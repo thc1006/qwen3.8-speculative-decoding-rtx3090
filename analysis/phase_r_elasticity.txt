@@ -1,0 +1,92 @@
+====================================================================================================
+RESOURCE RESPONSE — elasticities per interval (never pooled across a regime change)
+====================================================================================================
+
+--- measured operating points ---
+method     condition    tok/s   SM MHz  mem MHz      W
+baseline   bw-hi       42.80     1759     9901    415
+baseline   bw-lo       40.18     1799     9101    416
+baseline   pw-lo       29.78      906     9501    250
+baseline   pw-vlo      13.66      387     9501    175
+baseline   stock       41.56     1785     9501    416
+mtp-n3     bw-hi       63.58     1708     9901    411
+mtp-n3     bw-lo       62.87     1721     9101    411
+mtp-n3     pw-lo       42.89     1081     9501    249
+mtp-n3     pw-vlo      19.85      478     9501    175
+mtp-n3     stock       63.32     1716     9501    411
+mtp-n7     bw-hi       45.52     1728     9901    412
+mtp-n7     bw-lo       45.08     1740     9101    413
+mtp-n7     pw-lo       32.58     1178     9501    247
+mtp-n7     pw-vlo      15.45      525     9501    175
+mtp-n7     stock       45.33     1732     9501    413
+
+====================================================================================================
+--- memory bandwidth ---
+
+  interval bw-lo -> stock
+    baseline     9101 ->   9501  elasticity  0.783 [ 0.773,  0.794]
+    mtp-n3       9101 ->   9501  elasticity  0.167 [ 0.154,  0.181]  ( 0.21x baseline)
+    mtp-n7       9101 ->   9501  elasticity  0.130 [ 0.122,  0.138]  ( 0.17x baseline)
+
+  interval stock -> bw-hi
+    baseline     9501 ->   9901  elasticity  0.718 [ 0.702,  0.732]
+    mtp-n3       9501 ->   9901  elasticity  0.101 [ 0.083,  0.119]  ( 0.14x baseline)
+    mtp-n7       9501 ->   9901  elasticity  0.100 [ 0.094,  0.106]  ( 0.14x baseline)
+
+====================================================================================================
+--- compute (SM clock) ---
+
+  interval pw-vlo -> pw-lo
+    baseline      387 ->    906  elasticity  0.915 [ 0.912,  0.920]
+    mtp-n3        478 ->   1081  elasticity  0.944 [ 0.941,  0.947]  ( 1.03x baseline)
+    mtp-n7        525 ->   1178  elasticity  0.924 [ 0.923,  0.925]  ( 1.01x baseline)
+
+  interval pw-lo -> stock
+    baseline      906 ->   1785  elasticity  0.491 [ 0.491,  0.492]
+    mtp-n3       1081 ->   1716  elasticity  0.843 [ 0.840,  0.845]  ( 1.71x baseline)
+    mtp-n7       1178 ->   1732  elasticity  0.857 [ 0.853,  0.860]  ( 1.74x baseline)
+
+====================================================================================================
+--- correction: the bandwidth lever is not clean ---
+  At a fixed power cap, raising the memory clock takes power from the core, so core
+  clock falls across the bandwidth sweep. A compute-elastic arm is penalised by that,
+  which makes its measured bandwidth elasticity an under-estimate. Below, the core-
+  clock contribution is estimated using each method's OWN compute elasticity (from the
+  pw-lo -> stock interval) and removed.
+
+  over bw-lo -> bw-hi:
+    method             core MHz  measured  core term  corrected
+    baseline      1799 ->  1759     0.751      0.130      0.881
+    mtp-n3        1721 ->  1708     0.135      0.078      0.213
+    mtp-n7        1740 ->  1728     0.115      0.066      0.182
+
+  The correction raises every arm's bandwidth elasticity, baseline included, so
+  the RATIO between them moves less than either figure does.
+
+--- caveat: the compute intervals are not identical across methods ---
+  Under the same power cap, different methods settle at different core clocks, because
+  a bandwidth-heavy workload spends more of the budget on memory. Measured here:
+    pw-vlo   baseline=387  mtp-n3=478  mtp-n7=525
+    pw-lo    baseline=906  mtp-n3=1081  mtp-n7=1178
+    stock    baseline=1785  mtp-n3=1716  mtp-n7=1732
+  So an interval labelled 'pw-lo -> stock' spans a different clock range for each
+  method. Since elasticity is regime-dependent (see the two compute intervals above),
+  these comparisons are close but not exactly matched. The direction of the effect is
+  far larger than this mismatch; the magnitudes should be read with it in mind.
+
+====================================================================================================
+--- H2 vs H2' on matched intervals ---
+
+  mtp-n3
+    memory bandwidth     bw-lo->bw-hi      0.135 vs baseline  0.751  ratio  0.18
+    compute (SM clock)   pw-vlo->stock     0.908 vs baseline  0.727  ratio  1.25
+    -> less bandwidth-elastic AND more compute-elastic than baseline.
+       Speculation has converted a bandwidth-bound decode into a
+       compute-bound verify. Consistent with H2'; inconsistent with H2.
+
+  mtp-n7
+    memory bandwidth     bw-lo->bw-hi      0.115 vs baseline  0.751  ratio  0.15
+    compute (SM clock)   pw-vlo->stock     0.902 vs baseline  0.727  ratio  1.24
+    -> less bandwidth-elastic AND more compute-elastic than baseline.
+       Speculation has converted a bandwidth-bound decode into a
+       compute-bound verify. Consistent with H2'; inconsistent with H2.

@@ -1,0 +1,107 @@
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@stock                     41.56      41.56      75  zh_self_intro=0.2%
+mtp-n3@stock                       63.32      63.32      75  code_nginx_cfg=0.4%
+mtp-n7@stock                       45.33      45.33      75  reason_trains=0.2%
+baseline@bw-lo                     40.18      40.18      75  reason_invariant=0.2%
+mtp-n3@bw-lo                       62.87      62.87      75  code_sql_report=0.2%
+mtp-n7@bw-lo                       45.08      45.08      75  reason_probability=0.2%
+baseline@bw-hi                     42.80      42.80      75  chat_music=0.2%
+mtp-n3@bw-hi                       63.58      63.58      75  zh_self_intro=0.3%
+mtp-n7@bw-hi                       45.52      45.52      75  reason_probability=0.2%
+baseline@pw-lo                     29.78      29.78      75  code_py_ratelimiter=1.3%
+mtp-n3@pw-lo                       42.89      42.89      75  code_py_ratelimiter=1.3%
+mtp-n7@pw-lo                       32.58      32.58      75  code_py_ratelimiter=0.4%
+baseline@pw-vlo                    13.66      13.66      75  code_nginx_cfg=1.8%
+mtp-n3@pw-vlo                      19.85      19.85      75  code_sql_report=0.9%
+mtp-n7@pw-vlo                      15.45      15.45      75  prose_letter=1.2%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n3@stock                 baseline@stock         +52.35 [+48.48, +56.53]  FASTER
+mtp-n7@stock                 baseline@stock          +9.07 [+3.67, +14.50]  FASTER
+mtp-n3@bw-lo                 baseline@bw-lo         +56.46 [+52.49, +60.76]  FASTER
+mtp-n7@bw-lo                 baseline@bw-lo         +12.19 [+6.66, +17.79]  FASTER
+mtp-n3@bw-hi                 baseline@bw-hi         +48.54 [+44.76, +52.61]  FASTER
+mtp-n7@bw-hi                 baseline@bw-hi          +6.34 [+1.08, +11.63]  FASTER
+mtp-n3@pw-lo                 baseline@pw-lo         +44.00 [+40.26, +47.98]  FASTER
+mtp-n7@pw-lo                 baseline@pw-lo          +9.37 [+3.92, +14.85]  FASTER
+mtp-n3@pw-vlo                baseline@pw-vlo        +45.35 [+41.58, +49.38]  FASTER
+mtp-n7@pw-vlo                baseline@pw-vlo        +13.15 [+7.53, +18.86]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n3@stock               chat: +31.4%  code: +99.0%  prose: +36.9%  reason: +71.3%  zh: +23.1%
+  mtp-n7@stock               chat: -15.9%  code: +68.2%  prose: -16.2%  reason: +29.6%  zh: -20.5%
+  mtp-n3@bw-lo               chat: +34.8%  code:+104.4%  prose: +40.7%  reason: +75.9%  zh: +26.5%
+  mtp-n7@bw-lo               chat: -13.5%  code: +73.1%  prose: -13.7%  reason: +33.3%  zh: -18.2%
+  mtp-n3@bw-hi               chat: +28.2%  code: +93.9%  prose: +33.5%  reason: +67.0%  zh: +20.1%
+  mtp-n7@bw-hi               chat: -18.0%  code: +64.1%  prose: -18.2%  reason: +26.3%  zh: -22.5%
+  mtp-n3@pw-lo               chat: +24.1%  code: +88.2%  prose: +29.3%  reason: +62.1%  zh: +16.3%
+  mtp-n7@pw-lo               chat: -15.7%  code: +68.6%  prose: -16.1%  reason: +30.3%  zh: -20.2%
+  mtp-n3@pw-vlo              chat: +25.1%  code: +91.0%  prose: +30.0%  reason: +63.1%  zh: +17.7%
+  mtp-n7@pw-vlo              chat: -13.1%  code: +75.7%  prose: -13.4%  reason: +34.2%  zh: -17.7%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 1125
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+baseline@stock             0.1005     +0.0%       3979     +0.0%       -          -
+mtp-n3@stock               0.1550    +54.2%       2681    -32.6%   0.558       2.65
+mtp-n7@stock               0.1106    +10.1%       4028     +1.2%   0.323       3.22
+baseline@bw-lo             0.0974     -3.1%       4108     +3.2%       -          -
+mtp-n3@bw-lo               0.1539    +53.1%       2701    -32.1%   0.558       2.65
+mtp-n7@bw-lo               0.1099     +9.3%       4055     +1.9%   0.323       3.22
+baseline@bw-hi             0.1037     +3.2%       3856     -3.1%       -          -
+mtp-n3@bw-hi               0.1557    +54.9%       2669    -32.9%   0.558       2.65
+mtp-n7@bw-hi               0.1113    +10.7%       4010     +0.8%   0.323       3.22
+baseline@pw-lo             0.1201    +19.5%       3330    -16.3%       -          -
+mtp-n3@pw-lo               0.1739    +73.0%       2391    -39.9%   0.558       2.65
+mtp-n7@pw-lo               0.1331    +32.4%       3347    -15.9%   0.323       3.22
+baseline@pw-vlo            0.0786    -21.8%       5091    +27.9%       -          -
+mtp-n3@pw-vlo              0.1144    +13.8%       3632     -8.7%   0.558       2.65
+mtp-n7@pw-vlo              0.0889    -11.5%       5003    +25.7%   0.323       3.22
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  baseline@bw-hi             byte-identical 75/75   median shared prefix when forked: -
+  baseline@bw-lo             byte-identical 75/75   median shared prefix when forked: -
+  baseline@pw-lo             byte-identical 75/75   median shared prefix when forked: -
+  baseline@pw-vlo            byte-identical 75/75   median shared prefix when forked: -
+  mtp-n3@bw-hi               byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@bw-lo               byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@pw-lo               byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@pw-vlo              byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@stock               byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n7@bw-hi               byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@bw-lo               byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@pw-lo               byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@pw-vlo              byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@stock               byte-identical 15/75   median shared prefix when forked: 0.228
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@bw-hi             reproducible 50/50
+  baseline@bw-lo             reproducible 50/50
+  baseline@pw-lo             reproducible 50/50
+  baseline@pw-vlo            reproducible 50/50
+  baseline@stock             reproducible 50/50
+  mtp-n3@bw-hi               reproducible 50/50
+  mtp-n3@bw-lo               reproducible 50/50
+  mtp-n3@pw-lo               reproducible 50/50
+  mtp-n3@pw-vlo              reproducible 50/50
+  mtp-n3@stock               reproducible 50/50
+  mtp-n7@bw-hi               reproducible 50/50
+  mtp-n7@bw-lo               reproducible 50/50
+  mtp-n7@pw-lo               reproducible 50/50
+  mtp-n7@pw-vlo              reproducible 50/50
+  mtp-n7@stock               reproducible 50/50
