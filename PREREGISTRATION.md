@@ -760,3 +760,101 @@ leaves compute starvation.
 
 The usable comparison is the one Phase R2 was designed for: `sm600` to `sm1200`, a matched
 two-fold span with the pin holding exactly on every record.
+
+## ADDENDUM, registered 2026-08-25: a second RTX 3090 on a different host
+
+A second 3090 became available on a separate machine reached over Tailscale. It is worth being
+precise about what a second card of the same architecture can and cannot settle, because the
+temptation is to treat it as more samples of the same thing, and it is not.
+
+### What differs, and why absolute numbers cannot be pooled
+
+| | host A (primary) | host B (second 3090) |
+|---|---|---|
+| GPU | RTX 3090, GA102, sm_86 | RTX 3090, GA102, sm_86 |
+| default power limit | 420 W | **350 W** |
+| CUDA toolkit | 13.3 | **12.0.140** |
+| host compiler | gcc 14.2 (Debian 13) | **gcc 13.3 (Ubuntu 24.04)** |
+| glibc | 2.41 | 2.39 |
+| driver | **610.43.02** | **580.173.02** |
+
+The two cards are different SKUs of the same part: 350 W against 420 W is not a setting, it is the
+board's own `power.default_limit`. The drivers are a major version apart, 610 against 580, which is
+a wider gap than the rest of the table and wider than was first written here. Every absolute throughput number therefore belongs to its host
+and to nothing else, and no result here pools tok/s across the two. This is the same constraint the
+three-host fleet already imposed and it is restated because the second card makes it tempting to
+forget.
+
+The binary also cannot travel. Host A's `llama-server` links eight in-tree shared objects against
+glibc 2.41 and CUDA 13.3; host B has glibc 2.39 and CUDA 12.0, and glibc is not backward
+compatible in that direction. llama.cpp is therefore rebuilt on host B from the same revision,
+`c060ca974c773c7c3d17fd1b66dc9d312bc292c0`, with the same flags except `LLAMA_CURL`, which is off
+because the URL loader is not used and enabling it would pull in a dependency the host does not
+have. **The consequence is that host B differs from host A in the toolchain as well as the card,
+so a difference between them is not attributable to the hardware alone.** That is stated here
+rather than discovered later.
+
+The model bytes do travel, and are checked. The target, the MTP head and the DFlash2 drafter were
+copied from host A and verified by SHA-256 against host A's recorded digests, so the weights are
+identical even though the code that runs them is not.
+
+### RH1: the #27572 reproduction on an independent machine
+
+`repro/llamacpp_27572.py` runs unchanged apart from its paths. The issue concerns behaviour in the
+server's parallel path, so it is a property of the code and should not depend on the card.
+
+- **Reproduces on host B with the same qualitative pattern** — the strongest available evidence
+  short of a maintainer reproducing it, and it is reported to the thread either way.
+- **Does not reproduce on host B** — then host A's result is either configuration-specific or
+  toolchain-specific, and the comment already posted to that issue needs a correction naming host
+  B as the disconfirming case. Absolute timings are expected to differ because of the 350 W cap;
+  only the pattern is being replicated.
+
+### RH2: does the width partition survive an independent host and toolchain?
+
+The registered mechanism (see the 2026-08-24 addendum) is `calc_nwarps` in the CUDA MMVQ path:
+`ncols_dst` of 1 to 4 takes four warps, 5 to 8 takes two, above 8 takes one. Verification width
+`w = n_max + 1` enters as `ncols_dst`, so widths 3 and 4 share a kernel configuration, and 5, 6 and
+8 share a different one. That is an architecture property of sm_86, not a CUDA-version property,
+so the prediction carries to host B.
+
+Fork positions are compared **within host only**: each host's speculative arms against that host's
+own greedy baseline. Comparing host A's fork positions to host B's would confound the card, the
+driver and the compiler, and no such comparison is made.
+
+- **The grouping reproduces** — w3 equals w4, w5 equals w6 equals w8, and the two groups differ
+  from each other on host B as they do on host A. This is the registered prediction. It would show
+  the partition is not an artefact of one machine's numerics.
+- **The grouping does not reproduce** — the partition is toolchain- or machine-specific, and the
+  claim in llama.cpp #25618 must be narrowed to host A in a correction posted to that thread.
+- **The grouping reproduces and the absolute fork positions also match host A** — stronger than
+  required, and would say CUDA 12.0 and 13.3 produce bit-identical reductions here. Not predicted;
+  recorded if observed.
+- **A width lands in neither group cleanly** — reported as a failure of both H8 and the acceptance
+  competitor, exactly as `harness/width_groups.py` already handles on host A.
+
+Because greedy decoding at a fixed seed is deterministic, one pass per arm is sufficient for the
+fork-position comparison and no repetition is run for it. Throughput on host B is recorded but is
+not used for any cross-host claim.
+
+### Disclosure: host B's driver was broken and repairing it changed 15 packages
+
+Host B could not run any CUDA workload on arrival. Its NVIDIA kernel modules existed only for
+kernel 6.17.0-22-generic while the machine was running 7.0.0-30-generic, because the HWE tracking
+package `linux-modules-nvidia-580-open-generic-hwe-24.04` had not followed the kernel. `nvidia-smi`
+failed for every user on the box, not only for this study.
+
+Installing `linux-modules-nvidia-580-open-7.0.0-30-generic` fixed it and, as a dependency
+consequence, upgraded the userspace driver from 580.126.09 to 580.173.02: 15 packages upgraded, 2
+installed, and `linux-modules-nvidia-580-open-6.17.0-22-generic` removed. The machine's owner
+authorised this after being shown the exact package list. **The upgrade is not reversible**: version
+580.126.09 has been superseded and is no longer fetchable from the Ubuntu archive, and an attempt
+to retrieve it from snapshot.ubuntu.com returned nothing. The pre-change package versions are
+recorded on that host at `~/.nvidia-rollback/manifest.txt`.
+
+This matters to the results in one way and it is recorded rather than left implicit. Host B's
+driver is now 580.173.02 while host A runs 610.43.02, so the two hosts are a **major driver
+version** apart, not a point release apart, and the upgrade narrowed that gap without closing it.
+"Different driver" therefore joins "different CUDA toolkit" and "different compiler" in the list of
+things that separate the two hosts, and it is the largest of the three. It does not affect any within-host
+comparison, which is the only kind RH1 and RH2 make.

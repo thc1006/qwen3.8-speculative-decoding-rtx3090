@@ -126,3 +126,61 @@ The 27B ladder is ~93 GB of weights and `run_phase_q.sh` stages one rung at a ti
 `UD-Q4_K_XL` this repo already holds. The 9B ladder is 41.8 GB and fits at once, but it competes
 with the 21 GB MoE target needed for the dense-vs-MoE phase, so those two cannot both be resident
 on the current volume. Sequence them.
+
+---
+
+## Correction, 2026-08-25: the card is on a separate host, and the plan above assumed otherwise
+
+The A6000 exists and has been surveyed. It is **not** a second card in this chassis. It is
+`mailer.cirda.nycu.edu.tw`, reached over Tailscale, and that invalidates part of the plan above
+rather than merely adding detail.
+
+Everything in "Correctness work this preparation required" was written for two cards in one box.
+On separate hosts, items 1 (resolving the nvidia-smi against nvidia-settings index mapping by GPU
+UUID) and 5's justification (concurrent runs in one chassis contaminating each other through the
+power supply, case airflow and PCIe) do not apply: each host has one card at index 0 and its own
+power and airflow. The code is not wrong, it is simply not exercised by this arrangement. Items 2
+(stock power read per device), 3 (thermal gate calibrated per device) and 4 (idle floor waited for,
+not sampled) matter more than before, because the hosts differ in ways two cards in one box would
+not.
+
+What replaces the removed reasoning is the cross-host rule the fleet already imposes: **absolute
+throughput does not pool across hosts.** The step-1 gate below still holds and is still the gate,
+but it is a comparison of dimensionless quantities and fork positions, not of tok/s.
+
+### Surveyed state, 2026-08-25
+
+| | value | consequence |
+|---|---|---|
+| GPU | RTX A6000, 49140 MiB, sm_86 | as planned |
+| driver | 580.95.05, DKMS-built for the running 6.1.0-39 kernel | **works; nothing to repair** |
+| ECC | **Disabled** | matches both 3090s, so ECC is not a confound after all |
+| power.default_limit | 300 W | as the table above assumed |
+| persistence mode | Enabled | differs from host A; record it |
+| CUDA | 12.9 at `/usr/local/cuda`, **`nvcc` not on `PATH`** | one `export` away |
+| cmake | **absent** | the only package that must be installed; 3.25.1 is available and ggml-cuda needs 3.18 |
+| gcc | 12.2 (Debian 12), glibc 2.36 | officially supported with CUDA 12.9; no host-compiler override needed |
+| cores | 16 | builds take roughly twice as long as host B's 32 |
+| disk | 549 GB free | the 93 GB ladder fits without staging, though staging is kept anyway |
+| rsync | absent | transfers use `scp`, as with host B |
+
+This makes **three** distinct toolchains across the fleet: CUDA 13.3 / gcc 14.2 / glibc 2.41 on
+host A, CUDA 12.0 / gcc 13.3 / glibc 2.39 on host B, CUDA 12.9 / gcc 12.2 / glibc 2.36 here. Each
+host therefore needs its own build and its own baseline, and no result crosses hosts except as a
+comparison of dimensionless quantities.
+
+### The blocker is occupancy, not configuration
+
+The card is in use. A `ghcr.io/ggml-org/llama.cpp:server-cuda` container (`v32-gpu`) has been up
+four days serving `gemma-4-26B-A4B-it-UD-Q4_K_M` with a LoRA on port 8083, holding 19 GB and
+leaving 29491 MiB free, alongside roughly thirty other containers on the same box. The owner has
+said this is other research in progress and that the card will be free later.
+
+Nothing in this plan can run against a shared card. It is not only that a neighbour at 100 %
+utilisation would make the timings meaningless; the harness pins clocks with `nvidia-smi -lgc`,
+waits on a measured idle floor and gates on temperature, and every one of those actions would
+reach into the neighbouring workload. **Phase Q on this card requires the card to itself.**
+
+Note also that 29 GB free is not enough for the rung this card was wanted for: `Q8_0` needs
+31.3 GB and `UD-Q6_K_XL` needs 27.5 GB. Even setting contamination aside, the top of the ladder
+does not fit beside the running service.

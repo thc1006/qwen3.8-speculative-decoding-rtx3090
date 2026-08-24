@@ -18,6 +18,10 @@ saturation threshold forces the verify pass to load the union of K positions' ex
 routing, no union. So that mechanism cannot be what decides the answer here, and the question is
 open again.
 
+**It is not open any more.**
+
+![Dot-and-whisker plot of five speculative arms against the non-speculative baseline of 41.55 tok/s. mtp-n2 at verification width 3 is +59.8 % with a 95 % interval of +57.0 to +62.8; mtp-n3 +52.3 %; dflash2-n4 +51.9 %; mtp-n5 +32.1 %; dflash2-n7 +22.6 %. Every interval lies clear of zero.](analysis/plot_headline.png)
+
 ## What this repo is not claiming
 
 The prior-art sweep for this study (2026-08-24, recorded in `PREREGISTRATION.md`) found that
@@ -152,6 +156,8 @@ No study in the prior-art sweep publishes an energy figure for this model; `joul
 
 ### The headline number hides a sign change
 
+![Heatmap of throughput change against baseline for five speculative arms across five prompt classes. Code and reasoning are strongly positive for every arm, from +55 % to +117 %. Chat, prose and Chinese fall towards zero as verification width grows and turn negative for dflash2-n7 at width 8: minus 4 % on chat, minus 11 % on prose, minus 29 % on Chinese.](analysis/plot_per_class.png)
+
 | arm | code | reason | prose | chat | zh |
 |---|---:|---:|---:|---:|---:|
 | mtp-n2 | +92.0 % | +73.6 % | +48.6 % | +46.9 % | +37.7 % |
@@ -169,6 +175,8 @@ table is not an appendix.
 
 llama.cpp reports enough per request to recover the cost of one speculative verification step in
 units of a plain decode step. With `mean_len = (predicted_n − 1) / (predicted_n − accepted − 1)`:
+
+![Two panels. Left: k against verification width for both drafters, with fitted lines that are almost parallel. draft-mtp gives k0 = 0.894 and c = 0.2829 over three widths; draft-dflash gives k0 = 0.783 and c = 0.2784 over two, so its line is determined rather than fitted. Right: speedup against n-max, falling monotonically for both methods, best at the smallest n-max tested.](analysis/plot_cost_model.png)
 
     speedup = mean_len / k       k(w) = k0 + c·(w − 1),   w = n_max + 1
 
@@ -241,6 +249,8 @@ of requests diverge**, forking at a median 23 % into the text. Every arm is none
 positions partition the arms into exactly two stable groups by verification width
 (`{3,4}` against `{5,6,8}`), identically in all five passes and shared across unrelated drafters.
 
+![Matrix of 25 prompts by five speculative arms ordered by verification width, each cell giving the character position at which greedy output first differs from the baseline. Columns for widths 3 and 4 always agree with each other, columns for widths 5, 6 and 8 always agree with each other, and on 14 of 25 prompts the two groups fork at different positions. A vertical rule marks the CUDA calc_nwarps boundary between ncols_dst 4 and 5.](analysis/plot_width_partition.png)
+
 This corroborates [llama.cpp #25618](https://github.com/ggml-org/llama.cpp/issues/25618) rather
 than discovering anything: that thread already establishes the phenomenon, its
 quantization-dependence, its drafter-independence, and a root cause on the Vulkan side. What is
@@ -304,6 +314,10 @@ hf download z-lab/Qwen3.8-27B-DFlash2-GGUF --local-dir models/dflash2
 # run + analyse
 python3 harness/bench.py --matrix phase_a --passes 5 --out results/phase_a.json
 python3 harness/analyze.py results/phase_a.json
+
+# figures (the only step that needs anything beyond the standard library)
+pip install matplotlib
+python3 analysis/plot.py
 ```
 
 `harness/bench.py --prompts-per-class 1` runs a reduced dry run; reduced runs label themselves

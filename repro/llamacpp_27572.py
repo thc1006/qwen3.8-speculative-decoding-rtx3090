@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
 import threading
@@ -36,8 +37,10 @@ import gpustate as G  # noqa: E402
 import server as S  # noqa: E402
 
 REPO = HERE.parent
-BINARY = REPO / "llamacpp-master/build/bin/llama-server"
-MODEL = REPO / "models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf"
+# Overridable so the same file runs on a second host, where llama.cpp lives elsewhere and had to
+# be rebuilt: glibc and CUDA differ, so the binary cannot travel even though the weights can.
+BINARY = Path(os.environ.get("QWEN_LLAMA_SERVER") or REPO / "llamacpp-master/build/bin/llama-server")
+MODEL = Path(os.environ.get("QWEN_TARGET_MODEL") or REPO / "models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf")
 
 # Matches the reported server flags except for context, which is sized for 24 GiB rather than
 # their 1M, and the multimodal projector, which the text-only reproducer does not need.

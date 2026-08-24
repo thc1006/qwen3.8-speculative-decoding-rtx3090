@@ -402,14 +402,18 @@ def run_matrix(
                 # Every arm starts from the same thermal state. Without this the card sits on
                 # its power cap and loses ~9% of its SM clock over a pass, handing whichever
                 # arm runs first a measurably faster GPU than whichever runs last.
+                # --settle-floor computed measured_floor and dropped it here; without it
+                # settle_gpu has neither a target nor a floor and raises.
                 settle = T.settle_gpu(gpu_index, target_temp_c=settle_temp_c,
+                                      idle_floor_c=measured_floor,
+                                      margin_c=settle_margin_c,
                                       max_wait_s=settle_max_wait_s)
                 result.setdefault("arm_pass_settle", {})[tag] = settle
                 if not settle["reached_target"]:
                     result["incidents"].append({
                         "pass": p_idx, "arm": arm.name, "kind": "thermal_settle_timeout",
                         "detail": f"entry temp {settle['entry_temp_c']} C did not reach "
-                                  f"{settle_temp_c} C within {settle_max_wait_s}s"})
+                                  f"{settle['target_c']:.0f} C within {settle_max_wait_s}s"})
                 print(f"  settled: {settle['start_temp_c']}C -> {settle['entry_temp_c']}C "
                       f"in {settle['waited_s']}s (clock {settle['entry_sm_clock_mhz']} MHz)",
                       flush=True)
