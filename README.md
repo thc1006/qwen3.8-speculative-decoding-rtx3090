@@ -126,7 +126,7 @@ prompt-class mixture.
 Intervals are a paired cluster bootstrap over prompts (passes of one prompt are repeated
 measures, not independent samples), on the class-stratified effect.
 
-| arm | verify width | tok/s | vs own-tree baseline | tok/J | J per request |
+| arm | verify width | tok/s | vs own-tree baseline | tok/J | decode J per request |
 |---|---:|---:|---|---:|---:|
 | baseline @ master | — | 41.55 | — | 0.1005 | 3980 |
 | baseline @ PR #27342 | — | **41.55** | — | 0.1005 | 3979 |
@@ -140,9 +140,15 @@ The two trees agree to 41.55 tok/s and produce **byte-identical output on 125/12
 so nothing in the DFlash2 numbers is attributable to the unmerged branch. Run-to-run CV within a
 prompt is ≤ 0.3 %.
 
-**MTP at n-max 2 cuts the energy to produce a 400-token answer by 37 %** (3980 → 2503 J). No study
-in the prior-art sweep publishes an energy figure for this model; `joule`, `tok/J` and `watt`
-appear zero times in PR #27342's 60-comment thread.
+**MTP at n-max 2 cuts the decode energy for a 400-token answer by 37 %** (3980 → 2503 J). Both
+energy columns are decode-only: the prefill is measured separately, in its own eight-repetition
+calibration per prompt, and subtracted. Counting it, the same request goes 4050 → 2583 J, a 36.2 %
+saving. The prefill is measured per arm rather than assumed constant, and it is not: 70.9 J for
+the baseline against 83.2 J for `dflash2-n7`, because a speculative arm processes the prompt
+through its drafter as well.
+
+No study in the prior-art sweep publishes an energy figure for this model; `joule`, `tok/J` and
+`watt` appear zero times in PR #27342's 60-comment thread.
 
 ### The headline number hides a sign change
 
