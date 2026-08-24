@@ -91,6 +91,15 @@ fi
 
 run_phase phase_c 3 18220 results/phase_c.json || exit 1
 
+# The n-max ladder. Phase A fitted k(w) = k0 + c(w-1) on three MTP widths and two DFlash2 widths;
+# two points do not fit a line, and the DFlash2 coefficient was reported as meaningless for that
+# reason. This runs MTP at 1 through 8 and DFlash2 at 2, 4, 6, 8, so both coefficients are
+# fitted rather than asserted. It also produces the mtp-n1 arm that Phase V needs: vLLM's MTP
+# only runs at one speculative token, so K=1 is the only depth the two engines share.
+run_phase phase_nmax 3 18225 results/phase_nmax.json || exit 1
+python3 harness/cost_model.py results/phase_nmax.json > analysis/phase_nmax_cost.txt 2>&1
+log "wrote analysis/phase_nmax_cost.txt (the k(w) fit on 8 MTP widths and 4 DFlash2 widths)"
+
 # Phase L is a ladder, not a matrix: context depth sets `-c`, which is a server property, so each
 # rung is its own run. Its driver handles the per-rung gating and skips a rung that cannot fit.
 log "starting the Phase L depth ladder"

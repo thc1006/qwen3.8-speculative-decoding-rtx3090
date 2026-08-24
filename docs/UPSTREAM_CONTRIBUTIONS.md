@@ -64,14 +64,29 @@ and uses it for the `mean len` log line and for a Prometheus metric, but
 `server_slot_stats::to_json()` exposes only `draft_n` and `draft_n_accepted`, so a consumer of
 `/v1/chat/completions` cannot get it.
 
-The two available workarounds are both wrong in practice:
+Two obvious workarounds are wrong in practice:
 - `draft_n / n_max` assumes every step drafts the full width; steps that draft fewer break it.
 - Recovering it from the log's `mean len` fails on precision: that field prints at `%5.2f`, and
   back-solving `steps = accepted / (mean_len - 1)` from two decimals gave this study a spread of
   ±0.4 steps and produced physically impossible negative step counts.
 
-Adding `draft_n_verif_steps` next to the two fields already emitted is a one-line change to a
-counter that exists. Related but distinct prior requests:
+A third one is exact, and stating it honestly makes this a smaller contribution than the two
+failures above suggest. Every verification step emits one non-draft token, so the tokens produced
+are `verif_steps + accepted`, and `verif_steps = predicted_n - draft_n_accepted` follows. That
+identity is what this study actually uses, and it is exact rather than approximate. The case for
+the field is therefore convenience and durability, not necessity: the identity depends on every
+verification step emitting exactly one non-draft token, which is an implementation detail that
+no documentation guarantees and that a future scheduling change could break silently, since the
+arithmetic would keep producing plausible numbers.
+
+A patch is prepared at `upstream/0001-server-expose-draft-verification-steps-per-request.patch`
+against `c060ca9`. It is one line in `to_json()` and adds no state. It is deliberately **not**
+applied to `llamacpp-master/` in this repo: rebuilding that tree mid-study would leave later
+phases running a different binary from earlier ones, which is exactly the build confound the
+dual-tree design exists to avoid. It gets built and tested in a separate clone once the
+measurement queue is clear.
+
+Related but distinct prior requests:
 [#26516](https://github.com/ggml-org/llama.cpp/issues/26516) (speculative counters in
 `/metrics`) and [#24850](https://github.com/ggml-org/llama.cpp/issues/24850). Both are
 **server-wide aggregates**; benchmarking needs the **per-request** value, so this should be

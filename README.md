@@ -238,7 +238,7 @@ before its data existed, in the addenda to [`PREREGISTRATION.md`](PREREGISTRATIO
 | **L** | does the long-context decode collapse of [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) reproduce on sm_86, and does speculation survive it? | designed, ladder to 96K |
 | **M** | does `draft-mtp` at small n-max escape the MoE penalty that `draft-simple` at n-max 8 suffers? | designed, anchored on reproducing the predecessor's −44.6 % |
 | **Q** | does the target quantization ladder move the marginal cost per verified position? | driver written, needs the 48 GB card above `UD-Q5_K_XL` |
-| **V** | does the same comparison hold on vLLM rather than llama.cpp? | designed, [`docs/PHASE_V_DESIGN.md`](docs/PHASE_V_DESIGN.md); runs last, it needs the disk Phase M frees |
+| **V** | does the same comparison hold on vLLM rather than llama.cpp? | designed, [`docs/PHASE_V_DESIGN.md`](docs/PHASE_V_DESIGN.md); matched at K=1, so it waits on the n-max ladder |
 
 ## Reproduce
 

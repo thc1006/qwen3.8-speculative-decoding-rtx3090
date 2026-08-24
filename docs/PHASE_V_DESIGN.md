@@ -29,14 +29,28 @@ magnitude of the dense-hybrid speculative win survive a change of engine? A yes 
 a property of the model and the hardware. A no makes it a property of llama.cpp's implementation,
 which is what the predecessor found for the MoE and is worth knowing either way.
 
-One contrast is better matched than the rest. DFlash2 runs on both: llama.cpp through PR #27342
-with the GGUF drafter, vLLM through `{"method": "dflash", "model": "incoai/Qwen3.8-27B-DFlash2",
-"num_speculative_tokens": 7}`. Depth can be matched there even though it cannot for MTP, so the
-DFlash2 comparison carries more weight than the MTP one and should be read first.
+Depth can be matched, but not the way it first looked. The obvious route was DFlash2, which runs
+on both engines: llama.cpp through PR #27342 with the GGUF drafter, vLLM through
+`{"method": "dflash", "model": "incoai/Qwen3.8-27B-DFlash2", "num_speculative_tokens": 7}`. The
+arithmetic kills it on this card. The vLLM speculator ships at BF16 and is 3.58 GiB, on top of
+18.14 GiB of INT4 target, which is 21.72 GiB before any KV cache. vLLM's default
+`gpu_memory_utilization` of 0.9 offers 21.6 GiB, so the pair does not fit even before the 0.51 GiB
+this study's 8192 context needs and the activations and CUDA graphs on top of that. Raising the
+utilisation to 0.95 leaves about 1.1 GiB for everything else, which is not a margin worth trusting
+a measurement to. The DFlash2 cross-engine comparison needs the 48 GB card.
+
+So the matched contrast is at K=1 instead. vLLM's MTP is reported to work only at
+`num_speculative_tokens: 1`, and llama.cpp will happily run `--spec-draft-n-max 1`; `phase_nmax`
+already defines that arm as part of its 1 to 8 ladder. Matching at K=1 costs the comparison the
+depth llama.cpp actually prefers, which is 2, but a matched comparison at the wrong depth is
+worth more than an unmatched one at the right depth, and the llama.cpp n-max ladder gives the
+depth response separately. Phase V therefore depends on `phase_nmax` having been run, and its
+report should refuse to state a cross-engine ratio without it.
 
 ## Weights
 
-`RedHatAI/Qwen3.8-27B-INT4`, 18.14 GiB, compressed-tensors, which is vLLM's native quantised
+`RedHatAI/Qwen3.8-27B-INT4`, 18.14 GiB (17.33 for the model, 0.79 for the MTP head),
+compressed-tensors, which is vLLM's native quantised
 format and comes from the people who wrote the compressor. It ships `model_mtp.safetensors`
 separately, 0.79 GiB of it, so the MTP head is present rather than stripped by quantisation.
 
@@ -85,14 +99,23 @@ The parts that do not:
 
 ## Registered before running
 
-- **H7.** The dense-hybrid speculative win reproduces on vLLM: the DFlash2 arm at matched depth
-  is faster than its no-speculation baseline, with the interval clear of zero.
+- **H7.** The dense-hybrid speculative win reproduces on vLLM: MTP at
+  `num_speculative_tokens: 1` is faster than its no-speculation baseline on vLLM, with the
+  interval clear of zero.
   - Falsified if it is not, which would make the llama.cpp result implementation-specific and
     would be the more interesting outcome of the two.
-- **H7a.** The MTP arm at `num_speculative_tokens: 1` is faster than baseline but by less than
-  llama.cpp's n-max 2, since k=1 forgoes the depth that llama.cpp's optimum uses.
-  - This one is weakly held. It assumes the two engines' MTP paths cost the same per verified
+- **H7a.** At the matched depth of K=1, the two engines agree to within a factor of two on the
+  speedup over their own baselines.
+  - Compared against llama.cpp's `mtp-n1` from `phase_nmax`, not against its n-max 2 optimum.
+    Each engine is measured against its own baseline, so the quantisation difference cancels to
+    first order; what does not cancel is any interaction between quantisation and acceptance,
+    which llama.cpp #25618 says exists.
+  - Weakly held. It assumes the two engines' MTP paths cost about the same per verified
     position, which is exactly what a change of engine is free to violate.
+- **H7b.** `num_speculative_tokens: 2` fails on vLLM for this model family, as reported.
+  - Recorded as a result either way. It is cheap to test, it is the reason the comparison sits
+    at K=1 rather than at llama.cpp's optimum, and a version where it works would change what
+    this phase can do.
 
 ## Known problem on the other engine
 
