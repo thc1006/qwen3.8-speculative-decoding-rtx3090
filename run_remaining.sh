@@ -120,4 +120,24 @@ if b and a:
           "else in Phase M should be read as a statement about MoE until this is understood.")
 PYEOF
 
-log "chain complete"
+# Phase Q needs disk that Phase M's 22 GB MoE target is sitting on, so the deletion happens here
+# rather than inside run_phase_q.sh, and only against a Phase M result that is actually complete.
+if [ -f results/phase_m.json ]; then
+  mrec=$(records_in results/phase_m.json); mwant=$(expect_for phase_m 3)
+  if [ "${mrec:-0}" -ge "${mwant:-1}" ] && [ -f models/moe/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf ]; then
+    log "Phase M complete (${mrec}/${mwant}); releasing the 22 GB MoE target"
+    rm -f models/moe/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
+    log "disk now: $(df -h / | tail -1 | awk '{print $4}') free"
+  else
+    log "keeping the MoE target: Phase M is ${mrec}/${mwant}"
+  fi
+fi
+
+# The 24 GB card reaches only the first two rungs of the target ladder, and the second sits at
+# 96 % of the card. The driver auto-selects what fits and says what it skipped.
+log "starting the Phase Q target-quantization ladder"
+GPU=0 PASSES=3 bash run_phase_q.sh >> logs/phase_q_chain.log 2>&1
+log "Phase Q returned rc=$?"
+
+log "chain complete. Phase V is next and is not chained: it needs its own virtualenv"
+log "  and a 18 GB download. See docs/PHASE_V_DESIGN.md."
