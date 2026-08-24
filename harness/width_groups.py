@@ -162,6 +162,41 @@ def main() -> int:
             print("    same setting. That is a backend difference, it is worth more than the")
             print("    grouping, and llama.cpp #25618 should be told promptly.")
 
+    # -------------------------------------------------- the competing explanation
+    print("\n--- competing account: is the grouping just an acceptance threshold? ---")
+    accs = {}
+    for r in d["records"]:
+        w = width_of(r["arm"], arms.get(r["arm"]))
+        tm = r.get("timings") or {}
+        if w is None or not tm.get("t_draft_n"):
+            continue
+        accs.setdefault(w, []).append((tm.get("t_draft_n_accepted") or 0) / tm["t_draft_n"])
+    if len(accs) < 3:
+        print("    not enough widths with acceptance data")
+    else:
+        import statistics as _st
+        mean_acc = {w: _st.fmean(v) for w, v in accs.items()}
+        ws = sorted(mean_acc)
+        grp_of = {}
+        for gi, g in enumerate(observed):
+            for w in g:
+                grp_of[w] = gi
+        rows_ = []
+        for a, b in zip(ws, ws[1:]):
+            if a in grp_of and b in grp_of:
+                rows_.append((abs(mean_acc[b] - mean_acc[a]), a, b, grp_of[a] != grp_of[b]))
+        for gap, a, b, split in sorted(rows_, reverse=True):
+            print(f"    w={a} -> w={b}: acceptance gap {gap:.4f}   "
+                  + ("GROUP BOUNDARY" if split else "no boundary"))
+        if rows_:
+            biggest = max(rows_)
+            if biggest[3]:
+                print("    The largest acceptance gap is also a group boundary, so an acceptance")
+                print("    threshold explains the split at least as well as the warp table does.")
+            else:
+                print(f"    The largest gap, w={biggest[1]} to w={biggest[2]}, is not a boundary,")
+                print("    so a single acceptance threshold does not pick out the observed split.")
+
     # -------------------------------------------------- the table itself
     print("\n--- fork position per prompt ---")
     print(f"    {'prompt':26s}" + "".join(f"{'w=' + str(w):>8s}" for w in widths))

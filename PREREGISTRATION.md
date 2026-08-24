@@ -691,3 +691,39 @@ across pass 1 is disclosed here rather than corrected.
 **What would have changed the decision.** A baseline CV rising above the 0.24 % that Phase A saw
 within a prompt, any record where SM clock mean exceeded min at a pinned condition, or a step in
 a baseline arm's per-prompt series. None of those are present.
+
+## Registered 2026-08-24: the competing explanation for the width grouping, and what separates them
+
+The obvious objection to H8 is that acceptance falls monotonically with width, so a threshold on
+acceptance would produce the same two groups without any reference to warp counts. It is worth
+writing down before `phase_nmax` lands, because that run is what tells the two apart.
+
+Phase A's five widths cannot. Acceptance across them:
+
+| width | drafter | acceptance | fork group |
+|---|---|---|---|
+| 3 | mtp | 0.6645 | A |
+| 4 | mtp | 0.5579 | A |
+| 5 | dflash2 | 0.4737 | B |
+| 6 | mtp | 0.4125 | B |
+| 8 | dflash2 | 0.3394 | B |
+
+The largest gap between neighbours is 0.1066, from width 3 to width 4, and there is no group
+boundary there. The boundary sits at 0.0842, the second largest. So a single acceptance threshold
+does not naturally pick out the observed split. It is not excluded either: any cut between 0.474
+and 0.558 reproduces the grouping exactly, and five points cannot distinguish that from a cut on
+width.
+
+**What `phase_nmax` decides.** It runs widths 2 through 9. Acceptance continues to fall smoothly
+across them, so an acceptance account needs two thresholds placed precisely, and width 9 has to
+separate on its own despite sitting one small step below width 8. The warp table predicts exactly
+that with no free parameters, because `calc_nwarps` drops to one warp above `ncols_dst` 8.
+
+- **Acceptance is the better account** if the groups turn out to be split at acceptance
+  discontinuities that do not line up with 4-to-5 and 8-to-9.
+- **Neither survives** if the groups do not partition cleanly at all, for instance if two widths
+  with the same warp count and similar acceptance give different fork vectors.
+- Reported as a comparison of the two, not as a test of H8 alone. `harness/width_groups.py` prints
+  the observed partition next to the table's prediction and withholds a verdict when the
+  two-drafter control fails, so the acceptance comparison is added to its output rather than
+  argued afterwards.
