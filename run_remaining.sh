@@ -91,4 +91,33 @@ fi
 
 run_phase phase_c 3 18220 results/phase_c.json || exit 1
 
+# Phase L is a ladder, not a matrix: context depth sets `-c`, which is a server property, so each
+# rung is its own run. Its driver handles the per-rung gating and skips a rung that cannot fit.
+log "starting the Phase L depth ladder"
+GPU=0 PASSES=3 bash run_phase_l.sh >> logs/phase_l_chain.log 2>&1
+log "Phase L ladder returned rc=$? (a rung that does not fit is expected at the top)"
+python3 harness/analyze_depth.py > analysis/phase_l_ladder.txt 2>&1
+log "wrote analysis/phase_l_ladder.txt"
+
+# Phase M swaps the target for the 35B-A3B MoE. It must clear its replication anchor before any
+# of its other arms mean anything, so the check is printed right after the run.
+run_phase phase_m 3 18240 results/phase_m.json || exit 1
+python3 - <<'PYEOF' | tee -a analysis/phase_m_anchor.txt
+import json, statistics as st
+d = json.load(open("results/phase_m.json"))
+by = {}
+for r in d["records"]:
+    by.setdefault(r["arm"], []).append(r["decode_tok_s"])
+b = st.median(by.get("baseline-moe", [0]))
+a = st.median(by.get("moe-draft08b-n8", [0]))
+print("REPLICATION ANCHOR (predecessor reported 138.9 -> 77.0 tok/s, -44.6 %)")
+print(f"  baseline-moe     {b:7.1f} tok/s")
+print(f"  moe-draft08b-n8  {a:7.1f} tok/s   net {(a - b) / b * 100:+.1f} %" if b else "  no baseline")
+if b and a:
+    delta = (a - b) / b * 100
+    print("  anchor holds; the MoE penalty reproduces on this harness" if delta < -25 else
+          "  ANCHOR DOES NOT HOLD. The predecessor's loss did not reproduce here, so nothing "
+          "else in Phase M should be read as a statement about MoE until this is understood.")
+PYEOF
+
 log "chain complete"

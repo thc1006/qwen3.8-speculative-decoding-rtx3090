@@ -420,3 +420,64 @@ KV, which would confound depth with KV precision, or the 48GB card, which is cov
 `docs/A6000_PLAN.md`. The ladder is also 15 prompts rather than 25, three per class, which is
 enough for the cluster bootstrap to resample within each class but gives wider intervals than
 Phase A's.
+
+## ADDENDUM, registered 2026-08-24: hypotheses for Phase M
+
+Registered while Phase R2 runs and before the MoE target has been loaded once. The weights
+finished downloading at 20:43 and no server has been started against them.
+
+H3 and H4a above already frame the dense-versus-MoE question. What follows is narrower, and it
+exists because reading the predecessor's own explanation back against its own arm list turned up
+a gap that neither this document nor that study had noticed.
+
+The predecessor measured draft-then-verify at K of 8, 16, 32 and 64, found a net loss at every
+one, and explained it as MoE expert loading: a verification pass over K draft positions loads the
+union of those positions' expert sets, and below the K at which that union saturates, the pass
+buys fewer decode steps than it pays for in expert traffic. Acceptance was near 100 % throughout,
+so drafting quality was not the problem.
+
+That explanation is monotone in K, and its own logic points below the range that was measured.
+MTP is self-speculation with K equal to n_max, so n_max of 1 or 2 sits far under the smallest
+arm the predecessor ran. Its sibling vLLM study is the indirect signal: MTP at k=1 on the same
+3090 came out 27.5 % faster, credited to vLLM's smaller K and lighter verify path. Nobody has
+asked whether llama.cpp's MTP path escapes the penalty for the same structural reason, and the
+GGUF carries the `blk.40.nextn.*` tensors needed to ask.
+
+**H6 (small K escapes the MoE penalty).** On the MoE target, net yield rises monotonically as K
+falls across the combined ladder, and at least one MTP arm at n_max of 1 or 2 is not a net loss,
+meaning its interval's upper bound reaches zero or above.
+
+- Falsified if every MTP arm loses by a margin comparable to the draft-then-verify arms. That
+  would say the penalty is not a function of K, and the expert-union account the predecessor gave
+  would need replacing rather than extending.
+- Also falsified, differently, if yield is not monotone in K. A non-monotone curve would mean
+  something other than expert-set size is moving, and the arms at n_max 4 to 7 are placed to
+  overlap the draft-then-verify ladder specifically so the two paths can be compared at the same
+  K rather than assumed to be different regimes.
+
+**H6a (the anchor gates everything else).** `moe-draft08b-n8` reproduces the predecessor's loss:
+its net yield against the MoE baseline is worse than −25 %.
+
+- This runs first in the report for a reason. If the anchor does not reproduce, the difference
+  between the two studies is in the harness, the build, or the card, and no Phase M result may be
+  read as a statement about MoE until that is resolved. The predecessor's figures were 138.9 tok/s
+  baseline against 77.0 tok/s at K=8, a 44.6 % loss, taken at 16384 context on a different 3090.
+  This runs at 8192, so exact agreement is not expected and is not the test; the sign and the
+  rough magnitude are.
+
+**H6b (the cost model localises the difference).** Fitting k(w) = k0 + c(w−1) on the MoE gives a
+marginal cost per verified position c that exceeds the dense model's, by roughly the factor
+separating their net yields.
+
+- This is the version of the expert-loading claim that produces a number instead of a narrative.
+  The predecessor asserted the mechanism from acceptance being high while throughput fell; c
+  measures the cost of a verified position directly.
+- Falsified if c is comparable between the two models. In that case the MoE's loss lives in k0,
+  the fixed per-step cost, and the story is about step overhead rather than about how much each
+  extra speculated position costs.
+
+**What Phase M cannot settle.** The two models differ in size as well as in routing, 21.28 GiB
+against 16.35 GiB, so any yield difference carries a size component that this design cannot
+separate. Both being hybrid attention at `full_attention_interval: 4`, both carrying MTP tensors,
+and both sharing the 248320-token vocabulary removes the confounds that can be removed here; size
+is not one of them. Nothing in this phase will be reported as isolating routing alone.
