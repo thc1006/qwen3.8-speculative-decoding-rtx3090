@@ -926,3 +926,41 @@ Registered outcomes:
 The greedy baseline is included in every build as a control: it runs at width 1, which the table
 maps to 4 warps in all three builds, so **its output must be byte-identical across the three**. If
 it is not, the builds differ by more than the table and the comparison is void.
+
+## Observed 2026-08-25, not predicted: the partition travels, the positions do not
+
+The forced-warp intervention's **control** build ran on host C, the A6000, and its purpose was to
+give that host its own baseline before the two modified builds are compared against it. It also
+produced a comparison nobody registered, so it is recorded as an observation rather than dressed
+up as a prediction.
+
+| | host A | host B | host C |
+|---|---|---|---|
+| device | RTX 3090 | RTX 3090 | **RTX A6000** |
+| SMs | 82 | 82 | **84** |
+| compute capability | 8.6 | 8.6 | 8.6 |
+| memory bandwidth | 936 GB/s | 936 GB/s | **768 GB/s** |
+| CUDA / gcc / glibc | 13.3 / 14.2 / 2.41 | 12.0 / 13.3 / 2.39 | 12.9 / 12.2 / 2.36 |
+| partition clean | 25/25 | 25/25 | **25/25** |
+| groups differ on | 14 | 14 | **18** |
+| fork positions | identical to host B | identical to host A | **different from both** |
+
+Two 3090s that share nothing else — different board SKU at 350 W against 420 W, three CUDA
+versions between them, different compilers, a major driver version apart — produce fork positions
+that match to the character on all 25 prompts. The A6000 produces the same two-group structure and
+different positions.
+
+That is the shape the `calc_nwarps` account predicts without having been asked to. The table is
+selected by compute capability and indexed by `ncols_dst`, both of which are identical on all
+three, so the grouping should travel. The positions are an argmax outcome of a reduction whose
+order depends on how blocks are actually scheduled across the device, which is not identical:
+the A6000 has 84 SMs against the 3090's 82, and 768 GB/s against 936.
+
+**What this does not establish.** Which of those device differences moves the positions. SM count
+is the obvious candidate because it changes block residency directly, but bandwidth and clock
+differ too, and one observation cannot separate three variables. Nothing here is offered as a
+cause; it is a fact about three machines.
+
+It also does not weaken the registered endpoint. RH2 compared fork positions **within** host,
+which is what the addendum specified, and the cross-host agreement between A and B was registered
+in advance as the stronger-than-required outcome that would be recorded if seen. It was seen.
