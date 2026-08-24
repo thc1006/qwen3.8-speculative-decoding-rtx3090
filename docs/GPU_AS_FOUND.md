@@ -1,4 +1,4 @@
-# GPU as-found state, 2026-08-24 — BEFORE any reset by this study
+# GPU as-found state, 2026-08-24, BEFORE any reset by this study
 
 Discovered while designing the overclock phase, ~10 minutes into the first full Phase A run.
 The card was **not** at stock settings, and an earlier draft of README.md and
@@ -16,7 +16,7 @@ power.limit [W], power.default_limit [W], power.min_limit [W], power.max_limit [
 ## Why this matters
 
 The predecessor repo's `BENCHMARK_ENV.md` documents its v2/v3 cards explicitly as
-"Stock clocks — no overclocking": memory 9751 MHz, max graphics 2100 MHz, 350 W limit.
+"Stock clocks, no overclocking": memory 9751 MHz, max graphics 2100 MHz, 350 W limit.
 
 | | predecessor v2/v3 card | this card, as found | delta |
 |---|---:|---:|---:|
@@ -34,4 +34,4 @@ compute-dense, so an undisclosed memory overclock shifts the two arms by differe
 Overclock is promoted from an uncontrolled constant to a **controlled factor**.
 Phase A is re-run at stock (offsets 0, power limit at the card's 420 W default) so it is
 comparable to the predecessor repo and to the stock rows in community tables. The overclock
-is then varied deliberately in its own phase as a mechanistic probe — see PREREGISTRATION.md.
+is then varied deliberately in its own phase as a mechanistic probe; see PREREGISTRATION.md.

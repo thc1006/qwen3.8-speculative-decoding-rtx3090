@@ -1,4 +1,4 @@
-# Second-device plan — RTX A6000 (48 GB)
+# Second-device plan: RTX A6000 (48 GB)
 
 Prepared 2026-08-24, before the card exists on this host. Everything here is written so that it
 either runs correctly on arrival or refuses with a specific reason; nothing is left to be
@@ -26,20 +26,20 @@ What differs is the resource mix: more memory, less bandwidth, less power.
    (31.3 GB) need the larger card. This matters because two separate open claims turn on target
    quantization: llama.cpp #25618's finding that divergence is quantization-dependent, and the
    PR #27342 author's account of the n-max ceiling as a quantization × arithmetic-intensity
-   effect (recorded as H2'). Measuring `c` — the marginal cost per verified position — at each
+   effect (recorded as H2'). Measuring `c`, the marginal cost per verified position, at each
    rung tests H2' on the coefficient not on throughput.
 2. **Long context without a KV-quantization confound.** At 48 GB, `UD-Q4_K_XL` plus a 262 K
    f16 KV cache fits, so the decode cliff reported in #27623 can be crossed without also
    changing KV precision to make room.
 3. **A physical bandwidth step.** Phase R varies memory clock by ±4 % with software offsets;
    the A6000 is a −18 % step at nearly the same core count. That is a four-times-larger lever on
-   the same axis — but it moves power at the same time, so it is a **cross-check on Phase R, not
+   the same axis, but it moves power at the same time, so it is a **cross-check on Phase R, not
    a replacement for it**.
 
 ## What it does not do
 
 - **No bf16 target for the 27B.** BF16 is 50 GB; it does not fit on 48 GB either. The bf16 anchor
-  that #25618 rests on comes from `phase_qsmall` on the existing card instead — the 9B model whose
+  that #25618 rests on comes from `phase_qsmall` on the existing card instead, the 9B model whose
   BF16 is 18.4 GB, and whose Q4_K_M is the exact file used in llama.cpp #26750.
 - **No architectural diversity.** Both cards are sm_86. The open question in #26750 concerns
   Blackwell; an Ada or Blackwell card would address it and a second Ampere will not.
@@ -71,7 +71,7 @@ each fix was verified against the live hardware.
    Both tools report the same GPU UUID, so the mapping is now resolved by matching UUIDs
    (`gpustate.settings_index_for`) and **refuses instead of guessing**. There were two call
    sites; the second (`telemetry.overclock_state`) was missed on the first pass.
-2. **"Stock" was a hard-coded 420 W** — this 3090's default, not a universal one. An A6000
+2. **"Stock" was a hard-coded 420 W**, this 3090's default and not a universal one. An A6000
    defaults to 300 W, so "restore stock" would have restored something that was never stock for
    it. Stock is now read from each device's own `power.default_limit`.
 3. **The 60 °C thermal gate is calibrated for this card in this chassis.** On another cooler it is
@@ -79,7 +79,7 @@ each fix was verified against the live hardware.
    `--settle-floor` derives the target from the device's own measured idle floor, and bench.py
    now **refuses to use the fixed target on a card it was not calibrated for**.
 4. **The idle floor was sampled, not waited for.** Six readings two seconds apart, taken right
-   after a previous run, return a "floor" measured while the card is still shedding heat — and the
+   after a previous run, return a "floor" measured while the card is still shedding heat, and the
    gate silently becomes a no-op exactly when it is needed. It now waits for the reading to stop
    falling and reports if it never stabilises.
 5. **The run lock did not actually lock.** `acquire_lock` overwrote the file, so two concurrent
@@ -106,7 +106,7 @@ python3 -u harness/bench.py --matrix phase_a --passes 5 --gpu 1 --settle-floor \
     --port 18170 --out results/phase_a_a6000.json
 python3 harness/analyze_cross_device.py results/phase_a.json results/phase_a_a6000.json
 
-# 2. the quantization ladder — the thing 24 GB cannot do
+# 2. the quantization ladder, the thing 24 GB cannot do
 GPU=1 PASSES=3 bash run_phase_q.sh
 
 # 3. the bf16 anchor, on EITHER card (9B fits both)

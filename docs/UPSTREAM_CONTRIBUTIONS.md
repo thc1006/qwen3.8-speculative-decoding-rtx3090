@@ -30,20 +30,20 @@ and it already establishes:
   quantized target. Our target is `UD-Q4_K_XL`, i.e. squarely inside the known-affected regime.
   Our divergence numbers are corroboration, not discovery.
 - **The mechanism**, already argued in-thread: a batched decode over M positions must be bitwise
-  identical to M serial decodes, and is not — so batched verification changes the reduction order.
+  identical to M serial decodes, and is not, so batched verification changes the reduction order.
 - **Drafter independence**, already demonstrated: `snick525` built PR #27342 specifically to get
   DFlash2 as a structurally different drafter and showed the divergence persists against the
   built-in MTP head on Qwen3.8-27B Q6_K_XL. That is the same observation this study made
   independently on Q4_K_XL, and they published it first.
 - **One root cause, on Vulkan**: `Ankk98` traced an instance to the GQA-packed flash-attention
   path, which treated `N <= 8` as safe to pack and remapped workgroups as if there were a single
-  query token — valid only for single-token decode, so multi-token verify drifted, with **wrong
+  query token, valid only for single-token decode, so multi-token verify drifted, with **wrong
   drafts appearing at window >= 4**. Fixed by gating the packing on `neq1 == 1`.
 
 **What is left, and it is narrow but real.** That root cause is a **Vulkan** path. Nobody has
 localised the analogous threshold on **CUDA**. This study's Phase A shows fork positions on
-sm_86 partitioning into exactly two groups by verification width — `{3, 4}` against `{5, 6, 8}`
-— with the partition shared by two unrelated drafters, placing a CUDA boundary between width 4
+sm_86 partitioning into exactly two groups by verification width, `{3, 4}` against `{5, 6, 8}`,
+with the partition shared by two unrelated drafters, placing a CUDA boundary between width 4
 and width 5. That is close to, but not the same as, the Vulkan `>= 4` window condition, which is
 what makes it worth pinning down rather than assuming they are the same bug.
 
@@ -73,7 +73,7 @@ The two available workarounds are both wrong in practice:
 Adding `draft_n_verif_steps` next to the two fields already emitted is a one-line change to a
 counter that exists. Related but distinct prior requests:
 [#26516](https://github.com/ggml-org/llama.cpp/issues/26516) (speculative counters in
-`/metrics`) and [#24850](https://github.com/ggml-org/llama.cpp/issues/24850) — both are
+`/metrics`) and [#24850](https://github.com/ggml-org/llama.cpp/issues/24850). Both are
 **server-wide aggregates**; benchmarking needs the **per-request** value, so this should be
 raised as a comment on #26516 not as a new issue.
 
@@ -83,7 +83,7 @@ raised as a comment on #26516 not as a new issue.
 `draft-mtp` acceptance **collapses on CUDA**: 35.8–40.7 % against ~92 % on Vulkan, same files,
 same build, same prompts, turning MTP from +128 % into −32 %. Their setup: `Qwen3.5-9B-Q4_K_M`,
 RTX PRO 4000 **Blackwell**, `--spec-draft-n-max 6`, 108 runs per cell, read from
-`timings.draft_n` / `draft_n_accepted` — **the same two fields this study reads.**
+`timings.draft_n` and `draft_n_accepted`, **the same two fields this study reads.**
 
 What their report does not contain is an **acceptance-versus-depth curve on CUDA**, so there is
 no way to tell whether 40 % at n-max 6 is a collapse or simply where the curve sits.
@@ -100,7 +100,7 @@ This study measures, on sm_86 CUDA with Qwen3.8-27B Q4_K_XL:
 CUDA architecture, so this is not a refutation and must not be presented as one. It does supply
 the missing control: on a CUDA card where MTP is unambiguously a large *win* (+59.8 % at n-max 2),
 acceptance still falls to ~0.41 by n-max 5. That reframes the open question from "why is CUDA at
-40 %?" to "why is Vulkan at 92 %?" — and 92 % at n-max 6 implies a mean accepted length of
+40 %?" to "why is Vulkan at 92 %?", and 92 % at n-max 6 implies a mean accepted length of
 1 + 6×0.92 ≈ 6.5, which is high enough to be worth checking, especially since #25618 already
 root-caused a **Vulkan** flash-attention packing bug that made multi-token verify disagree with
 sequential decode.
@@ -131,21 +131,21 @@ worth enabling" is currently answered on throughput alone.
 `speedup = mean_len / k` with `k(w) = k0 + c·(w−1)` fits to r² = 0.9998 on the built-in MTP head,
 and the marginal cost `c` agrees to 1.7 % between MTP (0.2803) and the structurally unrelated
 DFlash2 drafter (0.2757) while the fixed cost `k0` differs by 14 %. That says the per-position
-cost belongs to the verification path and the fixed cost belongs to the drafter — and it explains
+cost belongs to the verification path and the fixed cost belongs to the drafter, and it explains
 *why* deep drafting loses, in a form that predicts the optimum instead of tabulating it.
 
 Relevant to [#25187](https://github.com/ggml-org/llama.cpp/issues/25187) (FR-Spec draft-vocab
-trimming research), which is about reducing drafter cost — i.e. `k0`, not `c`.
+trimming research), which is about reducing drafter cost, meaning `k0` rather than `c`.
 
 ## 5. Multimodal: confirm and extend, on Linux and on the other drafter
 
 [#27408](https://github.com/ggml-org/llama.cpp/issues/27408) (2 comments) reports that with
 `--spec-type draft-dflash` plus an mmproj, **every image request stalls ~500 s and returns HTTP
 500**, root-caused to mtmd image chunks leaving a positional hole in the draft KV cache. Reported
-on **RTX 3090 Ti, sm_86, Windows** — the same architecture as this study, on the other OS.
+on **RTX 3090 Ti, sm_86, Windows**, the same architecture as this study on the other OS.
 
 Two gaps in that report this study can close cheaply: whether it reproduces on **Linux/sm_86**,
-and whether **`draft-mtp`** — the built-in head, which needs no separate draft context — is
+and whether **`draft-mtp`**, the built-in head that needs no separate draft context, is
 affected at all. They tested only `draft-dflash`.
 
 ## 6. Confirmations, ranked by what they add
@@ -163,7 +163,7 @@ affected at all. They tested only `draft-dflash`.
 
 - **The quantization axis of the divergence.** #25618 establishes that a bf16 target preserves
   greedy parity while quantized targets do not. Testing that here would need a less-quantized
-  Qwen3.8-27B: `UD-Q6_K` is 25.3 GB, `Q8_0` 29 GB, BF16 50 GB — none fit in 24 GB alongside a KV
+  Qwen3.8-27B: `UD-Q6_K` is 25.3 GB, `Q8_0` 29 GB, BF16 50 GB, so none fit in 24 GB alongside a KV
   cache. The decisive control for that question is not available on this hardware and this study
   does not attempt it.
 - **`draft-eagle3`.** Accepted by `--spec-type` in this build, but no EAGLE3 drafter has been

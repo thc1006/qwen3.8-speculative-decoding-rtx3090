@@ -24,7 +24,7 @@ The prior-art sweep for this study (2026-08-24, recorded in `PREREGISTRATION.md`
 several things a first draft of this README would have called "first" are already published:
 
 - **Single RTX 3090 + DFlash2 + a Q4 target is already reported**, twice, in the comment thread
-  of llama.cpp PR #27342 — by `treo` (`UD-Q4_K_XL`, 32K ctx) and `ouening` (`UD-Q4_K_M`, 128K
+  of llama.cpp PR #27342, by `treo` (`UD-Q4_K_XL`, 32K ctx) and `ouening` (`UD-Q4_K_M`, 128K
   ctx, Windows). Priority is theirs and is cited, not re-claimed here.
 - **llama.cpp `draft-mtp` on a 3090** is covered in depth by
   [`sudoingX/qwen38-mtp`](https://github.com/sudoingX/qwen38-mtp), across six 3090 rows plus
@@ -33,7 +33,7 @@ several things a first draft of this README would have called "first" are alread
 - **vLLM on a single 3090** for this model is covered by
   [`syv-ai/qwen38-27b-rtx3090`](https://github.com/syv-ai/qwen38-27b-rtx3090).
 - **Losslessness of speculative decoding on consumer hardware** was studied in
-  [arXiv 2607.17283](https://arxiv.org/html/2607.17283) — though on Apple silicon, with Qwen2.5,
+  [arXiv 2607.17283](https://arxiv.org/html/2607.17283), though on Apple silicon, with Qwen2.5,
   and with classic two-model speculation rather than MTP or DFlash2.
 
 So the throughput table is not the contribution. What is left, and what this repo went after, is
@@ -91,12 +91,12 @@ on prose, chat and Chinese, so a single average is misleading for this model.
 | target | `unsloth/Qwen3.8-27B-GGUF` · `Qwen3.8-27B-UD-Q4_K_XL.gguf` (17.56 GB) |
 | architecture | `qwen35`, 64 layers, `full_attention_interval: 4` → **48 Gated DeltaNet + 16 full attention**, vocab 248320, native VL |
 | MTP | embedded in the quant: `qwen35.nextn_predict_layers = 1`, `blk.64.nextn.*` present (verified by reading the GGUF, no separate module needed) |
-| GPU | 1 × RTX 3090 24 GB, driver 610.43.02, **420 W default limit, reset to stock for the primary matrix** — the card was found overclocked (mem +400 MHz, core +100 MHz, 450 W) and the first Phase A run was discarded because of it; see [`docs/GPU_AS_FOUND.md`](docs/GPU_AS_FOUND.md) |
+| GPU | 1 × RTX 3090 24 GB, driver 610.43.02, **420 W default limit, reset to stock for the primary matrix**. The card was found overclocked (mem +400 MHz, core +100 MHz, 450 W) and the first Phase A run was discarded because of it; see [`docs/GPU_AS_FOUND.md`](docs/GPU_AS_FOUND.md) |
 | host | Debian 13, kernel 6.12, i9-13900, 31 GB RAM |
-| engine | llama.cpp built from source, CUDA 13.3, `CMAKE_CUDA_ARCHITECTURES=86`, two trees with identical flags |
+| engine | llama.cpp built from source, CUDA 13.3, `CMAKE_CUDA_ARCHITECTURES=86` (sm_86), two trees with identical flags |
 | trees | `master` @ `c060ca9` (build 200) · **PR #27342** (DFlash2, unmerged) @ `d1a522f` |
 | prompts | 25, balanced 3×5 → **5 per class** over code / prose / reason / chat / zh; every prompt written to exceed the 400-token cap |
-| sampling | greedy, full sampler chain pinned explicitly, `cache_prompt: false`, `--parallel 1` |
+| sampling | greedy, full sampler chain pinned explicitly, `cache_prompt: false`, `--parallel 1`; `--spec-draft-p-min` left at its default, so no arm gates its own drafts on confidence and acceptance is a property of the drafter rather than of a threshold |
 
 ### The controls, and why each exists
 
@@ -115,9 +115,10 @@ Every one of these was added because something measurable went wrong without it.
 | **degeneracy screen relative to baseline** | collapsed output is fast; [vLLM #52475](https://github.com/vllm-project/vllm/issues/52475) reports MTP repetition collapse on this model family |
 | **stock-clock enforcement** | this card arrived overclocked (mem +400 MHz, core +100 MHz, 450 W vs a 420 W default) while the README said "stock"; the harness now reads the offsets and **refuses to run** unless they are zero or an overclock is declared |
 
-A full audit of the predecessor repo's methodology — including a re-analysis of its own committed
-data showing its headline effect was understated roughly two-fold by prompt-class mixture — is in
-[`docs/METHODOLOGY_AUDIT.md`](docs/METHODOLOGY_AUDIT.md).
+A full audit of the predecessor repo's methodology is in
+[`docs/METHODOLOGY_AUDIT.md`](docs/METHODOLOGY_AUDIT.md). It includes a re-analysis of that
+repo's own committed data, which shows its headline effect was understated about two-fold by
+prompt-class mixture.
 
 ## Results: Phase A
 
@@ -172,7 +173,7 @@ units of a plain decode step. With `mean_len = predicted_n / (predicted_n − ac
 
 `c` agrees to **1.6 %** between the target's own built-in nextn head and a structurally unrelated
 1.1 GB block-diffusion drafter, while `k0` differs by 14 %. The marginal cost of verifying one
-more position belongs to the verification path; the fixed cost belongs to the drafter — and
+more position belongs to the verification path; the fixed cost belongs to the drafter, and
 DFlash2's fixed cost is the *lower* of the two. `k` varies by only 0.35–0.54 % across five prompt
 classes whose acceptance rates differ by nearly tenfold.
 
@@ -196,7 +197,7 @@ unsupported.
 
 Speculative arms are byte-identical to their baseline on only 25–30 of 125 prompt-passes: **76–80 %
 of requests diverge**, forking at a median 23 % into the text. Every arm is nonetheless
-**100/100 reproducible across passes** — the divergence is deterministic, not noise. Fork
+**100/100 reproducible across passes**, so the divergence is deterministic rather than noise. Fork
 positions partition the arms into exactly two stable groups by verification width
 (`{3,4}` against `{5,6,8}`), identically in all five passes and shared across unrelated drafters.
 
@@ -204,6 +205,8 @@ This corroborates [llama.cpp #25618](https://github.com/ggml-org/llama.cpp/issue
 than discovering anything: that thread already establishes the phenomenon, its
 quantization-dependence, its drafter-independence, and a root cause on the Vulkan side. What is
 still open is the **CUDA** boundary, and a width-localised boundary is what this repo can add.
+[llama.cpp #26750](https://github.com/ggml-org/llama.cpp/issues/26750) asks the same question on
+Blackwell; this card is sm_86 and cannot answer it.
 See [`docs/UPSTREAM_CONTRIBUTIONS.md`](docs/UPSTREAM_CONTRIBUTIONS.md).
 
 ### Two things went wrong and are recorded, not smoothed over
@@ -212,16 +215,30 @@ See [`docs/UPSTREAM_CONTRIBUTIONS.md`](docs/UPSTREAM_CONTRIBUTIONS.md).
    default) while this README described it as stock. The first Phase A run was **discarded**, the
    card reset, and the harness now refuses to start on a non-stock card. `docs/GPU_AS_FOUND.md`.
 2. **The completed run's process crashed** with a glibc `double free or corruption` after writing
-   its last record — a harness bug (`preexec_fn` used alongside a sampling thread, now
+   its last record. The cause was a harness bug (`preexec_fn` used alongside a sampling thread, now
    `start_new_session=True`). All 875 measurements survived; the final pass's derived comparisons
    were recomputed from the recorded text. `PREREGISTRATION.md`, Correction 2.
 
 ## Results: later phases
 
-Phase R (resource response: memory bandwidth × power budget × method) is running. Its pre-flight
-confirmed the assumption the design rests on: **lowering the power limit to 250 W and 175 W leaves
-the memory clock at 9501 MHz, unchanged**, so the compute and bandwidth levers are genuinely
-separable on this card.
+**Phase R** (resource response: memory bandwidth × power budget × method) is complete at 1125
+measurements. Its pre-flight confirmed the assumption the design rests on: lowering the power
+limit to 250 W and 175 W leaves the memory clock at 9501 MHz, unchanged, so the compute and
+bandwidth levers are genuinely separable on this card. Its own review then found that a power cap
+is a poor compute lever, because the clock it produces is an outcome rather than a setting, and
+**Phase R2** is re-running the compute axis with the SM clock pinned at 600, 1200 and 1700 MHz
+instead.
+
+The rest are designed, pre-registered and not yet measured. Each hypothesis was written down
+before its data existed, in the addenda to [`PREREGISTRATION.md`](PREREGISTRATION.md).
+
+| phase | question | status |
+|---|---|---|
+| **C** | does drafter quantization change the answer, and does the predecessor's v3.0 need an erratum? | queued |
+| **L** | does the long-context decode collapse of [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) reproduce on sm_86, and does speculation survive it? | designed, ladder to 96K |
+| **M** | does `draft-mtp` at small n-max escape the MoE penalty that `draft-simple` at n-max 8 suffers? | designed, anchored on reproducing the predecessor's −44.6 % |
+| **Q** | does the target quantization ladder move the marginal cost per verified position? | driver written, needs the 48 GB card above `UD-Q5_K_XL` |
+| **V** | does the same comparison hold on vLLM rather than llama.cpp? | not started |
 
 ## Reproduce
 
@@ -258,7 +275,7 @@ in the output file so they can never be mistaken for a full result.
   numbers: that work used two other physical 3090s with 350 W caps.
 - `-c 8192` for the primary matrix. The long-context behaviour: including whether speculation
   survives the ~25× decode collapse past ~80 K reported in
-  [llama.cpp #27623](https://github.com/ggml-org/llama.cpp/issues/27623) — is a separate phase.
+  [llama.cpp #27623](https://github.com/ggml-org/llama.cpp/issues/27623), is a separate phase.
 - `draft-eagle3` is supported by this build but **no EAGLE3 drafter has been published for
   Qwen3.8-27B**, so the method cannot be evaluated.
 - Multimodal input is not in the primary matrix; llama.cpp has historically refused speculation

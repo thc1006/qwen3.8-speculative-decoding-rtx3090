@@ -1,11 +1,11 @@
-# Phase L — does speculation survive the long-context decode cliff?
+# Phase L: does speculation survive the long-context decode cliff?
 
 Target: [llama.cpp #27623](https://github.com/ggml-org/llama.cpp/issues/27623), open 2026-08-23,
 **zero comments**. Reported on an RTX 4080 SUPER (sm_89): decode throughput on this model
 collapses roughly 25× once the KV position passes ~80 K (33 t/s at 68 K → 1.4 t/s at 91 K) while
 prompt processing stays fast (~1300 t/s). Reproduced there across three quants.
 
-Two things nobody has done: reproduce it on another architecture, and ask the obvious follow-up —
+Two things nobody has done: reproduce it on another architecture, and ask the obvious follow-up,
 **does speculative decoding survive the cliff, amplify it, or mask it?** DFlash2's advertised
 advantage is precisely long-context retention, so the answer is not guessable.
 
@@ -45,7 +45,7 @@ reference not a fresh one.
 
 The context has to be filled with **real, non-repeating text**. Filling it by repeating a
 paragraph would hand the ngram-style predictability of that repetition to the drafter and inflate
-acceptance for a reason that has nothing to do with context depth — the same artifact two
+acceptance for a reason that has nothing to do with context depth, the same artifact two
 independent 3090 reports describe when `probe.py` sends a prompt three times and the n-gram cache
 scores its own history on runs two and three.
 
@@ -54,6 +54,6 @@ an exact target length, with the actual question appended at the end. The realis
 count is recorded per request (`t_prompt_n`) and asserted against the target, so a depth that did
 not actually materialise is visible instead of assumed.
 
-Acceptance is expected to fall with depth on its own — vLLM #47602 reports exactly that from the
-other engine — so the analysis must separate "acceptance decayed" from "the per-step cost k rose".
+Acceptance is expected to fall with depth on its own, and vLLM #47602 reports exactly that from
+the other engine, so the analysis must separate "acceptance decayed" from "the per-step cost k rose".
 The cost model already in `harness/cost_model.py` does that decomposition directly.

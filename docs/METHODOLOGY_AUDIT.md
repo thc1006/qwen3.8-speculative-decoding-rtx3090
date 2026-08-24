@@ -25,7 +25,7 @@ The v1 prompt set is 10 prompts, and its class balance is:
 | reason | 1 |
 | zh | 1 |
 
-Chat prompts do not trigger the speculative path on this model at all — measured, from the
+Chat prompts do not trigger the speculative path on this model at all, measured from the
 repo's own data, baseline `135.8` vs `draft-q35-08b-max8` `135.7` tok/s on the chat class. So
 60 % of the prompt set contributes exactly zero effect to the average, and the published mean is
 a mixture statistic dominated by prompts where nothing happens.
@@ -46,7 +46,7 @@ the set, and a 51–56 % collapse on code and prose".
 **Does the conclusion survive?** Yes, and it strengthens: the finding was *net loss*, and
 stratified it is a larger net loss. The v1 README does publish a per-prompt heatmap and does
 describe the behaviour as bimodal, so the data were disclosed. The issue is that the TL;DR
-number — "Mean decode drops 3–12 %" — is the diluted one, and that is the number that travels.
+number, "Mean decode drops 3 to 12 %", is the diluted one, and that is the number that travels.
 
 **Carried into this repo:** prompt set balanced 3 × 5 by class, and the primary endpoint is
 defined as the class-stratified mean with per-class effects always reported beside it
@@ -61,7 +61,7 @@ variants); all completions reach the cap, so `predicted_n` is constant across ru
 config."*
 
 Checked against `results/`: of 190 recorded requests, **28 terminate below the cap, and all 28
-are in the four `-1000tok` configs** — 7 of 10 prompts in each. Observed `predicted_n` in
+are in the four `-1000tok` configs**, 7 of 10 prompts in each. Observed `predicted_n` in
 `baseline-1000tok` ranges `354 … 891` against a cap of 1000.
 
 The 300-token configs do hold: every one of those requests reaches 300.
@@ -84,7 +84,7 @@ it in. Configs with different caps are never placed in one ranking table.
 - v2 added replication (N = 3 on a subset) after review pressure.
 
 The `std` column in the v1 results table is the spread **across prompts**, not across repeats.
-Given A1, that spread is mostly the bimodality — i.e. it measures the prompt mixture, not
+Given A1, that spread is mostly the bimodality, so it measures the prompt mixture rather than
 run-to-run noise. No published number in v1 or v3 carries an interval that would let a reader
 tell a real 4 % effect from drift.
 
@@ -97,7 +97,7 @@ any interval spanning zero is reported as "no detected effect", never as a direc
 ## A4: Arms were run sequentially, so drift is confounded with arm
 
 Each config was benchmarked to completion before the next began. Any monotone drift over the
-session — thermal soak, clock behaviour, background load — is perfectly confounded with config
+session (thermal soak, clock behaviour, background load) is perfectly confounded with config
 order. The repo's own `baseline` vs `baseline-rerun` (135.7 vs 135.5) is reassuring but is a
 single paired observation, and both were run within the same block.
 
@@ -116,12 +116,12 @@ GPU temperature and clock are recorded at entry and exit.
 | v3 | `llama-cli` | `--temp 0.5 --seed 42` |
 
 Three differences at once (harness, sampling temperature, and a prompt-level reasoning switch),
-and the resulting baselines — 135.7 / 139.9 / 138.9 — are discussed together. The repo does
+and the resulting baselines of 135.7, 139.9 and 138.9 are discussed together. The repo does
 attribute the v1→v2 gap to board-to-board variance and does document the tool change in
 `BENCHMARK_ENV.md`, but with three variables moving simultaneously that attribution is not
 identified by the data.
 
-Temperature is plausibly not a neutral choice here — the standard expectation is that draft
+Temperature is plausibly not a neutral choice here. The standard expectation is that draft
 acceptance falls as temperature rises, which would put v2/v3 at a different point of the
 acceptance/throughput trade-off than v1. **This repo has not measured that, and does not assert
 it.** It is registered as a testable side-question, not used as an explanation for the gap.
@@ -142,7 +142,7 @@ This is not hypothetical for the successor model: vLLM issue #52475 reports MTP 
 decoding producing **repetition collapse** on a hybrid Gated DeltaNet Qwen3.8 target. Collapsed
 output is fast. A benchmark that records only tok/s will rank a broken arm first.
 
-**Carried into this repo:** `harness/quality.py` — every request screened for degeneracy against
+**Carried into this repo:** `harness/quality.py`, which screens every request for degeneracy against
 both absolute thresholds and its own baseline for the same prompt; greedy outputs compared
 character-by-character against the no-spec baseline, reporting where the texts fork rather than
 asserting either "lossless" or "not lossless".
@@ -160,8 +160,8 @@ Two independent third-party 3090 reports on the successor model quantify this ar
 directly: with `ngram-mod`, repeated passes of the same prompt read `111.1` cold then `124.4` and
 `122.5` warm.
 
-For v1 this cuts *against* the repo's own conclusion — the ngram arms were, if anything,
-flattered — so the negative finding is not threatened. It still belongs in the methodology.
+For v1 this cuts *against* the repo's own conclusion, since the ngram arms were if anything
+flattered, so the negative finding is not threatened. It still belongs in the methodology.
 
 **Carried into this repo:** fresh server per arm per pass; prompt order fixed and identical
 across arms; cold/warm status recorded per request so the artifact is measurable rather than
@@ -174,8 +174,8 @@ assumed away.
 `draft-qwen3-0.6b` used a draft model with vocab 151936 against a target with vocab 248320. The
 draft never attached, so the row is a duplicate baseline.
 
-The repo handles this correctly and in public — the table row is annotated *"vocab 151936 ≠
-248320, draft never attached — treat as baseline, shown for posterity"*. Recorded here only as
+The repo handles this correctly and in public: the table row is annotated *"vocab 151936 ≠
+248320, draft never attached, treat as baseline, shown for posterity"*. Recorded here only as
 a positive control worth keeping: **this repo asserts drafter attachment from server logs before
 accepting an arm's numbers**, rather than relying on the operator to notice.
 
@@ -198,7 +198,7 @@ Measured on this host during a single dry-run pass (7 arms, 5 prompts each, 450 
 | 5th | `mtp-n5` | ~1808 MHz | 81 → 84 °C |
 
 Full spread across the pass: **1950 → 1769 MHz, 9.3 %**. Power sat at ~445 W throughout, against
-a 450 W cap — so this is **power-limit throttling, not thermal shutdown**: leakage rises with
+a 450 W cap, so this is **power-limit throttling, not thermal shutdown**. Leakage rises with
 temperature, and the same wattage buys fewer megahertz. The card never reports an error and
 `/health` stays green.
 
