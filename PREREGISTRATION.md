@@ -571,3 +571,60 @@ fourth independent line of evidence for speculation converting a bandwidth-bound
 compute-bound verify, alongside the bandwidth elasticity ratio, the compute elasticity ratio, and
 the higher clock reached under a shared power cap. It was not predicted in advance and is
 recorded as an observation rather than as a test.
+
+## ADDENDUM, registered 2026-08-24: a mechanism for the width partition, and what it predicts
+
+Registered before `phase_nmax` has produced a single record. It is queued behind Phase C and its
+result file does not exist.
+
+Phase A found that fork positions partition the speculative arms into exactly two groups by
+verification width, `{3, 4}` against `{5, 6, 8}`, identically in all five passes, with the
+partition shared by the target's own MTP head and by a structurally unrelated 1.1 GB
+block-diffusion drafter. That was reported as an observation without a mechanism.
+
+Reading `ggml/src/ggml-cuda/mmvq.cu` supplies one. `calc_nwarps` selects how many warps take part
+in the MMVQ reduction, from a table chosen by architecture. An RTX 3090 is sm_86: it is not RDNA,
+GCN, CDNA or DGX Spark, and the Turing table is gated on `arch >= TURING && arch < AMPERE`, so it
+falls through to `MMVQ_PARAMETERS_GENERIC`. That table reads
+
+    ncols_dst 1 to 4  -> 4 warps
+    ncols_dst 5 to 8  -> 2 warps
+    ncols_dst > 8     -> 1 warp
+
+`ncols_dst` is the verification width. The number of warps sets the shape of the summation tree,
+so it sets the order in which partial products are added, and floating-point addition is not
+associative. The boundary between 4 and 5 is exactly where the measured partition falls.
+
+This is the same shape of cause the maintainers traced on Vulkan, where the `soft_max` reduction
+order changes with batch size, and it is on the side that is still open: ggerganov asked on
+2026-08-21 for a reproduction isolating the width at which it starts on CUDA, and noted that
+nobody had posted the boundary.
+
+**H8 (the partition follows `calc_nwarps`).** `phase_nmax` runs MTP at n-max 1 through 8, so
+widths 2 through 9. Fork positions will partition into exactly three groups: `{2, 3, 4}`,
+`{5, 6, 7, 8}`, and `{9}` alone.
+
+- Width 2 joins the low group and width 7 joins the middle one. Both are new: Phase A measured
+  neither, and both are forced by the table.
+- Width 9 separates for a second reason as well, and the two cannot be told apart here.
+  `calc_nwarps` drops it to one warp, and `ggml_cuda_should_use_mmvq` returns
+  `ne11 <= MMVQ_MAX_BATCH_SIZE`, which is 8 on this fallthrough, so width 9 leaves the MMVQ
+  kernel family altogether. Either alone predicts a separate group.
+- Falsified if width 2 or width 7 lands in the wrong group. That would say the partition tracks
+  something other than this table, and the mechanism would be wrong even though the Phase A
+  boundary happens to coincide with it.
+- Falsified differently if width 9 joins `{5, 6, 7, 8}`, which would say the reduction shape is
+  not what moves the fork positions.
+
+**What this does not establish.** That the warp count is the cause rather than a correlate. The
+table changes at the same width as the measurement, on this architecture, for this quantisation,
+which is consistent with cause and is not proof of it. Proof needs the kernel forced to a fixed
+warp count across widths and the divergence disappearing, which is a build change and belongs
+upstream rather than in a study that must not rebuild its own trees mid-run. The claim registered
+here is the boundary and its coincidence with a named code path, not the causal step.
+
+**Also unestablished: that it matters.** Divergence is not error. Every arm in Phase A was
+deterministic and reproduced exactly across five passes, and nothing here says the speculative
+output is worse, only that it is different. The reason it is worth reporting is that greedy
+decoding is documented as reproducible, and a user comparing two runs has no way to know a
+verification width changed the arithmetic under them.
