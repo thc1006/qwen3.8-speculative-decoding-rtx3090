@@ -50,7 +50,6 @@ import stats as ST  # noqa: E402
 
 OUT = ROOT / "analysis"
 RESULT = ROOT / "results/phase_a.json"
-RESULT_R = ROOT / "results/phase_r.json"
 RESULT_R2 = ROOT / "results/phase_r2.json"
 
 DPI = 150
@@ -232,7 +231,9 @@ def fig_cost_model(result):
         k_pts = series_of(spec, "k")
         if len(k_pts) >= 2:
             k0, c, _ = CM._linfit([w - 1 for w, _ in k_pts], [v for _, v in k_pts])
-            gx = np.linspace(2.6, 8.4, 40)
+            # only across the widths that were fitted. Extending it past the last point would
+            # both collide with the series label and draw a claim the data does not carry.
+            gx = np.linspace(k_pts[0][0], k_pts[-1][0], 40)
             ax_k.plot(gx, k0 + c * (gx - 1), color=col, lw=1.1, ls="--", alpha=0.75, zorder=1)
             c_labels.append((f"c = {c:.4f}   ({spec})", col))
 
@@ -241,35 +242,55 @@ def fig_cost_model(result):
         w0, y0 = ref[0]
         gx = np.linspace(w0, 8.4, 40)
         ax_n.plot(gx, y0 * gx / w0, color=C("mut"), lw=1.1, ls=":", zorder=1)
-        ax_n.text(6.05, y0 * 6.05 / w0, " growth in proportion to width", color=C("mut"),
-                  fontsize=9.2, va="center", rotation=0)
+        ax_n.plot([0.045, 0.085], [0.90, 0.90], transform=ax_n.transAxes, color=C("mut"),
+                  ls=":", lw=1.1, clip_on=False)
+        ax_n.text(0.095, 0.90, "growth in proportion to width", transform=ax_n.transAxes,
+                  color=C("mut"), fontsize=9.2, va="center")
     ax_n.set_ylabel("tokens accepted\nper target pass")
     ax_n.set_title("The benefit saturates: the gap below the dotted line is what is lost", pad=8)
-    ax_n.legend(frameon=False, loc="lower right")
+    # direct labels at the line ends. A legend box has to sit somewhere, and on this panel every
+    # somewhere is on top of a line.
+    for spec, (col, _) in STYLE.items():
+        pts = series_of(spec, "mean_len")
+        if pts:
+            ax_n.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
+                          color=col, fontsize=10, va="center", fontweight="bold")
 
     for i, (txt, col) in enumerate(c_labels):
         ax_k.text(0.015, 0.93 - i * 0.115, txt, transform=ax_k.transAxes, color=col,
                   fontsize=9.8, va="top", family="monospace")
+    for spec, (col, _) in STYLE.items():
+        pts = series_of(spec, "k")
+        if pts:
+            ax_k.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
+                          color=col, fontsize=10, va="center", fontweight="bold")
     ax_k.set_ylabel("cost of one target pass,\nin plain decode steps")
     ax_k.set_title("The cost is linear: each extra verified position costs a fixed c", pad=8)
 
+    ax_s.set_ylim(0.96, 1.78)   # headroom for the labels that sit above the best points
     ax_s.axhline(1.0, color=C("mut"), ls=":", lw=1.1)
     ax_s.text(2.65, 1.005, "break-even", fontsize=9, color=C("mut"), va="bottom")
     ax_s.set_ylabel("speedup\n= tokens / cost")
     ax_s.set_title("Saturating benefit over linear cost: the best width is a small one", pad=8)
     ax_s.set_xlabel("verification width  w = n-max + 1   (positions the target scores per pass)")
+    # below and to the right of the best point, with a leader, so the text never crosses a curve
     for spec, (col, _) in STYLE.items():
         pts = series_of(spec, "speedup")
         if pts:
             bw, bv = max(pts, key=lambda p: p[1])
-            ax_s.annotate(f"best w = {bw}  ({bv:.2f}×)", (bw, bv), textcoords="offset points",
-                          xytext=(10, 6), fontsize=9.6, color=col, fontweight="bold")
+            ax_s.annotate(f"best w = {bw}   {bv:.2f}×", (bw, bv), textcoords="offset points",
+                          xytext=(0, 13), ha="center", fontsize=10, color=col,
+                          fontweight="bold")
+        ax_s.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
+                      color=col, fontsize=10, va="center", fontweight="bold")
 
     for ax in axes:
         ax.grid(alpha=0.5)
         _despine(ax)
     ax_s.set_xticks([3, 4, 5, 6, 7, 8])
-    fig.subplots_adjust(left=0.165, right=0.965, top=0.945, hspace=0.30)
+    for _ax in axes:
+        _ax.set_xlim(2.6, 9.4)   # room for the end labels
+    fig.subplots_adjust(left=0.165, right=0.895, top=0.945, hspace=0.30)
     _save(fig, "plot_cost_model", bottom=0.105,
           note=PHASE_A_N + " k is recovered per request as mean_len / speedup, then averaged over 125 requests "
                "per arm. draft-dflash has two widths here, so its dashed line is determined "
@@ -326,69 +347,7 @@ def fig_width_partition(result):
                f"calc_nwarps switches between 4 and 5.")
 
 
-# ------------------------------------------------------------------ 5. the bandwidth bottleneck
-R_METHODS = [("baseline", None, "o"), ("mtp-n3", WONG["blue"], "s"), ("mtp-n7", WONG["green"], "^")]
-R_BW = ["bw-lo", "stock", "bw-hi"]
-
-
-def fig_bandwidth(result_r):
-    cells = EL._cells(result_r)
-    clocks = {c: EL._clock(result_r, "baseline", c, EL.MEM_KEY) for c in R_BW}
-
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(FIG_W, 7.4))
-    bars = []
-    for m, col, mk in R_METHODS:
-        col = col or C("neutral")
-        y = [fmean([v for vs in cells[(m, c)].values() for v in vs]) for c in R_BW]
-        ref = y[R_BW.index("stock")]
-        ax1.plot([clocks[c] for c in R_BW], [100 * v / ref for v in y], marker=mk, color=col,
-                 lw=2.0, ms=9, markeredgecolor=C("bg"), markeredgewidth=1.2,
-                 label=f"{m}  ({ref:.1f} tok/s at stock)")
-        for a, b in zip(R_BW, R_BW[1:]):
-            e, elo, ehi = EL._paired_elasticity(
-                cells[(m, a)], cells[(m, b)], clocks[a], clocks[b],
-                x_lo_samples=EL._clock_samples(result_r, m, a, EL.MEM_KEY),
-                x_hi_samples=EL._clock_samples(result_r, m, b, EL.MEM_KEY))
-            bars.append((f"{m}   {a} → {b}", e, elo, ehi, col, mk))
-
-    ax1.axhline(100, color=C("mut"), lw=1.0, ls=":")
-    ax1.set_xlabel("memory clock (MHz)")
-    ax1.set_ylabel("throughput, % of that\nmethod's own stock value")
-    ax1.set_title("Moving memory bandwidth ±4 % moves the baseline and barely\n"
-                  "moves either speculative arm", pad=10)
-    ax1.legend(frameon=False, loc="upper left", fontsize=9.4)
-    ax1.grid(alpha=0.5)
-    _despine(ax1)
-
-    for i, (_, e, elo, ehi, col, mk) in enumerate(bars):
-        ax2.plot([elo, ehi], [i, i], color=col, lw=2.4, zorder=2)
-        ax2.plot([e], [i], marker=mk, ms=9, color=col, zorder=3,
-                 markeredgecolor=C("bg"), markeredgewidth=1.2)
-        ax2.text(ehi + 0.035, i, f"{e:.2f}", va="center", fontsize=10, family="monospace",
-                 color=C("fg"))
-    for x, lab, ha in ((0.0, "bandwidth-independent", "left"),
-                       (1.0, "throughput ∝ bandwidth", "right")):
-        ax2.axvline(x, color=C("mut"), lw=1.0, ls=":")
-        pad = " " if ha == "left" else ""
-        ax2.text(x, len(bars) - 0.3, f"{pad}{lab}{'' if ha == 'left' else ' '}", fontsize=9,
-                 color=C("mut"), va="center", ha=ha)
-    ax2.set_yticks(range(len(bars)), [b[0] for b in bars], fontsize=9.4)
-    ax2.set_ylim(-0.6, len(bars) - 0.05)
-    ax2.set_xlim(-0.10, 1.15)
-    ax2.set_xlabel("bandwidth elasticity   d(ln tok/s) / d(ln memory clock)")
-    ax2.set_title("The baseline is bandwidth-bound; speculation is not", pad=10)
-    ax2.grid(axis="x", alpha=0.5)
-    ax2.tick_params(axis="y", length=0)
-    _despine(ax2, keep=("bottom",))
-    fig.subplots_adjust(left=0.275, right=0.965, top=0.915, hspace=0.62)
-    _save(fig, "plot_bandwidth_elasticity", bottom=0.115,
-          note="Phase R, 1125 requests. Elasticity is a cluster bootstrap over prompts and over "
-               "the measured clock, per interval, never pooled across a regime change. Only the "
-               "bandwidth conditions are shown: Phase R's compute axis used a power cap, which "
-               "Phase R2 replaces with a pinned clock.")
-
-
-# ------------------------------------------------------------------ 6. what speculation is bound by
+# ------------------------------------------------------------------ 5. what speculation is bound by
 # Phase R2 pins the SM clock instead of capping power, so both levers move independently and the
 # denominator of each elasticity is a setting rather than an outcome. That makes the two axes
 # comparable, which is what this figure needs.
@@ -411,7 +370,7 @@ def fig_bound_by(res):
     # --- the plane: bandwidth elasticity against compute elasticity, at the top of the clock range
     # the two speculative points sit almost on top of each other, so their labels are offset
     # rather than anchored, or they overlap
-    OFFS = {"baseline": (14, 0, "left"), "mtp-n3": (-10, -26, "right"), "mtp-n7": (10, 18, "left")}
+    OFFS = {"baseline": (14, 0, "left"), "mtp-n3": (-12, -20, "right"), "mtp-n7": (22, 24, "left")}
     for m, col, mk in R2_METHODS:
         col = col or C("neutral")
         bw = fmean([_elast(res, m, a, b, EL.MEM_KEY)[0]
@@ -423,11 +382,11 @@ def fig_bound_by(res):
         ax1.annotate(f"{m}\n({bw:.2f}, {cp:.2f})", (bw, cp), textcoords="offset points",
                      xytext=(dx, dy), fontsize=9.6, color=col, va="center", ha=ha)
     ax1.plot([0, 1], [1, 0], color=C("mut"), ls=":", lw=1.0, zorder=1)
-    ax1.text(0.06, 0.90, "compute-bound", fontsize=9.6, color=C("mut"))
-    ax1.text(0.62, 0.06, "bandwidth-bound", fontsize=9.6, color=C("mut"))
     ax1.set_xlim(-0.03, 1.0); ax1.set_ylim(-0.03, 1.0)
-    ax1.set_xlabel("bandwidth elasticity   d(ln tok/s) / d(ln memory clock)")
-    ax1.set_ylabel("compute elasticity\nd(ln tok/s) / d(ln SM clock)")
+    ax1.set_xlabel("bandwidth elasticity   d(ln tok/s) / d(ln memory clock)\n"
+                   "further right = more bandwidth-bound")
+    ax1.set_ylabel("compute elasticity\nd(ln tok/s) / d(ln SM clock)\n"
+                   "higher = more compute-bound")
     ax1.set_title("Speculation does not speed up a bandwidth-bound decode.\n"
                   "It moves the workload into the other corner", pad=10)
     ax1.grid(alpha=0.5); _despine(ax1)
@@ -450,13 +409,13 @@ def fig_bound_by(res):
     ax2.set_xticks(xs, ["600 → 1200 MHz\nboth still compute-starved",
                         "1200 → 1710 MHz\nthe baseline hits its bandwidth ceiling"], fontsize=9.6)
     ax2.set_ylabel("compute elasticity")
-    ax2.set_ylim(0, 1.08)
+    ax2.set_ylim(0, 1.14)
     ax2.set_title("Below 1200 MHz everything scales with clock. Above it, only\n"
                   "the speculative arms still do", pad=10)
-    ax2.legend(frameon=False, ncol=3, loc="upper right")
+    ax2.legend(frameon=False, ncol=3, loc="upper right", fontsize=9.4)
     ax2.grid(axis="y", alpha=0.5); _despine(ax2)
 
-    fig.subplots_adjust(left=0.155, right=0.975, top=0.925, hspace=0.55)
+    fig.subplots_adjust(left=0.185, right=0.975, top=0.935, hspace=0.62)
     _save(fig, "plot_bound_by", bottom=0.10,
           note="Phase R2, 1575 requests, 0 incidents. The SM clock is pinned with nvidia-smi -lgc "
                "rather than produced by a power cap, so each elasticity has a setting in its "
@@ -468,7 +427,6 @@ def main():
     OUT.mkdir(exist_ok=True)
     result = A.load(RESULT)
     series, prompt_class, _, _ = A.build_series(result, "decode_tok_s")
-    result_r = A.load(RESULT_R) if RESULT_R.exists() else None
     result_r2 = A.load(RESULT_R2) if RESULT_R2.exists() else None
     for mode in ("light", "dark"):
         print(f"  --- {mode}")
@@ -477,8 +435,6 @@ def main():
             fig_per_class(series, prompt_class)
             fig_cost_model(result)
             fig_width_partition(result)
-            if result_r:
-                fig_bandwidth(result_r)
             if result_r2:
                 fig_bound_by(result_r2)
 

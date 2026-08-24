@@ -1,0 +1,57 @@
+====================================================================================================
+VERIFICATION-STEP COST MODEL     speedup = mean_len / k
+  mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)   [derived; the API has
+            no verification-step count, and this is low by <1 %. See the docstring.]
+====================================================================================================
+[integrity] derived mean_len vs the server's printed mean len: 125 requests, mean gap -0.0050, worst 0.0581
+            within the log's own %5.2f printing precision, so the derivation tracks the server.
+
+[integrity] API counters vs llama.cpp log lines: 125 requests compared, 0 mismatched  -- two independent sources agree to the token
+
+--- k by arm (pooled over classes and passes) ---
+arm              spec             w    n   k mean    k sd         k range
+mtp-n2           draft-mtp        3   25   1.5750  0.0131   1.550-1.601
+mtp-n3           draft-mtp        4   25   1.9102  0.0173   1.880-1.943
+dflash2-n4       draft-dflash     5   25   2.0822  0.0210   2.042-2.140
+mtp-n5           draft-mtp        6   25   2.5197  0.0238   2.473-2.574
+dflash2-n7       draft-dflash     8   25   2.9833  0.0231   2.926-3.036
+
+--- TEST 1: is the overhead charged to REJECTION? ---
+    Model a rejection-proportional cost r (decode-steps per rejected draft token):
+        k = k_verify + r * n_max * (1 - acceptance)
+        => dk/d(acceptance) = -r * n_max,   so  r = -slope / n_max
+    A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+
+arm               n    accept range     slope     r2  r estimate  reading
+mtp-n2            2  0.418-0.918   -0.0172  0.044     0.00859  r negligible (k spread 3.24%)
+mtp-n3            3  0.325-0.857   -0.0180  0.036     0.00602  r negligible (k spread 3.29%)
+dflash2-n4        4  0.162-0.843   -0.0276  0.091     0.00691  r negligible (k spread 4.71%)
+mtp-n5            5  0.173-0.720   -0.0646  0.242     0.01293  r negligible (k spread 4.04%)
+dflash2-n7        7  0.096-0.695   -0.0108  0.010     0.00154  r negligible (k spread 3.71%)
+
+  Largest r across arms: +0.01293 decode-steps per rejected draft token.
+  Acceptance spans roughly 0.096-0.918 in this data — nearly a ten-fold range —
+  so a rejection-driven overhead of any consequence would have shown up here.
+  Reading: the verification overhead is paid per position VERIFIED, not per
+  draft REJECTED. This does not say rollback is free; it bounds how much of
+  the observed cost rollback can account for.
+
+--- TEST 2: k vs verification width, per method ---
+    fitting k = k0 + c*(w-1); c is the marginal cost of one more verified position
+  draft-dflash   widths [5, 8]  ->  k0=0.8807  c=0.3004  r2=1.0000
+      w= 5  k=2.0822  fit=2.0822  resid=+0.0000
+      w= 8  k=2.9833  fit=2.9833  resid=+0.0000
+  draft-mtp      widths [3, 4, 6]  ->  k0=0.9568  c=0.3134  r2=0.9994
+      w= 3  k=1.5750  fit=1.5837  resid=-0.0087
+      w= 4  k=1.9102  fit=1.8971  resid=+0.0130
+      w= 6  k=2.5197  fit=2.5240  resid=-0.0043
+
+  Two methods with independent drafters fitted separately. If their `c` agree
+  while `k0` differ, the marginal cost belongs to the verification path rather
+  than to the drafter.
+
+--- implied optimum ---
+    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k
+    has an interior maximum. Observed best per method:
+  draft-dflash   n4=1.386x  n7=1.124x   -> best n-max = 4
+  draft-mtp      n2=1.476x  n3=1.396x  n5=1.211x   -> best n-max = 2

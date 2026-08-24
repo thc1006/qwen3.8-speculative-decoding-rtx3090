@@ -1,0 +1,57 @@
+
+====================================================================================================
+metric: decode_tok_s   passes: 1   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@master                    38.86      38.86      25  -=0.0%
+baseline@pr27342                   38.84      38.84      25  -=0.0%
+mtp-n2                             57.36      57.36      25  -=0.0%
+mtp-n3                             54.26      54.26      25  -=0.0%
+mtp-n5                             47.06      47.06      25  -=0.0%
+dflash2-n4                         53.86      53.86      25  -=0.0%
+dflash2-n7                         43.70      43.70      25  -=0.0%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2                       baseline@master        +47.60 [+44.89, +50.36]  FASTER
+mtp-n3                       baseline@master        +39.60 [+35.97, +43.49]  FASTER
+mtp-n5                       baseline@master        +21.08 [+15.79, +26.32]  FASTER
+dflash2-n4                   baseline@pr27342       +38.62 [+32.57, +44.55]  FASTER
+dflash2-n7                   baseline@pr27342       +12.44 [+5.05, +19.70]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2                     chat: +35.4%  code: +77.8%  prose: +36.5%  reason: +61.1%  zh: +27.2%
+  mtp-n3                     chat: +20.5%  code: +82.6%  prose: +24.9%  reason: +57.5%  zh: +12.6%
+  mtp-n5                     chat:  -2.6%  code: +76.0%  prose:  -2.8%  reason: +42.7%  zh:  -8.0%
+  dflash2-n4                 chat: +19.0%  code: +99.1%  prose: +11.2%  reason: +72.8%  zh:  -9.0%
+  dflash2-n7                 chat: -12.3%  code: +76.2%  prose: -18.9%  reason: +52.1%  zh: -34.9%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 175
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+baseline@master            0.1164     +0.0%       3438     +0.0%       -          -
+baseline@pr27342           0.1164     +0.0%       3437     -0.0%       -          -
+mtp-n2                     0.1736    +49.2%       2348    -31.7%   0.665       2.32
+mtp-n3                     0.1645    +41.4%       2532    -26.4%   0.558       2.65
+mtp-n5                     0.1421    +22.1%       3060    -11.0%   0.412       3.03
+dflash2-n4                 0.1648    +41.6%       2684    -21.9%   0.474       2.87
+dflash2-n7                 0.1319    +13.4%       3613     +5.1%   0.339       3.33
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  dflash2-n4                 byte-identical 5/25   median shared prefix when forked: 0.228
+  dflash2-n7                 byte-identical 5/25   median shared prefix when forked: 0.228
+  mtp-n2                     byte-identical 6/25   median shared prefix when forked: 0.240
+  mtp-n3                     byte-identical 6/25   median shared prefix when forked: 0.240
+  mtp-n5                     byte-identical 5/25   median shared prefix when forked: 0.228
+
+--- determinism (greedy, same arm/prompt across passes) ---
