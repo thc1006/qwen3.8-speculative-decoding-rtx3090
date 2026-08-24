@@ -362,3 +362,61 @@ kept as `results/phase_a.pre_repair.json` and the repair is logged in the result
 _(none yet — the two items above are corrections to this document's own interim reasoning, not to
 a published result. The v3.0 erratum for the predecessor repo remains pending on Phase C's
 drafter-quantization ladder.)_
+
+## ADDENDUM, registered 2026-08-24: hypotheses for Phase L
+
+Registered after Phase A and during Phase R2, and before any Phase L measurement exists. It is
+appended rather than folded into the hypothesis section above because that section was fixed
+before the study began and does not get rewritten. What makes this a pre-registration and not a
+rationalisation is the ordering: the depth ladder had not been run when this was written, and
+the commit that adds it (`8159e60`) contains the harness and no results.
+
+The occasion is llama.cpp issue #27623, opened 2026-08-23 with no replies. It reports decode
+throughput on this exact model collapsing from 33 tok/s at 68K to 1.4 tok/s at 91K, roughly 25x,
+while prompt processing stays at about 1300 tok/s. The reporter is on an RTX 4080 SUPER, sm_89,
+and reproduced it across three quantisations. Two things follow that nobody has done: it has not
+been tried on another architecture, and nobody has asked what speculation does to it.
+
+**H5 (the cliff is not Ada-specific).** The collapse reproduces on sm_86 at a ratio of 10x or
+more between the best and worst rung of the ladder.
+
+- Falsified if the worst-to-best ratio is under 3x. That outcome is worth as much as a
+  reproduction, since it localises the report to Ada and is a more useful comment on the issue
+  than another confirmation would be.
+- A gradual slope is not a cliff. The largest single-rung drop is reported alongside the overall
+  ratio, and a finding is only called a cliff if one rung transition carries most of it.
+
+**H5a (speculation helps more as context deepens).** The relative speedup over the matched
+baseline increases with depth, monotonically over the rungs that clear H5's cliff.
+
+The reasoning is the mechanism this study has already measured at shallow context, extended:
+speculation converts bandwidth-bound decode into compute-bound verification, measured here as a
+bandwidth elasticity of 0.14 to 0.21x against a compute elasticity of 1.71 to 1.74x. Attention
+over a long KV cache is bandwidth work that grows with depth. A baseline pays one pass over the
+cache per token emitted. A verification step covering k accepted tokens pays one pass for all k.
+So the deeper the cache, the more a verification step saves relative to the baseline, and the
+advantage should widen rather than hold.
+
+- Falsified if the speedup is flat in depth (slope indistinguishable from zero across rungs) or
+  shrinks. Either would say the KV pass is not what limits decode at depth here, and the
+  mechanism claim would need narrowing to shallow context.
+- This is the prediction most likely to fail, because it assumes the cliff has the same cause as
+  ordinary depth slowdown. If the cliff is a distinct pathology, for instance an allocation or
+  eviction problem rather than a bandwidth one, speculation has no reason to help and H5a can
+  fail while H5 holds. The two are reported separately for that reason.
+
+**H5b (acceptance is roughly depth-invariant).** Mean accepted tokens per verification step
+varies by less than 15% across the ladder for a given method.
+
+- If acceptance holds while throughput collapses, the loss is in the target and speculation is
+  inheriting a problem rather than causing one.
+- If acceptance falls with depth, the drafter is degrading on its own, which is a different
+  finding and is what DFlash2's long-context claim would be failing at.
+
+**What Phase L cannot settle.** The ladder stops at 96K because 128K with a q8_0 KV cache needs
+23.8GB of a 24GB card. The reporter's cliff sits near 80K and 96K clears it, but the behaviour
+beyond 96K on this card is not measured and will not be claimed. Deeper rungs need either q4_0
+KV, which would confound depth with KV precision, or the 48GB card, which is covered in
+`docs/A6000_PLAN.md`. The ladder is also 15 prompts rather than 25, three per class, which is
+enough for the cluster bootstrap to resample within each class but gives wider intervals than
+Phase A's.
