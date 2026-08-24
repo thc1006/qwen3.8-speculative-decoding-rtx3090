@@ -134,6 +134,9 @@ log "wrote analysis/phase_kv_divergence.txt"
 run_phase phase_nmax 3 18225 results/phase_nmax.json || exit 1
 python3 harness/cost_model.py results/phase_nmax.json > analysis/phase_nmax_cost.txt 2>&1
 python3 harness/divergence_report.py results/phase_nmax.json > analysis/phase_nmax_divergence.txt 2>&1
+python3 harness/width_groups.py results/phase_nmax.json > analysis/phase_nmax_width_groups.txt 2>&1
+log "wrote analysis/phase_nmax_width_groups.txt: the H8 and H8a verdicts"
+grep -E "H8 |H8a |VERDICT WITHHELD|DISAGREE" analysis/phase_nmax_width_groups.txt | sed 's/^/    /' || true
 log "wrote analysis/phase_nmax_{cost,divergence}.txt: the k(w) fit on 8 MTP widths, and the"
 log "  width-2/7/9 groups that llama.cpp #25618 comment 5396293373 predicts"
 
