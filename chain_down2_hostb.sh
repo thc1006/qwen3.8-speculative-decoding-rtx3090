@@ -34,9 +34,24 @@ fi
 
 log "shipping and running the corrected build"
 scp -q -o BatchMode=yes run_warp_down2_hostb.sh "$HB:~/qwen38-remote/" || { log "scp failed"; exit 1; }
-rsh "cd qwen38-remote && bash run_warp_down2_hostb.sh > logs/warp_down2_chain.log 2>&1"
-rc=$?
-log "forced_down2 on host B returned rc=$rc"
+# NOT through rsh(): that wrapper carries a 120 s timeout for short status queries, and this
+# job builds and then runs 150 records. Sending it through rsh killed the ssh at 120 s and
+# reported rc=124 as if the run had failed, while the remote job carried on regardless and its
+# result had nobody left to collect it. Detached, then polled.
+timeout 120 ssh -o BatchMode=yes "$HB" \
+  "cd qwen38-remote && nohup bash run_warp_down2_hostb.sh > logs/warp_down2_chain.log 2>&1 & echo started"
+log "forced_down2 launched detached on host B"
+while rsh "pgrep -f '[r]un_warp_down2_hostb.sh' >/dev/null && echo yes || echo no" | grep -q yes; do
+  n=$(rsh "cd qwen38-remote && python3 -c \"
+import json
+try: print(len(json.load(open('results/phase_warp_forced_down2.json'))['records']))
+except Exception: print(0)\"" 2>/dev/null | tr -d '\r')
+  log "  forced_down2 ${n:-0}/150"
+  [ "$(date +%s)" -ge "$DEADLINE" ] && { log "deadline reached while it ran"; break; }
+  sleep 180
+done
+rc=0
+log "forced_down2 on host B finished"
 
 for f in results/phase_warp_forced_down2.json results/phase_warp_forced_down2.records.jsonl \
          logs/warp_forced_down2.log logs/warp_down2_chain.log; do

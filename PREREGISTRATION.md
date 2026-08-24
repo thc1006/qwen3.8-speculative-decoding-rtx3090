@@ -1077,3 +1077,63 @@ Registered now, with the run in progress and no results seen:
 If widths 5, 6 and 8 come back identical and widths 3 and 4 do not follow, then both directions
 agree that the warp count changes the numerics without carrying the fork positions, and H8's
 account of the partition is refuted rather than merely unsupported.
+
+## Correction 7, registered 2026-08-25 07:30, before either run finishes
+
+Two results landed together and both go against what was registered.
+
+### Forced-down2 failed the gates its rebuild was designed to pass
+
+Correction 6 predicted, before the run, that a table splitting the 1-4 row so widths 1 and 2 keep
+four warps would leave the greedy baseline and widths 5, 6 and 8 byte-identical to the control,
+and named what a failure would mean. The run finished and:
+
+| width | registered | observed | |
+|---|---|---|---|
+| 1 (baseline, no drafter) | identical to control | 2 of 25 | **FAIL** |
+| 3, 4 | must change | changed | PASS |
+| 5, 6, 8 | identical to control | 5 of 25 each | **FAIL** |
+
+Correction 6 says in as many words that width 1 moving means the drafter account is wrong. It
+moved. The baseline has no drafter at all, so that account cannot explain it and is withdrawn.
+
+Disassembly makes it worse rather than better. Hashing the SASS of all 294 `mul_mat_vec_q`
+instantiations, control against forced_down2: `ncols_dst` 1 is **byte-identical, 110 of 110**,
+`ncols_dst` 2 identical, 3 and 4 changed, 5 through 8 identical. The edit was surgical in the
+binary. A width-1 request runs byte-identical machine code in the two builds, on the same card,
+with the same weights, at greedy, and produces different text on 23 of 25 prompts.
+
+### The 3090 reproduces the A6000, so it is not one card
+
+| | A6000 | RTX 3090 |
+|---|---|---|
+| forced-up validity gates | all pass | all pass |
+| registered prediction held on | 3 of 18 | 4 of 14 |
+| forced-down | void, untouched widths moved | void, untouched widths moved |
+
+Different architecture generation, different toolchain, same shape. **`calc_nwarps` is not
+supported as the cause of the fork-position grouping on either device.**
+
+### The control that should have run first
+
+Every one of these comparisons assumes a build produces the same output twice, and nothing has
+tested it. The control build is being re-run now on host C, with the same binary
+(`libggml-cuda 5f77e30401ac31ab`, unchanged), against the same prompts. Registered before it
+finishes:
+
+- **It reproduces byte for byte, 150 of 150.** Then the build is deterministic, every difference
+  between builds is a build difference, and forced_down2 changing the width-1 baseline while its
+  width-1 kernels are identical SASS is a real effect that this study has not yet named. The next
+  step is hashing every kernel in the library rather than only `mul_mat_vec_q`, since something
+  outside that set has to be carrying it.
+- **It does not reproduce.** Then run-to-run variation is on the same scale as what was attributed
+  to the table edit, and every forced-warp comparison here has to be re-read against it - including
+  the forced-up gates that passed 25 of 25 and 50 of 50, which would then be measuring a
+  reproducibility this control says does not exist. That would not touch the throughput results,
+  which are paired and averaged over passes, but it would end the intervention as designed.
+- **It reproduces on some widths and not others.** Reported as such. The widths that fail are the
+  ones every other comparison has to drop, and no account is prepared for a partial result.
+
+Writing this down now matters more than usual: the second outcome would invalidate a line of work
+this repo has spent a day on, and the temptation to find a reason the control does not apply would
+be strongest exactly then.
