@@ -190,6 +190,56 @@ into `positions` as `200007`. `ancestor chain loops` behaves the same. With the 
 terminate in one and three iterations, offsets stay inside the row, and **the two valid cases are
 byte-identical with and without it**.
 
+### The sampler walk, run without the escape hatch
+
+`cap` is a runtime argument, so the same kernel text runs unbounded by passing `ULLONG_MAX`.
+[`hang_live.cu`](hang_live.cu) extracts the kernel from `hang_repro.cu` rather than retyping it
+and launches the minimal sufficient case, the 1 <-> 3 cycle with nothing accepted.
+
+| | utilisation | power | SM clock | memory |
+|---|---:|---:|---:|---:|
+| idle | 0 % | **24.1 W** | 210 MHz | 15 MiB |
+| **spinning** | **100 %** | **97-100 W** | **1950 MHz** | 287 MiB |
+| after the process is killed | 0 % | 25 W | 210 MHz | 15 MiB |
+
+The kernel never returned; it was still running when the process was killed, and the device
+recovered fully. **One block of one thread is enough** to pin utilisation at 100 % and drive the
+SM clock to its ceiling.
+
+On the power figure, be careful. The report describes "100 % GPU utilization with very low power
+draw (~25 W)" on an A2, and this is ~98 W on an A6000, so the numbers do not match and should not
+be presented as if they did. What matches is the shape, and the fractions are comparable: 25 W is
+about 42 % of the A2's 60 W board power, 98 W is about 33 % of the A6000's 300 W. The signature is
+a device that reads as fully utilised, with its clock at maximum, drawing far less than real work
+would. That is what a spin looks like and it is not what a slow kernel or a deadlock looks like.
+
+### The sampler walk also reads out of bounds, and one case needs no malformed tree
+
+The walk's only exit test is `cur_index != -1`; it never checks that `cur_index` indexes the row,
+and `draft_token_id` is read from `candidates` and used to index `target_probs` unvalidated.
+[`oob_repro.cu`](oob_repro.cu) runs each case in its own process, because a launch failure
+poisons the context and later cases would otherwise never run. Under `compute-sanitizer
+--tool memcheck` on sm_86:
+
+| case | result |
+|---|---|
+| sibling chain entirely in range | **no error** |
+| sibling entry 99, row holds 4 | invalid read, 153 bytes **after** a 128-byte allocation |
+| sibling entry -7, which is not the -1 sentinel | invalid read, 56 bytes **before** a 32-byte allocation |
+| **candidate token id 4096 against d = 8** | invalid read, **13 821 bytes after** a 4-byte allocation |
+
+The control is clean and the three malformed inputs each abort the launch, so this is a tool's
+verdict rather than a reading of the source.
+
+The last row is a **separate defect with a lower precondition**. Its sibling chain is entirely
+valid; all it takes is one token id in `candidates` outside the vocabulary dimension. A bounded
+walk would not prevent it.
+
+The `else` branch writes `draft_probs` at the same computed offset it reads `target_probs` from,
+into a buffer of the same size, so that write is out of bounds on the same inputs. It is not
+separately observed here, because the kernel dies at the read that precedes it, and it is not
+claimed as observed.
+
 ### What this does and does not establish
 
 It establishes that both loops are non-terminating on the reporting architecture, that the
@@ -198,8 +248,18 @@ proposed bounds release them, and that neither bound changes a valid input.
 It does not establish that either fix resolves #35822. The chain that would connect them is:
 the builder's out-of-row write corrupts a neighbouring row, which produces a malformed sibling
 chain, which wedges the sampler. Every link in that chain is now measured except the middle one —
-that the out-of-row write specifically turns `retrive_next_sibling` into a cycle. Until that is
-shown, the two are separate defects that happen to sit in the same feature.
+that the out-of-row write specifically turns `retrive_next_sibling` into a cycle.
+
+That middle link is more plausible than it was. The builder's runaway walk does not overrun its
+row by a little: `builder_repro` reaches offset 200 007 against a row that ends at 2, which leaves
+the tensor entirely and lands wherever the caching allocator placed the next block. The same
+function allocates and returns `retrive_next_sibling`. So the mechanism is not "a neighbouring
+element is corrupted" but "an arbitrary distance into the arena is written", and the sibling array
+is one of the things in that arena. Demonstrating it would take a run with the real allocator, not
+these standalone reproducers.
+
+Until that is shown, the two are separate defects that happen to sit in the same feature, and the
+open PR still does not claim otherwise.
 
 There is still no server-level reproduction, no TP=2, and no AWQ Qwen3.8 on this host.
 

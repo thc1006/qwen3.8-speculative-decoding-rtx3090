@@ -1,0 +1,90 @@
+host mailer.cirda.nycu.edu.tw | NVIDIA RTX A6000, 8.6, 580.95.05 | 2026-08-25T02:50:41+08:00
+sanitizer: /usr/local/cuda/bin/compute-sanitizer
+
+########## A. the unbounded walk, live, on a cyclic sibling chain ##########
+--- idle baseline
+  baseline   util  0,%  power 31.29, W  sm 210, MHz  31, C  mem 15 MiB
+  baseline   util  0,%  power 24.08, W  sm 210, MHz  30, C  mem 15 MiB
+  baseline   util  0,%  power 24.05, W  sm 210, MHz  30, C  mem 15 MiB
+--- kernel launched (pid 2514181), spinning:
+      launching walk<<<1,1>>> with cap=ULLONG_MAX, bounded=0
+      this call does not return; kill the process to release the device
+  spinning   util 100,%  power 97.58, W  sm 1950, MHz  34, C  mem 287 MiB
+  spinning   util 100,%  power 97.94, W  sm 1950, MHz  34, C  mem 287 MiB
+  spinning   util 100,%  power 98.24, W  sm 1950, MHz  35, C  mem 287 MiB
+  spinning   util 100,%  power 98.25, W  sm 1950, MHz  35, C  mem 287 MiB
+  spinning   util 100,%  power 99.32, W  sm 1950, MHz  36, C  mem 287 MiB
+  spinning   util 100,%  power 98.65, W  sm 1935, MHz  36, C  mem 287 MiB
+  spinning   util 100,%  power 98.88, W  sm 1935, MHz  37, C  mem 287 MiB
+  spinning   util 100,%  power 100.09, W  sm 1935, MHz  37, C  mem 287 MiB
+  spinning   util 100,%  power 99.09, W  sm 1935, MHz  38, C  mem 287 MiB
+  spinning   util 100,%  power 99.33, W  sm 1935, MHz  38, C  mem 287 MiB
+--- killing the process to release the device
+  after      util  0,%  power 26.51, W  sm 210, MHz  36, C  mem 15 MiB
+  after      util  0,%  power 24.85, W  sm 210, MHz  36, C  mem 15 MiB
+  after      util  0,%  power 25.23, W  sm 210, MHz  35, C  mem 15 MiB
+--- did the walk ever return?
+      no; it was still running when killed
+
+########## B. compute-sanitizer on the sampler walk ##########
+========= COMPUTE-SANITIZER
+=== in-range sibling chain ===
+  sync: no error
+=== sibling index 99, row holds 4 ===
+========= Invalid __global__ read of size 8 bytes
+=========     at walk(const long *, const long *, const long *, const long *, const float *, const float *, float *, unsigned int, unsigned int, unsigned int, float, float, unsigned long long, int, unsigned long long *, int *, int *)+0x900
+=========     by thread (0,0,0) in block (0,0,0)
+=========     Access at 0x7f7c85c00918 is out of bounds
+=========     and is 153 bytes after the nearest allocation at 0x7f7c85c00800 of size 128 bytes
+=========     Saved host backtrace up to driver entry point at kernel launch time
+=========         Host Frame: main [0x9323] in oob_repro
+========= 
+========= Program hit cudaErrorLaunchFailure (error 719) due to "unspecified launch failure" on CUDA API call to cudaDeviceSynchronize.
+=========     Saved host backtrace up to driver entry point at error
+=========         Host Frame: main [0x932c] in oob_repro
+========= 
+  sync: unspecified launch failure
+========= Program hit cudaErrorLaunchFailure (error 719) due to "unspecified launch failure" on CUDA API call to cudaMemcpy.
+=========     Saved host backtrace up to driver entry point at error
+=========         Host Frame: main [0x8f31] in oob_repro
+========= 
+========= Target application returned an error
+========= ERROR SUMMARY: 3 errors
+
+########## C. compute-sanitizer on the builder walk ##########
+========= Invalid __global__ read of size 8 bytes
+========= Invalid __global__ read of size 8 bytes
+========= Program hit cudaErrorLaunchFailure (error 719) due to "unspecified launch failure" on CUDA API call to cudaDeviceSynchronize.
+========= ERROR SUMMARY: 3 errors
+
+########## final GPU state ##########
+  final      util  8,%  power 90.11, W  sm 1935, MHz  38, C  mem 15 MiB
+  pid, process_name
+######## case 0 ########
+=== in-range sibling chain ===
+  sync: no error
+========= ERROR SUMMARY: 0 errors
+######## case 1 ########
+=== sibling index 99, row holds 4 ===
+========= Invalid __global__ read of size 8 bytes
+=========     Access at 0x7f12f3c00918 is out of bounds
+=========     and is 153 bytes after the nearest allocation at 0x7f12f3c00800 of size 128 bytes
+  sync: unspecified launch failure
+========= ERROR SUMMARY: 2 errors
+========= ERROR SUMMARY: 1 errors were not printed. Use --print-limit option to adjust the number of printed errors
+######## case 2 ########
+=== sibling index -7, not -1 ===
+========= Invalid __global__ read of size 8 bytes
+=========     Access at 0x7f1997c005c8 is out of bounds
+=========     and is 56 bytes before the nearest allocation at 0x7f1997c00600 of size 32 bytes
+  sync: unspecified launch failure
+========= ERROR SUMMARY: 2 errors
+========= ERROR SUMMARY: 1 errors were not printed. Use --print-limit option to adjust the number of printed errors
+######## case 3 ########
+=== candidate token id 4096, D=8 ===
+========= Invalid __global__ read of size 4 bytes
+=========     Access at 0x7f0765c04800 is out of bounds
+=========     and is 13,821 bytes after the nearest allocation at 0x7f0765c01200 of size 4 bytes
+  sync: unspecified launch failure
+========= ERROR SUMMARY: 2 errors
+========= ERROR SUMMARY: 1 errors were not printed. Use --print-limit option to adjust the number of printed errors
