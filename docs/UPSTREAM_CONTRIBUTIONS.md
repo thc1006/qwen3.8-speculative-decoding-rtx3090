@@ -40,21 +40,59 @@ and it already establishes:
   query token, valid only for single-token decode, so multi-token verify drifted, with **wrong
   drafts appearing at window >= 4**. Fixed by gating the packing on `neq1 == 1`.
 
-**What is left, and it is narrow but real.** That root cause is a **Vulkan** path. Nobody has
-localised the analogous threshold on **CUDA**. This study's Phase A shows fork positions on
-sm_86 partitioning into exactly two groups by verification width, `{3, 4}` against `{5, 6, 8}`,
-with the partition shared by two unrelated drafters, placing a CUDA boundary between width 4
-and width 5. That is close to, but not the same as, the Vulkan `>= 4` window condition, which is
-what makes it worth pinning down rather than assuming they are the same bug.
+**The thread moved on 2026-08-21 and 2026-08-24, and it changes what is worth saying.**
 
-Phase N walks MTP over widths 2–9 and DFlash2 over 3/5/7/9 precisely to state the CUDA boundary
-as "between width W and W+1" instead of "somewhere". A precise boundary on a backend whose
-sibling bug has already been root-caused is a usable pointer to a specific kernel; a vague one
-is a fourth report that output differs.
+ggerganov, 2026-08-21: the numerical difference between computing logits for N tokens at once and
+N separate decodes is inherent to batched evaluation and is not a bug; what would be useful is a
+reproduction isolating *the width at which it starts, on CUDA*, since the Vulkan case was traced
+to the `soft_max` reduction order changing with batch size and nobody had posted the CUDA
+boundary.
 
-**Filing discipline for this one:** comment on #25618 (the parent, where the expertise is), not
-on #27407; lead with the CUDA width boundary; explicitly credit `snick525` for drafter
-independence and `Ankk98` for the Vulkan root cause rather than restating either as new.
+`frizikk`, 2026-08-24, answered part of it on Vulkan with an operator-level bisect: the first
+boundary is a `MUL_MAT` at `linear_attn_out-0`, Q8_0 weight against F32 activation, where `N=1`
+takes `mul_mat_vec_q8_0_f32_f32` and `N=2` takes `quantize_q8_1_x4` plus a Q8_0 x Q8_1 MMVQ.
+Replaying `N=2` through the `N=1` path made row 0 bit-exact. So on Vulkan the onset is at `N=2`
+and the cause is the path switch plus F32-to-Q8_1 staging.
+
+`F-Mangini`, 2026-08-22, showed the same at `n_max=1` on LFM2.5 DSpark, Vulkan, Q8_0 target, and
+that an F16 target preserves greedy parity, so a quantised target is necessary.
+
+**What this study has that is not in the thread, stated narrowly.** Not the onset width. Phase A
+never ran `n_max=1`, so it cannot say where divergence starts, and on the Vulkan evidence the
+answer is already `N=2`. What it has is a *second* boundary, further up, on CUDA: fork positions
+on sm_86 partition into exactly two groups by verification width, `{3, 4}` against `{5, 6, 8}`,
+identically across five passes, with the partition shared by the target's own MTP head and by an
+unrelated 1.1 GB block-diffusion drafter. Every one of those widths diverges; what changes at the
+boundary is *where*.
+
+`ggml/src/ggml-cuda/mmvq.cu` has a candidate mechanism at exactly that width.
+`ggml_cuda_should_use_mmvq` on this card returns `ne11 <= MMVQ_MAX_BATCH_SIZE`, which is 8, so
+every width from 3 to 8 stays inside MMVQ and the kernel family is not what changes. `calc_nwarps`
+does change. sm_86 is not RDNA, GCN, CDNA or DGX Spark, and the Turing table is gated on
+`arch >= TURING && arch < AMPERE`, so it falls through to `MMVQ_PARAMETERS_GENERIC`:
+
+    ncols_dst 1 to 4  -> 4 warps
+    ncols_dst 5 to 8  -> 2 warps
+    ncols_dst > 8     -> 1 warp
+
+`ncols_dst` is the verification width, the warp count sets the shape of the summation tree, and
+floating-point addition is not associative. That is the same shape of cause as the Vulkan
+`soft_max` finding, in a different kernel, and its boundary is where the measurement's is.
+
+**What would make it a claim rather than a coincidence.** `phase_nmax` runs MTP at widths 2
+through 9 and is registered as H8 in `PREREGISTRATION.md` before its data exists. The table
+forces three groups, `{2, 3, 4}`, `{5, 6, 7, 8}` and `{9}`; widths 2 and 7 were never measured
+and are the real test, and width 9 is confounded because it drops to one warp and leaves MMVQ at
+the same time. Causation needs the warp count forced constant across widths and the divergence
+disappearing, which is a build change and belongs upstream, not in a study that cannot rebuild
+its own trees mid-run.
+
+**Filing discipline for this one:** comment on #25618, where the expertise is. Open by agreeing
+that batched evaluation is not bit-identical and that this is not filed as a bug. Do not claim
+the onset width; `frizikk` has it on Vulkan and this study did not run `n_max=1`. Lead with the
+second boundary, the code pointer, and the registered prediction, and say plainly that the
+coincidence is not proof. Credit `snick525` for drafter independence, `Ankk98` for the Vulkan
+root cause, `frizikk` for the operator bisect and `F-Mangini` for the quantisation dependence.
 
 ## 1b. Missing per-request counter in the server API: small, concrete, and self-motivated
 
