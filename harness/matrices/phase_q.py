@@ -14,7 +14,7 @@ settled on 24 GB with this model:
    `k(w) = k0 + c*(w-1)`. Running the ladder measures `c` at each quantization, which tests
    their claim on the coefficient rather than on throughput.
 
-Capacity, at the context this matrix actually uses (8192, not 64K — an earlier version of this
+Capacity, at the context this matrix actually uses (8192, not 64K - an earlier version of this
 table assumed 64K and therefore overstated every rung by about 2 GB), with this model's measured
 KV cost of ~34 KB/token at q8_0 and the ~1.9 GB compute buffer observed on this host:
 

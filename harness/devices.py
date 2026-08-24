@@ -158,7 +158,7 @@ def assert_capacity(dev: Device, required_gb: float, what: str) -> None:
     if dev.vram_gb + 0.01 < required_gb:
         raise RuntimeError(
             f"{what} needs about {required_gb:.1f} GB of VRAM; device {dev.index} "
-            f"({dev.name}) has {dev.vram_gb:.1f} GB. Refusing to start — an OOM partway through "
+            f"({dev.name}) has {dev.vram_gb:.1f} GB. Refusing to start - an OOM partway through "
             f"a matrix wastes the arms that already ran and leaves a half-populated result file.")
 
 
@@ -173,15 +173,15 @@ def _temp(index: int) -> float | None:
 
 def idle_floor_c(index: int = 0, *, interval_s: float = 5.0, max_wait_s: float = 300.0,
                  stable_needed: int = 3, tol_c: float = 1.0, verbose: bool = True) -> float:
-    """The temperature this device settles at with no load — waited for, not merely sampled.
+    """The temperature this device settles at with no load - waited for, not merely sampled.
 
     An earlier version took the minimum of six readings two seconds apart. Called at the start of
     a run that follows another run, that returns a number taken while the card is still shedding
     heat: a "floor" of, say, 78 C, and a gate target of 86 C that every arm then meets instantly.
     The gate silently becomes a no-op precisely when it is most needed.
 
-    This waits until the reading has stopped falling — `stable_needed` consecutive samples within
-    `tol_c` of each other — and returns the minimum seen. If it never stabilises within
+    This waits until the reading has stopped falling - `stable_needed` consecutive samples within
+    `tol_c` of each other - and returns the minimum seen. If it never stabilises within
     `max_wait_s` it returns the minimum anyway and says so, so a degraded measurement is visible
     rather than assumed.
     """
@@ -209,7 +209,7 @@ def idle_floor_c(index: int = 0, *, interval_s: float = 5.0, max_wait_s: float =
     floor = min(seen) if seen else 60.0
     print(f"[devices] WARNING: idle temperature on GPU {index} never stabilised within "
           f"{max_wait_s:.0f}s; using {floor:.0f} C. The thermal gate derived from this may be "
-          f"too permissive — check for another tenant or poor case airflow.", flush=True)
+          f"too permissive - check for another tenant or poor case airflow.", flush=True)
     return floor
 
 

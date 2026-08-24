@@ -84,12 +84,24 @@ rsh "cd $RDIR && for d in control forced_up forced_down; do
 log "  recorded libggml-cuda.so hashes (llama-server itself is a 17 KB wrapper and carries no kernel)"
 
 # ---------------------------------------------------------------- release the host
+# Cleanup is deliberately gated. The truncation audit found divergence verdicts on this host
+# that the generation cap may have censored, and a censored verdict can only be resolved on the
+# machine that produced it. Wiping host C now would close that door permanently. Set
+# QWEN_WIPE_HOSTC=1 once those prompts are resolved or formally excluded.
+if [ "${QWEN_WIPE_HOSTC:-0}" != "1" ]; then
+  log "HOLDING host C: the truncation audit flags censored verdicts in the warp files, and they"
+  log "  can only be re-measured here. Re-run with QWEN_WIPE_HOSTC=1 to release the machine."
+  log "  GPU clocks are still reset below so nothing is left pinned."
+  rsh "nvidia-smi -i 0 -rgc >/dev/null 2>&1; nvidia-smi -i 0 -rmc >/dev/null 2>&1; true"
+  rsh "nvidia-smi --query-gpu=memory.used,clocks.current.graphics --format=csv,noheader" | sed 's/^/    host C now: /'
+else
 log "restoring GPU state and removing everything this study put on host C"
 rsh "nvidia-smi -i 0 -rgc >/dev/null 2>&1; nvidia-smi -i 0 -rmc >/dev/null 2>&1; true"
 rsh "cd $RDIR 2>/dev/null && du -sh . 2>/dev/null | cut -f1" | sed 's/^/    occupied before: /'
 rsh "rm -rf ~/$RDIR" && log "  removed ~/$RDIR"
 rsh "ls -d ~/$RDIR 2>/dev/null && echo STILL_THERE || echo gone" | sed 's/^/    /'
 rsh "nvidia-smi --query-gpu=memory.used,utilization.gpu,clocks.current.graphics --format=csv,noheader" | sed 's/^/    host C now: /'
+fi
 
 # ---------------------------------------------------------------- score both directions
 log "scoring the intervention against the registered outcomes"

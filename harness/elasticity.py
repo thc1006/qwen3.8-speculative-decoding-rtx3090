@@ -6,18 +6,18 @@ at a fixed memory clock).
 
 **Elasticities are reported per interval, never pooled into one number.** The baseline's compute
 response measured on this hardware is 0.910 between 386 and 907 MHz but 0.498 between 907 and
-1783 MHz — at severe compute starvation even a bandwidth-bound workload becomes compute-limited,
+1783 MHz - at severe compute starvation even a bandwidth-bound workload becomes compute-limited,
 and it transitions back as clock rises. A single pooled figure would average across a regime
 change and describe neither end. Cross-method comparisons are therefore only made over the SAME
 interval.
 
 The discriminating question, from PREREGISTRATION.md:
 
-    H2'  (quantization x arithmetic intensity) — speculation converts a bandwidth-bound decode
+    H2'  (quantization x arithmetic intensity) - speculation converts a bandwidth-bound decode
          into a compute-bound verify, so a speculative arm should be LESS bandwidth-elastic and
          MORE compute-elastic than the no-spec baseline.
 
-    H2   (Gated DeltaNet state rollback) — the marginal cost is state reconstruction, i.e. memory
+    H2   (Gated DeltaNet state rollback) - the marginal cost is state reconstruction, i.e. memory
          traffic, so a speculative arm should be AT LEAST as bandwidth-elastic as baseline.
 
 They predict opposite signs on the same contrast, which is what makes this decisive rather than
@@ -111,7 +111,7 @@ def _cross_term_correction(result: dict, method: str, lo_c: str, hi_c: str,
     """How much of a measured response is really the OTHER resource moving underneath it.
 
     The bandwidth lever is not clean. At a fixed power cap, raising the memory clock draws power
-    away from the core, so the core clock falls across the bandwidth sweep — measured here as
+    away from the core, so the core clock falls across the bandwidth sweep - measured here as
     1799 -> 1754 MHz for the baseline and 1722 -> 1712 MHz for `mtp-n3`. A compute-elastic arm
     is penalised by that, so its measured bandwidth elasticity is a NET of the bandwidth gain and
     the core-clock loss, and is therefore an UNDER-estimate.
@@ -210,7 +210,7 @@ def report(result: dict) -> None:
     baseline = "baseline"
 
     print("=" * 100)
-    print("RESOURCE RESPONSE — elasticities per interval (never pooled across a regime change)")
+    print("RESOURCE RESPONSE - elasticities per interval (never pooled across a regime change)")
     print("=" * 100)
 
     print("\n--- measured operating points ---")

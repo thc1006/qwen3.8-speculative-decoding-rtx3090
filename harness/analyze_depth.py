@@ -56,7 +56,7 @@ def main():
         return 1
 
     print("=" * 78)
-    print("PHASE L — speculative decoding across context depth")
+    print("PHASE L - speculative decoding across context depth")
     print("=" * 78)
 
     # ---------------------------------------------------------------- depth actually reached
@@ -66,7 +66,7 @@ def main():
         name, d = rungs[depth]
         recs = d["records"]
         if not recs:
-            print(f"  {depth:8d}  {'—':>8}  {'—':>8}  {'—':>8}  {'—':>9}  no records")
+            print(f"  {depth:8d}  {'-':>8}  {'-':>8}  {'-':>8}  {'-':>9}  no records")
             continue
         fil = st.median(r.get("filler_tokens") or 0 for r in recs)
         pt = st.median(r.get("prompt_tokens") or 0 for r in recs)
@@ -97,7 +97,7 @@ def main():
         for m in methods:
             rs = by.get((depth, m), [])
             if not rs:
-                row += f"{'—':>18}"
+                row += f"{'-':>18}"
                 continue
             v = st.median(r["decode_tok_s"] for r in rs)
             first.setdefault(m, v)
@@ -111,7 +111,7 @@ def main():
         for m in methods:
             rs = by.get((depth, m), [])
             if not rs or m not in first or not first[m]:
-                row += f"{'—':>18}"
+                row += f"{'-':>18}"
                 continue
             row += f"{st.median(r['decode_tok_s'] for r in rs) / first[m]:>12.2%}{'':>6}"
         print(row)
@@ -182,7 +182,7 @@ def main():
             kb = {k: v for k, v in kb.items() if k in shared}
             ka = {k: v for k, v in ka.items() if k in shared}
             cls = {r["prompt_tag"]: r.get("prompt_class", "?") for r in rs + brs}
-            # (baseline, arm) — this order sets the sign of every number below.
+            # (baseline, arm) - this order sets the sign of every number below.
             iv = S.paired_cluster_bootstrap(
                 kb, ka, {k: cls.get(k, "?") for k in shared}, relative=True)
             pt, lo, hi = iv.point, iv.lo, iv.hi
@@ -203,7 +203,7 @@ def main():
             for m in spec:
                 rs = [r for r in by.get((depth, m), []) if r.get("mean_len")]
                 row += (f"{st.median(r['mean_len'] for r in rs):>12.3f}{'':>6}"
-                        if rs else f"{'—':>18}")
+                        if rs else f"{'-':>18}")
             print(row)
         print("\n  A drafter that holds acceptance as depth grows is doing what DFlash2 claims.")
         print("  Acceptance falling while throughput falls faster means the loss is in the target,")

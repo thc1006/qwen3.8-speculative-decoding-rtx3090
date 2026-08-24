@@ -11,11 +11,11 @@ racing a later graph that reuses the same buffer. The open question is whether C
 
 | configuration | requests | acceptance | exactly zero |
 |---|---|---|---|
-| `-np 4`, 256 / 1024 / 4096 / 8192 / 16384 tokens, concurrent | 4 each | 0.23–0.70 | 0 |
-| `-np 4`, **19 000 tokens** (the reported length), concurrent | 4 | 0.34–0.44 | 0 |
+| `-np 4`, 256 / 1024 / 4096 / 8192 / 16384 tokens, concurrent | 4 each | 0.23-0.70 | 0 |
+| `-np 4`, **19 000 tokens** (the reported length), concurrent | 4 | 0.34-0.44 | 0 |
 | `-np 4`, 16 384 tokens, concurrent, **12 repetitions** | 48 | all non-zero | 0 |
-| **`-np 8`**, 4 500 tokens, concurrent, `-c 40960` | 8 | 0.25–0.39 | 0 |
-| `-np 1` sequential controls at every length | — | healthy | 0 |
+| **`-np 8`**, 4 500 tokens, concurrent, `-c 40960` | 8 | 0.25-0.39 | 0 |
+| `-np 1` sequential controls at every length | - | healthy | 0 |
 
 ## Not tested, and why
 
@@ -45,8 +45,8 @@ Measured envelope on this card:
 
 | | `-c 81920` | `-c 40960` | `-c 20480` | `-c 10240` |
 |---|---|---|---|---|
-| `-np 4` | starts, slot 20480 | — | — | — |
-| `-np 8` | fails | starts, slot 5120 | starts, slot 2560 | — |
+| `-np 4` | starts, slot 20480 | - | - | - |
+| `-np 8` | fails | starts, slot 5120 | starts, slot 2560 | - |
 | `-np 16` | fails | fails | fails | fails |
 
 So on 24 GB the concurrency axis for this model stops at `-np 8`, and reaching it costs context.

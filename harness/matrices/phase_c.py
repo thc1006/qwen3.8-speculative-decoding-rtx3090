@@ -62,7 +62,7 @@ ARMS = [
     Arm("dflash2-bf16", ["--spec-type", "draft-dflash", "--spec-draft-n-max", "4",
                          "-md", str(D2 / "Qwen3.8-27B-DFlash2-BF16.gguf")],
         tree="pr27342", expects_drafter=True,
-        note="drafter BF16, 3.86 GB — the VRAM-headroom case on a 24 GB card"),
+        note="drafter BF16, 3.86 GB - the VRAM-headroom case on a 24 GB card"),
 
     # ---- classic draft model, vocab-matched (248320 == 248320) ----
     Arm("draft08b-n4", ["--spec-type", "draft-simple", "--spec-draft-n-max", "4",

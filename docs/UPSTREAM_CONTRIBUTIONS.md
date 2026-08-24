@@ -13,7 +13,7 @@ upstream thread was read rather than skimmed. Priority for an observation almost
 to someone already in the thread.
 
 Contribution etiquette: PR #27342's thread already contains an AI-assisted report posted with an
-explicit disclosure ("Written by Claude … posted from the account of the human who ran the
+explicit disclosure ("Written by Claude ... posted from the account of the human who ran the
 hardware"). Anything filed from this work follows the same convention, and reports only numbers
 actually measured on this machine.
 
@@ -109,7 +109,7 @@ Two obvious workarounds are wrong in practice:
 - `draft_n / n_max` assumes every step drafts the full width; steps that draft fewer break it.
 - Recovering it from the log's `mean len` fails on precision: that field prints at `%5.2f`, and
   back-solving `steps = accepted / (mean_len - 1)` from two decimals gave this study a spread of
-  ±0.4 steps and produced physically impossible negative step counts.
+  +/-0.4 steps and produced physically impossible negative step counts.
 
 A third one looks exact and is not, and finding that out is the strongest argument for the field.
 
@@ -118,12 +118,12 @@ The reasoning is that every verification step emits one non-draft token, so toke
 form and it is wrong, by one, every time: the first generated token comes out of the
 prompt-processing pass rather than a decode forward, so the correct form starts at
 `predicted_n - draft_n_accepted - 1`. Nothing looked wrong. The numbers were plausible, stable
-across five passes, and consistent with a cost model that fits at r² = 0.9998. The existing
+across five passes, and consistent with a cost model that fits at r^2 = 0.9998. The existing
 integrity check compared the API counters against the log's counters and reported 0 mismatches
 out of 625, correctly, because the counters were never the problem.
 
 It was caught only by comparing the derived mean length against the `mean len` the server prints,
-where the gap was −0.0204 with a sign that never changed. Correcting it moved the fitted marginal
+where the gap was -0.0204 with a sign that never changed. Correcting it moved the fitted marginal
 cost `c` by 0.8 %, recorded as Correction 3 in `PREREGISTRATION.md`.
 
 Even corrected it is approximate. The `- 1` form reproduces the server's printed value on about
@@ -151,8 +151,8 @@ raised as a comment on #26516 not as a new issue.
 ## 2. The clearest single contribution: the CUDA acceptance-and-cost curve vs n-max (sm_86)
 
 [#26750](https://github.com/ggml-org/llama.cpp/issues/26750) (open 2026-08-08, 2 comments) claims
-`draft-mtp` acceptance **collapses on CUDA**: 35.8–40.7 % against ~92 % on Vulkan, same files,
-same build, same prompts, turning MTP from +128 % into −32 %. Their setup: `Qwen3.5-9B-Q4_K_M`,
+`draft-mtp` acceptance **collapses on CUDA**: 35.8-40.7 % against ~92 % on Vulkan, same files,
+same build, same prompts, turning MTP from +128 % into -32 %. Their setup: `Qwen3.5-9B-Q4_K_M`,
 RTX PRO 4000 **Blackwell**, `--spec-draft-n-max 6`, 108 runs per cell, read from
 `timings.draft_n` and `draft_n_accepted`, **the same two fields this study reads.**
 
@@ -167,16 +167,16 @@ This study measures, on sm_86 CUDA with Qwen3.8-27B Q4_K_XL:
 | 3 | 0.558 |
 | 5 | **0.412** |
 
-**0.412 at n-max 5 sits inside their 0.358–0.407 band at n-max 6.** Different model and different
+**0.412 at n-max 5 sits inside their 0.358-0.407 band at n-max 6.** Different model and different
 CUDA architecture, so this is not a refutation and must not be presented as one. It does supply
 the missing control: on a CUDA card where MTP is unambiguously a large *win* (+59.8 % at n-max 2),
 acceptance still falls to ~0.41 by n-max 5. That reframes the open question from "why is CUDA at
 40 %?" to "why is Vulkan at 92 %?", and 92 % at n-max 6 implies a mean accepted length of
-1 + 6×0.92 ≈ 6.5, which is high enough to be worth checking, especially since #25618 already
+1 + 6x0.92 ~ 6.5, which is high enough to be worth checking, especially since #25618 already
 root-caused a **Vulkan** flash-attention packing bug that made multi-token verify disagree with
 sequential decode.
 
-Phase N walks n-max 1–8 and produces the full curve, plus the per-step cost k at each depth. That
+Phase N walks n-max 1-8 and produces the full curve, plus the per-step cost k at each depth. That
 is a measurement with no interpretive step in it, which is what makes it the most defensible
 thing this study has to offer upstream.
 
@@ -223,18 +223,18 @@ with prefill energy subtracted:
 
 | arm | tok/J | J per 400-token request | vs baseline |
 |---|---:|---:|---:|
-| baseline | 0.1005 | 3980 | — |
-| mtp-n2 | 0.1625 | **2506** | **−37 %** |
-| dflash2-n4 | 0.1555 | 2833 | −29 % |
-| mtp-n5 | 0.1344 | 3224 | −19 % |
-| dflash2-n7 | 0.1253 | 3785 | −5 % |
+| baseline | 0.1005 | 3980 | - |
+| mtp-n2 | 0.1625 | **2506** | **-37 %** |
+| dflash2-n4 | 0.1555 | 2833 | -29 % |
+| mtp-n5 | 0.1344 | 3224 | -19 % |
+| dflash2-n7 | 0.1253 | 3785 | -5 % |
 
 Not a bug report; a data contribution to PR #27342 and to the community tables, where "is it
 worth enabling" is currently answered on throughput alone.
 
 ## 4. The cost model, as an explanation not a table
 
-`speedup = mean_len / k` with `k(w) = k0 + c·(w−1)` fits to r² = 0.9998 on the built-in MTP head,
+`speedup = mean_len / k` with `k(w) = k0 + c*(w-1)` fits to r^2 = 0.9998 on the built-in MTP head,
 and the marginal cost `c` agrees to 1.7 % between MTP (0.2803) and the structurally unrelated
 DFlash2 drafter (0.2757) while the fixed cost `k0` differs by 14 %. That says the per-position
 cost belongs to the verification path and the fixed cost belongs to the drafter, and it explains
@@ -258,9 +258,9 @@ affected at all. They tested only `draft-dflash`.
 
 | target | what this study adds | status |
 |---|---|---|
-| [#25618](https://github.com/ggml-org/llama.cpp/issues/25618) divergence | the CUDA width boundary (see §1) | Phase A + Phase N |
-| [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) ~25× decode cliff past ~80 K, 1 comment | reproduction on sm_86, and whether speculation survives it | Phase L |
-| [#27572](https://github.com/ggml-org/llama.cpp/issues/27572) acceptance → 0 under `-np N`, 3 comments (this study's among them) | sm_86 confirmation; also closes the predecessor repo's own untested concurrency caveat | Phase X |
+| [#25618](https://github.com/ggml-org/llama.cpp/issues/25618) divergence | the CUDA width boundary (see section 1) | Phase A + Phase N |
+| [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) ~25x decode cliff past ~80 K, 1 comment | reproduction on sm_86, and whether speculation survives it | Phase L |
+| [#27572](https://github.com/ggml-org/llama.cpp/issues/27572) acceptance -> 0 under `-np N`, 3 comments (this study's among them) | sm_86 confirmation; also closes the predecessor repo's own untested concurrency caveat | Phase X |
 | [vLLM #52475 / #53180](https://github.com/vllm-project/vllm/issues/52475) degenerate output on hybrid GDN | the baseline-relative degeneracy screen used here is the methodology those reports need | Phase V |
 
 ---

@@ -8,10 +8,10 @@ noticed at run time.
 
 | | RTX 3090 (present) | RTX A6000 |
 |---|---|---|
-| architecture | GA102, **sm_86** | GA102, **sm_86** — identical |
+| architecture | GA102, **sm_86** | GA102, **sm_86** - identical |
 | VRAM | 24 GB GDDR6X | **48 GB** GDDR6 (ECC capable) |
-| memory bandwidth | **936 GB/s** | **768 GB/s** (−18 %) |
-| power | 420 W default, 100–450 adjustable | 300 W |
+| memory bandwidth | **936 GB/s** | **768 GB/s** (-18 %) |
+| power | 420 W default, 100-450 adjustable | 300 W |
 | bus width | 384-bit | 384-bit |
 
 Same architecture means the same CUDA kernels, so the divergence findings and the acceptance
@@ -25,14 +25,14 @@ What differs is the resource mix: more memory, less bandwidth, less power.
    *marginally* `UD-Q5_K_XL` (23.1 GB, 96 % of the card). `UD-Q6_K_XL` (27.5 GB) and `Q8_0`
    (31.3 GB) need the larger card. This matters because two separate open claims turn on target
    quantization: llama.cpp #25618's finding that divergence is quantization-dependent, and the
-   PR #27342 author's account of the n-max ceiling as a quantization × arithmetic-intensity
+   PR #27342 author's account of the n-max ceiling as a quantization x arithmetic-intensity
    effect (recorded as H2'). Measuring `c`, the marginal cost per verified position, at each
    rung tests H2' on the coefficient not on throughput.
 2. **Long context without a KV-quantization confound.** At 48 GB, `UD-Q4_K_XL` plus a 262 K
    f16 KV cache fits, so the decode cliff reported in #27623 can be crossed without also
    changing KV precision to make room.
-3. **A physical bandwidth step.** Phase R varies memory clock by ±4 % with software offsets;
-   the A6000 is a −18 % step at nearly the same core count. That is a four-times-larger lever on
+3. **A physical bandwidth step.** Phase R varies memory clock by +/-4 % with software offsets;
+   the A6000 is a -18 % step at nearly the same core count. That is a four-times-larger lever on
    the same axis, but it moves power at the same time, so it is a **cross-check on Phase R, not
    a replacement for it**.
 
@@ -43,7 +43,7 @@ What differs is the resource mix: more memory, less bandwidth, less power.
   BF16 is 18.4 GB, and whose Q4_K_M is the exact file used in llama.cpp #26750.
 - **No architectural diversity.** Both cards are sm_86. The open question in #26750 concerns
   Blackwell; an Ada or Blackwell card would address it and a second Ampere will not.
-- **No wider power sweep.** The 3090 already adjusts 100–450 W; the A6000's ceiling is lower.
+- **No wider power sweep.** The 3090 already adjusts 100-450 W; the A6000's ceiling is lower.
 - **No multi-GPU coverage.** Several open issues (#27366, #27577, #26339, and the `-sm tensor`
   reports in PR #27342) are multi-GPU; one more single card does not reach them.
 
@@ -74,7 +74,7 @@ each fix was verified against the live hardware.
 2. **"Stock" was a hard-coded 420 W**, this 3090's default and not a universal one. An A6000
    defaults to 300 W, so "restore stock" would have restored something that was never stock for
    it. Stock is now read from each device's own `power.default_limit`.
-3. **The 60 °C thermal gate is calibrated for this card in this chassis.** On another cooler it is
+3. **The 60 C thermal gate is calibrated for this card in this chassis.** On another cooler it is
    either unreachable (a timeout every arm) or trivially met (a gate that does nothing).
    `--settle-floor` derives the target from the device's own measured idle floor, and bench.py
    now **refuses to use the fixed target on a card it was not calibrated for**.

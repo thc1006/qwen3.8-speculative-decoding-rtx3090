@@ -244,7 +244,7 @@ def report(result: dict) -> None:
         r_estimates.append(r_est)
         spread = (max(ys) - min(ys)) / statistics.fmean(ys) * 100
         if r_est <= 0:
-            reading = f"r <= 0 — no rejection cost detected (k spread {spread:.2f}%)"
+            reading = f"r <= 0 - no rejection cost detected (k spread {spread:.2f}%)"
         elif r_est < 0.02:
             reading = f"r negligible (k spread {spread:.2f}%)"
         else:
@@ -255,7 +255,7 @@ def report(result: dict) -> None:
         worst = max(r_estimates)
         print(f"\n  Largest r across arms: {worst:+.5f} decode-steps per rejected draft token.")
         print(f"  Acceptance spans roughly {min(r['acceptance'] for r in rows):.3f}-"
-              f"{max(r['acceptance'] for r in rows):.3f} in this data — nearly a ten-fold range —")
+              f"{max(r['acceptance'] for r in rows):.3f} in this data - nearly a ten-fold range -")
         print("  so a rejection-driven overhead of any consequence would have shown up here.")
         if worst <= 0.02:
             print("  Reading: the verification overhead is paid per position VERIFIED, not per")
@@ -273,7 +273,7 @@ def report(result: dict) -> None:
             pts[r["width"]].append(r["k"])
         if len(pts) < 2:
             w = next(iter(pts))
-            print(f"  {method:14s} only one width ({w}) — cannot fit")
+            print(f"  {method:14s} only one width ({w}) - cannot fit")
             continue
         xs = [w - 1 for w in sorted(pts)]
         ys = [statistics.fmean(pts[w]) for w in sorted(pts)]

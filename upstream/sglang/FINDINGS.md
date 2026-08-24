@@ -185,7 +185,7 @@ random valid trees.
 ### Loop 2, the parent walk that PR #36201 bounds
 
 `ancestor not selected` runs 200 001 iterations, hits the cap, and reaches **offset 4 against a
-row that ends at 2** — the write past the row is real, not inferred, and the runaway counter leaks
+row that ends at 2** - the write past the row is real, not inferred, and the runaway counter leaks
 into `positions` as `200007`. `ancestor chain loops` behaves the same. With the guard both cases
 terminate in one and three iterations, offsets stay inside the row, and **the two valid cases are
 byte-identical with and without it**.
@@ -301,7 +301,7 @@ proposed bounds release them, and that neither bound changes a valid input.
 
 It does not establish that either fix resolves #35822. The chain that would connect them is:
 the builder's out-of-row write corrupts a neighbouring row, which produces a malformed sibling
-chain, which wedges the sampler. Every link in that chain is now measured except the middle one —
+chain, which wedges the sampler. Every link in that chain is now measured except the middle one -
 that the out-of-row write specifically turns `retrive_next_sibling` into a cycle.
 
 That middle link is more plausible than it was. The builder's runaway walk does not overrun its

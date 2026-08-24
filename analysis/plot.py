@@ -73,9 +73,9 @@ DRAFTER = {"mtp-n2": "MTP", "mtp-n3": "MTP", "mtp-n5": "MTP",
            "dflash2-n4": "DFlash2", "dflash2-n7": "DFlash2"}
 STYLE = {"draft-mtp": (WONG["blue"], "o"), "draft-dflash": (WONG["vermillion"], "s")}
 
-PROVENANCE = ("Qwen3.8-27B UD-Q4_K_XL · RTX 3090 24 GB · llama.cpp c060ca9 · greedy, "
-              "--parallel 1, fresh server per arm-pass, thermal gate at arm entry · "
-              "PREREGISTRATION.md · 2026-08-25")
+PROVENANCE = ("Qwen3.8-27B UD-Q4_K_XL | RTX 3090 24 GB | llama.cpp c060ca9 | greedy, "
+              "--parallel 1, fresh server per arm-pass, thermal gate at arm entry | "
+              "PREREGISTRATION.md | 2026-08-25")
 PHASE_A_N = "Phase A: 875 requests, 0 incidents, 0 excluded."
 CI_NOTE = "95 % paired cluster bootstrap over prompts within class, 10 000 resamples."
 
@@ -158,12 +158,12 @@ def fig_headline(series, prompt_class):
                 family="monospace", color=C("fg"))
     ax.axvline(0, color=C("neutral"), lw=1.4, zorder=1)
     ax.set_yticks(range(len(rows)),
-                  [f"{a}  ·  w={WIDTH[a]}  ·  {m:.1f} tok/s" for a, _, m in rows], fontsize=10)
+                  [f"{a}  |  w={WIDTH[a]}  |  {m:.1f} tok/s" for a, _, m in rows], fontsize=10)
     ax.set_ylim(-0.65, len(rows) - 0.35)
     ax.set_xlim(0, max(r[1].hi for r in rows) * 1.20)
     ax.set_xlabel("faster than the non-speculative baseline of the same tree  (%)")
     ax.set_title("Every speculative arm is faster, and every 95 % interval clears zero\n"
-                 f"baseline {base_abs:.2f} tok/s  ·  25 prompts × 5 passes per arm", pad=12)
+                 f"baseline {base_abs:.2f} tok/s  |  25 prompts x 5 passes per arm", pad=12)
     ax.grid(axis="x", alpha=0.5, zorder=0)
     _despine(ax, keep=("bottom",))
     ax.tick_params(axis="y", length=0)
@@ -196,7 +196,7 @@ def fig_per_class(series, prompt_class):
             ax.text(j, i, f"{v:+.0f}%", ha="center", va="center", fontsize=11.5,
                     color="white" if abs(v) > lim * 0.58 else "#111111")
     ax.set_xticks(range(len(classes)), classes, fontsize=11)
-    ax.set_yticks(range(len(SPEC_ARMS)), [f"{a}  ·  w={WIDTH[a]}" for a in SPEC_ARMS], fontsize=10)
+    ax.set_yticks(range(len(SPEC_ARMS)), [f"{a}  |  w={WIDTH[a]}" for a in SPEC_ARMS], fontsize=10)
     ax.tick_params(length=0)
     _despine(ax, keep=())
     ax.set_title("The gain is concentrated in code and reasoning, and reverses on\n"
@@ -278,7 +278,7 @@ def fig_cost_model(result):
         pts = series_of(spec, "speedup")
         if pts:
             bw, bv = max(pts, key=lambda p: p[1])
-            ax_s.annotate(f"best w = {bw}   {bv:.2f}×", (bw, bv), textcoords="offset points",
+            ax_s.annotate(f"best w = {bw}   {bv:.2f}x", (bw, bv), textcoords="offset points",
                           xytext=(0, 13), ha="center", fontsize=10, color=col,
                           fontweight="bold")
         ax_s.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
@@ -323,18 +323,18 @@ def fig_width_partition(result):
     for i in range(n):
         for j in range(n):
             if i == j:
-                ax.text(j, i, "—", ha="center", va="center", color="#8a8a8a", fontsize=14)
+                ax.text(j, i, "-", ha="center", va="center", color="#8a8a8a", fontsize=14)
             else:
                 ax.text(j, i, f"{agree[i, j]:.0f}%", ha="center", va="center", fontsize=13,
                         color="white" if agree[i, j] > 55 else "#111111")
     labels = [f"w={WIDTH[a]}\n{DRAFTER[a]}" for a in SPEC_ARMS]
     ax.set_xticks(range(n), labels, fontsize=10)
-    ax.set_yticks(range(n), [f"{a}\nw={WIDTH[a]} · {DRAFTER[a]}" for a in SPEC_ARMS], fontsize=9.4)
+    ax.set_yticks(range(n), [f"{a}\nw={WIDTH[a]} | {DRAFTER[a]}" for a in SPEC_ARMS], fontsize=9.4)
     ax.tick_params(length=0)
     _despine(ax, keep=())
     ax.axhline(1.5, color=C("fg"), lw=3.0)
     ax.axvline(1.5, color=C("fg"), lw=3.0)
-    ax.set_title("Verification width decides where output forks — not the drafter\n"
+    ax.set_title("Verification width decides where output forks - not the drafter\n"
                  f"100 % agreement within each width group, {cross:.0f} % across them",
                  fontsize=12, pad=12)
     fig.colorbar(im, ax=ax, fraction=0.030, pad=0.025).set_label(
@@ -406,8 +406,8 @@ def fig_bound_by(res):
                      capsize=3, lw=1.2, zorder=3)
         for x, v in zip(xs + (i - 1) * width, vals):
             ax2.text(x, v + 0.025, f"{v:.2f}", ha="center", fontsize=9.2, color=C("fg"))
-    ax2.set_xticks(xs, ["600 → 1200 MHz\nboth still compute-starved",
-                        "1200 → 1710 MHz\nthe baseline hits its bandwidth ceiling"], fontsize=9.6)
+    ax2.set_xticks(xs, ["600 -> 1200 MHz\nboth still compute-starved",
+                        "1200 -> 1710 MHz\nthe baseline hits its bandwidth ceiling"], fontsize=9.6)
     ax2.set_ylabel("compute elasticity")
     ax2.set_ylim(0, 1.14)
     ax2.set_title("Below 1200 MHz everything scales with clock. Above it, only\n"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase Q driver — the Qwen3.8-27B target-quantization ladder, disk-staged.
+# Phase Q driver - the Qwen3.8-27B target-quantization ladder, disk-staged.
 #
 # The four rungs total ~93 GB of GGUF and this host has far less free disk, so each rung is
 # downloaded, measured, verified complete, and only then deleted. Deletion is the one
@@ -63,7 +63,7 @@ try: print(f'{D.get_device($GPU).vram_gb:.1f}')
 except Exception as e: print('0')")
 log "GPU $GPU has ${vram_gb} GB"
 if [ "$(python3 -c "print(1 if float('$vram_gb')<1 else 0)")" = "1" ]; then
-  log "no such GPU — set GPU=<nvidia-smi index>"; exit 1
+  log "no such GPU - set GPU=<nvidia-smi index>"; exit 1
 fi
 
 # Default rung list: only what this card can actually hold.
@@ -83,7 +83,7 @@ for RUNG in $RUNGS; do
 
   got=$(records_in "$OUT")
   if [ "${got:-0}" -ge "$EXPECTED" ]; then
-    log "$RUNG already complete (${got}/${EXPECTED}) — skipping"
+    log "$RUNG already complete (${got}/${EXPECTED}) - skipping"
     continue
   fi
   if [ "${got:-0}" -gt 0 ]; then
@@ -102,7 +102,7 @@ for RUNG in $RUNGS; do
     log "downloading $F"
     HF_HUB_ENABLE_HF_TRANSFER=1 .venv/bin/hf download unsloth/Qwen3.8-27B-GGUF "$F" \
       --local-dir models/quant_ladder >> logs/phase_q_download.log 2>&1 || {
-        log "download of $F FAILED — see logs/phase_q_download.log"; continue; }
+        log "download of $F FAILED - see logs/phase_q_download.log"; continue; }
     SRC="models/quant_ladder/$F"
     DOWNLOADED=1
   else
@@ -129,7 +129,7 @@ for RUNG in $RUNGS; do
       rm -f "$SRC"
     fi
   else
-    log "$RUNG INCOMPLETE — keeping weights for a retry; inspect logs/phase_q_${RUNG}.log"
+    log "$RUNG INCOMPLETE - keeping weights for a retry; inspect logs/phase_q_${RUNG}.log"
   fi
   log "disk now: $(df -h / | tail -1 | awk '{print $4}') free"
 done

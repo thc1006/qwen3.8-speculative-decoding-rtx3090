@@ -3,10 +3,10 @@
 #
 # Two hard gates. Neither is advisory:
 #
-#   Gate 1 — Phase A must be COMPLETE. A crashed run releases no lock, and an earlier version of
+#   Gate 1 - Phase A must be COMPLETE. A crashed run releases no lock, and an earlier version of
 #   this script would have read "lock gone" as "finished" and handed partial data to Phase R.
 #
-#   Gate 2 — the Phase R pre-flight must prove every resource condition applies AND that the
+#   Gate 2 - the Phase R pre-flight must prove every resource condition applies AND that the
 #   power-limit conditions leave the memory clock alone. If a power condition drags the memory
 #   P-state with it, that condition varies both resources at once, the elasticity decomposition
 #   is invalid for it, and the design must be revised rather than run.
@@ -30,7 +30,7 @@ while :; do
   [ -f .gpu-in-use.lock ] || break
   lp=$(sed -n 's/^pid=//p' .gpu-in-use.lock | head -1)
   if [ -z "$lp" ] || ! kill -0 "$lp" 2>/dev/null; then
-    log "lock is stale (pid ${lp:-none} gone) — Phase A did not finish cleanly"
+    log "lock is stale (pid ${lp:-none} gone) - Phase A did not finish cleanly"
     break
   fi
   sleep 20

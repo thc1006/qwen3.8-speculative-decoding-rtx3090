@@ -77,7 +77,7 @@ def assert_port_owned_by(port: int, pid: int) -> None:
         cur = ppid
     raise RuntimeError(
         f"port {port} is owned by pid {owner}, which is not our server (pid {pid}). "
-        "A stale llama-server is almost certainly still answering /health — refusing to "
+        "A stale llama-server is almost certainly still answering /health - refusing to "
         "measure against it.")
 
 

@@ -1,6 +1,6 @@
 # Methodology audit of the predecessor repo
 
-`thc1006/qwen3.6-speculative-decoding-rtx3090` (v1.0 – v3.0, 2026-04 → 2026-05)
+`thc1006/qwen3.6-speculative-decoding-rtx3090` (v1.0 - v3.0, 2026-04 -> 2026-05)
 
 This audit was run **before** any measurement in the present repo, against the predecessor's own
 committed raw JSON. Its purpose is to make sure this repo does not inherit design choices that
@@ -35,20 +35,20 @@ Re-analysing the repo's **own committed 300-token results** with a class-stratif
 
 | config | published-style raw mean | class-stratified | difference |
 |---|---:|---:|---:|
-| `draft-q35-08b-max8` | **−10.8 %** | **−21.5 %** | −10.8 pp |
-| `ngram-cache` | **−12.2 %** | **−24.4 %** | −12.2 pp |
-| `ngram-mod-n24` | −3.4 % | −3.1 % | +0.2 pp |
+| `draft-q35-08b-max8` | **-10.8 %** | **-21.5 %** | -10.8 pp |
+| `ngram-cache` | **-12.2 %** | **-24.4 %** | -12.2 pp |
+| `ngram-mod-n24` | -3.4 % | -3.1 % | +0.2 pp |
 
 Per-class detail for `draft-q35-08b-max8` (tok/s): chat `135.7`, zh `135.6`, reason `135.5`,
-code `65.9`, prose `59.2`. The effect is not "a 3–12 % drop"; it is "no effect on more than half
-the set, and a 51–56 % collapse on code and prose".
+code `65.9`, prose `59.2`. The effect is not "a 3-12 % drop"; it is "no effect on more than half
+the set, and a 51-56 % collapse on code and prose".
 
 **Does the conclusion survive?** Yes, and it strengthens: the finding was *net loss*, and
 stratified it is a larger net loss. The v1 README does publish a per-prompt heatmap and does
 describe the behaviour as bimodal, so the data were disclosed. The issue is that the TL;DR
 number, "Mean decode drops 3 to 12 %", is the diluted one, and that is the number that travels.
 
-**Carried into this repo:** prompt set balanced 3 × 5 by class, and the primary endpoint is
+**Carried into this repo:** prompt set balanced 3 x 5 by class, and the primary endpoint is
 defined as the class-stratified mean with per-class effects always reported beside it
 (`harness/prompts.py`, `harness/stats.py`).
 
@@ -62,7 +62,7 @@ config."*
 
 Checked against `results/`: of 190 recorded requests, **28 terminate below the cap, and all 28
 are in the four `-1000tok` configs**, 7 of 10 prompts in each. Observed `predicted_n` in
-`baseline-1000tok` ranges `354 … 891` against a cap of 1000.
+`baseline-1000tok` ranges `354 ... 891` against a cap of 1000.
 
 The 300-token configs do hold: every one of those requests reaches 300.
 
@@ -80,7 +80,7 @@ it in. Configs with different caps are never placed in one ranking table.
 ## A3: N = 1 for the headline matrices, and the published "std" is not measurement uncertainty
 
 - v1: each of the 19 configs run **once** (10 prompts, 1 warmup). Self-disclosed in Limitations.
-- v3 (DFlash): "5 prompts × **1 trial** × 3 draft-max configs".
+- v3 (DFlash): "5 prompts x **1 trial** x 3 draft-max configs".
 - v2 added replication (N = 3 on a subset) after review pressure.
 
 The `std` column in the v1 results table is the spread **across prompts**, not across repeats.
@@ -88,7 +88,7 @@ Given A1, that spread is mostly the bimodality, so it measures the prompt mixtur
 run-to-run noise. No published number in v1 or v3 carries an interval that would let a reader
 tell a real 4 % effect from drift.
 
-**Carried into this repo:** N ≥ 5 complete passes; intervals from a **cluster** bootstrap that
+**Carried into this repo:** N >= 5 complete passes; intervals from a **cluster** bootstrap that
 resamples prompts (passes within a prompt are repeated measures, not independent samples);
 any interval spanning zero is reported as "no detected effect", never as a direction.
 
@@ -102,7 +102,7 @@ order. The repo's own `baseline` vs `baseline-rerun` (135.7 vs 135.5) is reassur
 single paired observation, and both were run within the same block.
 
 **Carried into this repo:** arms are **interleaved within each pass** (pass 1: all arms; pass 2:
-all arms; …), so drift is spread across arms rather than loaded onto whichever ran last. Per-arm
+all arms; ...), so drift is spread across arms rather than loaded onto whichever ran last. Per-arm
 GPU temperature and clock are recorded at entry and exit.
 
 ---
@@ -117,7 +117,7 @@ GPU temperature and clock are recorded at entry and exit.
 
 Three differences at once (harness, sampling temperature, and a prompt-level reasoning switch),
 and the resulting baselines of 135.7, 139.9 and 138.9 are discussed together. The repo does
-attribute the v1→v2 gap to board-to-board variance and does document the tool change in
+attribute the v1->v2 gap to board-to-board variance and does document the tool change in
 `BENCHMARK_ENV.md`, but with three variables moving simultaneously that attribution is not
 identified by the data.
 
@@ -134,7 +134,7 @@ declared factor if it is varied, never as an incidental difference between versi
 
 ## A6: No losslessness check and no degeneracy check
 
-Neither exists anywhere in v1–v3. The repo reasons about *acceptance rate* (correctly, and it
+Neither exists anywhere in v1-v3. The repo reasons about *acceptance rate* (correctly, and it
 verified the 100 % figure by reading `common/speculative.cpp`), but acceptance is an internal
 counter, not evidence about the bytes the user receives.
 
@@ -174,7 +174,7 @@ assumed away.
 `draft-qwen3-0.6b` used a draft model with vocab 151936 against a target with vocab 248320. The
 draft never attached, so the row is a duplicate baseline.
 
-The repo handles this correctly and in public: the table row is annotated *"vocab 151936 ≠
+The repo handles this correctly and in public: the table row is annotated *"vocab 151936 !=
 248320, draft never attached, treat as baseline, shown for posterity"*. Recorded here only as
 a positive control worth keeping: **this repo asserts drafter attachment from server logs before
 accepting an arm's numbers**, rather than relying on the operator to notice.
@@ -192,12 +192,12 @@ Measured on this host during a single dry-run pass (7 arms, 5 prompts each, 450 
 
 | position in pass | arm | SM clock (mean) | GPU temp |
 |---|---|---:|---:|
-| 1st | `baseline@master` | ~1929 MHz | 62 → 73 °C |
-| 2nd | `baseline@pr27342` | ~1891 MHz | 74 → 80 °C |
-| 3rd | `mtp-n2` | ~1789 MHz | 79 → 83 °C |
-| 5th | `mtp-n5` | ~1808 MHz | 81 → 84 °C |
+| 1st | `baseline@master` | ~1929 MHz | 62 -> 73 C |
+| 2nd | `baseline@pr27342` | ~1891 MHz | 74 -> 80 C |
+| 3rd | `mtp-n2` | ~1789 MHz | 79 -> 83 C |
+| 5th | `mtp-n5` | ~1808 MHz | 81 -> 84 C |
 
-Full spread across the pass: **1950 → 1769 MHz, 9.3 %**. Power sat at ~445 W throughout, against
+Full spread across the pass: **1950 -> 1769 MHz, 9.3 %**. Power sat at ~445 W throughout, against
 a 450 W cap, so this is **power-limit throttling, not thermal shutdown**. Leakage rises with
 temperature, and the same wattage buys fewer megahertz. The card never reports an error and
 `/health` stays green.
@@ -225,10 +225,10 @@ sweep, which varies the cap deliberately rather than holding entry state constan
 
 | Predecessor | Here |
 |---|---|
-| 10 prompts, 60 % chat, unbalanced | 15 prompts, balanced 3 × 5 by class |
+| 10 prompts, 60 % chat, unbalanced | 15 prompts, balanced 3 x 5 by class |
 | headline = raw mean over prompts | headline = class-stratified mean, per-class always shown |
 | some prompts terminate early | every prompt written to exceed the cap; early termination flagged |
-| N = 1 (v1, v3), N = 3 on a v2 subset | N ≥ 5, all arms |
+| N = 1 (v1, v3), N = 3 on a v2 subset | N >= 5, all arms |
 | std across prompts, reported as spread | cluster bootstrap CI over prompts |
 | arms run sequentially | arms interleaved within each pass |
 | harness and sampling change between versions | one harness, greedy primary endpoint |
@@ -236,7 +236,7 @@ sweep, which varies the cap deliberately rather than holding entry state constan
 | ngram warm-cache artifact undisclosed | fresh server per arm-pass; cold/warm recorded |
 | drafter attachment checked by eye | drafter attachment asserted from server logs |
 | no port-collision guard | refuses to measure unless our own PID owns the port |
-| no power measurement | power integrated over generation → tok/J |
+| no power measurement | power integrated over generation -> tok/J |
 | intra-session clock throttling uncontrolled (all prior art) | thermal gate at arm entry + rotation + clock recorded as covariate |
 
 ## Recommended follow-up in the predecessor repo

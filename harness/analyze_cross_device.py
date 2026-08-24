@@ -1,16 +1,16 @@
-"""Cross-device comparison — restricted, on purpose, to quantities that survive the crossing.
+"""Cross-device comparison - restricted, on purpose, to quantities that survive the crossing.
 
 The RTX 3090 and RTX A6000 share an architecture (GA102, sm_86) and therefore share CUDA kernels,
 but differ by roughly 18 % in memory bandwidth (936 vs 768 GB/s) and 29 % in power budget
 (420 vs 300 W). Absolute throughput and absolute energy therefore mean different things on each
 card and are NOT compared here. What is compared:
 
-  * **speedup** — a within-device ratio
-  * **k, k0, c** — the cost model's coefficients, already expressed in units of a plain decode
+  * **speedup** - a within-device ratio
+  * **k, k0, c** - the cost model's coefficients, already expressed in units of a plain decode
     step on the same device, so dimensionless
-  * **acceptance** — a ratio, and on identical weights with greedy sampling it should be
+  * **acceptance** - a ratio, and on identical weights with greedy sampling it should be
     IDENTICAL across two cards of the same architecture
-  * **fork positions** — likewise, identical kernels on identical inputs should fork identically
+  * **fork positions** - likewise, identical kernels on identical inputs should fork identically
 
 The last two are not results, they are **controls**. If acceptance or fork positions differ
 between two sm_86 cards running the same GGUF at greedy, then something other than the device is
@@ -40,7 +40,7 @@ def _device_of(result: dict) -> dict:
         name, memory.total, driver_version, compute_cap, power.limit,
         power.default_limit, power.max_limit, clocks.max.graphics, clocks.max.memory
 
-    Parsing it keeps older runs — including this study's own primary Phase A result — usable in
+    Parsing it keeps older runs - including this study's own primary Phase A result - usable in
     a cross-device comparison instead of showing every field as unknown.
     """
     d = dict((result.get("design") or {}).get("device") or {})
@@ -82,7 +82,7 @@ def _device_of(result: dict) -> dict:
 
 def _label(result: dict, path: Path) -> str:
     """Column label. The device name alone is ambiguous whenever two runs come from the same
-    model of card — including the common case of comparing two runs on one machine — so the
+    model of card - including the common case of comparing two runs on one machine - so the
     filename stem is always appended."""
     d = _device_of(result)
     n = (d.get("name", "?") or "?").replace("NVIDIA", "").replace("GeForce", "").strip()
@@ -100,7 +100,7 @@ def report(paths: list[Path]) -> None:
             problems.append(f"{p}: not found")
             continue
         except json.JSONDecodeError as e:
-            problems.append(f"{p}: not valid JSON ({e.msg} at line {e.lineno}) — a run that was "
+            problems.append(f"{p}: not valid JSON ({e.msg} at line {e.lineno}) - a run that was "
                             f"killed mid-write leaves this; try the newest file in "
                             f"results/snapshots/ or the .records.jsonl stream")
             continue
@@ -116,7 +116,7 @@ def report(paths: list[Path]) -> None:
         return
 
     print("=" * 100)
-    print("CROSS-DEVICE COMPARISON — dimensionless quantities only")
+    print("CROSS-DEVICE COMPARISON - dimensionless quantities only")
     print("=" * 100)
     print("\n--- devices ---")
     for lab, r, _ in runs:
@@ -150,7 +150,7 @@ def report(paths: list[Path]) -> None:
                 continue
             diffs = [abs(acc[base][k] - acc[other][k]) for k in common]
             worst = max(range(len(common)), key=lambda i: diffs[i])
-            print(f"  {base} vs {other}: n={len(common)}  max |Δacceptance|={max(diffs):.5f}  "
+            print(f"  {base} vs {other}: n={len(common)}  max |deltaacceptance|={max(diffs):.5f}  "
                   f"mean={statistics.fmean(diffs):.5f}  worst={common[worst]}")
             if max(diffs) > 0.005:
                 print("     !! acceptance differs by more than rounding. Same architecture and "
@@ -215,7 +215,7 @@ def report(paths: list[Path]) -> None:
             ys = [statistics.fmean(pts[w]) for w in sorted(pts)]
             a, b, r2 = cost_model._linfit(xs, ys)
             coeffs[(lab, method)] = (a, b)
-            note = "  (2 widths — r2 is meaningless)" if len(pts) == 2 else ""
+            note = "  (2 widths - r2 is meaningless)" if len(pts) == 2 else ""
             print(f"{lab:22s} {method:14s} {str(sorted(pts)):>16s} {a:8.4f} {b:8.4f} {r2:8.4f}{note}")
 
     if len(labs) >= 2:
@@ -253,7 +253,7 @@ def report(paths: list[Path]) -> None:
                 else:
                     print("    !! Bus width is not known to match for this pair, and nvidia-smi")
                     print("       does not report it. The memory-clock ratio is NOT a valid")
-                    print("       bandwidth proxy here — treat the elasticity above as unusable")
+                    print("       bandwidth proxy here - treat the elasticity above as unusable")
                     print("       until the bus widths are confirmed equal.")
                 print("    A marginal cost that is compute-bound should barely move with memory")
                 print("    bandwidth; one that is memory-bound should move with it roughly 1:1.")

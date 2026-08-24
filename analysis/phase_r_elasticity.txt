@@ -1,5 +1,5 @@
 ====================================================================================================
-RESOURCE RESPONSE — elasticities per interval (never pooled across a regime change)
+RESOURCE RESPONSE - elasticities per interval (never pooled across a regime change)
 ====================================================================================================
 
 --- measured operating points ---
@@ -20,31 +20,35 @@ mtp-n7     pw-lo       32.58     1178     9501    247
 mtp-n7     pw-vlo      15.45      525     9501    175
 mtp-n7     stock       45.33     1732     9501    413
 
+--- series inferred from the clocks each condition actually produced ---
+  memory bandwidth: bw-lo -> stock -> bw-hi
+  compute (SM clock): pw-vlo -> pw-lo -> stock
+
 ====================================================================================================
 --- memory bandwidth ---
 
   interval bw-lo -> stock
-    baseline     9101 ->   9501  elasticity  0.783 [ 0.773,  0.794]
-    mtp-n3       9101 ->   9501  elasticity  0.167 [ 0.154,  0.181]  ( 0.21x baseline)
+    baseline     9101 ->   9501  elasticity  0.783 [ 0.773,  0.793]
+    mtp-n3       9101 ->   9501  elasticity  0.167 [ 0.153,  0.181]  ( 0.21x baseline)
     mtp-n7       9101 ->   9501  elasticity  0.130 [ 0.122,  0.138]  ( 0.17x baseline)
 
   interval stock -> bw-hi
-    baseline     9501 ->   9901  elasticity  0.718 [ 0.702,  0.732]
-    mtp-n3       9501 ->   9901  elasticity  0.101 [ 0.083,  0.119]  ( 0.14x baseline)
+    baseline     9501 ->   9901  elasticity  0.718 [ 0.703,  0.732]
+    mtp-n3       9501 ->   9901  elasticity  0.101 [ 0.084,  0.120]  ( 0.14x baseline)
     mtp-n7       9501 ->   9901  elasticity  0.100 [ 0.094,  0.106]  ( 0.14x baseline)
 
 ====================================================================================================
 --- compute (SM clock) ---
 
   interval pw-vlo -> pw-lo
-    baseline      387 ->    906  elasticity  0.915 [ 0.912,  0.920]
-    mtp-n3        478 ->   1081  elasticity  0.944 [ 0.941,  0.947]  ( 1.03x baseline)
-    mtp-n7        525 ->   1178  elasticity  0.924 [ 0.923,  0.925]  ( 1.01x baseline)
+    baseline      387 ->    906  elasticity  0.915 [ 0.902,  0.929]
+    mtp-n3        478 ->   1081  elasticity  0.944 [ 0.922,  0.967]  ( 1.03x baseline)
+    mtp-n7        525 ->   1178  elasticity  0.924 [ 0.891,  0.961]  ( 1.01x baseline)
 
   interval pw-lo -> stock
-    baseline      906 ->   1785  elasticity  0.491 [ 0.491,  0.492]
-    mtp-n3       1081 ->   1716  elasticity  0.843 [ 0.840,  0.845]  ( 1.71x baseline)
-    mtp-n7       1178 ->   1732  elasticity  0.857 [ 0.853,  0.860]  ( 1.74x baseline)
+    baseline      906 ->   1785  elasticity  0.491 [ 0.485,  0.498]
+    mtp-n3       1081 ->   1716  elasticity  0.843 [ 0.824,  0.864]  ( 1.71x baseline)
+    mtp-n7       1178 ->   1732  elasticity  0.857 [ 0.797,  0.921]  ( 1.74x baseline)
 
 ====================================================================================================
 --- correction: the bandwidth lever is not clean ---
@@ -63,16 +67,19 @@ mtp-n7     stock       45.33     1732     9501    413
   The correction raises every arm's bandwidth elasticity, baseline included, so
   the RATIO between them moves less than either figure does.
 
---- caveat: the compute intervals are not identical across methods ---
-  Under the same power cap, different methods settle at different core clocks, because
-  a bandwidth-heavy workload spends more of the budget on memory. Measured here:
-    pw-vlo   baseline=387  mtp-n3=478  mtp-n7=525
-    pw-lo    baseline=906  mtp-n3=1081  mtp-n7=1178
-    stock    baseline=1785  mtp-n3=1716  mtp-n7=1732
-  So an interval labelled 'pw-lo -> stock' spans a different clock range for each
-  method. Since elasticity is regime-dependent (see the two compute intervals above),
-  these comparisons are close but not exactly matched. The direction of the effect is
-  far larger than this mismatch; the magnitudes should be read with it in mind.
+--- are the compute intervals matched across methods? 0 of 3 conditions ---
+    condition       spread   drift   per-method core clock
+    pw-vlo         35.80% 118.90%   baseline=387  mtp-n3=478  mtp-n7=525  <-- not matched
+    pw-lo          30.00% 71.59%   baseline=906  mtp-n3=1081  mtp-n7=1178  <-- not matched
+    stock           4.01%  6.92%   baseline=1785  mtp-n3=1716  mtp-n7=1732  <-- not matched
+  spread is between methods at the same condition; drift is within an arm,
+  measured as mean minus min, so 0.00 % means every sample sat on the pin.
+  Where a condition is not matched the pin did not bind, because the power
+  limit did first. Check the power column in the operating points above: an
+  arm whose peak draw reaches the cap cannot hold its requested clock, and a
+  speculative arm reaches it sooner because it draws more at the same clock.
+  Elasticities crossing such a condition carry that mismatch; ones that do
+  not, do not. Phase R, for contrast, was 30.0 % and 35.8 % mismatched.
 
 ====================================================================================================
 --- H2 vs H2' on matched intervals ---
@@ -90,56 +97,3 @@ mtp-n7     stock       45.33     1732     9501    413
     -> less bandwidth-elastic AND more compute-elastic than baseline.
        Speculation has converted a bandwidth-bound decode into a
        compute-bound verify. Consistent with H2'; inconsistent with H2.
-
-====================================================================================================
-POST-HOC REVIEW (added after the run, before publication)
-====================================================================================================
-
-Four checks that the run itself does not perform.
-
-CONTROL A. The same prompt and method under different resource conditions must produce
-identical text. Clock speed does not change arithmetic, so anything else varying would show up
-here. Checked 225 (method, prompt, pass) groups across all five conditions: 0 differ.
-
-CONTROL B. Acceptance must likewise be identical. Checked 150 groups: 0 differ.
-
-Together these establish that the resource manipulation changed only speed. The comparison is
-the same work performed at different rates, which is the assumption every elasticity here rests
-on and is not otherwise verifiable.
-
-STATE. All 45 arm-passes applied their declared condition and read it back with 0 mismatches.
-The thermal gate reached its 60 C target on all 45, entry temperatures 55-60 C, waits 0-30 s,
-0 timeouts.
-
-CLOCK STABILITY. This is the one real weakness. Within-request SM clock spread, as
-(mean - min) / mean:
-
-    condition   baseline   mtp-n3   mtp-n7
-    stock          1.4 %    2.2 %    2.2 %
-    bw-lo          1.3 %    1.9 %    1.9 %
-    bw-hi          1.5 %    2.3 %    2.0 %
-    pw-lo         12.3 %   12.7 %    8.1 %
-    pw-vlo        16.8 %   27.2 %   43.8 %
-
-At 175 W the clock oscillates instead of settling, so the mean is a poor description of the
-operating point there. Two things keep this from touching the conclusions.
-
-First, where it is worst is where nothing is concluded. The pw-vlo -> pw-lo interval returns
-~0.92 for all three methods, a null: under severe starvation everything is compute-limited and
-the methods are indistinguishable. The headline discrimination lives on pw-lo -> stock and on
-the bandwidth axis, where instability is 8-13 % and 1-2 % respectively.
-
-Second, the headline survives changing the denominator. Recomputing pw-lo -> stock against the
-minimum sustained clock instead of the mean:
-
-                  mean clock        min clock
-    baseline        0.491             0.419
-    mtp-n3          0.843 (1.71x)     0.676 (1.61x)
-    mtp-n7          0.857 (1.74x)     0.738 (1.76x)
-
-The absolute figures move by 15-20 %; the ratio that carries the argument does not.
-
-Worth noting on its own: the instability grows with speculation depth (16.8 / 27.2 / 43.8 % at
-175 W). Speculative decoding bunches its compute into verify bursts, so against a tight power
-cap the clock swings more. That was not designed for and is consistent with the same mechanism
-everything else in this phase points at.

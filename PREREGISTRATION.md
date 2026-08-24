@@ -21,14 +21,14 @@ cheapest available defence against repeating that.
 | host | 2x 3090, i7-11700, 62GB | 1x 3090 | 1x 3090, i9-13900, **31GB** |
 | OS | Ubuntu 24.04 | Ubuntu 24.04 | **Debian 13** |
 | driver | 580.126.09 | 580.126.09 | **610.43.02** |
-| power cap | 350 W (stock) | 350 W (stock) | **420 W default; reset to stock — see below** |
+| power cap | 350 W (stock) | 350 W (stock) | **420 W default; reset to stock - see below** |
 
 The 420 W default is a different board SKU/vBIOS from the 350 W cards used in v1-v3. Absolute
 tok/s are **not** comparable across these three hosts. Only within-host paired deltas are.
 
 **Overclock, found and corrected mid-study (2026-08-24).** Ten minutes into the first full
 Phase A run the card was discovered to be carrying `GPUMemoryTransferRateOffset=800`
-(memory +400 MHz), `GPUGraphicsClockOffset=100`, and a 450 W limit against its 420 W default —
+(memory +400 MHz), `GPUGraphicsClockOffset=100`, and a 450 W limit against its 420 W default -
 while this document described it as stock. **That run was discarded, not kept.** The offsets were
 zeroed and the limit returned to 420 W, which restored the maximum memory clock to 9751 MHz, the
 exact stock figure recorded in the predecessor repo's `BENCHMARK_ENV.md`. Full record in
@@ -36,7 +36,7 @@ exact stock figure recorded in the predecessor repo's `BENCHMARK_ENV.md`. Full r
 
 This is not a cosmetic correction. Batch-1 decode is memory-bandwidth-bound while speculative
 verification is comparatively compute-dense, so a memory overclock moves the baseline and the
-speculative arms by *different* amounts — precisely the kind of differential that a paired
+speculative arms by *different* amounts - precisely the kind of differential that a paired
 design is supposed to protect against. `harness/telemetry.overclock_state()` now records the
 offsets in every result file and `bench.py` refuses to start on a non-stock card unless the
 overclock is declared as an experimental factor.
@@ -62,7 +62,7 @@ must reconstruct recurrent state (cf. SpecLA, arXiv 2607.16673, which only evalu
   still degrades realized yield.
 - Falsifier: if yield tracks acceptance monotonically once acceptance is controlled, H2 is wrong.
 
-**H2' (competing explanation, from the PR #27342 author — must be discriminated, not assumed away).**
+**H2' (competing explanation, from the PR #27342 author - must be discriminated, not assumed away).**
 In the PR thread the author advances a different account of the same observation: the relative
 cost of one extra decode step rises as the target gets more quantized (measured by them with
 `llama-batched-bench` as BF16 6.7 %, Q8_0 14.5 %, Q4_K_M 23.4 %), because a 4-bit target is less
@@ -77,7 +77,7 @@ explanation. They make different predictions and the experiment must separate th
 |---|---|---|
 | driver | 48 of 64 layers are GDN and cannot roll back by KV truncation | 4-bit target shifts the compute/bandwidth ratio |
 | depends on target quant? | no | **yes, strongly** |
-| depends on rejection rate? | **yes — cost is paid only on rejection** | no — cost is paid per drafted token regardless |
+| depends on rejection rate? | **yes - cost is paid only on rejection** | no - cost is paid per drafted token regardless |
 | prediction | at fixed acceptance, raising n-max still degrades yield | at fixed n-max, yield improves as the target gets *less* quantized |
 
 Discriminating test, pre-committed: hold acceptance approximately fixed with the
@@ -106,7 +106,7 @@ configuration is a net win for Qwen3.6-35B-A3B on a consumer 3090", explained by
 expert-saturation. Qwen3.8-27B is dense-hybrid, so that mechanism does not apply.
 
 - H4a: Under a matched protocol, dense-hybrid shows net *positive* yield where the A3B MoE showed
-  net loss — isolating MoE routing, not consumer Ampere, as the cause.
+  net loss - isolating MoE routing, not consumer Ampere, as the cause.
 
 ## Analysis plan (fixed in advance)
 
@@ -192,7 +192,7 @@ cited, not re-claimed.
   (sm89) across three quants. No reproduction on another architecture, and no one has tested
   how speculative decoding interacts with the cliff.
 - llama.cpp: PR #22673 (MTP, merged), PR #23269 (MTP cleanup + recurrent-rollback fix),
-  PR #27342 (DFlash2, **open**), issue #22947 (llama-bench spec-decode support — closed as not planned),
+  PR #27342 (DFlash2, **open**), issue #22947 (llama-bench spec-decode support - closed as not planned),
   issue #19712 (spec decode blocked with `--mmproj`), issue #27623 (~25x decode collapse past ~80K
   on this hybrid model, **open**), issue #27122 (MTP + `--split-mode tensor` CUDA lockup, open).
 - vLLM: issue #52475 (MTP repetition collapse with turboquant KV on sm120, open),
@@ -211,7 +211,7 @@ Phase A yields a cost model that was not anticipated when this document was writ
     speedup = mean_len / k,   where  mean_len = 1 + n_max * acceptance   (verified against
     llama.cpp's own per-request `mean len` field, exact to two decimals)
 
-so `k` — the cost of one speculative verification step in units of a plain decode step — is
+so `k` - the cost of one speculative verification step in units of a plain decode step - is
 recoverable per request. Measured:
 
 | arm | verification width | k | k spread across 5 prompt classes |
@@ -222,25 +222,25 @@ recoverable per request. Measured:
 | mtp-n5 | 6 | 2.2929 | 1.38 % |
 | dflash2-n7 | 8 | 2.7142 | 2.39 % |
 
-(Figures corrected 2026-08-24 after a review of the estimator itself — see "Estimator
+(Figures corrected 2026-08-24 after a review of the estimator itself - see "Estimator
 correction" at the end of this entry. The earlier numbers used llama.cpp's reported `mean len`
 field and were biased by a prompt-dependent amount.)
 
 **Test of H2.** A state-rollback account charges the overhead to *rejection*. Modelling that as
 `k = k_verify + r * n_max * (1 - acceptance)` makes `r` estimable from the slope of k against
-acceptance. Acceptance spans 0.096–0.918 in this data — nearly a ten-fold range — and every arm
-returns `|r| <= 0.0024` with r² between 0.001 and 0.065 — no relationship at all. No
+acceptance. Acceptance spans 0.096-0.918 in this data - nearly a ten-fold range - and every arm
+returns `|r| <= 0.0024` with r^2 between 0.001 and 0.065 - no relationship at all. No
 rejection-proportional cost is detectable on either drafter.
 
 **This does not say rollback is free.** It bounds how much of the measured overhead rollback can
-account for, and the bound is approximately nothing. H2 as stated — rollback as the dominant term
-setting the n-max ceiling — is not supported.
+account for, and the bound is approximately nothing. H2 as stated - rollback as the dominant term
+setting the n-max ceiling - is not supported.
 
 **What replaces it.** Fitting `k = k0 + c * (w - 1)`:
 
-- `draft-mtp`, widths 3/4/6: k0 = 0.8937, **c = 0.2803**, r² = 0.9998
+- `draft-mtp`, widths 3/4/6: k0 = 0.8937, **c = 0.2803**, r^2 = 0.9998
 - `draft-dflash`, widths 5/8: k0 = 0.7844, **c = 0.2757** (two points only: a straight line
-  through two points is perfect by construction and this r² carries no information; Phase N adds
+  through two points is perfect by construction and this r^2 carries no information; Phase N adds
   widths 3/5/7/9 so that `c` is fitted rather than assumed)
 
 Two unrelated drafters agreeing on `c` to 1.7 % while differing in `k0` by 14 % places the
@@ -261,15 +261,15 @@ fewer make it an overestimate. Measured against the physical definition
     forwards F = predicted_n - accepted        (each forward emits its own token plus its accepted drafts)
     mean_len   = predicted_n / F
 
-the field is high by +0.17 % to +0.81 %, **and the error varies by prompt** — the same order as
+the field is high by +0.17 % to +0.81 %, **and the error varies by prompt** - the same order as
 the cross-class constancy of `k` that this entry uses as evidence. In other words the estimator
 was contaminating the exact quantity the claim rests on.
 
-An anomaly noted in the first version — that k sloped slightly *positive* against acceptance on
-every arm — turned out to be that bias, not a physical effect: the field's error is largest on
+An anomaly noted in the first version - that k sloped slightly *positive* against acceptance on
+every arm - turned out to be that bias, not a physical effect: the field's error is largest on
 high-acceptance prompts. Recomputing from the API counters removes it. The slopes now straddle
-zero (−0.0167 to +0.0033) with r² between 0.001 and 0.065, the within-arm spread of k tightens
-(e.g. mtp-n2 1.36 % → 1.06 %), and the conclusion is unchanged but better supported.
+zero (-0.0167 to +0.0033) with r^2 between 0.001 and 0.065, the within-arm spread of k tightens
+(e.g. mtp-n2 1.36 % -> 1.06 %), and the conclusion is unchanged but better supported.
 
 Deriving from the API counters also removed an unverified assumption: the earlier version aligned
 log lines to prompts by position. The log is now used only as an independent cross-check, and it
@@ -282,9 +282,9 @@ excluding zero, with within-prompt run-to-run CV at or below 0.3 %:
 
 | arm | width | tok/s | vs own-tree baseline (95 % CI) | k | tok/J | J/request |
 |---|---:|---:|---|---:|---:|---:|
-| baseline@master | — | 41.55 | — | — | 0.1005 | 3980 |
-| baseline@pr27342 | — | 41.55 | — | — | 0.1005 | 3979 |
-| mtp-n2 | 3 | 66.39 | **+59.77 [+56.95, +62.75] %** | 1.4497 | 0.1627 | **2503 (−37.1 %)** |
+| baseline@master | - | 41.55 | - | - | 0.1005 | 3980 |
+| baseline@pr27342 | - | 41.55 | - | - | 0.1005 | 3979 |
+| mtp-n2 | 3 | 66.39 | **+59.77 [+56.95, +62.75] %** | 1.4497 | 0.1627 | **2503 (-37.1 %)** |
 | mtp-n3 | 4 | 63.29 | +52.32 [+48.47, +56.48] % | 1.7425 | 0.1549 | 2684 |
 | dflash2-n4 | 5 | 63.13 | +51.94 [+45.56, +58.17] % | 1.8874 | 0.1554 | 2835 |
 | mtp-n5 | 6 | 54.89 | +32.10 [+26.38, +37.75] % | 2.2939 | 0.1343 | 3228 |
@@ -295,24 +295,24 @@ output on 125/125 prompt-passes**, so nothing in the DFlash2 comparison is attri
 unmerged branch.
 
 **H4a is supported, and the class breakdown matters more than the headline.** `dflash2-n7` is
-+22.6 % overall while being a *net loss* on three of five prompt classes (prose −11.1 %,
-chat −4.3 %, zh −28.7 %). `mtp-n5` and `dflash2-n4` are within noise of zero on Chinese. A single
-overall figure conceals a sign change — the same failure this repo documented in the predecessor's
++22.6 % overall while being a *net loss* on three of five prompt classes (prose -11.1 %,
+chat -4.3 %, zh -28.7 %). `mtp-n5` and `dflash2-n4` are within noise of zero on Chinese. A single
+overall figure conceals a sign change - the same failure this repo documented in the predecessor's
 headline (`docs/METHODOLOGY_AUDIT.md` A1), reproduced here in the opposite direction.
 
-**Cost model, final.** `draft-mtp` (widths 3/4/6): k0 = 0.8934, **c = 0.2806**, r² = 0.9998.
+**Cost model, final.** `draft-mtp` (widths 3/4/6): k0 = 0.8934, **c = 0.2806**, r^2 = 0.9998.
 `draft-dflash` (widths 5/8, two points): k0 = 0.7831, **c = 0.2761**. `c` agrees to 1.6 % between
 unrelated drafters while `k0` differs by 14 %. Within-arm spread of `k` across five prompt classes
-and five passes is 0.35–0.54 %. Independent cross-check: the API counters and llama.cpp's own log
+and five passes is 0.35-0.54 %. Independent cross-check: the API counters and llama.cpp's own log
 lines agree on **625/625 requests, to the token**.
 
-**H2 is not supported.** Over an acceptance range of 0.096–0.918, the rejection-proportional cost
-`r` is at most +0.0028 decode-steps per rejected draft token, with r² between 0.001 and 0.060.
+**H2 is not supported.** Over an acceptance range of 0.096-0.918, the rejection-proportional cost
+`r` is at most +0.0028 decode-steps per rejected draft token, with r^2 between 0.001 and 0.060.
 The overhead is charged per position verified, not per draft rejected. This bounds rollback's
 contribution; it does not prove rollback is free.
 
-**Losslessness.** Speculative arms are byte-identical to baseline on only 25–30 of 125
-prompt-passes — 76–80 % diverge, forking at a median 23 % into the text — but every arm is
+**Losslessness.** Speculative arms are byte-identical to baseline on only 25-30 of 125
+prompt-passes - 76-80 % diverge, forking at a median 23 % into the text - but every arm is
 **100/100 reproducible across passes**. The divergence is deterministic, not noise. This is
 consistent with, and corroborative of, llama.cpp #25618 rather than novel.
 
@@ -322,23 +322,23 @@ consistent with, and corroborative of, llama.cpp #25618 rather than novel.
 
 An earlier entry inferred a bandwidth elasticity of about 1.0 for the no-spec baseline from the
 overclock removal: memory +400 MHz was removed and throughput fell 4.1 %. That step was **not a
-bandwidth-only lever** — it also removed +100 MHz of core offset and dropped the power limit from
+bandwidth-only lever** - it also removed +100 MHz of core offset and dropped the power limit from
 450 W to 420 W. Attributing the whole 4.1 % to bandwidth was wrong.
 
 Phase R's pre-flight measures it properly, moving memory clock alone at a fixed 420 W:
 
 | condition | memory clock under load | tok/s |
 |---|---:|---:|
-| bw-lo (−800 offset) | 9101 MHz | 40.52 |
+| bw-lo (-800 offset) | 9101 MHz | 40.52 |
 | stock | 9501 MHz | 41.87 |
 | bw-hi (+800 offset) | 9901 MHz | 43.15 |
 
-That is +4.2 % / −4.2 % of memory clock for +3.1 % / −3.2 % of throughput: **elasticity ≈ 0.75**.
+That is +4.2 % / -4.2 % of memory clock for +3.1 % / -3.2 % of throughput: **elasticity ~ 0.75**.
 
 A further subtlety, recorded because it limits even the controlled lever: at a fixed power cap,
 raising the memory clock takes power from the core. SM clock under load reads 1922 MHz at stock
 against 1886 and 1881 MHz in the two bandwidth arms, so the bandwidth arms are a net of "+4 %
-memory, −2 % core" not a pure bandwidth step. Phase R's full run quantifies this; the
+memory, -2 % core" not a pure bandwidth step. Phase R's full run quantifies this; the
 pre-flight is a single 200-token measurement per condition.
 
 ### CORRECTION 2: the Phase A process crashed after writing its last record
@@ -359,7 +359,7 @@ kept as `results/phase_a.pre_repair.json` and the repair is logged in the result
 
 ## ERRATA
 
-_(none yet — the two items above are corrections to this document's own interim reasoning, not to
+_(none yet - the two items above are corrections to this document's own interim reasoning, not to
 a published result. The v3.0 erratum for the predecessor repo remains pending on Phase C's
 drafter-quantization ladder.)_
 
@@ -456,7 +456,7 @@ meaning its interval's upper bound reaches zero or above.
   K rather than assumed to be different regimes.
 
 **H6a (the anchor gates everything else).** `moe-draft08b-n8` reproduces the predecessor's loss:
-its net yield against the MoE baseline is worse than −25 %.
+its net yield against the MoE baseline is worse than -25 %.
 
 - This runs first in the report for a reason. If the anchor does not reproduce, the difference
   between the two studies is in the harness, the build, or the card, and no Phase M result may be
@@ -465,7 +465,7 @@ its net yield against the MoE baseline is worse than −25 %.
   This runs at 8192, so exact agreement is not expected and is not the test; the sign and the
   rough magnitude are.
 
-**H6b (the cost model localises the difference).** Fitting k(w) = k0 + c(w−1) on the MoE gives a
+**H6b (the cost model localises the difference).** Fitting k(w) = k0 + c(w-1) on the MoE gives a
 marginal cost per verified position c that exceeds the dense model's, by roughly the factor
 separating their net yields.
 
@@ -499,8 +499,8 @@ prompt-processing pass, so the decode phase emits `predicted_n - 1` tokens, not 
     F = predicted_n - accepted - 1,   mean_len = (predicted_n - 1) / F
 
 Compared against the `mean len` the server prints for every request, across all 625 speculative
-requests of Phase A, the old form is systematically low: mean gap −0.0204, and the sign never
-changes. The corrected form sits at −0.0050, which is inside the log's own `%5.2f` printing
+requests of Phase A, the old form is systematically low: mean gap -0.0204, and the sign never
+changes. The corrected form sits at -0.0050, which is inside the log's own `%5.2f` printing
 precision.
 
 **Why the existing integrity check did not catch it.** `cross_check_against_log` compared the API
@@ -511,8 +511,8 @@ same quantity. That comparison is now part of the check, and it was verified to 
 formula and pass on the new one.
 
 **What it moves.** `k` rises by 0.33 % at n-max 2 to 0.59 % at n-max 7. Because the bias grows
-with depth it inflates the fitted `c` by about 0.8 %: `draft-mtp` k0 0.8934 → 0.8937 and
-c 0.2806 → 0.2829; `draft-dflash` k0 0.7831 → 0.7825 and c 0.2761 → 0.2784. Both `c` still read
+with depth it inflates the fitted `c` by about 0.8 %: `draft-mtp` k0 0.8934 -> 0.8937 and
+c 0.2806 -> 0.2829; `draft-dflash` k0 0.7831 -> 0.7825 and c 0.2761 -> 0.2784. Both `c` still read
 0.28 to two figures, the 1.6 % agreement between the two methods survives, the implied optima
 stay at n-max 2 for MTP and 4 for DFlash2, and no hypothesis verdict changes. Every figure in
 this document above this line was computed with the old form and is superseded by the values here
@@ -750,7 +750,7 @@ clock mechanisms that is close, and it says the pinning did not introduce an art
 **A local elasticity between these two points is not estimable, and the first attempt to compute
 one was a mistake worth recording.** The core clocks differ by 4.2 % for the baseline but only
 1.2 % and 1.4 % for the speculative arms, which is the same order as the throughput difference
-being measured. Dividing one small number by another produced 0.162 for the baseline, −0.065 for
+being measured. Dividing one small number by another produced 0.162 for the baseline, -0.065 for
 `mtp-n3` and 0.314 for `mtp-n7`. The negative value is not a finding that lowering the clock made
 `mtp-n3` faster; it is 63.32 against 63.37, which is noise across a 1.2 % clock step. Only the
 baseline's span is wide enough to carry any signal at all, and 0.162 there is consistent with a
@@ -803,9 +803,9 @@ identical even though the code that runs them is not.
 `repro/llamacpp_27572.py` runs unchanged apart from its paths. The issue concerns behaviour in the
 server's parallel path, so it is a property of the code and should not depend on the card.
 
-- **Reproduces on host B with the same qualitative pattern** — the strongest available evidence
+- **Reproduces on host B with the same qualitative pattern** - the strongest available evidence
   short of a maintainer reproducing it, and it is reported to the thread either way.
-- **Does not reproduce on host B** — then host A's result is either configuration-specific or
+- **Does not reproduce on host B** - then host A's result is either configuration-specific or
   toolchain-specific, and the comment already posted to that issue needs a correction naming host
   B as the disconfirming case. Absolute timings are expected to differ because of the 350 W cap;
   only the pattern is being replicated.
@@ -822,15 +822,15 @@ Fork positions are compared **within host only**: each host's speculative arms a
 own greedy baseline. Comparing host A's fork positions to host B's would confound the card, the
 driver and the compiler, and no such comparison is made.
 
-- **The grouping reproduces** — w3 equals w4, w5 equals w6 equals w8, and the two groups differ
+- **The grouping reproduces** - w3 equals w4, w5 equals w6 equals w8, and the two groups differ
   from each other on host B as they do on host A. This is the registered prediction. It would show
   the partition is not an artefact of one machine's numerics.
-- **The grouping does not reproduce** — the partition is toolchain- or machine-specific, and the
+- **The grouping does not reproduce** - the partition is toolchain- or machine-specific, and the
   claim in llama.cpp #25618 must be narrowed to host A in a correction posted to that thread.
-- **The grouping reproduces and the absolute fork positions also match host A** — stronger than
+- **The grouping reproduces and the absolute fork positions also match host A** - stronger than
   required, and would say CUDA 12.0 and 13.3 produce bit-identical reductions here. Not predicted;
   recorded if observed.
-- **A width lands in neither group cleanly** — reported as a failure of both H8 and the acceptance
+- **A width lands in neither group cleanly** - reported as a failure of both H8 and the acceptance
   competitor, exactly as `harness/width_groups.py` already handles on host A.
 
 Because greedy decoding at a fixed seed is deterministic, one pass per arm is sufficient for the
@@ -908,9 +908,9 @@ so the primary tree is never rebuilt:
 
 | build | GENERIC table | prediction |
 |---|---|---|
-| **control** | unmodified: 1-4 → 4, 5-8 → 2 | reproduces this host's own grouping |
-| **forced-up** | 1-4 → 4, **5-8 → 4** | widths 5, 6, 8 move to the `{3,4}` fork positions |
-| **forced-down** | **1-4 → 2**, 5-8 → 2 | widths 3, 4 move to the `{5,6,8}` fork positions |
+| **control** | unmodified: 1-4 -> 4, 5-8 -> 2 | reproduces this host's own grouping |
+| **forced-up** | 1-4 -> 4, **5-8 -> 4** | widths 5, 6, 8 move to the `{3,4}` fork positions |
+| **forced-down** | **1-4 -> 2**, 5-8 -> 2 | widths 3, 4 move to the `{5,6,8}` fork positions |
 
 Registered outcomes:
 
@@ -945,8 +945,8 @@ up as a prediction.
 | groups differ on | 14 | 14 | **18** |
 | fork positions | identical to host B | identical to host A | **different from both** |
 
-Two 3090s that share nothing else — different board SKU at 350 W against 420 W, three CUDA
-versions between them, different compilers, a major driver version apart — produce fork positions
+Two 3090s that share nothing else - different board SKU at 350 W against 420 W, three CUDA
+versions between them, different compilers, a major driver version apart - produce fork positions
 that match to the character on all 25 prompts. The A6000 produces the same two-group structure and
 different positions.
 

@@ -76,8 +76,8 @@ def start(
     fh = open(log_path, "w")
     fh.write("CMD: " + " ".join(cmd) + "\n")
     fh.flush()
-    # `start_new_session=True`, NOT `preexec_fn=os.setsid`. They do the same thing — put the
-    # child in its own process group so the whole tree can be signalled — but preexec_fn runs
+    # `start_new_session=True`, NOT `preexec_fn=os.setsid`. They do the same thing - put the
+    # child in its own process group so the whole tree can be signalled - but preexec_fn runs
     # Python code in the child after fork, and that is explicitly unsafe in a process that has
     # threads. This harness runs a GPU power-sampling thread throughout, and the first full
     # 875-record run ended with `double free or corruption (out)` from glibc after roughly 7900

@@ -264,7 +264,7 @@ def run_matrix(
 
     # Order matters. The lock is taken FIRST, and only then is the restore-on-exit guard armed.
     # The guard restores stock clocks with force=True, which bypasses the lock by design so that
-    # a dying run can always clean up after itself — but armed before the lock is held, a run
+    # a dying run can always clean up after itself - but armed before the lock is held, a run
     # that then fails to acquire the lock would fire that guard on exit and move the clocks of a
     # card another run is actively measuring.
     G.acquire_lock(f"bench.py -> {out_path}")

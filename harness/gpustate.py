@@ -1,11 +1,11 @@
-"""Apply, verify and restore GPU clock/power state — with a guard against doing it mid-run.
+"""Apply, verify and restore GPU clock/power state - with a guard against doing it mid-run.
 
 Two things this module exists to prevent, both of which happened during development:
 
 1. **An undisclosed overclock.** The card arrived with memory +400 MHz and core +100 MHz while
    the write-up said "stock". Because batch-1 decode is bandwidth-bound and speculative
    verification is comparatively compute-dense, a memory overclock moves the two arms by
-   different amounts — the exact differential a paired design is supposed to exclude.
+   different amounts - the exact differential a paired design is supposed to exclude.
 
 2. **Changing clocks while a benchmark was live.** Probing whether the memory clock could be
    underclocked was done while a run was measuring, briefly putting the card 200 MHz below its
@@ -80,7 +80,7 @@ def settings_index_for(smi_index: int) -> int:
     """Map an nvidia-smi GPU index to the nvidia-settings `[gpu:N]` index, verified by UUID.
 
     These two tools maintain independent enumerations. On a single-GPU host they trivially agree,
-    which is exactly why the mismatch is easy to miss until a second card is installed — at which
+    which is exactly why the mismatch is easy to miss until a second card is installed - at which
     point clock offsets could be applied to one card while another is being measured, silently
     and with no error. Both tools report the same GPU UUID, so the mapping is resolved by
     matching on that rather than assumed.
@@ -175,7 +175,7 @@ def acquire_lock(owner: str, *, force: bool = False) -> None:
 
     The lock is deliberately global rather than per-device. Two benchmarks running at once in
     one chassis share a power supply, case airflow and PCIe root complex, so they contaminate
-    each other's timing and energy figures even on different cards — and if either one varies
+    each other's timing and energy figures even on different cards - and if either one varies
     clocks, it varies them for a card the other is measuring.
 
     The previous version simply overwrote the file, so two concurrent runs would each believe
