@@ -160,3 +160,74 @@ is not busy, because a hanging kernel holds one at 100 %.
 
 The existing unit test at `python/sglang/kernels/aot/tests/speculative/test_speculative_sampling.py`
 covers one well-formed tree and has no liveness, malformed-input or NaN case.
+
+## Hardware results, RTX 3090 sm_86, CUDA 13.3
+
+Two standalone reproductions, neither needing SGLang, sgl-kernel, a model or a second GPU. Both
+were run alongside an unrelated benchmark on the same card and did not disturb it.
+
+### Sibling walk, `TreeSpeculativeSamplingTargetOnly`
+
+`hang_repro.cu`. Iteration cap 1000000; a valid walk needs at most `num_draft_tokens`.
+
+| sibling chain | NaN | accepts | iterations | bounded |
+|---|---|---|---:|---:|
+| acyclic | no | no | 2 | 2 |
+| acyclic | no | yes | 2 | 2 |
+| acyclic | yes | no | 2 | 2 |
+| cyclic | no | yes | 1 | 1 |
+| cyclic | no | no | 1000001 | 4 |
+| cyclic | yes | no | 1000001 | 4 |
+| self-referential | no | no | 1000001 | 4 |
+
+### Parent walk, `build_tree_kernel`, the `tid != 0` branch
+
+`builder_repro.cu`, QLEN_ONLY layout, `draft_token_num` 4, `topk` 2, `depth` 3.
+
+| case | iterations | max offset written / row end |
+|---|---:|---|
+| parent present in `selected_index` | 3 | 2 / 2 |
+| parent present, guarded | 3 | 2 / 2 |
+| **parent absent** | 2 | **4 / 2** |
+| parent absent, guarded | 1 | 2 / 2 |
+
+Under `compute-sanitizer`:
+
+```
+memcheck,  as shipped    : 3 errors   (Invalid __global__ read of size 8 bytes,
+                                       threads (1,0,0) and (2,0,0))
+memcheck,  with the guard: 0 errors
+synccheck, as shipped    : 0 errors
+```
+
+The 8-byte reads are `selected_index`, which is `draft_token_num - 1` wide per batch item while
+the search loop runs to `draft_token_num`.
+
+**synccheck finding nothing matters.** The starting theory for this issue was a divergent
+cooperative-group barrier on Ampere. The sampling kernel's accept loop contains no barrier at
+all, uses only `blockIdx.x`, and is executed identically by every thread in the block, so its
+control flow is uniform by construction. When it does not terminate, no thread reaches the
+`__syncthreads()` that follows, which looks like a stuck barrier from outside and is not one.
+
+### Whether the guard changes results
+
+The `parent present` rows are identical with and without it, 3 iterations and the same offsets.
+For the sibling walk, 4000 randomly generated valid trees give identical accept sets.
+
+## What could be sent upstream, and what could not
+
+Verified enough to propose:
+
+1. `build_tree_kernel`, `tid != 0` branch: handle the parent-not-found case the way the
+   `tid == 0` branch already does, and stop the search at `draft_token_num - 1`, which is the
+   width `selected_index` actually has. Sanitizer evidence above, and the branch being fixed is
+   the only one of the two that lacks the handling.
+2. `TreeSpeculativeSamplingTargetOnly`: bound the sibling walk by `num_draft_tokens`. Defensive
+   rather than a proven bug fix, and it should be described that way.
+
+Not established, and so not claimable in a PR title or description:
+
+- That either change fixes #35822. There is no server-level reproduction here, no TP=2, and the
+  reporter's exact model was never loaded.
+- That a cycle in `retrive_next_sibling` occurs in practice. The CUDA builder cannot produce one
+  on its normal path.
