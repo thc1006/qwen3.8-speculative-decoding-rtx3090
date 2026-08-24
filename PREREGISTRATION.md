@@ -481,3 +481,54 @@ against 16.35 GiB, so any yield difference carries a size component that this de
 separate. Both being hybrid attention at `full_attention_interval: 4`, both carrying MTP tensors,
 and both sharing the 248320-token vocabulary removes the confounds that can be removed here; size
 is not one of them. Nothing in this phase will be reported as isolating routing alone.
+
+## Correction 3, 2026-08-24: the derived mean length was low by about a percent
+
+Found by checking the harness against the server rather than by anything going wrong. The numbers
+it produced were plausible, internally consistent, and stable across five passes.
+
+`speedup = mean_len / k` is the model this study argues from, and `mean_len` has no API field, so
+it is derived from the per-request counters. The derivation was
+
+    predicted_n = accepted + F   =>   F = predicted_n - accepted,   mean_len = predicted_n / F
+
+reasoning that each target forward pass emits one token of its own plus whatever drafts it
+accepted. The first generated token does not come from a decode forward. It comes out of the
+prompt-processing pass, so the decode phase emits `predicted_n - 1` tokens, not `predicted_n`:
+
+    F = predicted_n - accepted - 1,   mean_len = (predicted_n - 1) / F
+
+Compared against the `mean len` the server prints for every request, across all 625 speculative
+requests of Phase A, the old form is systematically low: mean gap −0.0204, and the sign never
+changes. The corrected form sits at −0.0050, which is inside the log's own `%5.2f` printing
+precision.
+
+**Why the existing integrity check did not catch it.** `cross_check_against_log` compared the API
+counters against the log's counters and reported 0 mismatches out of 625, correctly, both before
+and after this correction. The counters were never wrong. What was wrong was the arithmetic
+applied to them, and nothing compared the derived quantity against the server's own value of the
+same quantity. That comparison is now part of the check, and it was verified to fire on the old
+formula and pass on the new one.
+
+**What it moves.** `k` rises by 0.33 % at n-max 2 to 0.59 % at n-max 7. Because the bias grows
+with depth it inflates the fitted `c` by about 0.8 %: `draft-mtp` k0 0.8934 → 0.8937 and
+c 0.2806 → 0.2829; `draft-dflash` k0 0.7831 → 0.7825 and c 0.2761 → 0.2784. Both `c` still read
+0.28 to two figures, the 1.6 % agreement between the two methods survives, the implied optima
+stay at n-max 2 for MTP and 4 for DFlash2, and no hypothesis verdict changes. Every figure in
+this document above this line was computed with the old form and is superseded by the values here
+rather than rewritten in place.
+
+**What is still approximate.** The corrected form reproduces the server's printed value on about
+70 % of requests. The other 30 % need `F` one smaller still, which is what truncation at the
+token cap looks like: a verification step that ran and was counted, whose accepted tokens were
+partly discarded because the request had reached `max_tokens`. The API cannot distinguish the two
+cases, so the reported `mean_len` remains low by under 1 %, stated rather than hidden.
+
+**Consequence for the upstream contribution.** `docs/UPSTREAM_CONTRIBUTIONS.md` argued for
+exposing `n_draft_verif_steps` per request on the grounds of convenience, since an exact identity
+appeared to exist. There is no exact identity. The counter the server already keeps is the only
+way to get the number right, and a derivation that looks exact while being quietly wrong by a
+percent is a better argument for the patch than the one that was there.
+
+**No measurement was repeated.** The correction is arithmetic applied to counters that were
+already recorded, so every result file is unchanged and only the analysis output moves.

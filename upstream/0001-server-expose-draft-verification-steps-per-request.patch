@@ -16,9 +16,17 @@ different mean lengths and different speedups.
 process-wide counter. It cannot be attributed to a request, so it is unusable for per-request
 analysis or for any benchmark that changes conditions between requests.
 
-The value can be derived today as `predicted_n - draft_n_accepted`, which is how I have been
-computing it, but that identity holds only while every verification step emits exactly one
-non-draft token, which is an implementation detail rather than a documented guarantee.
+There is no exact way to derive it from what the API returns today, and I found that the hard
+way. `predicted_n - draft_n_accepted` looks right and is wrong by one, because the first
+generated token comes from the prompt-processing pass rather than a decode forward.
+`predicted_n - draft_n_accepted - 1` then reproduces the server's printed `mean len` on about
+70 % of requests; the remainder need one fewer still, which is what truncation at `max_tokens`
+looks like, and nothing in the response distinguishes those cases.
+
+I ran a study on the wrong form without noticing. The numbers were plausible, stable across five
+repetitions, and fit a linear cost model at r-squared 0.9998. What caught it was comparing the
+derived figure against the `mean len` the server prints, which differed by a consistent -0.0204.
+Correcting it moved the fitted coefficient by about 0.8 percent.
 
 One line, no new state, no behaviour change. It reports what the server already knows.
 

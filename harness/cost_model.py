@@ -1,9 +1,10 @@
 """Verification-step cost model.
 
-Speculative decoding emits `mean_len` tokens per target forward pass, where llama.cpp's own
-per-request line reports `mean_len` and it satisfies (verified against this run's data)
-
-    mean_len = 1 + n_max * acceptance_rate
+Speculative decoding emits `mean_len` tokens per target forward pass. llama.cpp prints that
+figure per request as `mean len` but does not return it through the API, so it is derived here
+from the counters that are returned. The derivation is accurate to under 1 % and the residual is
+characterised in `collect()`; it is not `1 + n_max * acceptance_rate`, which only holds when
+every step drafts its full width
 
 If one speculative verification step costs `k` times a plain decode step, then
 
@@ -73,20 +74,44 @@ def _spec_type(meta: dict) -> str:
 def collect(result: dict) -> list[dict]:
     """One row per (arm, pass, prompt), computed entirely from the per-request API timings.
 
-    `mean_len` is derived, not taken from llama.cpp's `mean len` log field. The two disagree:
-    llama.cpp reports `1 + n_max * accept_rate`, which assumes every step drafts the full
-    `n_max`, while a step may draft fewer. Measured on this run the gap is +0.17 % to +0.81 %
-    and it VARIES BY PROMPT -- the same order as the cross-class constancy of `k` that this
-    module is used to demonstrate, so using that field would contaminate the very claim.
+    `mean_len` is derived from the per-request API counters, because there is no API field for
+    it. Getting the derivation right took two attempts and the second one is still approximate;
+    both are recorded here because the difference is small enough to be invisible and systematic
+    enough to matter.
 
-    The physical definition has no such ambiguity. Each target forward pass emits one token of
-    its own plus whatever drafts it accepted, so over F forwards
+    The first attempt read
 
         predicted_n = accepted + F     =>   F = predicted_n - accepted
         mean_len    = predicted_n / F
 
-    Deriving from the API also removes a dependency on aligning log lines to prompts by
-    position, which was an implicit and unverified assumption.
+    on the reasoning that each target forward pass emits one token of its own plus whatever
+    drafts it accepted. Checked against the server's own `mean len` log line on all 625
+    speculative requests of Phase A, it is wrong, and always in the same direction. The missing
+    piece is the first generated token: it comes out of the prompt-processing pass, not out of a
+    decode forward, so the decode phase emits `predicted_n - 1` tokens over F forwards, not
+    `predicted_n`:
+
+        predicted_n - 1 = accepted + F  =>  F = predicted_n - accepted - 1
+        mean_len        = (predicted_n - 1) / F
+
+    That reproduces the server's printed value on about 70 % of requests. The remaining 30 %
+    need F smaller by one more, which is what truncation at the token cap looks like: a
+    verification step that ran and was counted, whose accepted tokens were partly discarded
+    because the request had reached `max_tokens`. So the true F is `predicted_n - accepted - 1`
+    or one less, and the API cannot say which.
+
+    The residual bias is bounded and reported rather than ignored. Against the server's own
+    figure it is under 1 % on `mean_len`, it moves `k` by +0.33 % at n-max 2 rising to +0.59 %
+    at n-max 7, and because it grows with depth it inflates the fitted `c` by about 0.8 %. It
+    does not move any conclusion in this study: `c` stays at 0.28 to two figures, and every
+    cross-arm ratio moves by less than the absolute figures do, since the bias has the same sign
+    everywhere.
+
+    The clean fix is upstream. `server_slot_stats` already holds the exact count in
+    `n_draft_verif_steps` and does not put it in `to_json()`. The one-line patch is in
+    `upstream/`, and this docstring is the argument for it: a derivation that looks exact,
+    reproduces plausible numbers, and is quietly wrong by a percent is exactly what an exposed
+    counter prevents.
     """
     recs = result["records"]
     arms_meta = result.get("arms", {})
@@ -108,11 +133,13 @@ def collect(result: dict) -> list[dict]:
         accepted = tm.get("t_draft_n_accepted") or 0
         pn = rec.get("predicted_n") or 0
         base = baselines.get((meta.get("tree", "?"), rec["pass"], rec["prompt"]))
-        forwards = pn - accepted
+        # predicted_n - accepted - 1: the first generated token comes from the prompt pass, not
+        # from a decode forward. See the docstring for why this is still approximate.
+        forwards = pn - accepted - 1
         if not (drafted and pn and base and forwards > 0 and rec.get("decode_tok_s")):
             continue
         speedup = rec["decode_tok_s"] / base
-        mean_len = pn / forwards
+        mean_len = (pn - 1) / forwards
         rows.append({
             "arm": rec["arm"], "pass": rec["pass"], "prompt": rec["prompt"],
             "class": rec["class"], "spec_type": _spec_type(meta),
@@ -135,6 +162,7 @@ def cross_check_against_log(result: dict, rows: list[dict]) -> None:
     if not acc_by:
         return
     checked = mismatched = 0
+    ml_checked: list[float] = []
     by_ap: dict[tuple[str, int], list[dict]] = defaultdict(list)
     for r in rows:
         by_ap[(r["arm"], r["pass"])].append(r)
@@ -146,6 +174,25 @@ def cross_check_against_log(result: dict, rows: list[dict]) -> None:
             checked += 1
             if r["drafted"] != lg["generated"] or r["accepted"] != lg["accepted"]:
                 mismatched += 1
+            # The counters agreeing is necessary and not sufficient. They agreed perfectly while
+            # the mean length derived from them was a percent low, because the derivation, not
+            # the counters, was wrong. Comparing the derived figure against the one the server
+            # prints is the check that catches that, and it is the check that was missing.
+            lg_ml = lg.get("mean_len") or lg.get("mean_draft_len")
+            if lg_ml:
+                ml_checked.append(r["mean_len"] - lg_ml)
+    if ml_checked:
+        import statistics as _st
+        bias = _st.fmean(ml_checked)
+        worst = max(abs(x) for x in ml_checked)
+        print(f"[integrity] derived mean_len vs the server's printed mean len: "
+              f"{len(ml_checked)} requests, mean gap {bias:+.4f}, worst {worst:.4f}")
+        if abs(bias) > 0.02:
+            print(f"            the gap is systematic, not rounding. The derivation is wrong, "
+                  f"not the counters. See collect()'s docstring.")
+        else:
+            print(f"            within the log's own %5.2f printing precision, so the "
+                  f"derivation tracks the server.")
     if checked:
         print(f"\n[integrity] API counters vs llama.cpp log lines: {checked} requests compared, "
               f"{mismatched} mismatched"
@@ -160,7 +207,8 @@ def report(result: dict) -> None:
 
     print("=" * 100)
     print("VERIFICATION-STEP COST MODEL     speedup = mean_len / k")
-    print("  mean_len = predicted_n / (predicted_n - accepted)   [derived, not llama.cpp's field]")
+    print("  mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)   [derived; the API has")
+    print("            no verification-step count, and this is low by <1 %. See the docstring.]")
     print("=" * 100)
     cross_check_against_log(result, rows)
 

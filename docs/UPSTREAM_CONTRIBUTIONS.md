@@ -70,14 +70,29 @@ Two obvious workarounds are wrong in practice:
   back-solving `steps = accepted / (mean_len - 1)` from two decimals gave this study a spread of
   ±0.4 steps and produced physically impossible negative step counts.
 
-A third one is exact, and stating it honestly makes this a smaller contribution than the two
-failures above suggest. Every verification step emits one non-draft token, so the tokens produced
-are `verif_steps + accepted`, and `verif_steps = predicted_n - draft_n_accepted` follows. That
-identity is what this study actually uses, and it is exact rather than approximate. The case for
-the field is therefore convenience and durability, not necessity: the identity depends on every
-verification step emitting exactly one non-draft token, which is an implementation detail that
-no documentation guarantees and that a future scheduling change could break silently, since the
-arithmetic would keep producing plausible numbers.
+A third one looks exact and is not, and finding that out is the strongest argument for the field.
+
+The reasoning is that every verification step emits one non-draft token, so tokens produced are
+`verif_steps + accepted` and `verif_steps = predicted_n - draft_n_accepted`. This study used that
+form and it is wrong, by one, every time: the first generated token comes out of the
+prompt-processing pass rather than a decode forward, so the correct form starts at
+`predicted_n - draft_n_accepted - 1`. Nothing looked wrong. The numbers were plausible, stable
+across five passes, and consistent with a cost model that fits at r² = 0.9998. The existing
+integrity check compared the API counters against the log's counters and reported 0 mismatches
+out of 625, correctly, because the counters were never the problem.
+
+It was caught only by comparing the derived mean length against the `mean len` the server prints,
+where the gap was −0.0204 with a sign that never changed. Correcting it moved the fitted marginal
+cost `c` by 0.8 %, recorded as Correction 3 in `PREREGISTRATION.md`.
+
+Even corrected it is approximate. The `- 1` form reproduces the server's printed value on about
+70 % of requests; the rest need one step fewer still, which is what truncation at `max_tokens`
+looks like, and the API cannot distinguish the two. So there is no exact identity to appeal to,
+and the remaining error is under 1 % and irreducible from outside the server.
+
+That is the case for the patch, and it is a better one than convenience. A derived quantity that
+reproduces plausible numbers while being quietly wrong by a percent is exactly what an exposed
+counter prevents, and the server already keeps the counter.
 
 A patch is prepared at `upstream/0001-server-expose-draft-verification-steps-per-request.patch`
 against `c060ca9`. It is one line in `to_json()` and adds no state. It is deliberately **not**

@@ -162,20 +162,34 @@ table is not an appendix.
 ### A cost model, not a table
 
 llama.cpp reports enough per request to recover the cost of one speculative verification step in
-units of a plain decode step. With `mean_len = predicted_n / (predicted_n − accepted)`:
+units of a plain decode step. With `mean_len = (predicted_n − 1) / (predicted_n − accepted − 1)`:
 
     speedup = mean_len / k       k(w) = k0 + c·(w − 1),   w = n_max + 1
 
 | method | widths | k0 | **c** | r² |
 |---|---|---:|---:|---:|
-| `draft-mtp` | 3, 4, 6 | 0.8934 | **0.2806** | 0.9998 |
-| `draft-dflash` | 5, 8 | 0.7831 | **0.2761** | (2 points — meaningless) |
+| `draft-mtp` | 3, 4, 6 | 0.8937 | **0.2829** | 0.9998 |
+| `draft-dflash` | 5, 8 | 0.7825 | **0.2784** | (2 points, meaningless) |
+
+The `− 1` in that formula was missing at first and the numbers it produced looked fine. The first
+generated token comes out of the prompt-processing pass, not out of a decode forward, and leaving
+it in the count inflated the forward count by one. Checking the derivation against the server's
+own `mean len` log line on all 625 speculative requests is what found it. The correction moves
+`c` by 0.8 % and changes nothing that is claimed here, but it is the reason
+[`upstream/`](upstream/) carries a one-line patch to expose the verification-step count the
+server already holds: a derivation that reproduces plausible numbers and is quietly wrong by a
+percent is exactly what an exposed counter prevents. Around 30 % of requests need one further
+step removed, which is what truncation at the token cap looks like, and the API cannot say which,
+so the figures above are low by under 1 % and are reported as such.
 
 `c` agrees to **1.6 %** between the target's own built-in nextn head and a structurally unrelated
 1.1 GB block-diffusion drafter, while `k0` differs by 14 %. The marginal cost of verifying one
 more position belongs to the verification path; the fixed cost belongs to the drafter, and
-DFlash2's fixed cost is the *lower* of the two. `k` varies by only 0.35–0.54 % across five prompt
-classes whose acceptance rates differ by nearly tenfold.
+DFlash2's fixed cost is the *lower* of the two. Across five prompt classes whose acceptance rates
+differ by nearly tenfold, the class means of `k` span **0.26 % to 0.94 %** of their own mean,
+depending on the arm. An earlier version of this section quoted 0.35 to 0.54 % here, which was
+the dispersion of `k` over individual requests rather than over class means. The record-level
+figure is the smaller and better-looking of the two, and it is not the one this claim is about.
 
 This predicts the optimum instead of tabulating it: `mean_len` saturates with depth while `k`
 grows linearly, so the best n-max is interior. Measured: **2 for MTP, 4 for DFlash2.**
