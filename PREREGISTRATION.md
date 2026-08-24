@@ -655,3 +655,39 @@ baseline on at least one prompt.
 5, 7 and 9. `snick525` established drafter independence at one width on Vulkan; this repeats it at
 four widths on CUDA without costing an extra arm. If the two drafters ever disagree at the same
 width, the width-grouping account fails and H8 goes with it.
+
+## Disclosure, 2026-08-24: an external process ran during part of Phase R2
+
+Noticed while checking process health, not because anything looked wrong. Recorded because a
+study that refuses to run on an overclocked card should not quietly ignore a second process
+touching the same GPU.
+
+A `watch -n 1 nvidia-smi` was started from a VS Code terminal at 21:18:37, forty-three minutes
+into a run that began at 20:35:27. It was still running at the time of writing. So pass 1's
+`sm600` arms and the first two `sm1200` arms were measured without it, and everything after
+`mtp-n3@sm1200` was measured with it.
+
+Checked rather than argued away. The sensitive number is the no-speculation baseline's
+coefficient of variation across prompts, which is small enough to see a perturbation:
+
+| arm | watch running | tok/s | CV | SM clock mean/min |
+|---|---|---|---|---|
+| `baseline@sm1200` | no | 37.580 | 0.073 % | 1200 / 1200 |
+| `baseline@sm600` | no | 21.497 | 0.115 % | 600 / 600 |
+| `baseline@sm1200-bwlo` | yes | 36.676 | 0.067 % | 1200 / 1200 |
+| `baseline@sm1200-bwhi` | yes | 38.306 | 0.075 % | 1200 / 1200 |
+| `baseline@sm1700` | yes | 41.268 | 0.069 % | 1710 / 1710 |
+| `baseline@sm1700-bwlo` | yes | 39.856 | 0.081 % | 1710 / 1710 |
+
+The variation with the poller running is the same as without it, or slightly smaller, and every
+record on both sides reports SM clock mean equal to min, so the pin held throughout. A one-hertz
+read-only driver query costing tens of milliseconds of CPU on a 24-thread host is not visible in
+a GPU-bound decode loop.
+
+**Left running rather than killed.** It is demonstrably not perturbing anything, and stopping it
+now would introduce a change partway through a run for no measurable gain. The uneven coverage
+across pass 1 is disclosed here rather than corrected.
+
+**What would have changed the decision.** A baseline CV rising above the 0.24 % that Phase A saw
+within a prompt, any record where SM clock mean exceeded min at a pinned condition, or a step in
+a baseline arm's per-prompt series. None of those are present.
