@@ -18,12 +18,17 @@ try: print(len(json.load(open('$1'))['records']))
 except Exception: print(0)" 2>/dev/null
 }
 
-expect_for() {   # arms x prompts x passes, without importing the matrix
+expect_for() {   # arms x prompts x passes
+  # PROMPTS_PER_CLASS is honoured because a matrix that declares one runs fewer prompts than the
+  # frozen set. Assuming 25 for such a phase makes the completeness gate unsatisfiable, and the
+  # chain would sit waiting for records that were never going to be written.
   python3 -c "
 import sys, os; sys.path.insert(0,'harness'); sys.path.insert(0,'harness/matrices')
 import prompts as P, importlib
 m = importlib.import_module('$1')
-print(len(m.ARMS) * len(P.PROMPTS) * $2)" 2>/dev/null
+ppc = int(getattr(m, 'PROMPTS_PER_CLASS', 0))
+n = ppc * len(P.CLASSES) if ppc else len(P.PROMPTS)
+print(len(m.ARMS) * n * $2)" 2>/dev/null
 }
 
 wait_for_lock_release() {
