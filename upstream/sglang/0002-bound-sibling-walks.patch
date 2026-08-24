@@ -1,0 +1,95 @@
+From 347e35b8ec2d9721921d2b470080df8b5f501429 Mon Sep 17 00:00:00 2001
+From: thc1006 <84045975+thc1006@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 04:24:26 +0800
+Subject: [PATCH] [Kernel] Bound the EAGLE sibling walks and keep their indices
+ inside the tree
+
+VerifyTreeGreedy and TreeSpeculativeSamplingTargetOnly both walk
+retrive_next_sibling with while (cur_index != -1) and no other exit. A chain
+that loops back on itself never terminates, and an entry that is neither -1 nor
+a position in the request's row indexes outside it.
+
+Both now bound the walk by draft_token_num, which is what a sibling chain can
+be at most since it is one node's child list, and check that cur_index is a
+position in the row before using it as one.
+
+The sampling kernel needs a third check the greedy one does not: it uses the
+candidate token id to index a vocabulary-strided array, so an id outside the
+vocabulary reads and writes out of bounds on a sibling chain that is otherwise
+valid, and no hop bound prevents that. It also runs the walk on every thread of
+a 1024-thread block, so its warnings come from one thread.
+
+Signed-off-by: thc1006 <84045975+thc1006@users.noreply.github.com>
+---
+ .../aot/csrc/speculative/eagle_utils.cu       | 13 ++++++++++
+ .../csrc/speculative/speculative_sampling.cuh | 26 +++++++++++++++++++
+ 2 files changed, 39 insertions(+)
+
+diff --git a/python/sglang/kernels/aot/csrc/speculative/eagle_utils.cu b/python/sglang/kernels/aot/csrc/speculative/eagle_utils.cu
+index 06524e7..e272046 100644
+--- a/python/sglang/kernels/aot/csrc/speculative/eagle_utils.cu
++++ b/python/sglang/kernels/aot/csrc/speculative/eagle_utils.cu
+@@ -290,7 +290,20 @@ __global__ void VerifyTreeGreedy(
+ 
+   for (uint32_t j = 1; j < num_speculative_tokens; ++j) {
+     cur_index = retrive_next_token[bx * num_draft_tokens + cur_index];
++    // A sibling chain is one node's child list, so it cannot be longer than the tree. Without
++    // the bound a chain that loops back on itself never returns, and without the range check an
++    // entry that is neither -1 nor a position in this row indexes outside it.
++    uint32_t hops = 0;
+     while (cur_index != -1) {
++      if (cur_index < 0 || (uint32_t) cur_index >= num_draft_tokens ||
++          hops++ >= num_draft_tokens) {
++        printf(
++            "WARNING: invalid eagle tree!!! The sibling chain of request %u does not terminate "
++            "inside the tree. Please check if the logprob has nan. Verification stops here to "
++            "keep proceeding.\n", bx);
++        cur_index = -1;
++        break;
++      }
+       IdType2 draft_index = retrive_index[bx * num_draft_tokens + cur_index];
+       IdType2 draft_token_id = candidates[bx * num_draft_tokens + cur_index];
+       IdType2 target_token_id = target_predict[last_accepted_retrive_idx];
+diff --git a/python/sglang/kernels/aot/csrc/speculative/speculative_sampling.cuh b/python/sglang/kernels/aot/csrc/speculative/speculative_sampling.cuh
+index b30b18e..ad14753 100644
+--- a/python/sglang/kernels/aot/csrc/speculative/speculative_sampling.cuh
++++ b/python/sglang/kernels/aot/csrc/speculative/speculative_sampling.cuh
+@@ -71,9 +71,35 @@ __global__ void TreeSpeculativeSamplingTargetOnly(
+ 
+   for (uint32_t j = 1; j < num_speculative_tokens; ++j) {
+     cur_index = retrive_next_token[bx * num_draft_tokens + cur_index];
++    // As in VerifyTreeGreedy, with one addition: this kernel uses the candidate id to index a
++    // vocabulary-strided array, so an id outside the vocabulary reads and writes out of bounds
++    // on a sibling chain that is otherwise perfectly valid. Every thread in the block runs this
++    // walk, so only one of them reports.
++    uint32_t hops = 0;
+     while (cur_index != -1) {
++      if (cur_index < 0 || (uint32_t) cur_index >= num_draft_tokens ||
++          hops++ >= num_draft_tokens) {
++        if (tx == 0) {
++          printf(
++              "WARNING: invalid eagle tree!!! The sibling chain of request %u does not terminate "
++              "inside the tree. Please check if the logprob has nan. Verification stops here to "
++              "keep proceeding.\n", bx);
++        }
++        cur_index = -1;
++        break;
++      }
+       IdType2 draft_index = retrive_index[bx * num_draft_tokens + cur_index];
+       IdType2 draft_token_id = candidates[bx * num_draft_tokens + cur_index];
++      if (draft_token_id < 0 || (uint32_t) draft_token_id >= d) {
++        if (tx == 0) {
++          printf(
++              "WARNING: invalid eagle tree!!! Candidate token id %lld of request %u is outside "
++              "the vocabulary. Verification stops here to keep proceeding.\n",
++              (long long) draft_token_id, bx);
++        }
++        cur_index = -1;
++        break;
++      }
+       DType target_prob_single = target_probs[cur_prob_offset + draft_token_id];
+       prob_acc += target_prob_single;
+ 
+-- 
+2.47.3
+

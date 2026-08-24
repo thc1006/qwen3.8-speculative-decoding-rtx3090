@@ -46,7 +46,10 @@ MODEL = Path(os.environ.get("QWEN_TARGET_MODEL") or REPO / "models/target/Qwen3.
 # their 1M, and the multimodal projector, which the text-only reproducer does not need.
 COMMON = [
     "-ngl", "999", "--fit", "off",
-    "-c", "81920", "-b", "1024", "-ub", "256",
+    # Overridable: compute buffers grow with the slot count, and on a 24 GB card this model
+    # will not start at -np 8 with -c 81920 at all, so testing the concurrency axis means
+    # trading context for slots.
+    "-c", os.environ.get("QWEN_REPRO_CTX", "81920"), "-b", "1024", "-ub", "256",
     "-fa", "on", "-ctk", "q4_0", "-ctv", "q4_0",
     "--no-webui", "--jinja", "--metrics",
     # their sampling, set server-side because harness.server.chat only pins the chain at
