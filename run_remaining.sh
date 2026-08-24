@@ -131,6 +131,14 @@ print("  correction posted to that thread.")
 PYEOF
 log "wrote analysis/phase_kv_divergence.txt"
 
+# The #27572 CUDA reproduction. Placed here, after the f16 control and before the long runs,
+# because a comment on that issue promises the result either way and the reporter is engaged.
+# It is roughly an hour against phase_nmax's six, so it does not meaningfully delay anything.
+log "starting the llama.cpp #27572 CUDA reproduction"
+python3 repro/llamacpp_27572.py --port 18300 > logs/repro_27572.log 2>&1
+log "repro #27572 returned rc=$?; see repro/results_27572.json"
+grep -E "reproduces on CUDA|does not reproduce" logs/repro_27572.log | sed 's/^/    /' || true
+
 # The n-max ladder. Phase A fitted k(w) = k0 + c(w-1) on three MTP widths and two DFlash2 widths;
 # two points do not fit a line, and the DFlash2 coefficient was reported as meaningless for that
 # reason. This runs MTP at 1 through 8 and DFlash2 at 2, 4, 6, 8, so both coefficients are
