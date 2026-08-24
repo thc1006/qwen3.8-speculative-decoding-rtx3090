@@ -155,9 +155,13 @@ def main() -> int:
     args = ap.parse_args()
     lengths = [int(x) for x in args.lengths.split(",")]
 
-    cases = [(4, 4, n, True) for n in lengths]
-    cases.append((1, 4, lengths[-1], False))   # control: sequential, one slot
-    cases.append((4, 1, lengths[-1], False))   # control: four slots, one request at a time
+    # Slot count is overridable: the reported configuration is -np 4, but a sibling report
+    # (#27117, draft-dflash) says its own collapse needs -np 16 and is healthy at 4, so the
+    # concurrency axis is worth probing before calling any of this a negative result.
+    n_slots = int(os.environ.get("QWEN_REPRO_NP") or 4)
+    cases = [(n_slots, n_slots, n, True) for n in lengths]
+    cases.append((1, n_slots, lengths[-1], False))   # control: sequential, one slot
+    cases.append((n_slots, 1, lengths[-1], False))  # control: all slots, one request at a time
 
     print("plan")
     for slots, n_req, toks, conc in cases:

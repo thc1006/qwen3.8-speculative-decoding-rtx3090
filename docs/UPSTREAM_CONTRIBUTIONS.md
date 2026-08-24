@@ -2,6 +2,9 @@
 
 Surveyed 2026-08-24 with `gh` against the live issue trackers, not from search snippets, and
 revised twice the same day as reading the actual threads narrowed what this study can claim.
+Comment counts and issue states quoted below were read on **2026-08-25**; a tracker moves, so
+treat them as a snapshot rather than a current reading.
+
 Ranked by *how directly this study's data answers a question that is still open after the
 existing discussion*.
 
@@ -19,11 +22,11 @@ actually measured on this machine.
 ## 1. Greedy divergence: CLAIM NARROWED TWICE AFTER READING THE THREAD
 
 **What this repo does NOT get to claim.** A first pass at this section treated
-[#27407](https://github.com/ggml-org/llama.cpp/issues/27407) (open 2026-08-19, zero comments,
-RTX 3090 Ti) as an unanswered orphan and this study's divergence data as a fresh confirmation.
-Reading the tracker properly shows otherwise. The parent thread is
-[#25618](https://github.com/ggml-org/llama.cpp/issues/25618) (open **2026-07-13, 16 comments**),
-and it already establishes:
+[#27407](https://github.com/ggml-org/llama.cpp/issues/27407) (open 2026-08-19, no comments at the
+time, RTX 3090 Ti) as an unanswered orphan and this study's divergence data as a fresh
+confirmation. Reading the tracker properly shows otherwise. The parent thread is
+[#25618](https://github.com/ggml-org/llama.cpp/issues/25618) (open 2026-07-13, **18 comments as of
+2026-08-25**), and it already establishes:
 
 - **The phenomenon**, scoped: greedy speculative output diverges from vanilla on **quantized**
   targets while a **bf16 target preserves parity**; ngram speculation stays lossless on the same
@@ -256,8 +259,8 @@ affected at all. They tested only `draft-dflash`.
 | target | what this study adds | status |
 |---|---|---|
 | [#25618](https://github.com/ggml-org/llama.cpp/issues/25618) divergence | the CUDA width boundary (see §1) | Phase A + Phase N |
-| [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) ~25× decode cliff past ~80 K, **0 comments** | reproduction on sm_86, and whether speculation survives it | Phase L |
-| [#27572](https://github.com/ggml-org/llama.cpp/issues/27572) acceptance → 0 under `-np N`, **0 comments** | sm_86 confirmation; also closes the predecessor repo's own untested concurrency caveat | Phase X |
+| [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) ~25× decode cliff past ~80 K, 1 comment | reproduction on sm_86, and whether speculation survives it | Phase L |
+| [#27572](https://github.com/ggml-org/llama.cpp/issues/27572) acceptance → 0 under `-np N`, 3 comments (this study's among them) | sm_86 confirmation; also closes the predecessor repo's own untested concurrency caveat | Phase X |
 | [vLLM #52475 / #53180](https://github.com/vllm-project/vllm/issues/52475) degenerate output on hybrid GDN | the baseline-relative degeneracy screen used here is the methodology those reports need | Phase V |
 
 ---
