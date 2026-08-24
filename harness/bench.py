@@ -326,10 +326,27 @@ def run_matrix(
         "incidents": [],
     }
 
-    # baseline text per (prompt, pass) -> used as the reference for divergence + degeneracy
-    baseline_text: dict[tuple[str, int], str] = {}
+    # Reference text for divergence and relative degeneracy, keyed by which baseline it came
+    # from as well as by prompt and pass. A single reference was wrong for a dual-tree run: it
+    # sent the PR-branch arms to the master baseline's text and folded any branch difference
+    # into the method effect. On Phase A the two baselines turned out byte-identical on all 125
+    # prompt-passes so nothing moved, but that is a result of the run, not a property of the
+    # design, and the next pair of trees need not agree.
+    baseline_text: dict[tuple[str, str, int], str] = {}
     first_pass_text: dict[tuple[str, str], str] = {}
-    baseline_name = arms[0].name
+    baseline_names = {a.name for a in arms
+                      if not a.extra_args and not getattr(a, "expects_drafter", False)}
+    if not baseline_names:
+        baseline_names = {arms[0].name}
+    # arm -> the baseline it is measured against
+    _bmap = dict(baseline_map or {})
+    for a in arms:
+        if a.name in _bmap or a.name in baseline_names:
+            continue
+        same_tree = [b for b in arms if b.name in baseline_names and b.tree == a.tree]
+        if same_tree:
+            _bmap[a.name] = same_tree[0].name
+    result["divergence_baseline_map"] = _bmap
 
     for p_idx in range(1, passes + 1):
         # Rotate arm order every pass. Interleaving alone still leaves a fixed position effect:
@@ -480,9 +497,18 @@ def run_matrix(
 
                     text = (r.get("reasoning_content") or "") + (r.get("content") or "")
                     predicted_n = int(r.get("t_predicted_n") or r.get("completion_tokens") or 0)
+                    # llama.cpp's own figure, which is (predicted_n - 1) / t_gen_ms. The minus
+                    # one is right: its source comments that "the first token is free, it comes
+                    # from the logits of the last prompt batch", and t_gen_ms is timed from the
+                    # end of prompt processing, so numerator and denominator cover the same
+                    # tokens. Never seen absent on this build.
                     rate = r.get("t_predicted_per_second")
                     if rate is None and r.get("t_predicted_ms"):
-                        rate = predicted_n / (r["t_predicted_ms"] / 1000.0)
+                        # Match the server's definition rather than inventing one. Dividing
+                        # predicted_n by t_predicted_ms would put N tokens over the time for
+                        # N - 1 of them, overstating the rate by N/(N-1).
+                        rate = ((predicted_n - 1) / (r["t_predicted_ms"] / 1000.0)
+                                if predicted_n > 1 else None)
 
                     energy = power.get("energy_j")
                     prefill_energy = prefill_power.get("energy_j")
@@ -562,8 +588,8 @@ def run_matrix(
 
                     # Comparison against baseline is deferred to a post-pass step: with arm
                     # order rotated, the baseline arm is not guaranteed to have run yet.
-                    if arm.name == baseline_name:
-                        baseline_text[(pr.tag, p_idx)] = text
+                    if arm.name in baseline_names:
+                        baseline_text[(arm.name, pr.tag, p_idx)] = text
 
                     result["records"].append(rec)
                     _append_jsonl(jsonl_path, rec)
@@ -610,7 +636,7 @@ def run_matrix(
             _atomic_write_json(out_path, result)
 
         # ---- post-pass: compare every arm against the baseline's own text for this pass ----
-        _attach_baseline_comparisons(result, baseline_text, baseline_name, p_idx)
+        _attach_baseline_comparisons(result, baseline_text, _bmap, baseline_names, p_idx)
         _atomic_write_json(out_path, result)
 
     if any(a.gpu_state is not None for a in arms):
@@ -624,22 +650,26 @@ def run_matrix(
     return result
 
 
-def _attach_baseline_comparisons(result: dict, baseline_text: dict, baseline_name: str,
-                                 p_idx: int) -> None:
+def _attach_baseline_comparisons(result: dict, baseline_text: dict, bmap: dict,
+                                 baseline_names: set, p_idx: int) -> None:
     """Attach divergence + relative-degeneracy to every non-baseline record of one pass.
 
     Deferred until the pass ends because arm order is rotated, so the baseline arm may run
-    after some treatment arms within a pass.
+    after some treatment arms within a pass. Each arm is referred to the baseline built from its
+    own tree, so a branch difference is never charged to the method.
     """
     for rec in result["records"]:
-        if rec["pass"] != p_idx or rec["arm"] == baseline_name:
+        if rec["pass"] != p_idx or rec["arm"] in baseline_names:
             continue
         if "rel_degeneracy" in rec:
             continue
-        ref = baseline_text.get((rec["prompt"], p_idx))
+        bname = bmap.get(rec["arm"])
+        ref = baseline_text.get((bname, rec["prompt"], p_idx)) if bname else None
         if ref is None:
             rec["baseline_comparison_unavailable"] = True
+            rec["baseline_comparison_wanted"] = bname
             continue
+        rec["compared_against"] = bname
         text = rec.get("text", "")
         if rec.get("temperature") == 0.0:
             rec["divergence"] = asdict(quality.compare_outputs(ref, text))
