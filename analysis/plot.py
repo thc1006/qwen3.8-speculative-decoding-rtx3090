@@ -1,18 +1,28 @@
-"""Figures for the Phase A confirmatory matrix.
+"""Figures for the Phase A confirmatory matrix, sized for a GitHub README.
 
-Every number is recomputed from `results/phase_a.json` through the same functions the text
-reports use -- `analyze.build_series`, `stats.paired_cluster_bootstrap`, `cost_model.collect` --
-so a figure cannot drift away from the report it illustrates.
+Every number is recomputed from the result files through the same functions the text reports
+use -- `analyze.build_series`, `stats.paired_cluster_bootstrap`, `cost_model.collect`,
+`elasticity._paired_elasticity` -- so a figure cannot drift from the report it illustrates.
+
+Layout is dictated by where these are read. GitHub renders README content in a column of roughly
+1010 px and scales anything wider to fit, so a 2300 px figure with 8 pt labels arrives at about
+3.5 pt and is unreadable. Two rules follow, and they are why nothing here is drawn side by side:
+
+    * no figure exceeds MAX_PX wide, so downscaling is slight;
+    * two views of one idea stack vertically, which keeps full width for each.
 
 Design follows published guidance rather than taste:
-  * effect sizes with intervals are drawn as dot-and-whisker rows, not bars. A bar encodes
-    magnitude from zero and fuses the estimate with its uncertainty; a dot separates them.
-  * categorical colour is the Wong palette (Nature Methods 8:441), which stays separable under
-    all three common colour-vision deficiencies and keeps a lightness difference in greyscale.
-    Marker shape carries the same distinction, so colour is never the only channel.
-  * the diverging map is RdBu_r, not RdYlGn: a red-to-green ramp is the one pairing that
-    collapses for the most common deficiency.
-  * every panel states its finding in the title and carries provenance in the footer.
+    * effect sizes with intervals are dots and whiskers, not bars. A bar encodes magnitude from
+      zero and fuses the estimate with its uncertainty.
+    * categorical colour is the Wong palette (Nature Methods 8:441), separable under all three
+      common colour-vision deficiencies and in greyscale. Marker shape repeats the distinction,
+      so colour is never the only channel.
+    * the diverging map is RdBu, never RdYlGn: red-to-green is the one pairing that collapses.
+    * agreement between conditions is measured and drawn directly rather than left for the
+      reader to verify cell by cell.
+
+Each figure is written twice, light and dark, because a white figure is a glare panel in a dark
+README. Pair them with <picture> and prefers-color-scheme.
 
     python3 analysis/plot.py        (repo root, matplotlib available)
 """
@@ -21,6 +31,7 @@ from __future__ import annotations
 import sys
 import textwrap
 from collections import defaultdict
+from contextlib import contextmanager
 from pathlib import Path
 from statistics import fmean
 
@@ -34,60 +45,85 @@ sys.path.insert(0, str(ROOT / "harness"))
 
 import analyze as A  # noqa: E402
 import cost_model as CM  # noqa: E402
+import elasticity as EL  # noqa: E402
 import stats as ST  # noqa: E402
 
 OUT = ROOT / "analysis"
 RESULT = ROOT / "results/phase_a.json"
-DPI = 170
+RESULT_R = ROOT / "results/phase_r.json"
+
+DPI = 150
+FIG_W = 9.0          # inches; 9.0 x 150 = 1350 px, close to GitHub's column
+MAX_PX = 1400
 
 # Wong, B. (2011) Points of view: Color blindness. Nature Methods 8:441.
 WONG = {"blue": "#0072B2", "vermillion": "#D55E00", "green": "#009E73",
-        "orange": "#E69F00", "purple": "#CC79A7", "grey": "#999999"}
+        "orange": "#E69F00", "purple": "#CC79A7"}
+INK = {"light": {"fg": "#111111", "mut": "#5a5a5a", "grid": "#c9c9c9", "bg": "#ffffff",
+                 "neutral": "#333333", "flat": "#e2e2e2"},
+       "dark":  {"fg": "#e6edf3", "mut": "#9aa4b0", "grid": "#3a4149", "bg": "#0d1117",
+                 "neutral": "#c9d1d9", "flat": "#30363d"}}
 
-# Verification width w = n_max + 1: the positions the target scores in one forward pass. It is
-# the axis the CUDA kernel selection turns on, not n_max.
 WIDTH = {"mtp-n2": 3, "mtp-n3": 4, "dflash2-n4": 5, "mtp-n5": 6, "dflash2-n7": 8}
 SPEC_ARMS = sorted(WIDTH, key=WIDTH.get)
 BASE = {"mtp-n2": "baseline@master", "mtp-n3": "baseline@master", "mtp-n5": "baseline@master",
         "dflash2-n4": "baseline@pr27342", "dflash2-n7": "baseline@pr27342"}
 METHOD = {a: ("draft-dflash" if a.startswith("dflash") else "draft-mtp") for a in SPEC_ARMS}
+DRAFTER = {"mtp-n2": "MTP", "mtp-n3": "MTP", "mtp-n5": "MTP",
+           "dflash2-n4": "DFlash2", "dflash2-n7": "DFlash2"}
 STYLE = {"draft-mtp": (WONG["blue"], "o"), "draft-dflash": (WONG["vermillion"], "s")}
 
-PROVENANCE = ("Qwen3.8-27B UD-Q4_K_XL · RTX 3090 24 GB · llama.cpp c060ca9 · 7 arms × 25 prompts × "
-              "5 passes = 875 requests, 0 incidents, 0 excluded · greedy, --parallel 1, fresh server "
-              "per arm-pass, thermal gate at arm entry · hypotheses fixed before measurement, see "
-              "PREREGISTRATION.md · generated 2026-08-25 by analysis/plot.py")
-CI_NOTE = ("Intervals are 95 % paired cluster bootstrap over prompts within class, 10 000 "
-           "resamples, statistic = arm minus baseline.")
+PROVENANCE = ("Qwen3.8-27B UD-Q4_K_XL · RTX 3090 24 GB · llama.cpp c060ca9 · greedy, "
+              "--parallel 1, fresh server per arm-pass, thermal gate at arm entry · "
+              "PREREGISTRATION.md · 2026-08-25")
+PHASE_A_N = "Phase A: 875 requests, 0 incidents, 0 excluded."
+CI_NOTE = "95 % paired cluster bootstrap over prompts within class, 10 000 resamples."
+
+_MODE = "light"
 
 
-def _save(fig, name, note="", bottom_pad=0.0):
-    # The footer wraps to the figure's own width and the figure is saved at that width.
-    # bbox_inches="tight" instead grows the canvas to fit one unwrapped line, which produced a
-    # 26575-pixel-wide image on the first attempt.
-    w_in = fig.get_size_inches()[0]
-    lines = textwrap.wrap(" ".join(x for x in (note, PROVENANCE) if x),
-                          width=int(w_in * 15.0))
-    fig.subplots_adjust(bottom=max(bottom_pad, 0.020 * len(lines) + 0.11))
+def C(k):
+    return INK[_MODE][k]
+
+
+@contextmanager
+def theme(mode):
+    global _MODE
+    _MODE = mode
+    rc = {"figure.facecolor": C("bg"), "axes.facecolor": C("bg"), "savefig.facecolor": C("bg"),
+          "text.color": C("fg"), "axes.labelcolor": C("fg"), "axes.edgecolor": C("grid"),
+          "xtick.color": C("fg"), "ytick.color": C("fg"), "grid.color": C("grid"),
+          "font.size": 11.0, "axes.titlesize": 12.5, "axes.labelsize": 10.5,
+          "xtick.labelsize": 10.0, "ytick.labelsize": 10.0, "legend.fontsize": 9.8}
+    with plt.rc_context(rc):
+        yield
+    _MODE = "light"
+
+
+def _save(fig, stem, note="", bottom=0.13):
+    # Footer spacing is computed in inches, not in figure fractions. A fixed fraction is a
+    # different number of pixels on every figure height, and on the 4.5-inch panels it put the
+    # footer lines on top of each other and on the x-label.
+    w_in, h_in = fig.get_size_inches()
+    lines = textwrap.wrap(" ".join(x for x in (note, PROVENANCE) if x), width=int(w_in * 15.5))
+    line_h, pad = 0.155 / h_in, 0.05 / h_in
+    # 0.62 in below the axes for the tick labels and the x-label, then the footer block under it.
+    fig.subplots_adjust(bottom=max(bottom, pad + line_h * len(lines) + 0.62 / h_in))
     for i, ln in enumerate(reversed(lines)):
-        fig.text(0.5, 0.008 + i * 0.020, ln, ha="center", va="bottom",
-                 fontsize=7.3, style="italic", color="#5a5a5a")
+        fig.text(0.5, pad + i * line_h, ln, ha="center", va="bottom",
+                 fontsize=7.6, style="italic", color=C("mut"))
+    name = f"{stem}.png" if _MODE == "light" else f"{stem}_dark.png"
     p = OUT / name
-    fig.savefig(p, dpi=DPI, facecolor="white")
+    fig.savefig(p, dpi=DPI)
     plt.close(fig)
-    print(f"  wrote {p.relative_to(ROOT)}  ({p.stat().st_size // 1024} KB)")
-
-
-def load():
-    result = A.load(RESULT)
-    series, prompt_class, _, _ = A.build_series(result, "decode_tok_s")
-    return result, series, prompt_class
+    px = int(w_in * DPI)
+    flag = "" if px <= MAX_PX else f"  ** {px} px exceeds MAX_PX={MAX_PX} **"
+    print(f"  {name:38s} {px:5d} px  {p.stat().st_size // 1024:4d} KB{flag}")
 
 
 def _effect(series, prompt_class, arm, relative=True):
-    # ARGUMENT ORDER: _balanced returns (arm, baseline) and the bootstrap takes (baseline, arm).
-    # Feeding it the pair in the order _balanced hands them back inverts the sign of every
-    # effect, which is how the first version of this file turned a +60 % win into a -36 % loss.
+    # _balanced returns (arm, baseline); the bootstrap takes (baseline, arm). Handing it the pair
+    # in the order _balanced returns them inverts the sign of every effect.
     arm_s, base_s = A._balanced(series[arm], series[BASE[arm]])
     return ST.paired_cluster_bootstrap(base_s, arm_s, prompt_class, relative=relative)
 
@@ -99,53 +135,43 @@ def _strat_mean(series, prompt_class, arm):
     return ST.stratified_mean(per)
 
 
+def _despine(ax, keep=("bottom", "left")):
+    for s, sp in ax.spines.items():
+        sp.set_visible(s in keep)
+
+
 # ------------------------------------------------------------------ 1. the primary endpoint
 def fig_headline(series, prompt_class):
-    rows = [(a, _effect(series, prompt_class, a), _strat_mean(series, prompt_class, a))
-            for a in SPEC_ARMS]
-    rows.sort(key=lambda r: r[1].point)
+    rows = sorted(((a, _effect(series, prompt_class, a), _strat_mean(series, prompt_class, a))
+                   for a in SPEC_ARMS), key=lambda r: r[1].point)
     base_abs = _strat_mean(series, prompt_class, "baseline@master")
 
-    fig, ax = plt.subplots(figsize=(11.0, 4.6))
-    y = np.arange(len(rows))
+    fig, ax = plt.subplots(figsize=(FIG_W, 4.5))
     for i, (arm, iv, _) in enumerate(rows):
         col, mk = STYLE[METHOD[arm]]
-        ax.plot([iv.lo, iv.hi], [i, i], color=col, lw=2.4, solid_capstyle="butt", zorder=2)
-        ax.plot([iv.lo, iv.lo, np.nan, iv.hi, iv.hi], [i - .13, i + .13, np.nan, i - .13, i + .13],
-                color=col, lw=2.0, zorder=2)
-        ax.plot([iv.point], [i], marker=mk, ms=9, color=col, zorder=3,
-                markeredgecolor="white", markeredgewidth=1.1)
-    ax.axvline(0, color="#222222", lw=1.3, zorder=1)
-    ax.text(0, len(rows) - 0.32, "  no change", fontsize=8.6, color="#444444", va="center")
-
-    for i, (arm, iv, absolute) in enumerate(rows):
-        ax.text(1.015, i, f"{absolute:5.1f} tok/s", transform=ax.get_yaxis_transform(),
-                va="center", ha="left", fontsize=9.4, family="monospace")
-        ax.text(1.215, i, f"{iv.point:+5.1f} %   [{iv.lo:+5.1f}, {iv.hi:+5.1f}]",
-                transform=ax.get_yaxis_transform(), va="center", ha="left",
-                fontsize=9.4, family="monospace")
-    ax.text(1.015, len(rows) - 0.32, "throughput", transform=ax.get_yaxis_transform(),
-            va="center", ha="left", fontsize=8.6, color="#444444")
-    ax.text(1.215, len(rows) - 0.32, "effect vs baseline, 95 % CI",
-            transform=ax.get_yaxis_transform(), va="center", ha="left",
-            fontsize=8.6, color="#444444")
-
-    ax.set_yticks(y, [f"{a}   w={WIDTH[a]}" for a, _, _ in rows], fontsize=10)
-    ax.set_ylim(-0.6, len(rows) - 0.05)
-    ax.set_xlabel("decode throughput against the non-speculative baseline built from the same "
-                  "tree  (%)", fontsize=9.8)
-    ax.set_title("Every speculative arm is faster, and every interval clears zero\n"
-                 f"non-speculative baseline = {base_abs:.2f} tok/s   ·   n = 25 prompts × 5 passes "
-                 "per arm", fontsize=12, pad=12)
-    ax.grid(axis="x", alpha=0.22, zorder=0)
-    for s in ("top", "right", "left"):
-        ax.spines[s].set_visible(False)
+        ax.plot([iv.lo, iv.hi], [i, i], color=col, lw=2.6, solid_capstyle="butt", zorder=2)
+        for x in (iv.lo, iv.hi):
+            ax.plot([x, x], [i - .14, i + .14], color=col, lw=2.2, zorder=2)
+        ax.plot([iv.point], [i], marker=mk, ms=10, color=col, zorder=3,
+                markeredgecolor=C("bg"), markeredgewidth=1.3)
+        ax.text(iv.hi + 1.8, i, f"{iv.point:+.1f} %", va="center", fontsize=10.4,
+                family="monospace", color=C("fg"))
+    ax.axvline(0, color=C("neutral"), lw=1.4, zorder=1)
+    ax.set_yticks(range(len(rows)),
+                  [f"{a}  ·  w={WIDTH[a]}  ·  {m:.1f} tok/s" for a, _, m in rows], fontsize=10)
+    ax.set_ylim(-0.65, len(rows) - 0.35)
+    ax.set_xlim(0, max(r[1].hi for r in rows) * 1.20)
+    ax.set_xlabel("faster than the non-speculative baseline of the same tree  (%)")
+    ax.set_title("Every speculative arm is faster, and every 95 % interval clears zero\n"
+                 f"baseline {base_abs:.2f} tok/s  ·  25 prompts × 5 passes per arm", pad=12)
+    ax.grid(axis="x", alpha=0.5, zorder=0)
+    _despine(ax, keep=("bottom",))
     ax.tick_params(axis="y", length=0)
-    handles = [plt.Line2D([], [], color=c, marker=m, ls="none", ms=8, label=k)
-               for k, (c, m) in STYLE.items()]
-    ax.legend(handles=handles, loc="lower right", frameon=False, fontsize=9.2)
-    fig.subplots_adjust(left=0.13, right=0.635, top=0.80)
-    _save(fig, "plot_headline.png", note=CI_NOTE)
+    ax.legend(handles=[plt.Line2D([], [], color=c, marker=m, ls="none", ms=8, label=k)
+                       for k, (c, m) in STYLE.items()],
+              loc="lower right", frameon=False)
+    fig.subplots_adjust(left=0.315, right=0.975, top=0.80)
+    _save(fig, "plot_headline", note=PHASE_A_N + " " + CI_NOTE)
 
 
 # ------------------------------------------------------------------ 2. where the win lives
@@ -160,25 +186,26 @@ def fig_per_class(series, prompt_class):
                 M[i, j] = per[c].point
 
     lim = float(np.nanmax(np.abs(M)))
-    fig, ax = plt.subplots(figsize=(9.4, 4.3))
-    # RdBu, not RdYlGn: blue is the win and red the loss, and the pair survives red-green
-    # deficiency, which a green-to-red ramp does not. RdBu_r would put the wins in red.
+    fig, ax = plt.subplots(figsize=(FIG_W, 4.3))
+    # RdBu: blue the win, red the loss. RdYlGn would collapse for red-green deficiency and
+    # RdBu_r would put the wins in red.
     im = ax.imshow(M, cmap="RdBu", vmin=-lim, vmax=lim, aspect="auto")
     for i in range(M.shape[0]):
         for j in range(M.shape[1]):
             v = M[i, j]
-            ax.text(j, i, f"{v:+.0f}%", ha="center", va="center", fontsize=10.5,
+            ax.text(j, i, f"{v:+.0f}%", ha="center", va="center", fontsize=11.5,
                     color="white" if abs(v) > lim * 0.58 else "#111111")
-    ax.set_xticks(range(len(classes)), classes, fontsize=10.5)
-    ax.set_yticks(range(len(SPEC_ARMS)), [f"{a}   w={WIDTH[a]}" for a in SPEC_ARMS], fontsize=10)
+    ax.set_xticks(range(len(classes)), classes, fontsize=11)
+    ax.set_yticks(range(len(SPEC_ARMS)), [f"{a}  ·  w={WIDTH[a]}" for a in SPEC_ARMS], fontsize=10)
     ax.tick_params(length=0)
-    ax.set_title("The gain is concentrated in code and reasoning, and reverses on conversational\n"
-                 "and Chinese prompts once the verification width grows", fontsize=12, pad=12)
-    cb = fig.colorbar(im, ax=ax, fraction=0.036, pad=0.02)
-    cb.set_label("throughput vs baseline (%)", fontsize=9.4)
-    fig.subplots_adjust(left=0.17, right=0.90, top=0.80)
-    _save(fig, "plot_per_class.png", note=CI_NOTE + " Per-class, exploratory: the "
-          "preregistered endpoint is the pooled effect, not these five.")
+    _despine(ax, keep=())
+    ax.set_title("The gain is concentrated in code and reasoning, and reverses on\n"
+                 "conversational and Chinese prompts as the verification width grows", pad=12)
+    fig.colorbar(im, ax=ax, fraction=0.030, pad=0.02).set_label("vs baseline (%)", fontsize=9.6)
+    fig.subplots_adjust(left=0.20, right=0.93, top=0.80)
+    _save(fig, "plot_per_class",
+          note=PHASE_A_N + " " + CI_NOTE + " Per-class is exploratory; the preregistered endpoint is the pooled "
+                         "effect.")
 
 
 # ------------------------------------------------------------------ 3. the cost model
@@ -186,120 +213,194 @@ def fig_cost_model(result):
     rows = CM.collect(result)
     grp = defaultdict(list)
     for r in rows:
-        grp[(r["spec_type"], r["width"], r["n_max"])].append(r)
+        grp[(r["spec_type"], r["width"])].append(r)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12.4, 4.6))
-    for spec, (col, mk) in STYLE.items():
-        pts = sorted((w, fmean([x["k"] for x in v])) for (s, w, _), v in grp.items() if s == spec)
-        if len(pts) < 2:
-            continue
-        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-        k0, c, r2 = CM._linfit([x - 1 for x in xs], ys)
-        gx = np.linspace(min(xs) - 0.35, max(xs) + 0.35, 50)
-        ax1.plot(gx, k0 + c * (gx - 1), color=col, lw=1.5, alpha=0.6, zorder=1)
-        ax1.plot(xs, ys, mk, ms=9, color=col, zorder=3, markeredgecolor="white",
-                 markeredgewidth=1.1,
-                 label=(f"{spec}   k₀ = {k0:.3f}   c = {c:.4f}   "
-                        + (f"r² = {r2:.4f}" if len(xs) > 2
-                           else "r² undefined (2 widths)")))
-    ax1.set_xlabel("verification width  w = n-max + 1   (positions scored per target pass)",
-                   fontsize=9.6)
-    ax1.set_ylabel("k   (target-pass cost, in baseline decode steps)", fontsize=9.6)
-    ax1.set_title("Two independent drafters, one marginal cost:\n"
-                  "k = k₀ + c(w−1) with c agreeing to 1.6 % while k₀ differs", fontsize=11)
-    ax1.text(0.985, 0.03, "draft-dflash has only two widths here, so its line is determined\n"
-                          "rather than fitted. phase_nmax adds w = 3 and 7.",
-             transform=ax1.transAxes, fontsize=8.2, color="#555555", va="bottom", ha="right")
-    ax1.legend(fontsize=8.4, frameon=False, loc="upper left")
-    ax1.grid(alpha=0.22)
-    for s in ("top", "right"):
-        ax1.spines[s].set_visible(False)
+    def series_of(spec, key):
+        return sorted((w, fmean([x[key] for x in v])) for (s, w), v in grp.items() if s == spec)
 
+    fig, axes = plt.subplots(3, 1, figsize=(FIG_W, 8.6), sharex=True)
+    ax_n, ax_k, ax_s = axes
+
+    c_labels = []
     for spec, (col, mk) in STYLE.items():
-        pts = sorted((nm, fmean([x["speedup"] for x in v]))
-                     for (s, _, nm), v in grp.items() if s == spec)
-        if not pts:
-            continue
-        ax2.plot([p[0] for p in pts], [p[1] for p in pts], marker=mk, color=col, lw=1.7, ms=8,
-                 markeredgecolor="white", markeredgewidth=1.1, label=spec)
-        best = max(pts, key=lambda p: p[1])
-        ax2.annotate(f"best n-max = {best[0]}\n{best[1]:.3f}×", best, textcoords="offset points",
-                     xytext=(12, -6), fontsize=9, color=col, fontweight="bold")
-    ax2.axhline(1.0, color="#666666", ls="--", lw=1.0)
-    ax2.text(ax2.get_xlim()[0], 1.0, " break-even", fontsize=8.4, color="#666666", va="bottom")
-    ax2.set_xlabel("--spec-draft-n-max", fontsize=9.6)
-    ax2.set_ylabel("speedup  =  mean_len / k", fontsize=9.6)
-    ax2.set_title("Speedup falls monotonically across the widths measured here:\n"
-                  "the best n-max is the smallest one tested, not the largest", fontsize=11)
-    ax2.legend(fontsize=9, frameon=False)
-    ax2.grid(alpha=0.22)
-    for s in ("top", "right"):
-        ax2.spines[s].set_visible(False)
-    fig.subplots_adjust(left=0.07, right=0.985, top=0.82, wspace=0.24)
-    _save(fig, "plot_cost_model.png", note="k is derived per request as mean_len / "
-          "speedup; points are means over 125 requests per arm.")
+        for ax, key in ((ax_n, "mean_len"), (ax_k, "k"), (ax_s, "speedup")):
+            pts = series_of(spec, key)
+            ax.plot([p[0] for p in pts], [p[1] for p in pts], marker=mk, color=col, lw=1.8,
+                    ms=9, markeredgecolor=C("bg"), markeredgewidth=1.2,
+                    label=spec if ax is ax_n else None)
+        k_pts = series_of(spec, "k")
+        if len(k_pts) >= 2:
+            k0, c, _ = CM._linfit([w - 1 for w, _ in k_pts], [v for _, v in k_pts])
+            gx = np.linspace(2.6, 8.4, 40)
+            ax_k.plot(gx, k0 + c * (gx - 1), color=col, lw=1.1, ls="--", alpha=0.75, zorder=1)
+            c_labels.append((f"c = {c:.4f}   ({spec})", col))
+
+    ref = series_of("draft-mtp", "mean_len")
+    if ref:
+        w0, y0 = ref[0]
+        gx = np.linspace(w0, 8.4, 40)
+        ax_n.plot(gx, y0 * gx / w0, color=C("mut"), lw=1.1, ls=":", zorder=1)
+        ax_n.text(6.05, y0 * 6.05 / w0, " growth in proportion to width", color=C("mut"),
+                  fontsize=9.2, va="center", rotation=0)
+    ax_n.set_ylabel("tokens accepted\nper target pass")
+    ax_n.set_title("The benefit saturates: the gap below the dotted line is what is lost", pad=8)
+    ax_n.legend(frameon=False, loc="lower right")
+
+    for i, (txt, col) in enumerate(c_labels):
+        ax_k.text(0.015, 0.93 - i * 0.115, txt, transform=ax_k.transAxes, color=col,
+                  fontsize=9.8, va="top", family="monospace")
+    ax_k.set_ylabel("cost of one target pass,\nin plain decode steps")
+    ax_k.set_title("The cost is linear: each extra verified position costs a fixed c", pad=8)
+
+    ax_s.axhline(1.0, color=C("mut"), ls=":", lw=1.1)
+    ax_s.text(2.65, 1.005, "break-even", fontsize=9, color=C("mut"), va="bottom")
+    ax_s.set_ylabel("speedup\n= tokens / cost")
+    ax_s.set_title("Saturating benefit over linear cost: the best width is a small one", pad=8)
+    ax_s.set_xlabel("verification width  w = n-max + 1   (positions the target scores per pass)")
+    for spec, (col, _) in STYLE.items():
+        pts = series_of(spec, "speedup")
+        if pts:
+            bw, bv = max(pts, key=lambda p: p[1])
+            ax_s.annotate(f"best w = {bw}  ({bv:.2f}×)", (bw, bv), textcoords="offset points",
+                          xytext=(10, 6), fontsize=9.6, color=col, fontweight="bold")
+
+    for ax in axes:
+        ax.grid(alpha=0.5)
+        _despine(ax)
+    ax_s.set_xticks([3, 4, 5, 6, 7, 8])
+    fig.subplots_adjust(left=0.165, right=0.965, top=0.945, hspace=0.30)
+    _save(fig, "plot_cost_model", bottom=0.105,
+          note=PHASE_A_N + " k is recovered per request as mean_len / speedup, then averaged over 125 requests "
+               "per arm. draft-dflash has two widths here, so its dashed line is determined "
+               "rather than fitted.")
 
 
 # ------------------------------------------------------------------ 4. the width partition
-def fig_width_partition(result):
+def _forks(result):
     fork = defaultdict(dict)
     for rec in result["records"]:
         d = rec.get("divergence")
         if rec["arm"] in WIDTH and rec["pass"] == 1 and d:
             fork[rec["prompt"]][rec["arm"]] = "SAME" if d["identical"] else d["first_diff_char"]
-    prompts = sorted(p for p in fork if len(fork[p]) == len(SPEC_ARMS))
+    return {p: v for p, v in fork.items() if len(v) == len(SPEC_ARMS)}
+
+
+def fig_width_partition(result):
+    fork = _forks(result)
+    prompts = sorted(fork)
+    n = len(SPEC_ARMS)
+    agree = np.array([[100.0 * sum(fork[p][a] == fork[p][b] for p in prompts) / len(prompts)
+                       for b in SPEC_ARMS] for a in SPEC_ARMS])
     lo = [a for a in SPEC_ARMS if WIDTH[a] <= 4]
     hi = [a for a in SPEC_ARMS if WIDTH[a] >= 5]
-    clean = [p for p in prompts
-             if len({fork[p][a] for a in lo}) == 1 and len({fork[p][a] for a in hi}) == 1]
-    split = [p for p in clean if fork[p][lo[0]] != fork[p][hi[0]]]
+    cross = min(agree[SPEC_ARMS.index(a), SPEC_ARMS.index(b)] for a in lo for b in hi)
+    differ = sum(1 for p in prompts if fork[p][lo[0]] != fork[p][hi[0]])
 
-    # Colour marks which distinct fork position a cell holds within its own row, so a row where
-    # the two width groups disagree reads as two blocks and a row where they agree reads as one.
-    PAL = [WONG["blue"], WONG["vermillion"], WONG["green"]]
-    fig, ax = plt.subplots(figsize=(10.6, 8.8))
-    for yi, p in enumerate(prompts):
-        vals = [fork[p][a] for a in SPEC_ARMS]
-        order = list(dict.fromkeys(v for v in vals if v != "SAME"))
-        for xi, v in enumerate(vals):
-            face = "#dddddd" if v == "SAME" else PAL[order.index(v) % len(PAL)]
-            ax.add_patch(plt.Rectangle((xi, yi), 1, 1, facecolor=face, edgecolor="white", lw=1.3))
-            ax.text(xi + .5, yi + .5, "identical" if v == "SAME" else f"@{v}",
-                    ha="center", va="center", fontsize=8.4,
-                    color="#666666" if v == "SAME" else "white")
-    ax.axvline(2, color="#111111", lw=3.0)
-    ax.set_xlim(0, len(SPEC_ARMS))
-    ax.set_ylim(len(prompts), 0)
-    ax.set_xticks([i + .5 for i in range(len(SPEC_ARMS))],
-                  [f"{a}\nw = {WIDTH[a]}" for a in SPEC_ARMS], fontsize=9.6)
-    ax.set_yticks([i + .5 for i in range(len(prompts))], prompts, fontsize=8.6)
+    fig, ax = plt.subplots(figsize=(FIG_W, 5.6))
+    im = ax.imshow(agree, cmap="Blues", vmin=0, vmax=100, aspect="auto")
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                ax.text(j, i, "—", ha="center", va="center", color="#8a8a8a", fontsize=14)
+            else:
+                ax.text(j, i, f"{agree[i, j]:.0f}%", ha="center", va="center", fontsize=13,
+                        color="white" if agree[i, j] > 55 else "#111111")
+    labels = [f"w={WIDTH[a]}\n{DRAFTER[a]}" for a in SPEC_ARMS]
+    ax.set_xticks(range(n), labels, fontsize=10)
+    ax.set_yticks(range(n), [f"{a}\nw={WIDTH[a]} · {DRAFTER[a]}" for a in SPEC_ARMS], fontsize=9.4)
     ax.tick_params(length=0)
-    for s in ax.spines.values():
-        s.set_visible(False)
-    ax.set_title("Greedy output forks from the baseline at a position set by verification\n"
-                 "width, not by which drafter produced the tokens\n"
-                 f"w ∈ {{3,4}} agree and w ∈ {{5,6,8}} agree on {len(clean)}/{len(prompts)} prompts;\n"
-                 f"the two groups land on different positions on {len(split)} of them",
-                 fontsize=11.5, pad=14)
-    ax.annotate("CUDA calc_nwarps boundary\nncols_dst 1–4 → 4 warps  |  5–8 → 2 warps",
-                xy=(2, len(prompts)), xytext=(2, len(prompts) + 1.5), ha="center", va="top",
-                fontsize=9, color="#111111",
-                arrowprops=dict(arrowstyle="-|>", color="#111111", lw=1.2))
-    fig.subplots_adjust(left=0.22, right=0.99, top=0.845)
-    _save(fig, "plot_width_partition.png", bottom_pad=0.13,
-          note="Pass 1 shown; the partition is identical in all five passes. "
-               "Greedy decoding is deterministic, so no interval applies here.")
-    print(f"    partition: {len(clean)}/{len(prompts)} rows group cleanly, "
-          f"{len(split)} differ between groups")
+    _despine(ax, keep=())
+    ax.axhline(1.5, color=C("fg"), lw=3.0)
+    ax.axvline(1.5, color=C("fg"), lw=3.0)
+    ax.set_title("Verification width decides where output forks — not the drafter\n"
+                 f"100 % agreement within each width group, {cross:.0f} % across them",
+                 fontsize=12, pad=12)
+    fig.colorbar(im, ax=ax, fraction=0.030, pad=0.025).set_label(
+        f"share of the {len(prompts)} prompts on which\nboth arms fork at the same character (%)", fontsize=9)
+    fig.subplots_adjust(left=0.175, right=0.885, top=0.845)
+    _save(fig, "plot_width_partition",
+          note=PHASE_A_N + f" The 100 % block spans both drafters, so drafter identity does not predict it "
+               f"while width does. The two groups fork elsewhere on {differ} of {len(prompts)} "
+               f"prompts. Pass 1; identical in all five. w is the CUDA kernel's ncols_dst and "
+               f"calc_nwarps switches between 4 and 5.")
+
+
+# ------------------------------------------------------------------ 5. the bandwidth bottleneck
+R_METHODS = [("baseline", None, "o"), ("mtp-n3", WONG["blue"], "s"), ("mtp-n7", WONG["green"], "^")]
+R_BW = ["bw-lo", "stock", "bw-hi"]
+
+
+def fig_bandwidth(result_r):
+    cells = EL._cells(result_r)
+    clocks = {c: EL._clock(result_r, "baseline", c, EL.MEM_KEY) for c in R_BW}
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(FIG_W, 7.4))
+    bars = []
+    for m, col, mk in R_METHODS:
+        col = col or C("neutral")
+        y = [fmean([v for vs in cells[(m, c)].values() for v in vs]) for c in R_BW]
+        ref = y[R_BW.index("stock")]
+        ax1.plot([clocks[c] for c in R_BW], [100 * v / ref for v in y], marker=mk, color=col,
+                 lw=2.0, ms=9, markeredgecolor=C("bg"), markeredgewidth=1.2,
+                 label=f"{m}  ({ref:.1f} tok/s at stock)")
+        for a, b in zip(R_BW, R_BW[1:]):
+            e, elo, ehi = EL._paired_elasticity(
+                cells[(m, a)], cells[(m, b)], clocks[a], clocks[b],
+                x_lo_samples=EL._clock_samples(result_r, m, a, EL.MEM_KEY),
+                x_hi_samples=EL._clock_samples(result_r, m, b, EL.MEM_KEY))
+            bars.append((f"{m}   {a} → {b}", e, elo, ehi, col, mk))
+
+    ax1.axhline(100, color=C("mut"), lw=1.0, ls=":")
+    ax1.set_xlabel("memory clock (MHz)")
+    ax1.set_ylabel("throughput, % of that\nmethod's own stock value")
+    ax1.set_title("Moving memory bandwidth ±4 % moves the baseline and barely\n"
+                  "moves either speculative arm", pad=10)
+    ax1.legend(frameon=False, loc="upper left", fontsize=9.4)
+    ax1.grid(alpha=0.5)
+    _despine(ax1)
+
+    for i, (_, e, elo, ehi, col, mk) in enumerate(bars):
+        ax2.plot([elo, ehi], [i, i], color=col, lw=2.4, zorder=2)
+        ax2.plot([e], [i], marker=mk, ms=9, color=col, zorder=3,
+                 markeredgecolor=C("bg"), markeredgewidth=1.2)
+        ax2.text(ehi + 0.035, i, f"{e:.2f}", va="center", fontsize=10, family="monospace",
+                 color=C("fg"))
+    for x, lab, ha in ((0.0, "bandwidth-independent", "left"),
+                       (1.0, "throughput ∝ bandwidth", "right")):
+        ax2.axvline(x, color=C("mut"), lw=1.0, ls=":")
+        pad = " " if ha == "left" else ""
+        ax2.text(x, len(bars) - 0.3, f"{pad}{lab}{'' if ha == 'left' else ' '}", fontsize=9,
+                 color=C("mut"), va="center", ha=ha)
+    ax2.set_yticks(range(len(bars)), [b[0] for b in bars], fontsize=9.4)
+    ax2.set_ylim(-0.6, len(bars) - 0.05)
+    ax2.set_xlim(-0.10, 1.15)
+    ax2.set_xlabel("bandwidth elasticity   d(ln tok/s) / d(ln memory clock)")
+    ax2.set_title("The baseline is bandwidth-bound; speculation is not", pad=10)
+    ax2.grid(axis="x", alpha=0.5)
+    ax2.tick_params(axis="y", length=0)
+    _despine(ax2, keep=("bottom",))
+    fig.subplots_adjust(left=0.275, right=0.965, top=0.915, hspace=0.62)
+    _save(fig, "plot_bandwidth_elasticity", bottom=0.115,
+          note="Phase R, 1125 requests. Elasticity is a cluster bootstrap over prompts and over "
+               "the measured clock, per interval, never pooled across a regime change. Only the "
+               "bandwidth conditions are shown: Phase R's compute axis used a power cap, which "
+               "Phase R2 replaces with a pinned clock.")
 
 
 def main():
     OUT.mkdir(exist_ok=True)
-    result, series, prompt_class = load()
-    fig_headline(series, prompt_class)
-    fig_per_class(series, prompt_class)
-    fig_cost_model(result)
-    fig_width_partition(result)
+    result = A.load(RESULT)
+    series, prompt_class, _, _ = A.build_series(result, "decode_tok_s")
+    result_r = A.load(RESULT_R) if RESULT_R.exists() else None
+    for mode in ("light", "dark"):
+        print(f"  --- {mode}")
+        with theme(mode):
+            fig_headline(series, prompt_class)
+            fig_per_class(series, prompt_class)
+            fig_cost_model(result)
+            fig_width_partition(result)
+            if result_r:
+                fig_bandwidth(result_r)
 
 
 if __name__ == "__main__":
