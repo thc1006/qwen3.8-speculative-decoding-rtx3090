@@ -198,7 +198,27 @@ the dispersion of `k` over individual requests rather than over class means. The
 figure is the smaller and better-looking of the two, and it is not the one this claim is about.
 
 This predicts the optimum instead of tabulating it: `mean_len` saturates with depth while `k`
-grows linearly, so the best n-max is interior. Measured: **2 for MTP, 4 for DFlash2.**
+grows linearly, so the best n-max is interior. Measured **on this card, at this target
+quantisation: 2 for MTP, 4 for DFlash2.**
+
+The scope matters, because the PR thread disagrees. `lance0` reports on an RTX 5090 with a
+`UD-Q6_K_XL` target that n-max 7 is the right setting for DFlash2, since the drafter's
+`block_size` is 8 and lower values discard tokens the block already paid for. Here n-max 4 beats
+n-max 7 by a wide margin, 1.520x against 1.228x.
+
+The model says both can be true, and says what would have to differ. For width 8 to beat width 5
+on this measured acceptance curve, `c` would have to be below **0.0543**; it is 0.2784 here,
+5.1 times too large. `c` is the cost of one more verified position in units of a plain decode
+step, and Phase R shows what moves it: speculation converts a bandwidth-bound decode into a
+compute-bound verify, so `c` falls as compute rises relative to memory bandwidth. That is exactly
+the axis separating a 5090 from a 3090. The prediction is that a card with `c` under 0.0543
+prefers the deeper setting with the same drafter and the same acceptance, and measuring `c` needs
+one baseline and three widths.
+
+One assumption is doing work there and is not verified: the calculation uses this card's
+`mean_len` curve, taken at `UD-Q4_K_XL`. A higher-precision target may accept more, which would
+raise `mean_len` at depth and make the required `c` less extreme. Phase Q walks the target
+quantisation ladder to separate the two.
 
 ### What the cost model rules out
 

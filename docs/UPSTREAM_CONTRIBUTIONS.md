@@ -177,6 +177,41 @@ Phase N walks n-max 1–8 and produces the full curve, plus the per-step cost k 
 is a measurement with no interpretive step in it, which is what makes it the most defensible
 thing this study has to offer upstream.
 
+## 2b. The n-max disagreement in PR #27342, turned into a measurable coefficient
+
+`lance0` posted RTX 5090 numbers on 2026-08-23, `UD-Q6_K_XL` target, and concluded that n-max 7
+is the right DFlash2 setting because the drafter's `block_size` is 8 and lower values discard
+tokens the block already paid for. That reasoning is about the drafter and is sound on its own
+terms. This study measures the opposite ordering on an RTX 3090 at `UD-Q4_K_XL`: n-max 4 gives
+1.520x and n-max 7 gives 1.228x.
+
+Both can hold, and the cost model says what has to differ rather than which report is wrong.
+With `speedup = mean_len(w) / (k0 + c(w-1))`, width 8 beats width 5 only when
+
+    mean_len(8) / (k0 + 7c)  >  mean_len(5) / (k0 + 4c)
+
+On the acceptance curve measured here, `mean_len` 2.883 at w=5 and 3.353 at w=8 with k0 = 0.7825,
+that requires **c < 0.0543**. Measured here `c` is 0.2784, so this card is 5.1 times over the
+threshold and the shallower setting wins. Phase R identifies what moves `c`: speculation turns a
+bandwidth-bound decode into a compute-bound verify, so `c` falls as compute rises against memory
+bandwidth, which is the axis between the two cards.
+
+**Why this is worth posting rather than a correction.** It converts "n-max 7 is right" and "n-max
+4 is right" into one number that either card can measure, from one baseline and three widths, and
+it predicts the crossover instead of tabulating it. The thread currently has per-card tables and
+no way to tell whether a new card should follow the 5090 or the 3090.
+
+**What it assumes, which must be said when posting.** The threshold uses this card's `mean_len`
+curve at `UD-Q4_K_XL`. A Q6_K target may accept more, which raises `mean_len` at depth and lowers
+the required `c`. That confound is not resolved here; Phase Q walks the target ladder to separate
+`c` from acceptance, and until it runs the honest statement is that the two reports differ by at
+least a factor in `c`, target quantisation uncontrolled.
+
+**Filing:** a comment on #27342 addressed to `lance0`'s numbers, crediting the `block_size`
+argument rather than disputing it, and leading with the coefficient rather than with this card's
+ordering. The 5090 result is more interesting than this one; it is the second point that makes
+the model testable.
+
 ## 3. Energy: no prior art at all
 
 `joule`, `tok/J` and `watt` appear **zero** times across PR #27342's 60-comment thread, and no
