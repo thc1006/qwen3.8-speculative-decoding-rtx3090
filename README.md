@@ -365,6 +365,9 @@ done
 hf download unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-UD-Q4_K_XL.gguf --local-dir models/target
 hf download z-lab/Qwen3.8-27B-DFlash2-GGUF --local-dir models/dflash2
 
+# the harness's own tests: one case per defect this study shipped and later found
+python3 harness/test_harness.py
+
 # run + analyse (standard library only)
 python3 harness/bench.py --matrix phase_a --passes 5 --out results/phase_a.json
 python3 harness/analyze.py results/phase_a.json

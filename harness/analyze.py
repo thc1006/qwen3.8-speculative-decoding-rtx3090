@@ -156,7 +156,7 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         if not arm_s:
             continue
         # NOTE argument order: (baseline, arm). Passing (arm, baseline) silently inverts
-        # the sign of every reported effect -- caught by the synthetic-data test.
+        # the sign of every reported effect. harness/test_harness.py holds that case.
         iv = ST.paired_cluster_bootstrap(base_s, arm_s, prompt_class, relative=True)
         verdict = ("no detected effect" if iv.spans_zero
                    else ("FASTER" if iv.point > 0 else "SLOWER"))
