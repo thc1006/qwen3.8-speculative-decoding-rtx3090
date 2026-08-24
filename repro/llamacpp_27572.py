@@ -89,12 +89,7 @@ def run_case(n_slots: int, n_req: int, n_prompt_tokens: int, concurrent: bool,
                      port=port, log_path=log_path, common_args=COMMON, gpu_index=0)
     try:
         S.assert_drafter_loaded(handle, "draft-mtp")
-        # Promised in the issue thread: n_copies is 1 on a single device, which makes the
-        # graph-copy alternation a no-op, so recording it here is what makes this run a control
-        # for that mechanism rather than just another data point.
-        log = handle.log_text()
-        sched_hint = [ln for ln in log.splitlines()
-                      if "n_copies" in ln or "pipeline parallel" in ln.lower()]
+
         # A distinct slice per request, so no two share a prefix.
         prompts = []
         for i in range(n_req):
@@ -124,8 +119,27 @@ def run_case(n_slots: int, n_req: int, n_prompt_tokens: int, concurrent: bool,
         "exactly_zero": len(zero),
         "empty_completions": len(empty),
         "errors": [r.get("error") for r in responses if isinstance(r, dict) and r.get("error")],
-        "sched_lines": sched_hint,
     }
+
+
+def probe_config(port: int, out_dir: Path) -> dict:
+    """Capture what the server says about pipeline parallelism, verbosely, once.
+
+    Kept out of the sweep on purpose. The sweep is testing a race, and verbose logging changes
+    the timing it depends on, so the configuration question gets its own short server at `-lv 5`
+    while the measured runs stay at the default.
+    """
+    log_path = out_dir / "config_probe.log"
+    handle = S.start(BINARY, MODEL, [*SPEC, "-np", "4", "-lv", "5"],
+                     port=port, log_path=log_path, common_args=COMMON, gpu_index=0)
+    try:
+        text = handle.log_text()
+    finally:
+        S.stop(handle.proc, port=port)
+    want = ("pipeline parallel", "n_copies", "n_devices", "ggml_backend", "using device",
+            "CUDA0", "offloaded")
+    lines = [ln for ln in text.splitlines() if any(w.lower() in ln.lower() for w in want)]
+    return {"probe_lines": lines[:60], "log": str(log_path)}
 
 
 def main() -> int:
@@ -158,6 +172,15 @@ def main() -> int:
     G.acquire_lock("repro-27572")
     results = []
     try:
+        print("\n=== configuration probe (-lv 5, not part of the sweep) ===", flush=True)
+        try:
+            cfg = probe_config(args.port, out_dir)
+            for ln in cfg["probe_lines"][:12]:
+                print(f"    {ln[:120]}", flush=True)
+            Path("repro/config_27572.json").write_text(json.dumps(cfg, indent=2))
+        except Exception as e:  # noqa: BLE001
+            print(f"    probe failed: {e!r}", flush=True)
+
         for slots, n_req, toks, conc in cases:
             print(f"\n=== -np {slots}, {n_req} req, {toks} tokens, "
                   f"{'concurrent' if conc else 'sequential'} ===", flush=True)
