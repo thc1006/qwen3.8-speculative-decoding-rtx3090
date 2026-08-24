@@ -127,10 +127,81 @@ def _cross_term_correction(result: dict, method: str, lo_c: str, hi_c: str,
     return (d_ln_other, other_elasticity * d_ln_other)
 
 
+# Fallback for Phase R, whose condition names encode the lever that was pulled.
 AXES = {
     "memory bandwidth": ("mem_clock_mean_mhz", ["bw-lo", "stock", "bw-hi"]),
     "compute (SM clock)": ("sm_clock_mean_mhz", ["pw-vlo", "pw-lo", "stock"]),
 }
+
+MEM_KEY = "mem_clock_mean_mhz"
+SM_KEY = "sm_clock_mean_mhz"
+
+
+def _condition_clocks(result: dict) -> dict[str, tuple[float, float]]:
+    """condition -> (median SM MHz, median memory MHz), pooled over methods.
+
+    Pooling is deliberate. A condition is a property of the card, so if two methods disagree
+    about the clock a condition produced, that disagreement is itself the finding, and it is
+    reported by the interval-matching check rather than hidden by picking one method.
+    """
+    acc: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for r in result["records"]:
+        if "@" not in r["arm"]:
+            continue
+        cond = r["arm"].split("@", 1)[1]
+        pw = r.get("power") or {}
+        for k in (SM_KEY, MEM_KEY):
+            if pw.get(k):
+                acc[cond][k].append(pw[k])
+    return {c: (statistics.median(v[SM_KEY]), statistics.median(v[MEM_KEY]))
+            for c, v in acc.items() if v.get(SM_KEY) and v.get(MEM_KEY)}
+
+
+def _infer_axes(result: dict) -> dict[str, tuple[str, list[str]]]:
+    """Work out which conditions form a series, from the clocks they actually produced.
+
+    Phase R named its conditions after the lever (`pw-lo`, `bw-hi`); Phase R2 names them after
+    the operating point (`sm1200-bwlo`), and it deliberately runs the bandwidth sweep twice, at
+    two pinned core clocks. A hard-coded list of names cannot describe both, and silently
+    reporting "not enough conditions" for a complete run is the worst way to fail. So the series
+    are read off the measured clocks instead, and printed for checking.
+
+    A series varies one clock while holding the other. The thresholds are loose on the held axis
+    because a power cap never holds a clock exactly: Phase R's bandwidth sweep moved the core
+    clock by 2.2 % as a side effect, which is a confound to correct for, not a reason to refuse
+    to call it a bandwidth series.
+    """
+    clocks = _condition_clocks(result)
+    if len(clocks) < 2:
+        return {}
+    out: dict[str, tuple[str, list[str]]] = {}
+
+    def spread(vals):
+        return (max(vals) - min(vals)) / min(vals) if vals and min(vals) else 0.0
+
+    def series(bucket_of, moving_of, held_of, min_move, base, held_name, key):
+        """Group conditions by the held clock, keep groups where the other clock really moves."""
+        groups: dict[int, list[str]] = defaultdict(list)
+        for c in clocks:
+            groups[round(held_of(c) / 200)].append(c)      # 200 MHz buckets on the held axis
+        found = []
+        for _, conds in sorted(groups.items()):
+            if len(conds) >= 2 and spread([moving_of(c) for c in conds]) > min_move:
+                found.append(sorted(conds, key=moving_of))
+        # Only disambiguate by the held clock when there is genuinely more than one series;
+        # a lone series does not need its label qualified.
+        for conds in found:
+            label = base
+            if len(found) > 1:
+                label += (f" @ {held_name} ~"
+                          f"{statistics.median(held_of(c) for c in conds):.0f} MHz")
+            out[label] = (key, conds)
+
+    series(None, lambda c: clocks[c][1], lambda c: clocks[c][0], 0.02,
+           "memory bandwidth", "core", MEM_KEY)
+    series(None, lambda c: clocks[c][0], lambda c: clocks[c][1], 0.10,
+           "compute (SM clock)", "memory", SM_KEY)
+    return out
 
 
 def report(result: dict) -> None:
@@ -155,7 +226,13 @@ def report(result: dict) -> None:
                   f"{(_clock(result, m, c, 'mem_clock_mean_mhz') or 0):8.0f} "
                   f"{(_clock(result, m, c, 'power_mean_w') or 0):6.0f}")
 
-    for axis, (clock_key, order) in AXES.items():
+    axes = _infer_axes(result) or AXES
+    if axes is not AXES:
+        print("\n--- series inferred from the clocks each condition actually produced ---")
+        for a, (_, cs) in axes.items():
+            print(f"  {a}: {' -> '.join(cs)}")
+
+    for axis, (clock_key, order) in axes.items():
         print(f"\n{'=' * 100}\n--- {axis} ---")
         present = [c for c in order if any((m, c) in cells for m in methods)]
         if len(present) < 2:
@@ -180,63 +257,107 @@ def report(result: dict) -> None:
                       f"elasticity {e:6.3f} [{l:6.3f}, {h:6.3f}]{rel}")
 
     # ------------------------------------------------------- cross-term correction
-    print(f"\n{'=' * 100}\n--- correction: the bandwidth lever is not clean ---")
-    print("  At a fixed power cap, raising the memory clock takes power from the core, so core")
-    print("  clock falls across the bandwidth sweep. A compute-elastic arm is penalised by that,")
-    print("  which makes its measured bandwidth elasticity an under-estimate. Below, the core-")
-    print("  clock contribution is estimated using each method's OWN compute elasticity (from the")
-    print("  pw-lo -> stock interval) and removed.")
-    bw_key, bw_order = AXES["memory bandwidth"]
-    cp_key, _ = AXES["compute (SM clock)"]
-    pres = [c for c in bw_order if any((m, c) in cells for m in methods)]
-    if len(pres) >= 2:
-        lo_c, hi_c = pres[0], pres[-1]
-        print(f"\n  over {lo_c} -> {hi_c}:")
-        print(f"    {'method':10s} {'core MHz':>16s} {'measured':>9s} {'core term':>10s} "
-              f"{'corrected':>10s}")
-        for m in methods:
-            if (m, lo_c) not in cells or (m, hi_c) not in cells:
-                continue
-            # this method's own compute elasticity, on the normal-clock interval
-            ce = float("nan")
-            if (m, "pw-lo") in cells and (m, "stock") in cells:
-                ce, *_ = _paired_elasticity(cells[(m, "pw-lo")], cells[(m, "stock")],
-                                            _clock(result, m, "pw-lo", cp_key),
-                                            _clock(result, m, "stock", cp_key))
-            e, *_ = _paired_elasticity(cells[(m, lo_c)], cells[(m, hi_c)],
-                                       _clock(result, m, lo_c, bw_key),
-                                       _clock(result, m, hi_c, bw_key))
-            c_lo = _clock(result, m, lo_c, cp_key)
-            c_hi = _clock(result, m, hi_c, cp_key)
-            if not (c_lo and c_hi) or ce != ce:
-                print(f"    {m:10s} {'-':>16s} {e:9.3f} {'-':>10s} {'-':>10s}")
-                continue
-            d_ln_core, core_term = _cross_term_correction(result, m, lo_c, hi_c,
-                                                          bw_key, cp_key, ce)
-            d_ln_mem = math.log(_clock(result, m, hi_c, bw_key)) - \
-                       math.log(_clock(result, m, lo_c, bw_key))
-            corrected = e - core_term / d_ln_mem
-            print(f"    {m:10s} {c_lo:7.0f} ->{c_hi:6.0f} {e:9.3f} "
-                  f"{-core_term/d_ln_mem:10.3f} {corrected:10.3f}")
-        print("\n  The correction raises every arm's bandwidth elasticity, baseline included, so")
-        print("  the RATIO between them moves less than either figure does.")
+    bw_axes = [a for a in axes if a.startswith("memory bandwidth")]
+    core_moved = False
+    for a in bw_axes:
+        cs = [c for c in axes[a][1] if any((m, c) in cells for m in methods)]
+        if len(cs) >= 2:
+            cl = _condition_clocks(result)
+            sms = [cl[c][0] for c in cs if c in cl]
+            if sms and (max(sms) - min(sms)) / min(sms) > 0.005:
+                core_moved = True
+    if bw_axes and not core_moved:
+        print(f"\n{'=' * 100}\n--- the bandwidth lever is clean here ---")
+        cl = _condition_clocks(result)
+        for a in bw_axes:
+            cs = [c for c in axes[a][1] if c in cl]
+            if len(cs) >= 2:
+                sms = [cl[c][0] for c in cs]
+                print(f"  {a}: core clock {min(sms):.0f} to {max(sms):.0f} MHz across the sweep, "
+                      f"a spread of {(max(sms)-min(sms))/min(sms)*100:.2f} %.")
+        print("  The core clock is pinned rather than left to fall out of a power cap, so raising")
+        print("  the memory clock does not take budget from the core and there is no cross term")
+        print("  to remove. Phase R needed that correction; this run does not.")
+        bw_axes = []
+
+    if bw_axes:
+        print(f"\n{'=' * 100}\n--- correction: the bandwidth lever is not clean ---")
+        print("  At a fixed power cap, raising the memory clock takes power from the core, so core")
+        print("  clock falls across the bandwidth sweep. A compute-elastic arm is penalised by that,")
+        print("  which makes its measured bandwidth elasticity an under-estimate. Below, the core-")
+        print("  clock contribution is estimated using each method's OWN compute elasticity (from the")
+        print("  pw-lo -> stock interval) and removed.")
+        bw_key, bw_order = AXES["memory bandwidth"]
+        cp_key, _ = AXES["compute (SM clock)"]
+        pres = [c for c in bw_order if any((m, c) in cells for m in methods)]
+        if len(pres) >= 2:
+            lo_c, hi_c = pres[0], pres[-1]
+            print(f"\n  over {lo_c} -> {hi_c}:")
+            print(f"    {'method':10s} {'core MHz':>16s} {'measured':>9s} {'core term':>10s} "
+                  f"{'corrected':>10s}")
+            for m in methods:
+                if (m, lo_c) not in cells or (m, hi_c) not in cells:
+                    continue
+                # this method's own compute elasticity, on the normal-clock interval
+                ce = float("nan")
+                if (m, "pw-lo") in cells and (m, "stock") in cells:
+                    ce, *_ = _paired_elasticity(cells[(m, "pw-lo")], cells[(m, "stock")],
+                                                _clock(result, m, "pw-lo", cp_key),
+                                                _clock(result, m, "stock", cp_key))
+                e, *_ = _paired_elasticity(cells[(m, lo_c)], cells[(m, hi_c)],
+                                           _clock(result, m, lo_c, bw_key),
+                                           _clock(result, m, hi_c, bw_key))
+                c_lo = _clock(result, m, lo_c, cp_key)
+                c_hi = _clock(result, m, hi_c, cp_key)
+                if not (c_lo and c_hi) or ce != ce:
+                    print(f"    {m:10s} {'-':>16s} {e:9.3f} {'-':>10s} {'-':>10s}")
+                    continue
+                d_ln_core, core_term = _cross_term_correction(result, m, lo_c, hi_c,
+                                                              bw_key, cp_key, ce)
+                d_ln_mem = math.log(_clock(result, m, hi_c, bw_key)) - \
+                           math.log(_clock(result, m, lo_c, bw_key))
+                corrected = e - core_term / d_ln_mem
+                print(f"    {m:10s} {c_lo:7.0f} ->{c_hi:6.0f} {e:9.3f} "
+                      f"{-core_term/d_ln_mem:10.3f} {corrected:10.3f}")
+            print("\n  The correction raises every arm's bandwidth elasticity, baseline included, so")
+            print("  the RATIO between them moves less than either figure does.")
 
     # ---------------------------------------------------- interval-matching caveat
-    print(f"\n--- caveat: the compute intervals are not identical across methods ---")
-    print("  Under the same power cap, different methods settle at different core clocks, because")
-    print("  a bandwidth-heavy workload spends more of the budget on memory. Measured here:")
-    for c in ["pw-vlo", "pw-lo", "stock"]:
-        row = []
-        for m in methods:
-            v = _clock(result, m, c, cp_key)
-            if v:
-                row.append(f"{m}={v:.0f}")
-        if row:
-            print(f"    {c:8s} " + "  ".join(row))
-    print("  So an interval labelled 'pw-lo -> stock' spans a different clock range for each")
-    print("  method. Since elasticity is regime-dependent (see the two compute intervals above),")
-    print("  these comparisons are close but not exactly matched. The direction of the effect is")
-    print("  far larger than this mismatch; the magnitudes should be read with it in mind.")
+    # Whether the methods share an interval is a property of the data, not of the phase, so it
+    # is measured rather than asserted. Phase R let a power cap decide the clock and the methods
+    # landed on different ones; Phase R2 pins the clock so they cannot. Printing Phase R's caveat
+    # over Phase R2's data would describe a defect that run exists to remove.
+    cp_axes = [a for a in axes if a.startswith("compute")]
+    rows, worst = [], 0.0
+    for a in cp_axes:
+        for c in axes[a][1]:
+            per = {m: _clock(result, m, c, SM_KEY) for m in methods
+                   if _clock(result, m, c, SM_KEY)}
+            if len(per) < 2:
+                continue
+            spread = (max(per.values()) - min(per.values())) / min(per.values())
+            worst = max(worst, spread)
+            rows.append((c, per, spread))
+    if rows and worst <= 0.005:
+        print(f"\n--- the compute intervals ARE matched across methods ---")
+        print("  Every method met the same core clock at each condition, so an interval spans the")
+        print("  same range for all of them and the elasticities above are directly comparable.")
+        for c, per, spread in rows:
+            print(f"    {c:14s} " + "  ".join(f"{m}={v:.0f}" for m, v in sorted(per.items()))
+                  + f"   spread {spread * 100:.2f} %")
+        print("  This is what pinning the clock buys over capping the power, and it is the defect")
+        print("  Phase R2 exists to remove. Phase R could not say this.")
+    elif rows:
+        print(f"\n--- caveat: the compute intervals are not identical across methods ---")
+        print("  Under the same power cap, different methods settle at different core clocks,")
+        print("  because a bandwidth-heavy workload spends more of the budget on memory:")
+        for c, per, spread in rows:
+            print(f"    {c:14s} " + "  ".join(f"{m}={v:.0f}" for m, v in sorted(per.items()))
+                  + f"   spread {spread * 100:.2f} %")
+        print(f"  So an interval spans a different clock range for each method, by up to")
+        print(f"  {worst * 100:.1f} %. Elasticity is regime-dependent (see the two compute intervals")
+        print("  above), so these comparisons are close but not exactly matched. The direction of")
+        print("  the effect is far larger than the mismatch; read the magnitudes with it in mind.")
 
     # ------------------------------------------------------------------ verdict
     print(f"\n{'=' * 100}\n--- H2 vs H2' on matched intervals ---")

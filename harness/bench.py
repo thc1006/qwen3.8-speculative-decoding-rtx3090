@@ -27,6 +27,7 @@ import os
 import platform
 import subprocess
 import time
+import dataclasses
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -315,11 +316,11 @@ def run_matrix(
         "arms": {a.name: {"extra_args": a.extra_args, "tree": a.tree,
                           "expects_drafter": a.expects_drafter,
                           "temperature": a.temperature, "note": a.note,
-                          "gpu_state": (None if a.gpu_state is None else {
-                              "name": a.gpu_state.name,
-                              "mem_transfer_offset": a.gpu_state.mem_transfer_offset,
-                              "core_offset": a.gpu_state.core_offset,
-                              "power_limit_w": a.gpu_state.power_limit_w})}
+                          # Every field of the dataclass, not a hand-picked list. The picked
+                          # list silently dropped `lock_sm_mhz` when Phase R2 added it, so the
+                          # result recorded what the clock measured but not what was asked for.
+                          "gpu_state": (None if a.gpu_state is None
+                                        else dataclasses.asdict(a.gpu_state))}
                  for a in arms},
         "records": [],
         "incidents": [],
