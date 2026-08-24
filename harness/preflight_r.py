@@ -11,6 +11,7 @@ Run with no benchmark holding the lock. Restores stock on exit, including on fai
 """
 from __future__ import annotations
 
+import os
 import sys
 import time
 import traceback
@@ -24,9 +25,14 @@ import gpustate as G       # noqa: E402
 import quality             # noqa: E402
 import server as S         # noqa: E402
 import telemetry as T      # noqa: E402
-import phase_r as M        # noqa: E402
+import importlib           # noqa: E402
 
-PORT = 18190
+# Which matrix to check is chosen at run time, so the same pre-flight serves
+# phase_r (power-capped conditions) and phase_r2 (pinned-clock conditions).
+_MATRIX = os.environ.get("PREFLIGHT_MATRIX", "phase_r")
+M = importlib.import_module(_MATRIX)
+
+PORT = int(os.environ.get("PREFLIGHT_PORT", "18190"))
 STOCK_MEM_CLK = 9751.0
 
 
@@ -40,6 +46,7 @@ def check(cond: G.GpuState) -> dict:
     out["mem_clock_ok"] = (got_mem == want_mem)
     out["mem_clock_want"] = want_mem
     out["mem_clock_got"] = got_mem
+    out["lock_sm_mhz"] = getattr(cond, "lock_sm_mhz", None)
 
     log = HERE.parent / f"logs/preflight_{cond.name}.log"
     t0 = time.perf_counter()
@@ -112,14 +119,19 @@ def main() -> int:
         print(G.apply(G.STOCK, force=True))
 
     print("\n=== summary ===")
-    print(f"  {'cond':8s} {'mem_max':>8s} {'mem_load':>9s} {'sm_load':>8s} {'W':>6s} "
-          f"{'tok/s':>7s}  degen")
+    print(f"  {'cond':13s} {'pin':>5s} {'mem_max':>8s} {'mem_load':>9s} {'sm_load':>8s} "
+          f"{'W':>6s} {'tok/s':>7s}  degen")
     for r in results:
-        print(f"  {r['condition']:8s} {r['mem_clock_got']:8.0f} "
-              f"{(r.get('mem_clock_under_load_mhz') or 0):9.0f} "
-              f"{(r.get('sm_clock_under_load_mhz') or 0):8.0f} "
+        pin = r.get("lock_sm_mhz")
+        sm = r.get("sm_clock_under_load_mhz") or 0
+        held = "" if pin is None else ("  ok" if abs(sm - pin) <= 30 else f"  DRIFT {sm-pin:+.0f}")
+        print(f"  {r['condition']:13s} {str(pin or '-'):>5s} {r['mem_clock_got']:8.0f} "
+              f"{(r.get('mem_clock_under_load_mhz') or 0):9.0f} {sm:8.0f} "
               f"{(r.get('power_mean_w') or 0):6.0f} {(r.get('decode_tok_s') or 0):7.2f}  "
-              f"{r.get('degenerate')}")
+              f"{r.get('degenerate')}{held}")
+        if pin is not None and abs(sm - pin) > 30:
+            failures.append((r["condition"],
+                             f"pinned to {pin} MHz but ran at {sm:.0f} MHz under load"))
 
     # ---- the check that validates or kills the Phase R design ----
     ref = next((r for r in results if r["condition"] == "stock"), None)
@@ -132,12 +144,18 @@ def main() -> int:
                 continue
             drift = (m - base_mem) / base_mem * 100
             note = ""
-            if r["condition"].startswith("pw") and abs(drift) > 1.0:
-                note = ("   <-- POWER-LIMIT CONDITION IS ALSO MOVING MEMORY CLOCK. "
-                        "This condition does not isolate compute; the elasticity "
-                        "decomposition is invalid for it.")
-                failures.append((r["condition"], "power limit drags memory clock"))
-            print(f"    {r['condition']:8s} {m:8.0f} MHz  ({drift:+.1f} %){note}")
+            pinned = r.get("lock_sm_mhz")
+            # A condition is "compute only" if it was not asked to move the memory clock,
+            # whether it varies compute by a power cap or by pinning the core. Either way its
+            # memory clock must not move, or it is not isolating compute.
+            compute_only = (abs(r["mem_clock_want"] - STOCK_MEM_CLK) < 1
+                            and (pinned is not None or r["condition"].startswith("pw")))
+            if compute_only and abs(drift) > 1.0:
+                note = ("   <-- THIS COMPUTE CONDITION IS ALSO MOVING THE MEMORY CLOCK. "
+                        "It does not isolate compute and the elasticity decomposition is "
+                        "invalid for it.")
+                failures.append((r["condition"], "compute condition drags the memory clock"))
+            print(f"    {r['condition']:13s} {m:8.0f} MHz  ({drift:+.1f} %){note}")
     if failures:
         print("\nFAILURES -- do not launch Phase R until these are resolved or the condition "
               "is removed from the matrix:")

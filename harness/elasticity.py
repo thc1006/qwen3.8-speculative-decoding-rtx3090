@@ -46,33 +46,63 @@ def _cells(result: dict) -> dict[tuple[str, str], dict[str, list[float]]]:
 
 
 def _clock(result: dict, method: str, cond: str, key: str) -> float | None:
-    vals = [(r.get("power") or {}).get(key)
-            for r in result["records"] if r["arm"] == f"{method}@{cond}"]
-    vals = [v for v in vals if v]
+    vals = _clock_samples(result, method, cond, key)
     return statistics.fmean(vals) if vals else None
 
 
-def _paired_elasticity(lo: dict[str, list[float]], hi: dict[str, list[float]],
-                       x_lo: float, x_hi: float, *, n_boot: int = 5000,
-                       seed: int = 20260824) -> tuple[float, float, float]:
-    """Local elasticity d(ln y)/d(ln x), with a cluster bootstrap over prompts.
+def _clock_samples(result: dict, method: str, cond: str, key: str) -> list[float]:
+    """Per-request clock readings, so the denominator's own variance can be bootstrapped."""
+    vals = [(r.get("power") or {}).get(key)
+            for r in result["records"] if r["arm"] == f"{method}@{cond}"]
+    return [v for v in vals if v]
 
-    Prompts are the unit of replication; passes of one prompt are repeated measures.
+
+def _paired_elasticity(lo: dict[str, list[float]], hi: dict[str, list[float]],
+                       x_lo: float, x_hi: float, *,
+                       x_lo_samples: list[float] | None = None,
+                       x_hi_samples: list[float] | None = None,
+                       n_boot: int = 6000,
+                       seed: int = 20260824) -> tuple[float, float, float]:
+    """Local elasticity d(ln y)/d(ln x), cluster bootstrap over prompts AND over the denominator.
+
+    Prompts are the unit of replication for the numerator; passes of one prompt are repeated
+    measures. The denominator is a measured clock, not a constant, and the first version of this
+    function treated it as exact. That understates the interval: at the 250 W condition the
+    achieved SM clock has a standard deviation of 4-5 % of its mean, because the card oscillates
+    against the cap instead of settling. Passing the per-request clock readings in
+    `x_lo_samples` / `x_hi_samples` bootstraps that too.
+
+    Without the samples the behaviour is the old one, and the returned interval is a lower bound
+    on the true width.
     """
     tags = sorted(set(lo) & set(hi))
     if not tags or x_lo <= 0 or x_hi <= 0 or x_lo == x_hi:
         return (float("nan"),) * 3
-    dlnx = math.log(x_hi) - math.log(x_lo)
 
-    def point(sample: list[str]) -> float:
+    def point(sample: list[str], xl: float, xh: float) -> float:
         ylo = statistics.fmean([statistics.fmean(lo[t]) for t in sample])
         yhi = statistics.fmean([statistics.fmean(hi[t]) for t in sample])
-        return (math.log(yhi) - math.log(ylo)) / dlnx
+        return (math.log(yhi) - math.log(ylo)) / (math.log(xh) - math.log(xl))
 
-    est = point(tags)
+    est = point(tags, x_lo, x_hi)
     rng = random.Random(seed)
-    reps = sorted(point([tags[rng.randrange(len(tags))] for _ in tags]) for _ in range(n_boot))
-    return est, reps[int(0.025 * n_boot)], reps[int(0.975 * n_boot) - 1]
+    reps = []
+    for _ in range(n_boot):
+        smp = [tags[rng.randrange(len(tags))] for _ in tags]
+        if x_lo_samples and x_hi_samples:
+            xl = statistics.fmean([x_lo_samples[rng.randrange(len(x_lo_samples))]
+                                   for _ in x_lo_samples])
+            xh = statistics.fmean([x_hi_samples[rng.randrange(len(x_hi_samples))]
+                                   for _ in x_hi_samples])
+        else:
+            xl, xh = x_lo, x_hi
+        if xl <= 0 or xh <= 0 or xl == xh:
+            continue
+        reps.append(point(smp, xl, xh))
+    reps.sort()
+    if not reps:
+        return est, float("nan"), float("nan")
+    return est, reps[int(0.025 * len(reps))], reps[int(0.975 * len(reps)) - 1]
 
 
 def _cross_term_correction(result: dict, method: str, lo_c: str, hi_c: str,
@@ -139,7 +169,10 @@ def report(result: dict) -> None:
                     continue
                 x_lo = _clock(result, m, lo_c, clock_key)
                 x_hi = _clock(result, m, hi_c, clock_key)
-                e, l, h = _paired_elasticity(cells[(m, lo_c)], cells[(m, hi_c)], x_lo, x_hi)
+                e, l, h = _paired_elasticity(
+                    cells[(m, lo_c)], cells[(m, hi_c)], x_lo, x_hi,
+                    x_lo_samples=_clock_samples(result, m, lo_c, clock_key),
+                    x_hi_samples=_clock_samples(result, m, hi_c, clock_key))
                 if m == baseline:
                     base_e = e
                 rel = f"  ({e/base_e:5.2f}x baseline)" if base_e and m != baseline else ""

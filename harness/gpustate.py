@@ -30,12 +30,27 @@ class GpuStateError(RuntimeError):
 
 @dataclass(frozen=True)
 class GpuState:
-    """A resource condition. `mem_transfer_offset` is in transfer-rate units, which are TWICE
-    the memory clock delta: +800 raises the memory clock by 400 MHz."""
+    """A resource condition.
+
+    `mem_transfer_offset` is in transfer-rate units, which are TWICE the memory clock delta:
+    +800 raises the memory clock by 400 MHz.
+
+    `lock_sm_mhz` pins the graphics clock with `nvidia-smi -lgc`. Prefer it over squeezing the
+    power limit when the point is to vary compute. Measured on this card, a power cap does not
+    produce a stable operating point: at 175 W the achieved SM clock oscillates with a
+    within-request spread of 17 % for the no-spec baseline and 44 % for the deepest speculative
+    arm, so the mean is a poor description of where the card actually ran. A power cap also lets
+    each method settle at a DIFFERENT clock (906, 1081 and 1178 MHz for baseline, mtp-n3 and
+    mtp-n7 at 250 W), because a bandwidth-heavy workload spends more of the budget on memory, so
+    an interval labelled the same for every method spans a different clock range for each.
+    Pinning removes both problems, and it also removes a third: with the core pinned, raising the
+    memory clock can no longer steal power from it, which was contaminating the bandwidth lever.
+    """
     name: str
     mem_transfer_offset: int = 0
     core_offset: int = 0
     power_limit_w: int = 420
+    lock_sm_mhz: int | None = None
 
     @property
     def mem_clock_delta_mhz(self) -> float:
@@ -122,11 +137,13 @@ def read_state(index: int = 0) -> dict:
             out[key] = None
     try:
         csv = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=power.limit,clocks.max.memory,clocks.max.graphics",
+            ["nvidia-smi", "--query-gpu=power.limit,clocks.max.memory,clocks.max.graphics,"
+             "clocks.current.graphics",
              "--format=csv,noheader,nounits", "-i", str(index)],
             text=True, stderr=subprocess.DEVNULL).strip()
-        pl, mem, gr = [float(x) for x in csv.split(",")]
-        out.update(power_limit_w=pl, clocks_max_memory_mhz=mem, clocks_max_graphics_mhz=gr)
+        pl, mem, gr, cur = [float(x) for x in csv.split(",")]
+        out.update(power_limit_w=pl, clocks_max_memory_mhz=mem, clocks_max_graphics_mhz=gr,
+                   clocks_current_graphics_mhz=cur)
     except Exception as e:                                       # noqa: BLE001
         out["nvidia_smi_error"] = repr(e)
     return out
@@ -194,12 +211,19 @@ def apply(state, index: int = 0, *, force: bool = False,
         raise GpuStateError(
             f"a benchmark run holds {LOCKFILE.name}; refusing to change GPU clocks while it is "
             f"measuring.\n{LOCKFILE.read_text()}")
-    sidx = settings_index_for(index)   # raises rather than writing to an unverified card
+    sidx = settings_index_for(index)   # raises instead of writing to an unverified card
     _settings(["-a", f"[gpu:{sidx}]/GPUMemoryTransferRateOffset[4]={state.mem_transfer_offset}"])
     _settings(["-a", f"[gpu:{sidx}]/GPUGraphicsClockOffset[4]={state.core_offset}"])
     subprocess.check_output(["sudo", "nvidia-smi", "-i", str(index),
                              "-pl", str(state.power_limit_w)],
                             text=True, stderr=subprocess.DEVNULL)
+    if state.lock_sm_mhz:
+        subprocess.check_output(["sudo", "nvidia-smi", "-i", str(index),
+                                 "-lgc", f"{state.lock_sm_mhz},{state.lock_sm_mhz}"],
+                                text=True, stderr=subprocess.DEVNULL)
+    else:
+        subprocess.run(["sudo", "nvidia-smi", "-i", str(index), "-rgc"],
+                       capture_output=True, text=True)
     time.sleep(settle_s)
 
     got = read_state(index)
@@ -213,6 +237,11 @@ def apply(state, index: int = 0, *, force: bool = False,
     if abs((got.get("power_limit_w") or -1) - state.power_limit_w) > 0.5:
         problems.append(f"power limit requested {state.power_limit_w} W, "
                         f"read back {got.get('power_limit_w')} W")
+    if state.lock_sm_mhz:
+        cur = got.get("clocks_current_graphics_mhz")
+        if cur is None or abs(cur - state.lock_sm_mhz) > 30:
+            problems.append(f"SM clock locked to {state.lock_sm_mhz} MHz, "
+                            f"reads {cur} MHz")
     if problems:
         raise GpuStateError(f"GPU state '{state.name}' did not take effect: " + "; ".join(problems))
     got["condition"] = state.name
@@ -228,7 +257,7 @@ def stock_for(index: int = 0) -> GpuState:
     import devices as _dev
     d = _dev.get_device(index)
     return GpuState(f"stock@{d.short}", mem_transfer_offset=0, core_offset=0,
-                    power_limit_w=int(round(d.power_default_w)))
+                    power_limit_w=int(round(d.power_default_w)), lock_sm_mhz=None)
 
 
 def restore_stock(index: int = 0, *, force: bool = False) -> dict:

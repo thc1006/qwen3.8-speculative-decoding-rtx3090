@@ -1,9 +1,13 @@
 # Qwen3.8-27B speculative decoding on a single RTX 3090: a controlled study
 
-> **STATUS: measurement in progress (started 2026-08-24). No result in this README is final.**
-> Sections marked `RESULTS PENDING` are placeholders. The hypotheses, the design, the analysis
-> plan and the prior-art scoping were all committed **before** any measurement was taken — see
-> [`PREREGISTRATION.md`](PREREGISTRATION.md).
+> **Status, 2026-08-24.** Phase A is complete: 875 measurements, 0 incidents, nothing excluded.
+> Phase R (resource response) is complete at 1125 measurements and Phase R2 is re-running its
+> compute axis with the clock pinned instead of power-capped, which fixes three defects its own
+> review found. Later phases are designed and not yet run; each says so where it appears.
+>
+> The hypotheses, the analysis plan and the prior-art scoping were committed **before** any
+> measurement, in [`PREREGISTRATION.md`](PREREGISTRATION.md), which is append-only. Two of its
+> own hypotheses have since been recorded as unsupported.
 
 Successor to [`thc1006/qwen3.6-speculative-decoding-rtx3090`](https://github.com/thc1006/qwen3.6-speculative-decoding-rtx3090).
 That repo asked whether speculative decoding pays off for a 3B-active MoE on consumer Ampere,
@@ -37,6 +41,48 @@ the protocol and the axes nobody ran: a paired interleaved design that puts an i
 number, a thermal gate at arm entry, per-request energy, byte-level output divergence, and a
 mechanism test that separates two competing explanations for why deeper drafting stops paying.
 Details below.
+
+## What this answers
+
+Written out as questions because that is how people arrive here, and the numbers behind each
+answer are in the sections below.
+
+**Is speculative decoding worth enabling for Qwen3.8-27B on an RTX 3090?**
+Yes, and by a lot. The built-in MTP head at `--spec-draft-n-max 2` gives +59.8 % decode
+throughput over no speculation, measured across 875 requests with an interval.
+
+**What `--spec-draft-n-max` should I use?**
+2 for `draft-mtp`, 4 for `draft-dflash`. Both are the interior maximum of
+`speedup = mean_len / k` where `k` grows linearly with verification width, so this is derived
+and not just the best cell in a table.
+
+**Does DFlash2 (llama.cpp PR #27342) beat the built-in MTP head on consumer Ampere?**
+No. At its own best depth DFlash2 gives +51.9 % against MTP's +59.8 %. It does draft longer
+blocks, and its fixed per-step cost is actually lower, but its acceptance falls faster with
+depth.
+
+**Does speculative decoding save energy, or just time?**
+Both. MTP at n-max 2 takes 2503 J to produce a 400-token answer against 3980 J without it, so
+37 % less energy. Decode-only, with prefill measured separately and subtracted.
+
+**Is llama.cpp speculative decoding lossless at temperature 0?**
+Not in bytes. 76-80 % of greedy requests produce different text from the non-speculative
+baseline, forking at a median 23 % of the way in. It is deterministic and reproduces exactly
+across passes, and it corroborates llama.cpp issue #25618.
+
+**Why does deeper drafting stop paying off?**
+Because speculation turns a bandwidth-bound decode into a compute-bound verify, and each extra
+verified position costs about 0.28 of a plain decode step. Measured directly by varying memory
+clock and core clock independently: speculative arms are 0.14-0.21x as sensitive to memory
+bandwidth as the baseline and 1.71-1.74x as sensitive to core clock.
+
+**Does the MoE result from Qwen3.6-35B-A3B carry over?**
+No. That model's expert-saturation argument does not apply to a dense-hybrid target, and the
+sign flips: net loss there, large net win here.
+
+**Which prompts benefit?**
+Code and reasoning most, Chinese least. `dflash2-n7` is +22.6 % overall while being a net loss
+on prose, chat and Chinese, so a single average is misleading for this model.
 
 ## Design
 
