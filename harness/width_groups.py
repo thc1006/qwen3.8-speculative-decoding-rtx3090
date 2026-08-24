@@ -23,12 +23,27 @@ import json
 import sys
 
 # ncols_dst -> warps, MMVQ_PARAMETERS_GENERIC, which is what sm_86 falls through to.
+#
+# This is the STOCK table. The forced-warp builds ship a different one, so on those files every
+# line below that mentions warps would state the stock prediction for a build that does not have
+# it, and the H8 verdict would report an agreement that was never tested. is_intervention_file()
+# gates that, and harness/warp_intervention.py is what scores those runs.
 def warps_for(width: int) -> int:
     if width <= 4:
         return 4
     if width <= 8:
         return 2
     return 1
+
+
+def is_intervention_file(d: dict, path: str) -> bool:
+    """True for a forced_up / forced_down result, whose GENERIC table is not the stock one.
+
+    The arms carry tree "warp" in all three builds including the control, so the tree alone does
+    not separate them; the filename is what names the build.
+    """
+    warp_tree = any((a or {}).get("tree") == "warp" for a in (d.get("arms") or {}).values())
+    return warp_tree and ("forced_up" in path or "forced_down" in path)
 
 
 def width_of(arm: str, meta: dict) -> int | None:
@@ -47,6 +62,13 @@ def main() -> int:
     path = sys.argv[1] if len(sys.argv) > 1 else "results/phase_nmax.json"
     d = json.load(open(path))
     arms = d.get("arms", {})
+
+    if is_intervention_file(d, path):
+        print(f"{path} is a forced-warp build. Its GENERIC table is not the stock one, so every")
+        print("warp count printed here would be wrong and the H8 verdict would compare the")
+        print("observation against a prediction the build never made.")
+        print("\nUse:  python3 harness/warp_intervention.py control.json forced_up.json forced_down.json")
+        return 2
 
     # (width, spec_type) -> {prompt -> fork position or "same"}, first pass only; divergence
     # proved perfectly reproducible across passes in Phase A, 125 of 125.
