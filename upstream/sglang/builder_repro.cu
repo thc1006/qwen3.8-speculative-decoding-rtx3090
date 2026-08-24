@@ -26,10 +26,20 @@ __global__ void build_walk(
   int bid = blockIdx.x;
   int tid = threadIdx.x;
   if (tid >= draft_token_num) return;
-  if (tid == 0) return;                       // the guarded branch is not what is under test
 
   int seq_len = (int)verified_seq_len[bid];
   int token_tree_idx = draft_token_num * draft_token_num * bid + draft_token_num * tid + 1;
+
+  // The real kernel initialises every thread's mask row before the tid branch.
+  tree_mask[token_tree_idx - 1] = true;
+  for (int i = 0; i < draft_token_num - 1; i++) {
+    tree_mask[token_tree_idx + i] = false;
+  }
+  if (tid == 0) {                             // the guarded branch is not under test here
+    positions[bid * draft_token_num] = seq_len;
+    out_iters[0] = 0; out_hit_cap[0] = 0; out_max_offset[0] = 0;
+    return;
+  }
 
   int position = 0;
   int cur_position = tid - 1;
@@ -37,51 +47,49 @@ __global__ void build_walk(
   int hit_cap = 0;
   int max_offset = cur_position;
 
-  while (true) {
-    // A walk up the tree visits at most draft_token_num nodes. The bound belongs in the shipped
-    // kernel too, because a not-found check alone does not stop a parent chain that loops.
-    if (guarded && iters >= (unsigned long long)draft_token_num) break;
-    if (++iters > cap) { hit_cap = 1; break; }
-    position += 1;
-    // This thread's row runs from offset -1 to draft_token_num - 2. Anything beyond that is
-    // another thread's row, or past the buffer for the last thread of the last block.
-    if (cur_position > max_offset) max_offset = cur_position;
-    // The write the branch performs every iteration. Valid offsets for this thread's mask row
-    // are -1 through draft_token_num - 2.
-    tree_mask[token_tree_idx + cur_position] = true;
-    int parent_tb_idx = (int)(selected_index[bid * (draft_token_num - 1) + cur_position] / topk);
-    if (parent_tb_idx == 0) break;
-    int64_t token_idx = parent_list[bid * (topk * (depth - 1) + 1) + parent_tb_idx];
-
-    if (guarded) {
-      // Proposed fix: search only the range selected_index actually has, and handle not-found
-      // the way the tid == 0 branch already does.
-      int found = -1;
-      for (int p = 0; p < draft_token_num - 1; ++p) {
-        if (selected_index[bid * (draft_token_num - 1) + p] == token_idx) { found = p; break; }
-      }
-      if (found < 0) break;                   // no parent selected: the tid == 0 branch's case
-      if (found == cur_position) break;       // a node that is its own parent
-      cur_position = found;
-    } else {
+  if (!guarded) {
+    // ---- as shipped on main ----
+    while (true) {
+      if (++iters > cap) { hit_cap = 1; break; }
+      position += 1;
+      if (cur_position > max_offset) max_offset = cur_position;
+      tree_mask[token_tree_idx + cur_position] = true;
+      int parent_tb_idx = (int)(selected_index[bid * (draft_token_num - 1) + cur_position] / topk);
+      if (parent_tb_idx == 0) break;
+      int64_t token_idx = parent_list[bid * (topk * (depth - 1) + 1) + parent_tb_idx];
       for (cur_position = 0; cur_position < draft_token_num; ++cur_position) {
         if (selected_index[bid * (draft_token_num - 1) + cur_position] == token_idx) break;
       }
     }
+  } else {
+    // ---- verbatim copy of the proposed patch ----
+    while (position < depth) {
+      if (++iters > cap) { hit_cap = 1; break; }        // escape only, not part of the patch
+      position += 1;
+      if (cur_position > max_offset) max_offset = cur_position;
+      tree_mask[token_tree_idx + cur_position] = true;
+      int parent_tb_idx = (int)(selected_index[bid * (draft_token_num - 1) + cur_position] / topk);
+      if (parent_tb_idx == 0) break;
+      int64_t token_idx = parent_list[bid * (topk * (depth - 1) + 1) + parent_tb_idx];
+      int found = -1;
+      for (int p = 0; p < draft_token_num - 1; ++p) {
+        if (selected_index[bid * (draft_token_num - 1) + p] == token_idx) { found = p; break; }
+      }
+      if (found < 0) break;                              // the patch prints a warning here
+      cur_position = found;
+    }
   }
   positions[bid * draft_token_num + tid] = position + seq_len;
-  // Record the worst offender across threads: the last thread of the last block is the one whose
-  // row ends at the end of the allocation, so an overrun there leaves the buffer entirely.
   out_iters[tid] = iters;
   out_hit_cap[tid] = hit_cap;
-  out_max_offset[tid] = max_offset;      // relative to this thread's row
+  out_max_offset[tid] = max_offset;
 }
 
 int main(int argc, char** argv) {
   // 0 = as shipped, 1 = with the guard, absent = both
   int only = (argc > 1) ? atoi(argv[1]) : -1;
   const int N = 4;        // draft_token_num
-  const int TOPK = 2, DEPTH = 3, BS = 1;
+  const int TOPK = 2, DEPTH = 3, BS = 2;
   const unsigned long long CAP = 200000ULL;
   const int PL = TOPK * (DEPTH - 1) + 1;
 
@@ -92,11 +100,11 @@ int main(int argc, char** argv) {
   // Case A: the looked-up token is present, the walk reaches the root and stops.
   // Case B: the looked-up token is absent, which is exactly the state the tid == 0 branch warns
   //         about and skips.
-  int64_t h_sel_A[BS*(N-1)] = {4, 2, 0};
-  int64_t h_par_A[BS*PL]    = {0, 0, 2, 0, 0};    // chain 4 -> 2 -> 0, each step strictly closer to the root
-  int64_t h_sel_B[BS*(N-1)] = {4, 2, 0};
-  int64_t h_par_B[BS*PL]    = {0, 99, 99, 99, 99};  // 99 appears nowhere in selected_index
-  int64_t h_seq[BS] = {7};
+  int64_t h_sel_A[BS*(N-1)] = {4, 2, 0,  2, 4, 0};
+  int64_t h_par_A[BS*PL]    = {0, 0, 2, 0, 0,   0, 4, 0, 0, 0};
+  int64_t h_sel_B[BS*(N-1)] = {4, 2, 0,  2, 4, 0};
+  int64_t h_par_B[BS*PL]    = {0, 99, 99, 99, 99,  0, 99, 99, 99, 99};
+  int64_t h_seq[BS] = {7, 11};
 
   int64_t *d_par,*d_sel,*d_seq,*d_pos; bool* d_mask;
   unsigned long long* d_it; int *d_cap,*d_max;
@@ -114,11 +122,14 @@ int main(int argc, char** argv) {
   printf("  %-40s %9s %8s %8s\n", "case", "iters", "hit cap", "max off / row end");
 
   int fail = 0;
+  int64_t h_sel_C[BS*(N-1)] = {4, 2, 0,  2, 4, 0};
+  int64_t h_par_C[BS*PL]    = {0, 2, 2, 0, 0,   0, 4, 4, 0, 0};
   struct { const char* n; int64_t* sel; int64_t* par; } cases[] = {
-    {"parent present in selected_index", h_sel_A, h_par_A},
-    {"parent absent (the warned-about state)", h_sel_B, h_par_B},
+    {"valid ancestor chain", h_sel_A, h_par_A},
+    {"ancestor not selected", h_sel_B, h_par_B},
+    {"ancestor chain loops", h_sel_C, h_par_C},
   };
-  for (int c=0;c<2;++c) {
+  for (int c=0;c<3;++c) {
     for (int guarded=0; guarded<2; ++guarded) {
       if (only >= 0 && guarded != only) continue;
       CUDA_OK(cudaMemcpy(d_sel,cases[c].sel,BS*(N-1)*sizeof(int64_t),cudaMemcpyHostToDevice));
@@ -129,17 +140,25 @@ int main(int argc, char** argv) {
       CUDA_OK(cudaMemset(d_cap,0,N*sizeof(int))); CUDA_OK(cudaMemset(d_max,0,N*sizeof(int)));
       build_walk<<<BS,N>>>(d_par,d_sel,d_seq,d_mask,d_pos,TOPK,DEPTH,N,guarded,CAP,d_it,d_cap,d_max);
       CUDA_OK(cudaDeviceSynchronize());
+      int64_t posa[BS*N];
       unsigned long long ita[N]; int capa[N], mxa[N];
       CUDA_OK(cudaMemcpy(ita,d_it,N*sizeof(unsigned long long),cudaMemcpyDeviceToHost));
       CUDA_OK(cudaMemcpy(capa,d_cap,N*sizeof(int),cudaMemcpyDeviceToHost));
       CUDA_OK(cudaMemcpy(mxa,d_max,N*sizeof(int),cudaMemcpyDeviceToHost));
+      CUDA_OK(cudaMemcpy(posa,d_pos,BS*N*sizeof(int64_t),cudaMemcpyDeviceToHost));
       unsigned long long it=0; int cap_=0, mx=0, over=0;
       for (int q=1;q<N;++q){ if(ita[q]>it) it=ita[q]; cap_|=capa[q];
                              if(mxa[q]>mx) mx=mxa[q]; if(mxa[q] > N-2) over=1; }
       char label[80];
       snprintf(label,sizeof(label),"%s%s", cases[c].n, guarded ? " [guarded]" : "");
-      printf("  %-40s %9llu %8s %8d / %d%s\n", label, it, cap_?"YES":"no", mx, N-2,
-             over ? "   <-- wrote outside its own row" : "");
+      printf("  %-40s %9llu %8s %8d / %d   positions [", label, it, cap_?"YES":"no", mx, N-2);
+      for (int q=0;q<BS*N;++q) printf("%s%lld", q?", ":"", (long long)posa[q]);
+      printf("]%s\n", over ? "  <-- outside its row" : "");
+      bool hm[N*BS*N];
+      CUDA_OK(cudaMemcpy(hm,d_mask,N*BS*N*sizeof(bool),cudaMemcpyDeviceToHost));
+      printf("      mask ");
+      for (int r=0;r<BS*N;++r){ printf("["); for(int q=0;q<N;++q) printf("%d",(int)hm[r*N+q]); printf("]"); }
+      printf("\n");
       if (guarded && (cap_ || over)) fail = 1;
     }
   }

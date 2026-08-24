@@ -270,3 +270,35 @@ backend in this repository already has to another that does not, with the commen
 they were needed already written by whoever added them. The hardware and sanitizer results above
 are then evidence of what the missing guards cost on sm_86, rather than the argument for adding
 them.
+
+## Submitted: sgl-project/sglang#36201
+
+Opened 2026-08-24. Bounds the ancestor walk in `build_tree_efficient` by `depth`, searches only
+the `draft_token_num - 1` entries `selected_index` holds, and stops when the ancestor was not
+selected, which is what the CPU and Triton builders already do. Adds
+`test/registered/spec/utils/test_build_eagle_tree_malformed.py`, which pins the kernel to a
+reference walk over two requests and three trees.
+
+The PR does not claim to fix #35822. It says the report is worth reading alongside, notes that
+its stack is in the other kernel whose sibling walk is also unbounded, and states that a cyclic
+sibling chain is not reachable through the CUDA builder's normal path.
+
+`call-gate / pr-gate` shows red on `Require run-ci label (optional)`. That is the CI gate waiting
+for a maintainer to apply `run-ci`; #31478 sits in the same state and #35872 runs only because it
+has the label. Not a defect in the change.
+
+**A mistake caught in the last check before opening.** The second request's `PARENT_VALID` was
+copied from the first without accounting for its `selected_index` being `[2, 4, 0]` rather than
+`[4, 2, 0]`, so its ancestor resolved to itself and the "valid" case was a third looping tree.
+`test_valid_chain` was not testing a valid chain, and the PR body would have claimed a
+before-equals-after result that did not hold. Fixed and re-measured before the PR was opened.
+
+That run also showed the same absent-ancestor tree terminating in two iterations with one request
+and running away with two. Whether the unpatched walk stops depends on what the out-of-bounds
+read returns, which is stated in the PR because it is why this is awkward to reproduce.
+
+## Still open here
+
+The sibling walk in `TreeSpeculativeSamplingTargetOnly` is unbounded in the same way, verified
+non-terminating on sm_86 on a cyclic chain. It is deliberately not in #36201: #35771 is already
+open against that kernel's accept condition, and a second change to the same lines would collide.
