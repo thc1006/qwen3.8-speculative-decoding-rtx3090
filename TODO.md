@@ -65,13 +65,15 @@ second-host addendum in `PREREGISTRATION.md`.
 
 ## Upstream
 
+> `ggml-org/llama.cpp` ships an `AGENTS.md` that binds contributions there. It forbids AI-written PR **descriptions, commit messages and reviewer responses**, and forbids an agent running `git push` or `gh pr create` on the author's behalf; the stated penalty is a contributor ban. Prepare the branch and the body, then run the submit step by hand. Comment rules it enforces: 1-2 lines, no hard-wrapping, never split a sentence across lines, ASCII only.
+
 | item | state | next |
 |---|---|---|
 | **SGLang #36201** | open, CI gated on `run-ci` | body rewritten; four lookup sites and both kernels fixed; test covers 3 mask modes × 5 outputs; real-op sanitizer clean. Needs someone to trigger CI. |
 | **SGLang sampler walk** | not filed | `TreeSpeculativeSamplingTargetOnly` hangs and reads out of bounds on sm_86, both shown. Separate PR: bound the walk **and** range-check `cur_index` and `draft_token_id` — a bound alone does not fix the candidate-id case. Warning must come from one thread; the walk runs on all 1024. |
 | **llama.cpp #25618** | commented | the width partition, and the forced-warp result when it lands. Reply on the existing thread rather than opening a new "not lossless" issue. |
 | **llama.cpp #27572** | commented | the extended sweep decides whether the CUDA negative holds. Do not claim graph-copy alternation as the root cause. |
-| **llama.cpp verification-step counter** | patch written | 3 lines in `server_slot_stats::to_json()` plus assertions in `tools/server/tests/unit/test_speculative.py`. Motivation is exact accounting, not benchmark convenience. |
+| **llama.cpp [#27676](https://github.com/ggml-org/llama.cpp/pull/27676)** | open | the verification-step counter. One line in `server_slot_stats::to_json()` plus assertions in `tools/server/tests/unit/test_speculative.py`. Verified both ways on a CPU-only build of `c060ca9`: unpatched `KeyError: 'draft_n_verif_steps'`, patched `1 passed`. Motivation is exact accounting, not benchmark convenience. |
 | **llama.cpp `output_reorder()` gate** | verified, not filed | the `embd_nextn` swap is unconditional but the buffer is token-indexed when `embeddings_nextn_masked` is off. One line, plus a masked/unmasked regression. Does not claim to fix #27572. |
 | **llama.cpp #25618 / #27407 / #27623** | tracked | comment counts in `docs/UPSTREAM_CONTRIBUTIONS.md` are dated; re-read before quoting. |
 

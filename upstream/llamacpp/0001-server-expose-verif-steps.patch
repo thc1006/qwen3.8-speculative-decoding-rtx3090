@@ -1,25 +1,29 @@
-From 3c17c2e1eef2a652da38a7e7d20657ea245d8777 Mon Sep 17 00:00:00 2001
+From fc62ba743b4089be2b6b0a8d244604ce07b3c626 Mon Sep 17 00:00:00 2001
 From: thc1006 <84045975+thc1006@users.noreply.github.com>
 Date: Tue, 25 Aug 2026 03:57:46 +0800
 Subject: [PATCH] server : expose the speculative verification-step count per
  request
 
-server_slot_stats already counts verification steps and the server uses the
-count for the per-slot mean-length log line and for the Prometheus metrics
-added in #24536. The per-request JSON does not carry it, so a client has to
-reconstruct it from draft_n, draft_n_accepted and predicted_n, and that
-reconstruction is off by one because the first generated token comes from the
-prompt pass rather than a decode forward.
+The server already tracks n_draft_verif_steps, but the corresponding
+draft_n_verif_steps value is not included in the per-request timings JSON.
 
-Adds it to the speculative block of server_slot_stats::to_json(), and extends
-the existing speculative server test, which fails against master with
-KeyError: 'draft_n_verif_steps'.
+The existing draft_n and draft_n_accepted fields are enough to calculate the
+draft acceptance rate, but not the mean acceptance length, because the latter
+also needs the number of verification steps. The server already computes mean
+acceptance length from 1 + n_draft_accepted / n_draft_verif_steps.
+
+The Prometheus metric is useful for server-wide monitoring, but it is
+cumulative. For request-level benchmarks, the value still needs to be available
+in the request timings.
+
+No new state is introduced; the patch only exposes a counter that is already
+maintained by the server.
 
 Signed-off-by: thc1006 <84045975+thc1006@users.noreply.github.com>
 ---
  tools/server/server-common.cpp              | 5 +++--
- tools/server/tests/unit/test_speculative.py | 7 ++++++-
- 2 files changed, 9 insertions(+), 3 deletions(-)
+ tools/server/tests/unit/test_speculative.py | 6 +++++-
+ 2 files changed, 8 insertions(+), 3 deletions(-)
 
 diff --git a/tools/server/server-common.cpp b/tools/server/server-common.cpp
 index 4f5b820..79980db 100644
@@ -38,10 +42,10 @@ index 4f5b820..79980db 100644
  
      return base;
 diff --git a/tools/server/tests/unit/test_speculative.py b/tools/server/tests/unit/test_speculative.py
-index 5837195..c29fd8b 100644
+index 5837195..4d94e7d 100644
 --- a/tools/server/tests/unit/test_speculative.py
 +++ b/tools/server/tests/unit/test_speculative.py
-@@ -47,7 +47,12 @@ def test_with_and_without_draft():
+@@ -47,7 +47,11 @@ def test_with_and_without_draft():
      server.start()
      res = server.make_request("POST", "/completion", data=request)
      assert res.status_code == 200
@@ -49,8 +53,7 @@ index 5837195..c29fd8b 100644
 +    timings = res.body["timings"]
 +    assert timings["draft_n"] > 0
 +    assert timings["draft_n_accepted"] <= timings["draft_n"]
-+    # the verification-step count cannot be derived from the other two: the same acceptance
-+    # fraction at two draft widths gives two different step counts
++    # mean acceptance length needs this, the other two only give the rate
 +    assert timings["draft_n_verif_steps"] > 0
      tokens_draft = res.body["tokens"]
  
