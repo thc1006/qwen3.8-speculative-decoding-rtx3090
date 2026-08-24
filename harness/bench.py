@@ -531,7 +531,12 @@ def run_matrix(
                         decode_energy = energy - prefill_energy
                         prefill_power["subtracted"] = True
                     if decode_energy and decode_energy > 0 and predicted_n:
-                        tok_per_j_decode = predicted_n / decode_energy
+                        # The prefill calibration is a max_tokens=1 request, so subtracting it
+                        # removes prompt processing AND the first output token. What is left
+                        # covers tokens 2..N, so the numerator is N-1, matching the decode rate
+                        # which already uses (predicted_n - 1) / t_predicted_ms. Using N here
+                        # divided a decode-only denominator by an all-tokens numerator.
+                        tok_per_j_decode = max(predicted_n - 1, 0) / decode_energy
 
                     # Direct verification that prompt caching is really off, rather than
                     # trusting that the request field was honoured: llama.cpp reports how many

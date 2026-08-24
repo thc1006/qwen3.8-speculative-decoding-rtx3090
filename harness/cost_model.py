@@ -36,6 +36,9 @@ import argparse
 import json
 import statistics
 from collections import defaultdict
+
+# ggml/src/ggml-cuda/mmvq.cu: a wider batch is dispatched to a different kernel.
+MMVQ_MAX_BATCH_SIZE = 8
 from pathlib import Path
 
 
@@ -162,13 +165,21 @@ def cross_check_against_log(result: dict, rows: list[dict]) -> None:
     if not acc_by:
         return
     checked = mismatched = 0
+    skipped: list[tuple] = []
     ml_checked: list[float] = []
     by_ap: dict[tuple[str, int], list[dict]] = defaultdict(list)
     for r in rows:
         by_ap[(r["arm"], r["pass"])].append(r)
     for (arm, pas), g in by_ap.items():
         log_rows = acc_by.get(f"pass{pas:02d}_{arm}")
-        if not log_rows or len(log_rows) != len(g) + 1:
+        # The log carries one extra line per arm-pass: the drafter-evidence request that runs
+        # before the measured ones. Requiring exactly one extra is what keeps the zip aligned.
+        # Skipping quietly when it is not would turn this check off without saying so, which is
+        # the failure mode it exists to catch.
+        if not log_rows:
+            continue
+        if len(log_rows) != len(g) + 1:
+            skipped.append((arm, pas, len(log_rows), len(g) + 1))
             continue
         for r, lg in zip(g, log_rows[1:]):
             checked += 1
@@ -193,6 +204,12 @@ def cross_check_against_log(result: dict, rows: list[dict]) -> None:
         else:
             print(f"            within the log's own %5.2f printing precision, so the "
                   f"derivation tracks the server.")
+    if skipped:
+        print(f"\n[integrity] the log cross-check was SKIPPED for {len(skipped)} arm-pass(es) whose "
+              f"line count did not match:")
+        for arm, pas, got, want in skipped[:5]:
+            print(f"              pass{pas:02d}_{arm}: {got} log lines against {want} expected")
+        print(f"            That check is off for those, not passing for them.")
     if checked:
         print(f"\n[integrity] API counters vs llama.cpp log lines: {checked} requests compared, "
               f"{mismatched} mismatched"
@@ -263,7 +280,9 @@ def report(result: dict) -> None:
             print("  the observed cost rollback can account for.")
 
     print("\n--- TEST 2: k vs verification width, per method ---")
-    print("    fitting k = k0 + c*(w-1); c is the marginal cost of one more verified position")
+    print("    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified")
+    print("    position in serial-decode-step equivalents, over the whole cycle rather than")
+    print("    attributed to any one component; see the note under the fits.")
     by_method: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
         by_method[r["spec_type"]].append(r)
@@ -275,20 +294,42 @@ def report(result: dict) -> None:
             w = next(iter(pts))
             print(f"  {method:14s} only one width ({w}) - cannot fit")
             continue
-        xs = [w - 1 for w in sorted(pts)]
-        ys = [statistics.fmean(pts[w]) for w in sorted(pts)]
+        # A batch wider than MMVQ_MAX_BATCH_SIZE never reaches MMVQ and takes a different kernel
+        # family, so a single line through both sides is a line through two regimes. On phase_nmax
+        # that dragged the MTP coefficient from 0.2915 to 0.2215 and the fit quality from
+        # r2 = 0.9959 to 0.8304, and the width-9 point sits 26 % below what the MMVQ line predicts.
+        on_path = [w for w in sorted(pts) if w <= MMVQ_MAX_BATCH_SIZE]
+        off_path = [w for w in sorted(pts) if w > MMVQ_MAX_BATCH_SIZE]
+        if len(on_path) < 2:
+            print(f"  {method:14s} fewer than two widths on the MMVQ path - cannot fit")
+            continue
+        xs = [w - 1 for w in on_path]
+        ys = [statistics.fmean(pts[w]) for w in on_path]
         a, b, r2 = _linfit(xs, ys)
-        print(f"  {method:14s} widths {sorted(pts)}  ->  k0={a:.4f}  c={b:.4f}  r2={r2:.4f}")
-        for w in sorted(pts):
+        print(f"  {method:14s} MMVQ widths {on_path}  ->  k0={a:.4f}  c={b:.4f}  r2={r2:.4f}")
+        for w in on_path:
             pred = a + b * (w - 1)
             print(f"      w={w:2d}  k={statistics.fmean(pts[w]):.4f}  fit={pred:.4f}  "
                   f"resid={statistics.fmean(pts[w]) - pred:+.4f}")
+        for w in off_path:
+            obs = statistics.fmean(pts[w])
+            pred = a + b * (w - 1)
+            rel = 100.0 * (obs - pred) / pred if pred else float("nan")
+            print(f"      w={w:2d}  k={obs:.4f}  OFF THE MMVQ PATH (> {MMVQ_MAX_BATCH_SIZE}); the "
+                  f"MMVQ line would predict {pred:.4f}, so it sits {rel:+.1f} %")
+            print(f"            excluded from the fit: it is a different kernel, not a residual")
 
     ms = [m for m in by_method if len({r['width'] for r in by_method[m]}) >= 2]
     if len(ms) >= 2:
-        print("\n  Two methods with independent drafters fitted separately. If their `c` agree")
-        print("  while `k0` differ, the marginal cost belongs to the verification path rather")
-        print("  than to the drafter.")
+        print("\n  Two methods with independent drafters fitted separately. Agreement in `c` with")
+        print("  a difference in `k0` is consistent with the marginal cost sitting outside the")
+        print("  drafter, but it does not identify it. What `k` measures is the whole speculative")
+        print("  cycle: target verification, the drafter's own forwards, sampling, launch and")
+        print("  synchronisation, output extraction and any per-step state management. The two")
+        print("  methods share every one of those except the drafter, so a shared slope narrows")
+        print("  the cost to that shared machinery without saying which part of it. Separating")
+        print("  them needs per-context CUDA-event timing, a replay that skips drafter compute,")
+        print("  or a profiler decomposition - none of which this file has.")
 
     print("\n--- implied optimum ---")
     print("    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k")

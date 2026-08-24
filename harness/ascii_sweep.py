@@ -54,8 +54,17 @@ def convert(text):
     # A trailing separator has no space after it, so match end-of-line before the spaced form;
     # falling through to the multiplication rule would leave a bare "*" that Markdown reads as
     # the start of emphasis.
-    text = re.sub(r" ·$", " |", text, flags=re.M)
-    text = text.replace(" · ", " | ").replace("·", "*")
+    # A middle dot separating navigation links is punctuation, one inside an expression is
+    # multiplication, and one inside a markdown table cell is neither: a pipe there is a column
+    # separator and splits the row. That is not hypothetical - it broke five rows in README.md
+    # and TODO.md on the first pass, and the tables rendered with the wrong number of columns.
+    out = []
+    for line in text.split("\n"):
+        if line.lstrip().startswith("|"):
+            out.append(line.replace(" · ", ", ").replace("·", "*"))
+        else:
+            out.append(re.sub(r" ·$", " |", line).replace(" · ", " | ").replace("·", "*"))
+    text = "\n".join(out)
     # An em dash with spaces reads as a parenthetical and keeps its spacing; one without is
     # joining two words and becomes a plain hyphen.
     text = text.replace(" — ", " - ").replace("—", "-")

@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
-"""Finds divergence verdicts that the generation cap could have censored.
+"""Reports divergence as a time-to-event with an observation window, because it is one.
 
-Every arm generates a fixed number of tokens and stops, so a record whose speculative output
-never differs from the greedy baseline is reported identical. That is only the same thing as
-"identical" when the output ran long enough for a divergence to have shown. Four hundred tokens
-is roughly 2500 characters of English and roughly 950 of dense Chinese or of code, and forks in
-this study have been resolved as late as character 1537, so a 960-character record marked
-identical is not evidence of identity: it is evidence of no divergence in the first 960
-characters.
+Every arm generates a fixed number of tokens and stops. A record whose speculative output never
+differs from the greedy baseline inside that window is recorded identical, which is not the same
+claim as identical: it is no divergence observed within N tokens. The distinction is already in
+the data, in `finish_reason`, and does not need inferring.
 
-The threshold is taken per file as the largest fork that file actually resolved. A fork that late
-demonstrably occurs under these conditions, so an output shorter than it could have hidden one.
-Using a fixed number instead would import an assumption from a different run.
+    diverged        the outputs differ, at token t
+    identical       the generation reached EOS and never differed          - exact identity
+    right-censored  the generation stopped at the cap and never differed   - not identity
 
-This matters only where a censored verdict carries a conclusion. A prompt whose widths do not
-partition cleanly is consistent with everything already; a prompt whose two-group split rests on
-a censored identical is asserting something the data does not establish.
+The unit is tokens. An earlier version of this file measured the window in characters and reported
+that 15 of 25 prompts in Phase A were censored while the rest were clean. That was an artefact of
+the unit: characters per token run from 1.36 to 6.17 across this suite, a 4.5x spread, so a
+character window varies 4.5x while the token window the design actually fixes does not vary at
+all. Measured in tokens every record has the same 400-token window and no prompt is censored more
+than another. What is true is both simpler and worse: every record in this study stopped at the
+cap, so every identical verdict in it is right-censored, uniformly.
+
+Token positions are recovered per record from its own characters-per-token ratio, since the server
+response carries `predicted_n` and the text but not the token ids. That is exact at the record
+level, and it is what makes a position on a Chinese prompt comparable to one on an English prompt.
 
 Usage:
     truncation_audit.py results/*.json
@@ -24,104 +29,173 @@ Usage:
 import collections
 import glob
 import json
+import statistics
 import sys
 
-LOW, HIGH = (3, 4), (5, 6, 8)
+DIVERGED, IDENTICAL_EOS, CENSORED = "diverged", "identical_eos", "right_censored"
 
 
-def width_of(arm_name, meta):
-    """Verification width from the arm's own arguments: n_max + 1, or 1 for a greedy baseline.
+def chars_per_token(rec):
+    n = rec.get("predicted_n") or 0
+    t = len(rec.get("text") or "")
+    return (t / n) if (n and t) else None
 
-    Reading it from extra_args rather than a table of arm names keeps this correct for matrices
-    that use different names for the same width, which is why phase_a and phase_nmax cannot share
-    a hard-coded map.
+
+def classify(rec):
+    """(state, token position or None, window in tokens).
+
+    `hit_cap` and `finish_reason` both say whether the generation ran out of budget; either alone
+    is enough, and both are checked so a file from an older harness still classifies.
     """
-    args = (meta or {}).get("extra_args") or []
-    for i, a in enumerate(args):
-        if a == "--spec-draft-n-max" and i + 1 < len(args):
-            try:
-                return int(args[i + 1]) + 1
-            except ValueError:
-                return None
-    return 1 if not (meta or {}).get("expects_drafter") else None
+    div = rec.get("divergence")
+    window = rec.get("predicted_n") or 0
+    if not div:
+        return None, None, window
+    capped = bool(rec.get("hit_cap")) or rec.get("finish_reason") == "length"
+    if div.get("identical"):
+        return (CENSORED if capped else IDENTICAL_EOS), None, window
+    i = div.get("first_diff_char")
+    if i is None:
+        return None, None, window
+    # A difference reported at the end of the shorter text is a length difference, not a fork.
+    limit = min(div.get("len_ref", 0), div.get("len_arm", 0))
+    if limit and i >= limit:
+        return None, None, window
+    cpt = chars_per_token(rec)
+    return DIVERGED, (i / cpt if cpt else None), window
+
+
+def resolved_forks(data):
+    """Token positions of the divergences this file actually established."""
+    out = []
+    for rec in data["records"]:
+        state, pos, _ = classify(rec)
+        if state == DIVERGED and pos is not None:
+            out.append(pos)
+    return out
+
+
+def windows(data):
+    return sorted({w for _, _, w in (classify(r) for r in data["records"]) if w})
+
+
+def censored_prompts(data, threshold=None):
+    """Prompts holding an identical verdict the generation cap could have produced.
+
+    With a uniform token window this is every prompt with an identical record, because the
+    censoring is uniform: there is no subset of prompts that is safe to check the others against.
+    `threshold` is accepted and ignored - it belonged to the character version, and callers still
+    pass it.
+    """
+    out = set()
+    for rec in data["records"]:
+        if classify(rec)[0] == CENSORED:
+            out.add(rec["prompt"])
+    ws = windows(data)
+    return out, (ws[0] if len(ws) == 1 else None)
+
+
+def study_threshold(paths=None):
+    """The latest token at which a divergence has been resolved anywhere in the study."""
+    if paths is None:
+        paths = [p for p in glob.glob("results/*.json") if ".partial." not in p]
+    best = 0.0
+    for path in paths:
+        try:
+            with open(path) as fh:
+                best = max([best] + resolved_forks(json.load(fh)))
+        except Exception:
+            continue
+    return best
+
+
+def pass_agreement(data):
+    """Does a prompt-arm cell give the same verdict in every pass it was measured in?
+
+    The analysers collapse passes by overwriting, which is only sound if they agree. They do here,
+    but nothing asserted it.
+    """
+    cell = collections.defaultdict(dict)
+    for rec in data["records"]:
+        state, pos, _ = classify(rec)
+        if state is None:
+            continue
+        key = (rec["arm"], rec["prompt"])
+        cell[key][rec["pass"]] = (state, None if pos is None else round(pos))
+    multi = {k: v for k, v in cell.items() if len(v) > 1}
+    disagree = {k: v for k, v in multi.items() if len(set(v.values())) > 1}
+    return len(multi), disagree
 
 
 def audit(path):
     with open(path) as fh:
         data = json.load(fh)
-    arms = data.get("arms", {})
-    widths = {name: width_of(name, meta) for name, meta in arms.items()}
-
-    resolved = [r["divergence"]["first_diff_char"] for r in data["records"]
-                if r.get("divergence") and not r["divergence"].get("identical")
-                and r["divergence"].get("first_diff_char") is not None]
-    if not resolved:
-        return path, None, [], [], 0
-    threshold = max(resolved)
-
-    pos = collections.defaultdict(dict)
-    censored = collections.defaultdict(set)
+    counts = collections.Counter()
+    forks = []
+    ws = collections.Counter()
     for rec in data["records"]:
-        w = widths.get(rec["arm"])
-        if w is None or w == 1:
+        state, pos, window = classify(rec)
+        if state is None:
             continue
-        div = rec.get("divergence")
-        if not div:
-            continue
-        if div.get("identical"):
-            pos[rec["prompt"]][w] = "same"
-            if len(rec.get("text") or "") < threshold:
-                censored[rec["prompt"]].add(w)
-        else:
-            pos[rec["prompt"]][w] = div["first_diff_char"]
-
-    need = set(LOW) | set(HIGH)
-    full = [p for p in pos if need.issubset(pos[p])]
-    tainted, harmless = [], []
-    for p in full:
-        q = pos[p]
-        split = (len({q[w] for w in LOW}) == 1
-                 and len({q[w] for w in HIGH}) == 1
-                 and q[LOW[0]] != q[HIGH[0]])
-        if not censored.get(p):
-            continue
-        (tainted if split else harmless).append(p)
-    return path, threshold, sorted(tainted), sorted(harmless), len(full)
+        counts[state] += 1
+        if window:
+            ws[window] += 1
+        if state == DIVERGED and pos is not None:
+            forks.append(pos)
+    return path, counts, forks, ws, pass_agreement(data)
 
 
 def main():
     paths = sys.argv[1:] or sorted(glob.glob("results/*.json"))
     paths = [p for p in paths if ".partial." not in p]
     print("=" * 100)
-    print("TRUNCATION AUDIT: divergence verdicts the generation cap could have censored")
+    print("DIVERGENCE AS A TIME-TO-EVENT, IN TOKENS")
     print("=" * 100)
-    any_tainted = False
+    total = collections.Counter()
     for path in paths:
         try:
-            path, threshold, tainted, harmless, full = audit(path)
+            path, counts, forks, ws, (n_multi, disagree) = audit(path)
         except Exception as exc:
-            print("  %-44s unreadable: %s" % (path, exc))
+            print("  %-40s unreadable: %s" % (path, exc))
             continue
-        if threshold is None:
-            print("  %-44s no resolved forks; nothing to censor" % path)
+        if not counts:
             continue
-        if full == 0:
-            print("  %-44s no prompt carries every width in %s + %s; not covered by this test"
-                  % (path, list(LOW), list(HIGH)))
-            continue
-        print("  %-44s %3d prompts, cap threshold %4d chars" % (path, full, threshold))
-        if tainted:
-            any_tainted = True
-            print("       SPLIT VERDICT RESTS ON A CENSORED IDENTICAL: %s" % ", ".join(tainted))
-        if harmless:
-            print("       censored but carrying no split verdict: %s" % ", ".join(harmless))
-        if not tainted and not harmless:
-            print("       clean")
-    if any_tainted:
-        print("\n  A tainted prompt is not a wrong measurement; the record correctly says the two")
-        print("  outputs did not differ over the tokens that were generated. It is a verdict that")
-        print("  should not be counted as a clean split until the prompt is re-run long enough for")
-        print("  a late fork to show. Exclude, or extend the cap for those prompts and re-measure.")
+        total.update(counts)
+        n = sum(counts.values())
+        win = ", ".join("%d tokens x%d" % (w, c) for w, c in sorted(ws.items()))
+        print("\n  %s" % path)
+        print("    window            : %s" % (win or "unknown"))
+        print("    diverged          : %4d / %d" % (counts[DIVERGED], n))
+        print("    identical at EOS  : %4d / %d   <- the only exact identities" % (counts[IDENTICAL_EOS], n))
+        print("    right-censored    : %4d / %d   <- no divergence within the window" % (counts[CENSORED], n))
+        if forks:
+            forks.sort()
+            print("    fork position     : min %.0f  median %.0f  max %.0f tokens"
+                  % (forks[0], statistics.median(forks), forks[-1]))
+            if len(ws) == 1:
+                w = next(iter(ws))
+                print("                        the latest sits at %.0f %% of the window, so a fork"
+                      % (100.0 * forks[-1] / w))
+                print("                        past it would not have been seen")
+        if n_multi:
+            if disagree:
+                print("    PASSES DISAGREE   : %d of %d cells give different verdicts across passes;"
+                      % (len(disagree), n_multi))
+                print("                        collapsing them by overwriting is unsound here")
+                for k, v in list(disagree.items())[:3]:
+                    print("                          %s %s" % (k, v))
+            else:
+                print("    pass agreement    : %d cells measured more than once, all agree" % n_multi)
+
+    print("\n%s" % ("=" * 100))
+    if sum(total.values()):
+        print("  Across every file: %d diverged, %d identical at EOS, %d right-censored."
+              % (total[DIVERGED], total[IDENTICAL_EOS], total[CENSORED]))
+        if total[IDENTICAL_EOS] == 0:
+            print("  No record anywhere reached EOS, so no identity in this study is exact. Every")
+            print("  one means 'did not diverge within the token budget'. The censoring is uniform,")
+            print("  so there is no subset of prompts to check the others against and the only")
+            print("  thing that resolves it is re-running with a larger budget. TODO.md item D2.")
     return 0
 
 

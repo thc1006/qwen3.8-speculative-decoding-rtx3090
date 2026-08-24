@@ -20,7 +20,11 @@ Usage:  python3 harness/width_groups.py results/phase_nmax.json
 """
 import collections
 import json
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import truncation_audit as TA  # noqa: E402
 
 # ncols_dst -> warps, MMVQ_PARAMETERS_GENERIC, which is what sm_86 falls through to.
 #
@@ -28,12 +32,34 @@ import sys
 # line below that mentions warps would state the stock prediction for a build that does not have
 # it, and the H8 verdict would report an agreement that was never tested. is_intervention_file()
 # gates that, and harness/warp_intervention.py is what scores those runs.
-def warps_for(width: int) -> int:
+# ggml/src/ggml-cuda/mmvq.cu. A batch wider than this never reaches MMVQ at all, so the table
+# says nothing about it and neither can this file.
+MMVQ_MAX_BATCH_SIZE = 8
+
+
+def warps_for(width: int) -> int | None:
+    """Warps for a width, or None when the width does not run through MMVQ.
+
+    The `default: return 1` arm of calc_nwarps is unreachable for a verification batch: MMVQ is
+    dispatched only up to MMVQ_MAX_BATCH_SIZE, and a wider batch takes a different kernel family
+    entirely. Returning 1 for width 9 put it in a warp group of its own and let H8 be scored
+    against a prediction the table never made. phase_nmax runs widths 2 through 9, so this was
+    live rather than hypothetical.
+    """
+    if width > MMVQ_MAX_BATCH_SIZE:
+        return None
     if width <= 4:
         return 4
-    if width <= 8:
-        return 2
-    return 1
+    return 2
+
+
+def warp_label(group) -> str:
+    """How to describe a group's warp count, given some widths have none."""
+    counts = {warps_for(w) for w in group}
+    if counts == {None}:
+        return "n/a (off the MMVQ path)"
+    known = sorted(x for x in counts if x is not None)
+    return str(known) + (" + off-path widths" if None in counts else "")
 
 
 def is_intervention_file(d: dict, path: str) -> bool:
@@ -87,13 +113,38 @@ def main() -> int:
     widths = sorted({w for w, _ in cell})
     prompts = sorted(set().union(*[set(v) for v in cell.values()]))
 
+    # "same" is one of the values a width's signature vector can take, and it means "did not
+    # diverge within the token budget" rather than "identical" whenever the generation stopped at
+    # the cap. Every arm gets the same budget, so that censoring is uniform across prompts and
+    # widths: there is no cleaner subset to check the rest against, and an earlier version of this
+    # file that built one was measuring the window in characters, which the design does not hold
+    # constant. The window is stated instead, and resolving it needs a larger budget.
+    censored, window = TA.censored_prompts(d)
+
     print("=" * 92)
     print("FORK POSITION BY VERIFICATION WIDTH")
     print("=" * 92)
     print(f"  source: {path}")
     print(f"  widths: {widths}")
+    if censored:
+        forks = TA.resolved_forks(d)
+        latest = max(forks) if forks else 0
+        print(f"  every 'same' below is right-censored: the generation stopped at the "
+              f"{window}-token cap,")
+        print(f"  so it means 'did not diverge within {window} tokens', not 'identical'. Forks here "
+              f"have been")
+        print(f"  resolved as late as token {latest:.0f} ({100.0*latest/window:.0f} % of the window) "
+              f"when {window} is the cap.")
+        print(f"  {len(censored)} of {len(prompts)} prompts carry at least one. The censoring is "
+              f"uniform, so no")
+        print(f"  subset of prompts is cleaner than another; TODO.md D2 is the run that resolves it.")
     print(f"  MMVQ_PARAMETERS_GENERIC warps: "
-          + "  ".join(f"w{w}={warps_for(w)}" for w in widths))
+          + "  ".join(f"w{w}=" + ("n/a" if warps_for(w) is None else str(warps_for(w)))
+                      for w in widths))
+    off_path = [w for w in widths if warps_for(w) is None]
+    if off_path:
+        print(f"  widths {off_path} exceed MMVQ_MAX_BATCH_SIZE ({MMVQ_MAX_BATCH_SIZE}) and take a")
+        print("  different kernel family, so the table makes no prediction for them.")
 
     # -------------------------------------------------- control: drafters must agree at a width
     print("\n--- control: two drafters at the same width must agree ---")
@@ -142,31 +193,52 @@ def main() -> int:
 
     print("\n--- observed groups (identical fork vector across every prompt) ---")
     for g in observed:
-        print(f"    {set(g)}  warps {sorted({warps_for(w) for w in g})}")
+        print(f"    {set(g)}  warps {warp_label(g)}")
 
     # -------------------------------------------------- verdict on H8
+    untestable = [w for w in gradable if warps_for(w) is None]
+    testable = [w for w in gradable if warps_for(w) is not None]
     pred: dict[int, list] = collections.OrderedDict()
-    for w in gradable:
+    for w in testable:
         pred.setdefault(warps_for(w), []).append(w)
     predicted = [tuple(v) for v in pred.values()]
+    obs_testable = [tuple(w for w in g if w in testable) for g in observed]
+    obs_testable = [g for g in obs_testable if g]
     print("\n--- H8: does the grouping follow calc_nwarps? ---")
     if lossless:
         print(f"    computed over the diverging widths only, {sorted(gradable)}")
+    if untestable:
+        print(f"    NOT TESTABLE at widths {untestable}: they exceed MMVQ_MAX_BATCH_SIZE and do not")
+        print("    share the MMVQ execution path, so calc_nwarps makes no prediction for them.")
+        print(f"    Scored on the widths that do share it: {testable}")
+        observed = obs_testable
     print(f"    predicted from the table: {[set(g) for g in predicted]}")
     print(f"    observed:                 {[set(g) for g in observed]}")
-    if control_failed:
+    # A control failure at a width the table does not cover cannot withhold a verdict about the
+    # widths it does. It is reported either way, because two drafters disagreeing is a finding in
+    # its own right: at width 9 they share only the verification width and no longer agree, which
+    # is the same MMVQ boundary that shows up in the cost fit and in the throughput.
+    failed_testable = [w for w in control_failed if warps_for(w) is not None]
+    failed_offpath = [w for w in control_failed if warps_for(w) is None]
+    if failed_offpath:
+        print(f"    Two drafters disagree at width(s) {set(failed_offpath)}, which are off the MMVQ")
+        print("    path. That does not bear on the widths below, and is itself the boundary showing")
+        print("    up in the control as well as in the cost fit.")
+    if failed_testable:
         print(f"    VERDICT WITHHELD. Two drafters give different fork positions at width(s) "
-              f"{set(control_failed)}, so fork position is not a function of width alone and the")
+              f"{set(failed_testable)}, so fork position is not a function of width alone and the")
         print("    grouping below was built by letting one drafter overwrite the other. Nothing")
         print("    here supports or refutes H8 until that is resolved, and llama.cpp #25618 needs")
         print("    telling either way.")
+    if failed_testable:
+        pass
     elif set(map(frozenset, observed)) == set(map(frozenset, predicted)):
         print("    H8 SUPPORTED. The partition is exactly the warp-count table.")
     else:
         print("    H8 NOT SUPPORTED. The grouping tracks something other than the warp count,")
         print("    and the mechanism offered in llama.cpp #25618 needs withdrawing there.")
         for g in observed:
-            if len({warps_for(w) for w in g}) > 1:
+            if len({warps_for(w) for w in g if warps_for(w) is not None}) > 1:
                 print(f"      widths {set(g)} share a fork vector but not a warp count")
 
     # -------------------------------------------------- verdict on H8a

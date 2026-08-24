@@ -123,5 +123,75 @@ class TestSettleFloorIsPassedThrough(unittest.TestCase):
             self.assertTrue(needed in src, f"run_matrix does not pass {needed} to settle_gpu")
 
 
+class TestAlgebraicInvariants(unittest.TestCase):
+    """The formulas that decide the headline numbers, pinned so a rewrite has to break a test.
+
+    Each of these was wrong in the repo at some point and each looked plausible while it was.
+    """
+
+    def test_analyze_mean_len_excludes_the_prompt_pass_token(self):
+        import analyze as A
+        src = inspect.getsource(A.report)
+        self.assertIn("steps = n - da - 1", src,
+                      "analyze.py is back to steps = n - da, which counts the prompt-pass token "
+                      "as a decode forward")
+        self.assertIn("(n - 1) / steps", src)
+
+    def test_analyze_prefers_the_exact_verification_step_counter(self):
+        import analyze as A
+        src = inspect.getsource(A.report)
+        self.assertIn("draft_n_verif_steps", src,
+                      "mean_len should use the server's own counter when the response carries it, "
+                      "rather than deriving it; llama.cpp #27676 adds that field")
+
+    def test_decode_tok_per_joule_numerator_matches_the_decode_denominator(self):
+        import bench as B
+        src = inspect.getsource(B.run_matrix) if hasattr(B, "run_matrix") else inspect.getsource(B)
+        self.assertIn("max(predicted_n - 1, 0) / decode_energy", src,
+                      "decode energy has the prefill calibration subtracted, which removes the "
+                      "first token, so the numerator must be N-1 to match")
+
+    def test_cost_model_does_not_fit_across_the_mmvq_dispatch_boundary(self):
+        import cost_model as CM
+        self.assertEqual(CM.MMVQ_MAX_BATCH_SIZE, 8)
+        src = inspect.getsource(CM)
+        self.assertIn("w <= MMVQ_MAX_BATCH_SIZE", src,
+                      "widths past the MMVQ dispatch limit take a different kernel; including "
+                      "them in one line drags the MTP coefficient by 24 percent")
+
+    def test_width_groups_makes_no_warp_prediction_off_the_mmvq_path(self):
+        import width_groups as W
+        self.assertEqual(W.MMVQ_MAX_BATCH_SIZE, 8)
+        self.assertIsNone(W.warps_for(9),
+                          "width 9 never reaches MMVQ, so the table predicts nothing for it; "
+                          "returning 1 put it in a warp group of its own and let H8 be scored "
+                          "against a prediction that was never made")
+        self.assertEqual(W.warps_for(4), 4)
+        self.assertEqual(W.warps_for(8), 2)
+
+    def test_an_intention_to_treat_series_exists_and_excludes_nothing(self):
+        import analyze as A
+        recs = [{"arm": "a", "prompt": "p", "pass": 1, "class": "c",
+                 "decode_tok_s": 10.0, "hit_cap": True},
+                {"arm": "a", "prompt": "q", "pass": 1, "class": "c",
+                 "decode_tok_s": 20.0, "hit_cap": False}]
+        pp, _, exc, _ = A.build_series({"records": recs})
+        itt, _ = A.build_series_itt({"records": recs})
+        n_pp = sum(len(v) for arm in pp.values() for v in arm.values())
+        n_itt = sum(len(v) for arm in itt.values() for v in arm.values())
+        self.assertEqual(n_pp, 1, "the early-stopping record should leave the per-protocol series")
+        self.assertEqual(n_itt, 2, "intention-to-treat keeps it; speculation moves where a "
+                                   "request stops, so excluding on that selects post-treatment")
+        self.assertTrue(any("early stop" in x for v in exc.values() for x in v))
+
+    def test_the_log_cross_check_announces_when_it_skips(self):
+        import cost_model as CM
+        src = inspect.getsource(CM.cross_check_against_log)
+        self.assertIn("skipped.append", src,
+                      "a mismatched line count used to `continue` silently, which turns the "
+                      "integrity check off without saying so")
+        self.assertIn("SKIPPED", src)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

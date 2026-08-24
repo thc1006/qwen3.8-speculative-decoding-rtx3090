@@ -36,6 +36,16 @@ EXTREME_DISTINCT_RATIO = 0.05      # unambiguous collapse; real prose/code never
 
 
 def _usable(rec: dict) -> tuple[bool, str]:
+    """Whether a record enters the per-protocol series.
+
+    Dropping a record that stopped before the cap is post-treatment selection whenever the
+    treatment can move the stopping point, and speculative decoding can: 76 to 80 % of these
+    requests diverge from their baseline, so an arm can reach an end-of-text token the baseline
+    did not. On the fixed-400-token matrices nothing is dropped, because every record hits the
+    cap. It starts to matter on any run with a budget large enough to finish, which is what
+    TODO.md D2 does, so `report()` prints the intention-to-treat series beside this one rather
+    than letting the exclusion happen quietly.
+    """
     if rec.get("decode_tok_s") in (None, 0):
         return False, "no decode rate"
     if not rec.get("hit_cap", True):
@@ -53,6 +63,22 @@ def _flagged(rec: dict) -> str:
     if (rec.get("degeneracy") or {}).get("is_degenerate"):
         return (rec["degeneracy"].get("reason") or "degenerate")[:70]
     return ""
+
+
+def build_series_itt(result: dict, metric: str = "decode_tok_s"):
+    """Every record that carries the metric, with no exclusion applied.
+
+    The intention-to-treat counterpart of build_series. If the two disagree, the exclusion rule is
+    doing work and has to be justified rather than assumed harmless.
+    """
+    series: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    prompt_class: dict[str, str] = {}
+    for rec in result["records"]:
+        prompt_class[rec["prompt"]] = rec["class"]
+        v = rec.get(metric)
+        if v is not None:
+            series[rec["arm"]][rec["prompt"]].append(float(v))
+    return series, prompt_class
 
 
 def build_series(result: dict, metric: str = "decode_tok_s"):
@@ -94,6 +120,22 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
     # --baseline-map is how a dual-tree study silently compares a PR-branch arm against a
     # master-branch baseline.
     baseline_map = baseline_map or result.get("baseline_map") or {}
+    itt_series, _ = build_series_itt(result)
+    n_pp = sum(len(v) for arm in series.values() for v in arm.values())
+    n_itt = sum(len(v) for arm in itt_series.values() for v in arm.values())
+    if n_pp != n_itt:
+        print(f"\n[selection] the per-protocol series holds {n_pp} records and the "
+              f"intention-to-treat series {n_itt}.")
+        print(f"            {n_itt - n_pp} were excluded. Speculation moves where a request stops, "
+              f"so excluding")
+        print(f"            requests that stopped early selects on a post-treatment variable. Both "
+              f"series are")
+        print(f"            reported below where they differ.")
+    else:
+        print(f"\n[selection] per-protocol and intention-to-treat hold the same {n_pp} records; "
+              f"the exclusion rule does no work here.")
+
+
     default_baseline = present[0] if present else None
 
     if not baseline_map:
@@ -218,10 +260,21 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         if dn:
             a_by[rec["arm"]].append(da / dn)
             n = rec.get("predicted_n") or 0
-            # tokens emitted per target forward pass: accepted drafts + the always-emitted token
-            steps = n - da
-            if steps > 0:
-                l_by[rec["arm"]].append(n / steps)
+            # Tokens emitted per target forward pass. The first token comes out of the prompt
+            # pass, not a decode forward, so it is in neither the numerator nor the denominator;
+            # cost_model.py was corrected for this and this copy was not, which left two
+            # different mean lengths in the same repo.
+            #
+            #   mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)
+            #
+            # Once llama.cpp #27676 lands, draft_n_verif_steps makes this exact rather than
+            # derived: mean_len = 1 + draft_n_accepted / draft_n_verif_steps.
+            steps = n - da - 1
+            vs = (rec.get("timings") or {}).get("draft_n_verif_steps")
+            if vs:
+                l_by[rec["arm"]].append(1.0 + da / vs)
+            elif steps > 0:
+                l_by[rec["arm"]].append((n - 1) / steps)
     ref_e = statistics.fmean(e_by[default_baseline]) if e_by.get(default_baseline) else None
     ref_j = statistics.fmean(j_by[default_baseline]) if j_by.get(default_baseline) else None
     for a in present:
