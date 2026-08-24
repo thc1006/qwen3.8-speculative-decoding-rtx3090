@@ -1,0 +1,364 @@
+# Pre-registration
+
+**Committed before any measurement was taken. This file is append-only; corrections go in a
+dated ERRATA section at the bottom, never by editing the text above.**
+
+Date: 2026-08-24
+Author: Hsiu-Chi Tsai (`thc1006`)
+
+## Why this document exists
+
+The predecessor repo (`thc1006/qwen3.6-speculative-decoding-rtx3090`) had to issue a major scope
+correction at v2.3: v2.2 claimed the negative finding was "hardware-class-independent", and a
+clean A/B retest in a sibling repo falsified that. The correction was made honestly and in public,
+but it was made *after* publication. Pre-registering the hypotheses and the analysis plan is the
+cheapest available defence against repeating that.
+
+## Hardware (third distinct RTX 3090 in this research line: disclose, do not pool)
+
+| | v1 (s1) | v2/v3 (`3090` node) | **this repo** |
+|---|---|---|---|
+| host | 2x 3090, i7-11700, 62GB | 1x 3090 | 1x 3090, i9-13900, **31GB** |
+| OS | Ubuntu 24.04 | Ubuntu 24.04 | **Debian 13** |
+| driver | 580.126.09 | 580.126.09 | **610.43.02** |
+| power cap | 350 W (stock) | 350 W (stock) | **420 W default; reset to stock — see below** |
+
+The 420 W default is a different board SKU/vBIOS from the 350 W cards used in v1-v3. Absolute
+tok/s are **not** comparable across these three hosts. Only within-host paired deltas are.
+
+**Overclock, found and corrected mid-study (2026-08-24).** Ten minutes into the first full
+Phase A run the card was discovered to be carrying `GPUMemoryTransferRateOffset=800`
+(memory +400 MHz), `GPUGraphicsClockOffset=100`, and a 450 W limit against its 420 W default —
+while this document described it as stock. **That run was discarded, not kept.** The offsets were
+zeroed and the limit returned to 420 W, which restored the maximum memory clock to 9751 MHz, the
+exact stock figure recorded in the predecessor repo's `BENCHMARK_ENV.md`. Full record in
+`docs/GPU_AS_FOUND.md`.
+
+This is not a cosmetic correction. Batch-1 decode is memory-bandwidth-bound while speculative
+verification is comparatively compute-dense, so a memory overclock moves the baseline and the
+speculative arms by *different* amounts — precisely the kind of differential that a paired
+design is supposed to protect against. `harness/telemetry.overclock_state()` now records the
+offsets in every result file and `bench.py` refuses to start on a non-stock card unless the
+overclock is declared as an experimental factor.
+
+## Primary hypotheses
+
+**H1 (DFlash2 x Q4 target).** The predecessor repo's v3.0 concluded that a Q4 target collapses
+DFlash because the drafter was trained against BF16/FP16 target hidden states. z-lab's own
+published acceptance lengths for DFlash2 (BF16 5.28, Q8_0 5.13, Q4_K_M 5.39) point the other way.
+
+- H1a: DFlash2 on a Q4_K_XL target on sm86 yields a *net speedup* over no-spec baseline.
+- H1b: Drafter quantization (BF16 / Q8_0 / Q4_K_M) does **not** monotonically degrade acceptance
+  against a Q4 target.
+- **If H1a and H1b hold, the predecessor repo's v3.0 mechanism claim requires an erratum.**
+  Pre-committing to issuing that erratum, whatever the result.
+
+**H2 (state rollback).** Qwen3.8-27B is 48 linear-attention (Gated DeltaNet) + 16 full-attention
+layers. On draft rejection, full-attention layers roll back by KV suffix truncation; GDN layers
+must reconstruct recurrent state (cf. SpecLA, arXiv 2607.16673, which only evaluated GDN-1.3B on H100).
+
+- H2a: The n-max optimum is pinned low (2-3) by rollback cost, not by acceptance decay alone.
+- H2b: Therefore, holding acceptance fixed (via a `--spec-draft-p-min` gate) and raising n-max
+  still degrades realized yield.
+- Falsifier: if yield tracks acceptance monotonically once acceptance is controlled, H2 is wrong.
+
+**H2' (competing explanation, from the PR #27342 author — must be discriminated, not assumed away).**
+In the PR thread the author advances a different account of the same observation: the relative
+cost of one extra decode step rises as the target gets more quantized (measured by them with
+`llama-batched-bench` as BF16 6.7 %, Q8_0 14.5 %, Q4_K_M 23.4 %), because a 4-bit target is less
+memory-bound, so the marginal compute of speculating further is proportionally more expensive.
+They use this to explain why DFlash2 only narrowly beats MTP at 4-bit (1.447x vs 1.30x) while
+leading clearly at BF16 (2.06x vs 1.58x).
+
+This is a *quantization x arithmetic-intensity* explanation. H2 is a *layer-architecture*
+explanation. They make different predictions and the experiment must separate them:
+
+| | H2 (state rollback) | H2' (quantization/arithmetic intensity) |
+|---|---|---|
+| driver | 48 of 64 layers are GDN and cannot roll back by KV truncation | 4-bit target shifts the compute/bandwidth ratio |
+| depends on target quant? | no | **yes, strongly** |
+| depends on rejection rate? | **yes — cost is paid only on rejection** | no — cost is paid per drafted token regardless |
+| prediction | at fixed acceptance, raising n-max still degrades yield | at fixed n-max, yield improves as the target gets *less* quantized |
+
+Discriminating test, pre-committed: hold acceptance approximately fixed with the
+`--spec-draft-p-min` gate and sweep n-max. H2 predicts continued degradation; H2' predicts the
+degradation largely flattens because the drafted-token count, not the rejection count, is what
+H2' charges for. **If the data favour H2', this repo reports H2' and says so.** H2 is not
+this repo's finding to defend.
+
+**Prior art note on drafter quantization (checked 2026-08-24, before measurement).** The same PR
+thread already reports, on a 32 GB card, that Q4_K_M / Q8_0 / BF16 drafters produced
+byte-identical output with identical acceptance counts, and that BF16 is actively worse there
+because it crosses the VRAM ceiling. H1b is therefore **not novel as a question**; what is
+untested is the 24 GB case, where a 17.5 GB target leaves far less headroom than a 32 GB card
+does, and where that same commenter's VRAM argument predicts a larger penalty.
+
+**H3 (dense-vs-MoE contradiction).** The public record disagrees:
+njannasch.dev on a 5060 Ti 16GB reports Qwen3.6 **dense +MTP = 42% slower** while the MoE gains
+1.47x; sudoingX on an RTX 3090 24GB reports Qwen3.8 **dense +MTP = +54% to +81%**.
+
+- H3a: The sign flip is explained by llama.cpp build age (presence of the `ssm_scan` state-rollback
+  commit), not by model generation or VRAM headroom.
+- Competing explanations to be separated, not assumed: 3.6-vs-3.8, 16GB-vs-24GB, quant.
+
+**H4 (the predecessor's central claim).** The 2026-04 finding was "no llama.cpp speculative-decode
+configuration is a net win for Qwen3.6-35B-A3B on a consumer 3090", explained by MoE
+expert-saturation. Qwen3.8-27B is dense-hybrid, so that mechanism does not apply.
+
+- H4a: Under a matched protocol, dense-hybrid shows net *positive* yield where the A3B MoE showed
+  net loss — isolating MoE routing, not consumer Ampere, as the cause.
+
+## Analysis plan (fixed in advance)
+
+- **Design:** paired, arms **interleaved within a session**, not blocked (all-A-then-all-B invites drift).
+- **N:** >= 5 complete passes per arm. Prompt set fixed before measurement, and includes both the
+  code/structured and prose classes, because every prior study on this model family finds the
+  effect splits sharply by prompt class (code gains, prose often loses).
+- **Statistic:** paired bootstrap CI on the per-prompt delta + effect size. Not mean+-std alone.
+  A result whose CI crosses zero is reported as "no detected effect", never as a directional claim.
+- **Primary endpoint:** decode tok/s as reported by llama-server (`predicted_per_second`),
+  which includes draft and verify time in the denominator. This is the user-visible metric.
+- **Secondary:** acceptance rate/length, tok/J, peak VRAM, TTFT.
+- **Guards:** refuse to start when the port is bound and the owning PID is not ours (a contributor
+  to sudoingX/qwen38-mtp published three fabricated-looking rows to a zombie server that kept
+  answering `/health`); assert weights are GPU-resident; both arms at `--parallel 1`.
+
+## Two design decisions fixed in advance
+
+**Dual-tree baseline (build confound).** DFlash2 requires llama.cpp PR #27342, which is not
+merged. Every other arm runs on master. Comparing a DFlash2 arm on the PR binary against a
+baseline on the master binary would conflate the *method* with the *branch*: any kernel change
+between the two trees lands entirely on the DFlash2 arm. This is not hypothetical -- a
+contributor to `sudoingX/qwen38-mtp` disclosed exactly this confound in their own KV-cache
+comparison ("part of the +47% is almost certainly the newer build's improved CUDA kernels").
+
+Therefore **a no-spec baseline arm is run on BOTH trees**, `baseline@master` and
+`baseline@pr27342`, with identical flags. The DFlash2 effect is estimated against
+`baseline@pr27342`. The difference between the two baselines is reported as its own quantity;
+if it is not within noise, every cross-tree comparison in this repo is reported with that
+offset stated, not silently absorbed.
+
+**Multiplicity.** The design produces roughly 8 arms x 5 classes of intervals. At the 95 % level
+some will exclude zero by chance alone. Fixed in advance:
+
+- **Primary endpoints** (confirmatory): the overall class-stratified paired effect of each
+  speculative arm against its own-tree baseline. One interval per arm.
+- **Secondary** (exploratory, explicitly labelled as such): all per-class effects, the n-max
+  sweeps, and the drafter-quant ladder. These are for direction and mechanism, and no claim in
+  this repo rests on a per-class interval alone.
+- No arm is added to the matrix after seeing results in order to chase a significant one.
+
+## Declared in advance as NOT covered
+
+Multi-GPU / tensor-parallel. Non-CUDA backends. Training or fine-tuning drafters. Batch serving
+beyond the explicit concurrency sweep. Quality benchmarking beyond the losslessness check
+(no MMLU/GSM8K claims). Absolute cross-host comparison against v1-v3 of the predecessor repo.
+
+## Known prior art (established by a search sweep on 2026-08-24, before measurement)
+
+Claims of novelty in this repo are scoped against these. Anything already covered below will be
+cited, not re-claimed.
+
+- `sudoingX/qwen38-mtp`: llama.cpp `draft-mtp` on Qwen3.8-27B across 40+ GPUs incl. 6 RTX 3090 rows,
+  plus DSpark on a 3090. Crowdsourced; heterogeneous builds/quants/OS; self-disclosed confounds.
+- `syv-ai/qwen38-27b-rtx3090`: single 3090, vLLM + custom patches, MTP/DFlash2/lookup.
+  Explicitly does not cover llama.cpp comparison, confidence intervals, or power efficiency.
+- `tfriedel/qwen3.6-rtx3090-lab`: 4x 3090, Qwen3.6 dense + MoE + Qwen3.8-27B day-2. No formal statistics.
+- `zptalk0221-cpu/llama-cpp-dflash2-qwen3.8-windows`: DFlash2 on RTX 4090 48GB, Q6_K target,
+  ~70 vs ~60 tok/s. User-reported; no trial count; no acceptance data.
+- `ianlpaterson` (3090 Ti, Qwen3.6-27B): DFlash **v1** vs MTP, N=10+, and the explicit finding that
+  spec decode is not bit-for-bit lossless at temp=0 on free-form prose.
+- `njannasch.dev` (5060 Ti): Qwen3.6 dense vs MoE; dense +MTP measured as 42% *slower*.
+- KGP Talkie (RTX 5090): n-max sweep, KV sweep, and a `reasoning_effort` x acceptance ladder.
+- `shreyansh26/qwen-spec-decode-benchmarking`: Qwen3.6-35B-A3B on B200, SGLang/vLLM.
+- arXiv 2607.17283 "Lossless but Not Free": losslessness verified at three levels, but on
+  Apple M3 + Qwen2.5 + classic two-model SD; the CUDA pairing was scripted, not executed.
+- arXiv 2607.16673 "SpecLA": linear-attention state-rollback theory; H100 + GDN-1.3B only.
+- **llama.cpp PR #27342 comment thread itself (60 comments, checked 2026-08-24)**: this is the
+  closest prior art and it invalidates a novelty claim made earlier in this repo's planning.
+  Two contributors have ALREADY posted single-RTX-3090 DFlash2 datapoints on a Q4 target:
+  * `treo`: single RTX 3090, `Qwen3.8-27B-UD-Q4_K_XL` (the same file this repo uses), 32K ctx,
+    q8_0 KV. MTP `n-max 3` overall 57.79 tok/s at accept_rate 0.6317 across 11 categories x 2
+    samples; concludes DFlash2 "seems to be not significantly better than MTP".
+  * `ouening`: RTX 3090 24G, Windows 11, `UD-Q4_K_M`, 128K ctx, q8_0 KV, baseline vs MTP
+    n-max 2-5 vs DFlash2 n-max 2-5. Results posted as screenshots.
+  **"First public RTX 3090 + DFlash2 + Q4 datapoint" is therefore FALSE and is not claimed.**
+  What remains uncovered against these two: both are N=1 with 2 samples per category, neither
+  publishes an interval or a paired design, neither runs a drafter-quantization ladder, and
+  neither checks losslessness, output degeneracy, or energy. This repo's contribution is the
+  controlled protocol and those missing axes -- not priority.
+- llama.cpp issue #27623 (opened 2026-08-23, **zero comments**): decode collapses ~25x past
+  ~80K context on this model while prompt processing stays fast; reported on RTX 4080 SUPER
+  (sm89) across three quants. No reproduction on another architecture, and no one has tested
+  how speculative decoding interacts with the cliff.
+- llama.cpp: PR #22673 (MTP, merged), PR #23269 (MTP cleanup + recurrent-rollback fix),
+  PR #27342 (DFlash2, **open**), issue #22947 (llama-bench spec-decode support — closed as not planned),
+  issue #19712 (spec decode blocked with `--mmproj`), issue #27623 (~25x decode collapse past ~80K
+  on this hybrid model, **open**), issue #27122 (MTP + `--split-mode tensor` CUDA lockup, open).
+- vLLM: issue #52475 (MTP repetition collapse with turboquant KV on sm120, open),
+  issue #52682 (Qwen3.8-27B-FP8 CUDA-graph capture hang on Ampere, open).
+
+## INTERIM FINDINGS (appended during execution; the text above is never rewritten)
+
+### 2026-08-24: H2 is in trouble, on this repo's own pre-registered falsifier
+
+Status: **preliminary, 2 of 5 passes of Phase A.** Recorded now because it is a pre-registered
+hypothesis moving against the person who registered it, and that should be on the record before
+the remaining passes rather than after.
+
+Phase A yields a cost model that was not anticipated when this document was written:
+
+    speedup = mean_len / k,   where  mean_len = 1 + n_max * acceptance   (verified against
+    llama.cpp's own per-request `mean len` field, exact to two decimals)
+
+so `k` — the cost of one speculative verification step in units of a plain decode step — is
+recoverable per request. Measured:
+
+| arm | verification width | k | k spread across 5 prompt classes |
+|---|---:|---:|---:|
+| mtp-n2 | 3 | 1.4494 | 1.06 % |
+| mtp-n3 | 4 | 1.7420 | 1.15 % |
+| dflash2-n4 | 5 | 1.8871 | 1.79 % |
+| mtp-n5 | 6 | 2.2929 | 1.38 % |
+| dflash2-n7 | 8 | 2.7142 | 2.39 % |
+
+(Figures corrected 2026-08-24 after a review of the estimator itself — see "Estimator
+correction" at the end of this entry. The earlier numbers used llama.cpp's reported `mean len`
+field and were biased by a prompt-dependent amount.)
+
+**Test of H2.** A state-rollback account charges the overhead to *rejection*. Modelling that as
+`k = k_verify + r * n_max * (1 - acceptance)` makes `r` estimable from the slope of k against
+acceptance. Acceptance spans 0.096–0.918 in this data — nearly a ten-fold range — and every arm
+returns `|r| <= 0.0024` with r² between 0.001 and 0.065 — no relationship at all. No
+rejection-proportional cost is detectable on either drafter.
+
+**This does not say rollback is free.** It bounds how much of the measured overhead rollback can
+account for, and the bound is approximately nothing. H2 as stated — rollback as the dominant term
+setting the n-max ceiling — is not supported.
+
+**What replaces it.** Fitting `k = k0 + c * (w - 1)`:
+
+- `draft-mtp`, widths 3/4/6: k0 = 0.8937, **c = 0.2803**, r² = 0.9998
+- `draft-dflash`, widths 5/8: k0 = 0.7844, **c = 0.2757** (two points only: a straight line
+  through two points is perfect by construction and this r² carries no information; Phase N adds
+  widths 3/5/7/9 so that `c` is fitted rather than assumed)
+
+Two unrelated drafters agreeing on `c` to 1.7 % while differing in `k0` by 14 % places the
+marginal cost on the verification path, not on the drafter. Notably DFlash2's fixed cost `k0` is *lower* than
+the target's own built-in nextn head.
+
+**Consequence for Phase R.** The question is no longer "H2 or H2'" but "which resource sets
+`c`". That is a sharper test on a single measured coefficient: H2' (arithmetic intensity) implies
+`c` falls as the compute budget rises and is insensitive to memory clock; a memory-bound account
+implies the reverse. Phase R is unchanged in design; its estimand is now `c` not a
+throughput elasticity.
+
+**Estimator correction (same day, before the phase completed).** The first version of this
+analysis took `mean_len` from llama.cpp's own per-request `mean len` field. That field reports
+`1 + n_max * accept_rate`, which assumes every step drafts the full `n_max`; steps that draft
+fewer make it an overestimate. Measured against the physical definition
+
+    forwards F = predicted_n - accepted        (each forward emits its own token plus its accepted drafts)
+    mean_len   = predicted_n / F
+
+the field is high by +0.17 % to +0.81 %, **and the error varies by prompt** — the same order as
+the cross-class constancy of `k` that this entry uses as evidence. In other words the estimator
+was contaminating the exact quantity the claim rests on.
+
+An anomaly noted in the first version — that k sloped slightly *positive* against acceptance on
+every arm — turned out to be that bias, not a physical effect: the field's error is largest on
+high-acceptance prompts. Recomputing from the API counters removes it. The slopes now straddle
+zero (−0.0167 to +0.0033) with r² between 0.001 and 0.065, the within-arm spread of k tightens
+(e.g. mtp-n2 1.36 % → 1.06 %), and the conclusion is unchanged but better supported.
+
+Deriving from the API counters also removed an unverified assumption: the earlier version aligned
+log lines to prompts by position. The log is now used only as an independent cross-check, and it
+agrees with the API counters on **150/150 requests, to the token**.
+
+### 2026-08-24: Phase A complete (875/875, 0 incidents), and two corrections
+
+**Result.** Every speculative arm is faster than its own-tree baseline, all five intervals
+excluding zero, with within-prompt run-to-run CV at or below 0.3 %:
+
+| arm | width | tok/s | vs own-tree baseline (95 % CI) | k | tok/J | J/request |
+|---|---:|---:|---|---:|---:|---:|
+| baseline@master | — | 41.55 | — | — | 0.1005 | 3980 |
+| baseline@pr27342 | — | 41.55 | — | — | 0.1005 | 3979 |
+| mtp-n2 | 3 | 66.39 | **+59.77 [+56.95, +62.75] %** | 1.4497 | 0.1627 | **2503 (−37.1 %)** |
+| mtp-n3 | 4 | 63.29 | +52.32 [+48.47, +56.48] % | 1.7425 | 0.1549 | 2684 |
+| dflash2-n4 | 5 | 63.13 | +51.94 [+45.56, +58.17] % | 1.8874 | 0.1554 | 2835 |
+| mtp-n5 | 6 | 54.89 | +32.10 [+26.38, +37.75] % | 2.2939 | 0.1343 | 3228 |
+| dflash2-n7 | 8 | 50.95 | +22.63 [+14.68, +30.37] % | 2.7156 | 0.1251 | 3786 |
+
+The dual-tree control is exact: the two baselines agree to 41.55 tok/s and produce **byte-identical
+output on 125/125 prompt-passes**, so nothing in the DFlash2 comparison is attributable to the
+unmerged branch.
+
+**H4a is supported, and the class breakdown matters more than the headline.** `dflash2-n7` is
++22.6 % overall while being a *net loss* on three of five prompt classes (prose −11.1 %,
+chat −4.3 %, zh −28.7 %). `mtp-n5` and `dflash2-n4` are within noise of zero on Chinese. A single
+overall figure conceals a sign change — the same failure this repo documented in the predecessor's
+headline (`docs/METHODOLOGY_AUDIT.md` A1), reproduced here in the opposite direction.
+
+**Cost model, final.** `draft-mtp` (widths 3/4/6): k0 = 0.8934, **c = 0.2806**, r² = 0.9998.
+`draft-dflash` (widths 5/8, two points): k0 = 0.7831, **c = 0.2761**. `c` agrees to 1.6 % between
+unrelated drafters while `k0` differs by 14 %. Within-arm spread of `k` across five prompt classes
+and five passes is 0.35–0.54 %. Independent cross-check: the API counters and llama.cpp's own log
+lines agree on **625/625 requests, to the token**.
+
+**H2 is not supported.** Over an acceptance range of 0.096–0.918, the rejection-proportional cost
+`r` is at most +0.0028 decode-steps per rejected draft token, with r² between 0.001 and 0.060.
+The overhead is charged per position verified, not per draft rejected. This bounds rollback's
+contribution; it does not prove rollback is free.
+
+**Losslessness.** Speculative arms are byte-identical to baseline on only 25–30 of 125
+prompt-passes — 76–80 % diverge, forking at a median 23 % into the text — but every arm is
+**100/100 reproducible across passes**. The divergence is deterministic, not noise. This is
+consistent with, and corroborative of, llama.cpp #25618 rather than novel.
+
+---
+
+### CORRECTION 1: the baseline bandwidth elasticity is 0.75, not ~1.0
+
+An earlier entry inferred a bandwidth elasticity of about 1.0 for the no-spec baseline from the
+overclock removal: memory +400 MHz was removed and throughput fell 4.1 %. That step was **not a
+bandwidth-only lever** — it also removed +100 MHz of core offset and dropped the power limit from
+450 W to 420 W. Attributing the whole 4.1 % to bandwidth was wrong.
+
+Phase R's pre-flight measures it properly, moving memory clock alone at a fixed 420 W:
+
+| condition | memory clock under load | tok/s |
+|---|---:|---:|
+| bw-lo (−800 offset) | 9101 MHz | 40.52 |
+| stock | 9501 MHz | 41.87 |
+| bw-hi (+800 offset) | 9901 MHz | 43.15 |
+
+That is +4.2 % / −4.2 % of memory clock for +3.1 % / −3.2 % of throughput: **elasticity ≈ 0.75**.
+
+A further subtlety, recorded because it limits even the controlled lever: at a fixed power cap,
+raising the memory clock takes power from the core. SM clock under load reads 1922 MHz at stock
+against 1886 and 1881 MHz in the two bandwidth arms, so the bandwidth arms are a net of "+4 %
+memory, −2 % core" not a pure bandwidth step. Phase R's full run quantifies this; the
+pre-flight is a single 200-token measurement per condition.
+
+### CORRECTION 2: the Phase A process crashed after writing its last record
+
+The run wrote all 875 records and then died with a glibc `double free or corruption (out)`,
+before attaching pass 5's baseline comparisons and before releasing the run lock. The chain's
+completeness gate refused to start Phase R as a result, which is the intended behaviour.
+
+Root cause is in this harness, not in llama.cpp: `server.start()` used
+`preexec_fn=os.setsid`, which runs Python code in the child after fork and is documented as
+unsafe in a process with threads. This harness runs a GPU power-sampling thread throughout, and
+the run performed roughly 7 900 fork/exec cycles. Replaced with `start_new_session=True`, which
+performs the same `setsid` on the safe side of the fork; `os.killpg` still works, verified.
+
+Pass 5's comparisons were **recomputed from the recorded text** using the harness's own
+`_attach_baseline_comparisons`, with no measurement repeated or altered. The pre-repair file is
+kept as `results/phase_a.pre_repair.json` and the repair is logged in the result's `repairs` field.
+
+## ERRATA
+
+_(none yet — the two items above are corrections to this document's own interim reasoning, not to
+a published result. The v3.0 erratum for the predecessor repo remains pending on Phase C's
+drafter-quantization ladder.)_

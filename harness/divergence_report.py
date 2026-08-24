@@ -1,0 +1,254 @@
+"""Byte-level divergence analysis of speculative arms against their own baseline.
+
+Written for llama.cpp issue #27407, which reports that greedy speculative output diverges
+deterministically from the non-speculative baseline on CUDA and classifies it as numerical
+divergence under batched verification rather than a logic bug. That report covers `draft-simple`
+and `draft-dflash` on two workloads with an IQ2_M target and asks for confirmation.
+
+This produces the three things it does not have:
+
+  1. prevalence  -- how often it happens, across a balanced 25-prompt set and every arm
+  2. `draft-mtp` -- the built-in head, which the report does not test
+  3. the batch-shape signature -- whether the fork POSITION is shared by drafters that have
+     nothing in common except how many positions they verify at once. If two unrelated drafters
+     fork at the same character, and that character moves when n-max changes, the reduction
+     order under batched verification is doing the work, which is precisely the report's claim.
+
+Determinism across passes is reported alongside, because a divergence that is not reproducible
+is a different bug from one that is.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import statistics
+from collections import defaultdict
+from pathlib import Path
+
+
+def load(path: Path) -> dict:
+    return json.loads(Path(path).read_text())
+
+
+def report(result: dict) -> None:
+    arms = result.get("arms", {})
+    recs = result["records"]
+
+    # arm -> prompt -> pass -> divergence record
+    div: dict[str, dict[str, dict[int, dict]]] = defaultdict(lambda: defaultdict(dict))
+    for r in recs:
+        d = r.get("divergence")
+        if d:
+            div[r["arm"]][r["prompt"]][r["pass"]] = d
+
+    if not div:
+        print("no divergence records (are the arms greedy, and did the baseline run?)")
+        return
+
+    print("=" * 100)
+    print("BYTE-LEVEL DIVERGENCE FROM THE NON-SPECULATIVE BASELINE (greedy, same prompt & pass)")
+    print("=" * 100)
+
+    print("\n--- prevalence ---")
+    print(f"{'arm':22s} {'n':>5s} {'identical':>10s} {'rate':>7s} "
+          f"{'median shared prefix':>21s}  {'earliest fork':>13s}")
+    for arm in sorted(div):
+        flat = [d for p in div[arm].values() for d in p.values()]
+        ident = sum(1 for d in flat if d["identical"])
+        forks = [d for d in flat if not d["identical"]]
+        med = statistics.median(d["common_prefix_frac"] for d in forks) if forks else None
+        earliest = min((d["first_diff_char"] for d in forks), default=None)
+        print(f"{arm:22s} {len(flat):5d} {ident:10d} {ident/len(flat)*100:6.1f}% "
+              f"{(f'{med:.3f}' if med is not None else '-'):>21s}  "
+              f"{(str(earliest) if earliest is not None else '-'):>13s}")
+
+    print("\n--- batch-shape signature: fork position per prompt, by arm ---")
+    print("    (identical fork positions across drafters that share only their verification")
+    print("     width is the signature of reduction-order-dependent argmax flips)")
+    prompts = sorted({p for a in div for p in div[a]})
+    arm_names = sorted(div)
+    w = max(len(p) for p in prompts) + 1
+    print(f"\n{'prompt':{w}s} " + " ".join(f"{a[:12]:>13s}" for a in arm_names))
+    shared_signature = 0
+    for pr in prompts:
+        cells = []
+        pos = []
+        for a in arm_names:
+            passes = div[a].get(pr, {})
+            d = passes.get(min(passes)) if passes else None
+            if d is None:
+                cells.append(f"{'-':>13s}")
+            elif d["identical"]:
+                cells.append(f"{'SAME':>13s}")
+            else:
+                cells.append(f"{('@' + str(d['first_diff_char'])):>13s}")
+                pos.append(d["first_diff_char"])
+        if len(pos) >= 2 and len(set(pos)) < len(pos):
+            shared_signature += 1
+        print(f"{pr:{w}s} " + " ".join(cells))
+    print(f"\n  prompts where at least two arms fork at the SAME character: "
+          f"{shared_signature}/{len(prompts)}")
+
+    print("\n--- does the fork position move with n-max? ---")
+    groups: dict[str, list[int]] = defaultdict(list)
+    for pr in prompts:
+        for a in arm_names:
+            passes = div[a].get(pr, {})
+            d = passes.get(min(passes)) if passes else None
+            if d and not d["identical"]:
+                groups[f"{pr}|{a}"] = [d["first_diff_char"]]
+    for pr in prompts:
+        row = []
+        for a in arm_names:
+            v = groups.get(f"{pr}|{a}")
+            row.append(f"{a.split('@')[0]}={v[0]}" if v else None)
+        row = [x for x in row if x]
+        if len(row) >= 2:
+            print(f"  {pr:24s} " + "  ".join(row))
+
+    print("\n--- determinism across passes (same arm, same prompt) ---")
+    print(f"{'arm':22s} {'checked':>8s} {'reproducible':>13s}")
+    for arm in sorted(div):
+        tot = rep = 0
+        for pr, passes in div[arm].items():
+            if len(passes) < 2:
+                continue
+            shas = {d["sha_arm"] for d in passes.values()}
+            tot += 1
+            rep += (len(shas) == 1)
+        if tot:
+            print(f"{arm:22s} {tot:8d} {rep:13d}")
+        else:
+            print(f"{arm:22s} {'-':>8s} {'(need >1 pass)':>13s}")
+
+    print("\n--- arm metadata (for a bug report) ---")
+    for a in arm_names:
+        meta = arms.get(a, {})
+        print(f"  {a:22s} tree={meta.get('tree','?'):9s} args={' '.join(meta.get('extra_args', []))}")
+    env = result.get("env", {})
+    print(f"\n  gpu           : {env.get('gpu')}")
+    print(f"  llama.cpp     : {env.get('llama_cpp_revisions')}")
+    print(f"  model sha256  : {env.get('model_sha256')}")
+    print(f"  overclock     : {env.get('overclock_state')}")
+    print(f"  design        : greedy, sampler chain pinned, cache_prompt="
+          f"{result.get('design', {}).get('cache_prompt')}, "
+          f"max_tokens={result.get('design', {}).get('max_tokens')}")
+
+
+def group_stability(result: dict) -> None:
+    """Is the fork-position grouping a stable property, or a single-pass coincidence?
+
+    Pass 1 showed the arms partitioning into exactly two fork-position groups, with the
+    partition tracking n-max ({2,3} vs {4,5,7}) rather than which drafter was used -- an
+    independent 1.1 GB block-diffusion drafter landing on the same character as the target's own
+    built-in head. That is a strong claim and it is only worth making if it reproduces.
+
+    Three checks, reported separately because they can fail independently:
+      1. determinism   -- same arm, same prompt, different pass: same fork character?
+      2. partition     -- within one pass, which arms share a fork character?
+      3. consistency   -- is the partition the same in every pass?
+    """
+    recs = result["records"]
+    fork: dict[tuple[str, str, int], object] = {}
+    for r in recs:
+        d = r.get("divergence")
+        if d:
+            fork[(r["arm"], r["prompt"], r["pass"])] = (
+                "SAME" if d["identical"] else d["first_diff_char"])
+
+    arms = sorted({a for a, _, _ in fork})
+    prompts = sorted({p for _, p, _ in fork})
+    passes = sorted({q for _, _, q in fork})
+
+    print("\n" + "=" * 100)
+    print(f"GROUP STABILITY  ({len(passes)} passes: {passes})")
+    print("=" * 100)
+
+    if len(passes) < 2:
+        print("\nonly one pass present -- determinism and consistency cannot be checked yet.")
+        return
+
+    # ---- 1. determinism -------------------------------------------------
+    print("\n--- 1. determinism: same arm + prompt across passes ---")
+    print(f"{'arm':22s} {'prompts':>8s} {'stable':>7s} {'unstable':>9s}  examples")
+    any_unstable = False
+    for a in arms:
+        stable = unstable = 0
+        ex = []
+        for p in prompts:
+            vals = [fork.get((a, p, q)) for q in passes]
+            vals = [v for v in vals if v is not None]
+            if len(vals) < 2:
+                continue
+            if len(set(vals)) == 1:
+                stable += 1
+            else:
+                unstable += 1
+                if len(ex) < 3:
+                    ex.append(f"{p}={vals}")
+        if unstable:
+            any_unstable = True
+        print(f"{a:22s} {stable+unstable:8d} {stable:7d} {unstable:9d}  {'; '.join(ex)}")
+    if not any_unstable:
+        print("\n  every fork position reproduces exactly across passes.")
+
+    # ---- 2 & 3. partition per pass, and whether it is the same each time --
+    print("\n--- 2/3. fork-position partition of arms, per pass ---")
+    sigs: dict[int, str] = {}
+    for q in passes:
+        groups_per_prompt = []
+        for p in prompts:
+            by_pos: dict[object, list[str]] = {}
+            for a in arms:
+                v = fork.get((a, p, q))
+                if v is None:
+                    continue
+                by_pos.setdefault(v, []).append(a)
+            # only informative when at least two arms diverge and agree
+            parts = sorted(tuple(sorted(v)) for v in by_pos.values())
+            groups_per_prompt.append(tuple(parts))
+        # the modal partition of this pass
+        from collections import Counter
+        c = Counter(groups_per_prompt)
+        modal, n = c.most_common(1)[0]
+        sigs[q] = repr(modal)
+        pretty = " | ".join("{" + ",".join(g) + "}" for g in modal)
+        print(f"  pass {q}: modal partition on {n}/{len(prompts)} prompts -> {pretty}")
+
+    same = len(set(sigs.values())) == 1
+    print(f"\n  partition identical in every pass: {same}")
+    if same:
+        print("  -> the grouping is a stable property of the configuration, not a single-pass "
+              "coincidence.")
+    else:
+        print("  -> the grouping VARIES between passes. Do not claim it is batch-shape "
+              "determined without explaining the variation.")
+
+    # ---- does the partition line up with n-max rather than with the drafter? ----
+    print("\n--- 4. does the partition track n-max or the drafter? ---")
+    meta = result.get("arms", {})
+    def nmax(a: str):
+        args = meta.get(a, {}).get("extra_args", [])
+        if "--spec-draft-n-max" in args:
+            return int(args[args.index("--spec-draft-n-max") + 1])
+        return None
+    def drafter(a: str):
+        args = meta.get(a, {}).get("extra_args", [])
+        if "--spec-type" in args:
+            return args[args.index("--spec-type") + 1]
+        return "none"
+    for a in arms:
+        print(f"  {a:22s} spec-type={drafter(a):14s} n-max={nmax(a)}")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("result")
+    a = ap.parse_args()
+    res = load(Path(a.result))
+    report(res)
+    group_stability(res)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------- weights and build trees
+# 25 GB of GGUF and two llama.cpp checkouts. Everything needed to reproduce them is in the
+# README and BENCHMARK_ENV; the bytes themselves do not belong in git.
+models/
+llamacpp-master/
+llamacpp-dflash2/
+
+# ---------------------------------------------------------------- environment
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# ---------------------------------------------------------------- runtime scaffolding
+# Not artefacts: the run lock, the atomic-write temp file, cached model hashes, and the rolling
+# snapshots the external safety net keeps (redundant with the committed result, which is written
+# atomically and versioned here anyway).
+.gpu-in-use.lock
+*.tmp
+*.sha256
+results/snapshots/
+
+# The per-record JSONL stream exists to survive a corrupted JSON write. Once the JSON is
+# committed, git is the durable copy, so the stream is runtime insurance rather than an artefact.
+results/*.records.jsonl
+
+# Partial results archived by a re-run. Kept on disk for inspection, not published.
+results/*.partial.*.json
+
+# ---------------------------------------------------------------- deliberately NOT ignored
+# results/*.json          — the measurements, including full generated text, which the
+#                           byte-level divergence analysis needs
+# results/server_logs/    — llama.cpp's own per-request acceptance lines and the drafter-load
+#                           evidence. This is the primary record that an arm's speculative path
+#                           actually ran; the predecessor repo keeps its per-prompt logs for the
+#                           same reason.
+# logs/*.log              — run logs, including the two ABORTED runs. Those are evidence of the
+#                           undisclosed overclock and the mid-run clock change that caused them
+#                           to be discarded, and discarding the evidence of a discarded run
+#                           would defeat the point of recording it.
+# harness/, analysis/, docs/, *.md, *.sh
