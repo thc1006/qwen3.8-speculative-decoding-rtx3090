@@ -1,0 +1,31 @@
+Every loop in the two speculative kernel files, 2026-08-25, after the four-site fix.
+Generated rather than read by eye, because the review found a duplicated path by searching the
+file for `while` and that is what a reviewer will do.
+
+######## eagle_utils.cu (this PR) ########
+   ln  kind   bound                                     indexes                        verdict
+   39  for    p < sel_stride                            selected_index                 bounded (the new helper)
+   67  for    i < bid                                   verified_seq_len               bounded
+   78  for    i < draft_token_num - 1                   tree_mask                      bounded
+   87  for    i = draft_token_num-1; i > 0; --i         parent_list,retrive_*,selected bounded
+  117  while  position < depth                          parent_list,selected,tree_mask bounded (fixed here)
+  176  for    i = draft_token_num-1; i > 0; --i         parent_list,retrive_*,selected bounded
+  206  while  position < depth                          parent_list,selected,tree_mask bounded (fixed here)
+  308  for    j < num_speculative_tokens                candidates,retrive_*           bounded
+  310  while  cur_index != -1                           candidates,retrive_*           UNBOUNDED -> VerifyTreeGreedy,
+                                                                                       deferred to the walker PR
+
+######## speculative_sampling.cuh (not this PR) ########
+   72  for    j < num_speculative_tokens                candidates,retrive_*,target_p  bounded
+   74  while  cur_index != -1                           candidates,retrive_*,target_p  UNBOUNDED -> the sampler walk,
+                                                                                       hangs and reads OOB on sm_86
+  107  for    i < ceil_div(d, BLOCK_THREADS*VEC_SIZE)   -                              bounded
+  118  for    j < VEC_SIZE                              -                              bounded
+  136  for    i < ceil_div(d, BLOCK_THREADS*VEC_SIZE)   -                              bounded
+  149  for    j < VEC_SIZE                              -                              bounded
+
+Two unbounded loops remain and both are sibling walks over retrive_next_sibling. They share a
+fix that this PR does not carry: a hop bound, a range check on cur_index before it is used as an
+index, and a range check on the candidate token id, which can be out of vocabulary on a valid
+chain. The sampling kernel additionally runs its walk on all 1024 threads, so any warning there
+needs one writer.
