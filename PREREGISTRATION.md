@@ -727,3 +727,36 @@ that with no free parameters, because `calc_nwarps` drops to one warp above `nco
   the observed partition next to the table's prediction and withholds a verdict when the
   two-drafter control fails, so the acceptance comparison is added to its output rather than
   argued afterwards.
+
+## Cross-check, 2026-08-24: Phase R and Phase R2 agree where they overlap
+
+Phase R's `stock` condition and Phase R2's `sm1700` sit close together: same memory clock at
+9501 MHz, same 420 W limit, core clocks 4 % apart. They were produced hours apart by different
+mechanisms, Phase R letting the clock settle under a power cap and Phase R2 pinning it with
+`nvidia-smi -lgc`, so agreement between them is a real check on both.
+
+| method | run | n | tok/s | core MHz | power W |
+|---|---|---:|---:|---:|---:|
+| baseline | R stock | 75 | 41.56 | 1785 | 416 |
+| baseline | R2 sm1700 | 25 | 41.27 | 1710 | 381 |
+| mtp-n3 | R stock | 75 | 63.32 | 1716 | 411 |
+| mtp-n3 | R2 sm1700 | 25 | 63.37 | 1695 | 401 |
+| mtp-n7 | R stock | 75 | 45.33 | 1732 | 413 |
+| mtp-n7 | R2 sm1700 | 25 | 45.13 | 1708 | 398 |
+
+Throughput agrees to 0.7 %, 0.08 % and 0.4 %. For two runs on different days through different
+clock mechanisms that is close, and it says the pinning did not introduce an artefact.
+
+**A local elasticity between these two points is not estimable, and the first attempt to compute
+one was a mistake worth recording.** The core clocks differ by 4.2 % for the baseline but only
+1.2 % and 1.4 % for the speculative arms, which is the same order as the throughput difference
+being measured. Dividing one small number by another produced 0.162 for the baseline, −0.065 for
+`mtp-n3` and 0.314 for `mtp-n7`. The negative value is not a finding that lowering the clock made
+`mtp-n3` faster; it is 63.32 against 63.37, which is noise across a 1.2 % clock step. Only the
+baseline's span is wide enough to carry any signal at all, and 0.162 there is consistent with a
+bandwidth-bound workload near the top of its clock range and with the 0.491 that Phase R measured
+over the far wider and lower `pw-lo` to `stock` span, since elasticity falls as the workload
+leaves compute starvation.
+
+The usable comparison is the one Phase R2 was designed for: `sm600` to `sm1200`, a matched
+two-fold span with the pin holding exactly on every record.
