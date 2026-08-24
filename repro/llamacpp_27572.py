@@ -89,6 +89,12 @@ def run_case(n_slots: int, n_req: int, n_prompt_tokens: int, concurrent: bool,
                      port=port, log_path=log_path, common_args=COMMON, gpu_index=0)
     try:
         S.assert_drafter_loaded(handle, "draft-mtp")
+        # Promised in the issue thread: n_copies is 1 on a single device, which makes the
+        # graph-copy alternation a no-op, so recording it here is what makes this run a control
+        # for that mechanism rather than just another data point.
+        log = handle.log_text()
+        sched_hint = [ln for ln in log.splitlines()
+                      if "n_copies" in ln or "pipeline parallel" in ln.lower()]
         # A distinct slice per request, so no two share a prefix.
         prompts = []
         for i in range(n_req):
@@ -118,6 +124,7 @@ def run_case(n_slots: int, n_req: int, n_prompt_tokens: int, concurrent: bool,
         "exactly_zero": len(zero),
         "empty_completions": len(empty),
         "errors": [r.get("error") for r in responses if isinstance(r, dict) and r.get("error")],
+        "sched_lines": sched_hint,
     }
 
 
