@@ -231,3 +231,42 @@ Not established, and so not claimable in a PR title or description:
   reporter's exact model was never loaded.
 - That a cycle in `retrive_next_sibling` occurs in practice. The CUDA builder cannot produce one
   on its normal path.
+
+## The fix already exists in this repository, on the CPU backend
+
+`python/sglang/kernels/aot/csrc/cpu/spec.cpp` implements the same tree build. Its helper is
+introduced with the comment "mirroring the CUDA kernel's `invalid eagle tree` printf", so it was
+written against the CUDA original, and it carries guards the original does not.
+
+| | CUDA `eagle_utils.cu` | CPU `spec.cpp` |
+|---|---|---|
+| width of the parent search | `cur_position < draft_token_num` | `i < sel_stride`, and `sel_stride = draft_token_num - 1` |
+| not-found result | no path for it in the `tid != 0` branch | `find_parent_node` returns `-1` |
+| caller handling | none in the `tid != 0` branch | `if (found < 0) { TORCH_WARN(...); break; }` |
+| ancestor walk | `while (true)` | `while (position < depth)` |
+
+The bound carries its own reason in the source:
+
+```cpp
+// A valid root-ward walk has at most `depth` steps; the bound turns a
+// malformed (cyclic) tree into a warning instead of a scheduler hang.
+while (position < depth) {
+```
+
+So the project already documents that a malformed cyclic tree causes a scheduler hang here, and
+already bounds the walk to prevent it, on one backend. #35822 reports a scheduler hang, on the
+other.
+
+The CPU file guards the ancestor walk in both of its mask-layout branches, QLEN_ONLY and
+FULL_MASK. The CUDA kernel guards neither, and guards only the separate parent lookup in its
+`tid == 0` branch.
+
+This also settles the search width independently. `sel_stride = draft_token_num - 1` is the CPU
+backend's own statement of how wide `selected_index` is, which is the array the CUDA search runs
+one element past.
+
+**What this makes the PR.** Not a new theory and not a new mechanism: porting guards that one
+backend in this repository already has to another that does not, with the comment explaining why
+they were needed already written by whoever added them. The hardware and sanitizer results above
+are then evidence of what the missing guards cost on sm_86, rather than the argument for adding
+them.
