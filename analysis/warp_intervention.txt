@@ -1,24 +1,3 @@
-[2026-08-25T06:00:42+08:00] waiting for forced_down on host C (expecting 150 records)
-[2026-08-25T06:00:43+08:00]   forced_down 150/150  bench running: no
-[2026-08-25T06:00:43+08:00] forced_down complete
-[2026-08-25T06:00:43+08:00] transferring
-[2026-08-25T06:00:45+08:00] verifying every transferred file against the remote checksum
-[2026-08-25T06:00:45+08:00]   ok  phase_warp_forced_down.json
-[2026-08-25T06:00:45+08:00]   ok  phase_warp_forced_down.records.jsonl
-[2026-08-25T06:00:46+08:00]   ok  warp_forced_down.log
-[2026-08-25T06:00:46+08:00]   ok  warp_run.log
-[2026-08-25T06:00:46+08:00]   ok  warp_builds.log
-[2026-08-25T06:00:46+08:00] collecting the build provenance before it is deleted
-[2026-08-25T06:00:47+08:00]   got control_table.txt
-[2026-08-25T06:00:47+08:00]   got forced_up_table.txt
-[2026-08-25T06:00:47+08:00]   got forced_down_table.txt
-[2026-08-25T06:00:49+08:00]   recorded libggml-cuda.so hashes (llama-server itself is a 17 KB wrapper and carries no kernel)
-[2026-08-25T06:00:49+08:00] HOLDING host C: the truncation audit flags censored verdicts in the warp files, and they
-[2026-08-25T06:00:49+08:00]   can only be re-measured here. Re-run with QWEN_WIPE_HOSTC=1 to release the machine.
-[2026-08-25T06:00:49+08:00]   GPU clocks are still reset below so nothing is left pinned.
-    host C now: 15 MiB, 210 MHz
-[2026-08-25T06:00:50+08:00] scoring the intervention against the registered outcomes
-[2026-08-25T06:00:50+08:00] wrote analysis/warp_intervention.txt
 ============================================================================================
 FORCED-WARP INTERVENTION
 ============================================================================================
@@ -34,7 +13,7 @@ FORCED_UP : GENERIC table w1->4, w3->4, w4->4, w5->4, w6->4, w8->4
 
   --- validity gates (registered: a failure here voids the comparison) ---
     [PASS] greedy baseline byte-identical across builds
-           width 1 maps to 4 warps in both builds; identical 25, differs 0
+           width 1 is at 4 warps in both builds; identical 25, differs 0
     [PASS] intervention did not touch widths it should not have
            widths [3, 4]: identical 50, differs 0
     [PASS] intervention had a measurable effect where it was applied
@@ -68,12 +47,23 @@ FORCED_DOWN : GENERIC table w1->2, w3->2, w4->2, w5->2, w6->2, w8->2
     widths left at the stock count  : [5, 6, 8]
 
   --- validity gates (registered: a failure here voids the comparison) ---
-    [FAIL] greedy baseline byte-identical across builds
-           width 1 maps to 2 warps in both builds; identical 5, differs 20
+    [N/A ] greedy baseline byte-identical across builds
+           This build maps width 1 to 2 warps against the stock 4, so the baseline is
+           part of the intervention and cannot also be its control. Observed: identical 5, differs 20.
+           PREREGISTRATION.md asserts width 1 is at 4 warps in all three builds while also
+           specifying 1-4 -> 2 here. Both cannot be true; the table is what was built.
     [FAIL] intervention did not touch widths it should not have
            widths [5, 6, 8]: identical 15, differs 60
     [PASS] intervention had a measurable effect where it was applied
            widths [3, 4]: identical 8, differs 42
 
   COMPARISON VOID. Not scoring the prediction.
-[2026-08-25T06:00:50+08:00] done
+
+  This is the fourth registered outcome: "The forced build changes fork
+  positions for widths it did not touch. The intervention is not clean;
+  something else in the build differs, and nothing is concluded until that is
+  found." Widths [5, 6, 8] carry the stock warp count in both builds and still
+  produce different output, so the warp count is not the only thing the edit
+  changed. Control and forced-up agree byte for byte at every width forced-up
+  left alone, so the build process itself is deterministic and the effect is
+  specific to this edit.

@@ -28,7 +28,7 @@ except Exception: print(0)\"" 2>/dev/null | tr -d '\r'
 }
 
 remote_alive() {     # is a bench.py still running there?
-  rsh "pgrep -f 'bench.py --matrix phase_warp' >/dev/null && echo yes || echo no" 2>/dev/null | tr -d '\r'
+  rsh "pgrep -f '[b]ench.py --matrix phase_warp' >/dev/null && echo yes || echo no" 2>/dev/null | tr -d '\r'
 }
 
 # ---------------------------------------------------------------- wait for forced_down

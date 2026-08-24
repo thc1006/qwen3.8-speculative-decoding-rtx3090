@@ -964,3 +964,116 @@ cause; it is a fact about three machines.
 It also does not weaken the registered endpoint. RH2 compared fork positions **within** host,
 which is what the addendum specified, and the cross-host agreement between A and B was registered
 in advance as the stronger-than-required outcome that would be recorded if seen. It was seen.
+
+## Correction 5, 2026-08-25: the forced-down direction is void, and one of its controls was impossible
+
+Both problems were found by running the comparison the registration asked for, not by inspection.
+
+### The baseline identity control cannot hold for forced-down
+
+The registration says the greedy baseline "runs at width 1, which the table maps to 4 warps in
+all three builds, so its output must be byte-identical across the three". The table it specifies
+for forced-down, in the row directly above that sentence, is `1-4 -> 2`. Width 1 is inside that
+range. The baseline in the forced-down build therefore runs at two warps, not four, and cannot be
+byte-identical to the control's by construction. It is not: 20 of 25 differ.
+
+Both statements were written at the same time and only one can be true. The table is what was
+compiled, so the table stands and the control does not. `warp_intervention.py` reports that gate
+as not applicable for a build that changes width 1, rather than as a failure, because failing it
+would blame the measurement for a contradiction in the design.
+
+The control is still valid for forced-up, which leaves width 1 at four warps, and it passes there:
+25 of 25 baselines byte-identical.
+
+### Forced-down changes widths it did not touch
+
+Forced-down leaves `5-8 -> 2`, the stock value, so widths 5, 6 and 8 run at the same warp count in
+that build as in the control. Their output should be identical. It is not:
+
+| widths | forced_down == control | expected |
+|---|---|---|
+| 1, 3, 4 | 5/25, 4/25, 4/25 | differ; the edit changed them from 4 warps to 2 |
+| **5, 6, 8** | **5/25 each** | **25/25; the edit did not touch them** |
+
+This is the fourth registered outcome, and it was registered precisely so this would not be
+explained away: "The forced build changes fork positions for widths it did not touch. The
+intervention is not clean; something else in the build differs, and nothing is concluded until
+that is found." The forced-down direction is therefore void and the bidirectional result the
+design was built for is not available.
+
+Two things narrow where to look. Control and forced-up agree byte for byte at every width
+forced-up left alone, 25 of 25 at width 1 and 50 of 50 across widths 3 and 4, so the build process
+is deterministic and the effect is specific to this edit rather than to rebuilding. And the three
+libraries differ in size, not only in content:
+
+    control      57765192 bytes
+    forced_up    57806152 bytes   +40960
+    forced_down  57621832 bytes   -143360
+
+`calc_nwarps` is `constexpr` and its result is a template argument, so the set of instantiations
+the compiler emits is a function of the table. Forced-down collapses the GENERIC table to a single
+warp count and its library is the smallest of the three, which is consistent with instantiations
+disappearing. Whether that is what moves the untouched widths is not established here and no claim
+is made from it; it is where the next test should go.
+
+### What survives
+
+Forced-up passes all three of its gates and is scored. Forced-down is void. A single direction
+cannot separate the warp count from an accidental one-way effect, which the registration also
+says, so there is no bidirectional causal result to report.
+
+## Correction 6, registered 2026-08-25 06:28, before the run: why forced-down was void, and the rebuild
+
+Correction 5 recorded that forced-down changed widths it did not touch and left the direction
+void with no explanation. There is now an explanation, it is not a build fault, and the design is
+at fault.
+
+Disassembling all three libraries settles what the edit did to the binary. `calc_nwarps` is
+`constexpr` and derived from `ncols_dst` inside the kernel rather than being a template argument,
+so every build carries the same 294 `mul_mat_vec_q` symbols with the same names; what changes is
+the code inside them. Hashing the SASS of each instantiation:
+
+| | ncols_dst 1-4 | ncols_dst 5-8 |
+|---|---|---|
+| control vs forced-up | identical, 179 of 179 | changed, 92 of 92 |
+| control vs forced-down | changed, 179 of 179 | identical, 92 of 92 |
+
+Both edits are surgical in the binary. Every kernel each one should have left alone is
+byte-identical machine code. So forced-down's widths 5, 6 and 8 ran exactly the control's code and
+still produced different text on 20 of 25 prompts each.
+
+The reason is that `ncols_dst` is not the verification width. It is the number of columns in the
+matrix-vector product, and **a drafter generates one token at a time, so a drafter runs at
+`ncols_dst` 1**. Every speculative arm has a drafter. Setting the whole 1-4 row to two warps
+therefore perturbs every arm through its drafter regardless of its verification width, and moves
+the greedy baseline as well, which is why the registered baseline control could not hold.
+
+That control was not a stray sentence. It was load-bearing, and the forced-down table specified
+alongside it violated it. Reading the two together should have caught this before anything ran.
+
+### The rebuild, and what is predicted before it finishes
+
+`forced_down2` splits the row:
+
+    case 1, 2       -> 4     unchanged: the drafter and the greedy baseline are untouched
+    case 3, 4       -> 2     the intervention
+    case 5, 6, 7, 8 -> 2     unchanged
+
+Registered now, with the run in progress and no results seen:
+
+- **The greedy baseline must be byte-identical to the control's on all 25 prompts.** Width 1 is at
+  four warps in control, forced-up and forced_down2 alike. If it is not, the drafter account above
+  is wrong and so is this build.
+- **Widths 5, 6 and 8 must be byte-identical to the control's.** Their kernels are unchanged and
+  their drafters are now unchanged too. This is the gate the first forced-down failed, and it is
+  the whole reason for the rebuild.
+- **Widths 3 and 4 must change**, or the edited row never reached the kernel.
+- The prediction under test is unchanged: **widths 3 and 4 adopt the {5,6,8} fork positions** if
+  the warp count is what puts the widths into two groups. Forced-up already failed the mirror of
+  this on 15 of 18 informative prompts, so the honest expectation is that this fails too; that is
+  written down here so that a failure cannot later be presented as the expected result and a
+  success cannot be presented as a surprise.
+
+If widths 5, 6 and 8 come back identical and widths 3 and 4 do not follow, then both directions
+agree that the warp count changes the numerics without carrying the fork positions, and H8's
+account of the partition is refuted rather than merely unsupported.

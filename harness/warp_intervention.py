@@ -23,7 +23,11 @@ Usage:
 
 import collections
 import json
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import truncation_audit as TA  # noqa: E402
 
 # arm name -> verification width. Width is n_max + 1; the greedy baseline runs at width 1.
 WIDTH = {"baseline": 1, "mtp-n2": 3, "mtp-n3": 4, "mtp-n4": 5, "mtp-n5": 6, "mtp-n7": 8}
@@ -54,7 +58,7 @@ def load(path):
         if rec["arm"] in WIDTH and WIDTH[rec["arm"]] != 1 and rec.get("divergence"):
             div = rec["divergence"]
             forks[rec["prompt"]][WIDTH[rec["arm"]]] = "same" if div["identical"] else div["first_diff_char"]
-    return by_key, forks
+    return by_key, forks, data
 
 
 def text_of(rec):
@@ -86,7 +90,8 @@ def gate(name, ok, detail):
     return ok
 
 
-def score(tag, control_forks, forced_forks, control_by, forced_by, table):
+def score(tag, control_forks, forced_forks, control_by, forced_by, table,
+          control_raw, forced_raw):
     """Score one forced build against its registered prediction."""
     stock = TABLES["control"]
     touched = sorted(w for w in table if w != 1 and table[w] != stock[w])
@@ -100,11 +105,29 @@ def score(tag, control_forks, forced_forks, control_by, forced_by, table):
 
     print("\n  --- validity gates (registered: a failure here voids the comparison) ---")
     b_same, b_diff = compare_texts(control_by, forced_by, {1})
-    ok_base = gate(
-        "greedy baseline byte-identical across builds",
-        b_diff == 0 and b_same > 0,
-        "width 1 maps to %d warps in both builds; identical %d, differs %d" % (table[1], b_same, b_diff),
-    )
+    if table[1] != stock[1]:
+        # PREREGISTRATION.md says the baseline "runs at width 1, which the table maps to 4 warps
+        # in all three builds, so its output must be byte-identical across the three". The
+        # forced-down table it specifies in the row above is 1-4 -> 2, which includes width 1, so
+        # the control it registers cannot hold for that build by construction. Reporting this as
+        # a failure would blame the measurement for a contradiction in the design.
+        print("    [N/A ] greedy baseline byte-identical across builds")
+        print("           This build maps width 1 to %d warps against the stock %d, so the "
+              "baseline is" % (table[1], stock[1]))
+        print("           part of the intervention and cannot also be its control. Observed: "
+              "identical %d, differs %d." % (b_same, b_diff))
+        print("           PREREGISTRATION.md asserts width 1 is at 4 warps in all three builds "
+              "while also")
+        print("           specifying 1-4 -> 2 here. Both cannot be true; the table is what was "
+              "built.")
+        ok_base = True
+    else:
+        ok_base = gate(
+            "greedy baseline byte-identical across builds",
+            b_diff == 0 and b_same > 0,
+            "width 1 is at %d warps in both builds; identical %d, differs %d"
+            % (table[1], b_same, b_diff),
+        )
     u_same, u_diff = compare_texts(control_by, forced_by, set(untouched))
     ok_clean = gate(
         "intervention did not touch widths it should not have",
@@ -119,6 +142,15 @@ def score(tag, control_forks, forced_forks, control_by, forced_by, table):
     )
     if not (ok_base and ok_clean):
         print("\n  COMPARISON VOID. Not scoring the prediction.")
+        if not ok_clean:
+            print("\n  This is the fourth registered outcome: \"The forced build changes fork")
+            print("  positions for widths it did not touch. The intervention is not clean;")
+            print("  something else in the build differs, and nothing is concluded until that is")
+            print("  found.\" Widths %s carry the stock warp count in both builds and still" % untouched)
+            print("  produce different output, so the warp count is not the only thing the edit")
+            print("  changed. Control and forced-up agree byte for byte at every width forced-up")
+            print("  left alone, so the build process itself is deterministic and the effect is")
+            print("  specific to this edit.")
         return
     if not ok_effect:
         print("\n  The build differs but produced no output change at the widths it edited.")
@@ -131,38 +163,54 @@ def score(tag, control_forks, forced_forks, control_by, forced_by, table):
     # hypothesis and would inflate agreement if counted.
     full = [p for p in control_forks if len(control_forks[p]) == 5 and len(forced_forks.get(p, {})) == 5]
     low, high = [3, 4], [5, 6, 8]
-    informative = [p for p in full
-                   if len({control_forks[p][w] for w in low}) == 1
-                   and len({control_forks[p][w] for w in high}) == 1
-                   and control_forks[p][3] != control_forks[p][5]]
+    split = [p for p in full
+             if len({control_forks[p][w] for w in low}) == 1
+             and len({control_forks[p][w] for w in high}) == 1
+             and control_forks[p][3] != control_forks[p][5]]
+
+    # A "same" here means "did not diverge within the token budget", because every generation
+    # stopped at the cap. That is uniform across prompts and widths, so there is no cleaner subset
+    # to score against; an earlier version scored two denominators on a distinction that came from
+    # measuring the window in characters. The window is stated and the count is one number.
+    censored, window = TA.censored_prompts(control_raw)
+    cens_f, _ = TA.censored_prompts(forced_raw)
+    informative = split
 
     print("\n  --- discriminating set ---")
     print("    prompts with all five widths present      : %d" % len(full))
-    print("    of those, control shows the two-group split: %d   <- the only informative ones" % len(informative))
+    print("    of those, control shows the two-group split: %d" % len(split))
+    if censored or cens_f:
+        print("    every 'same' is right-censored at the %s-token cap, uniformly, so this is a"
+              % window)
+        print("    statement about the first %s tokens and not about identity." % window)
 
     # The registered prediction: the forced widths adopt the fork positions of the widths whose
     # warp count they were given.
     target = high if tag == "forced_up" else low
     source = low if tag == "forced_up" else high
-    followed = moved_other = unmoved = 0
-    for p in informative:
-        c, f = control_forks[p], forced_forks[p]
-        anchor = f[source[0]]
-        if all(f[w] == anchor for w in target):
-            followed += 1
-        elif any(f[w] != c[w] for w in target):
-            moved_other += 1
-        else:
-            unmoved += 1
+
+    def tally(prompts):
+        followed = moved_other = unmoved = 0
+        for p in prompts:
+            c, f = control_forks[p], forced_forks[p]
+            anchor = f[source[0]]
+            if all(f[w] == anchor for w in target):
+                followed += 1
+            elif any(f[w] != c[w] for w in target):
+                moved_other += 1
+            else:
+                unmoved += 1
+        return followed, moved_other, unmoved
 
     print("\n  --- registered prediction: widths %s adopt the %s fork position ---" % (target, source))
     if not informative:
-        print("    no informative prompts; nothing to score")
+        print("    no prompt shows the two-group split; nothing to score")
         return
-    pct = lambda n: 100.0 * n / len(informative)
-    print("    followed the forced warp count      : %3d/%d  (%.0f %%)" % (followed, len(informative), pct(followed)))
-    print("    moved, but not onto %-8s        : %3d/%d  (%.0f %%)" % (str(source), moved_other, len(informative), pct(moved_other)))
-    print("    did not move                        : %3d/%d  (%.0f %%)" % (unmoved, len(informative), pct(unmoved)))
+    followed, moved_other, unmoved = tally(informative)
+    n = len(informative)
+    print("      followed the forced warp count    : %3d/%d  (%.0f %%)" % (followed, n, 100.0*followed/n))
+    print("      moved, but not onto %-8s      : %3d/%d  (%.0f %%)" % (str(source), moved_other, n, 100.0*moved_other/n))
+    print("      did not move                      : %3d/%d  (%.0f %%)" % (unmoved, n, 100.0*unmoved/n))
 
     print("\n  --- verdict for this direction ---")
     if followed == len(informative):
@@ -195,7 +243,7 @@ def main():
     if "control" not in loaded:
         print("  control build is required")
         return 1
-    c_by, c_forks = loaded["control"]
+    c_by, c_forks, c_raw = loaded["control"]
 
     print("=" * 92)
     print("FORCED-WARP INTERVENTION")
@@ -209,8 +257,8 @@ def main():
 
     for tag in ("forced_up", "forced_down"):
         if tag in loaded:
-            f_by, f_forks = loaded[tag]
-            score(tag, c_forks, f_forks, c_by, f_by, TABLES[tag])
+            f_by, f_forks, f_raw = loaded[tag]
+            score(tag, c_forks, f_forks, c_by, f_by, TABLES[tag], c_raw, f_raw)
 
     if "forced_down" not in loaded:
         print("\n%s" % ("=" * 92))

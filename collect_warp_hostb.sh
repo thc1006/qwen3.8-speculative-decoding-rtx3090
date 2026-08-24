@@ -45,7 +45,7 @@ while :; do
     line="$line $b=$n"
     [ "$n" -ge "$EXPECT" ] && done_n=$(( done_n + 1 ))
   done
-  alive=$(rsh "pgrep -f 'run_warp_hostb.sh' >/dev/null && echo yes || echo no" 2>/dev/null | tr -d '\r')
+  alive=$(rsh "pgrep -f '[r]un_warp_hostb.sh' >/dev/null && echo yes || echo no" 2>/dev/null | tr -d '\r')
   log " ${line}  builds complete: ${done_n}/3  driver: ${alive}"
   [ "$done_n" -ge 3 ] && { log "all three builds complete"; break; }
   if [ "$alive" = "no" ]; then

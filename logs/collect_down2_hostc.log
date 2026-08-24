@@ -1,0 +1,111 @@
+[2026-08-25T06:40:57+08:00]   forced_down2 25/150  driver: yes
+[2026-08-25T06:42:58+08:00]   forced_down2 25/150  driver: yes
+[2026-08-25T06:44:59+08:00]   forced_down2 50/150  driver: yes
+[2026-08-25T06:47:00+08:00]   forced_down2 50/150  driver: yes
+[2026-08-25T06:49:00+08:00]   forced_down2 50/150  driver: yes
+[2026-08-25T06:51:01+08:00]   forced_down2 75/150  driver: yes
+[2026-08-25T06:53:02+08:00]   forced_down2 75/150  driver: yes
+[2026-08-25T06:55:03+08:00]   forced_down2 75/150  driver: yes
+[2026-08-25T06:57:04+08:00]   forced_down2 75/150  driver: yes
+[2026-08-25T06:59:05+08:00]   forced_down2 100/150  driver: yes
+[2026-08-25T07:01:06+08:00]   forced_down2 100/150  driver: yes
+[2026-08-25T07:03:07+08:00]   forced_down2 100/150  driver: yes
+[2026-08-25T07:05:08+08:00]   forced_down2 100/150  driver: yes
+[2026-08-25T07:07:08+08:00]   forced_down2 125/150  driver: yes
+[2026-08-25T07:09:09+08:00]   forced_down2 125/150  driver: yes
+[2026-08-25T07:11:10+08:00]   forced_down2 125/150  driver: yes
+[2026-08-25T07:13:11+08:00]   forced_down2 125/150  driver: yes
+[2026-08-25T07:15:12+08:00]   forced_down2 150/150  driver: no
+[2026-08-25T07:15:12+08:00] complete; transferring
+[2026-08-25T07:15:13+08:00]   ok  phase_warp_forced_down2.json
+[2026-08-25T07:15:13+08:00]   ok  phase_warp_forced_down2.records.jsonl
+[2026-08-25T07:15:14+08:00]   ok  warp_forced_down2.log
+[2026-08-25T07:15:15+08:00]   ok  warp_down2_chain.log
+[2026-08-25T07:15:15+08:00] scoring against Correction 6
+
+=== Correction 6, registered before this run ===
+  w=1  baseline    2/25 identical   registered: identical to control   *** FAIL ***
+  w=3  mtp-n2      4/25 identical   registered: must change            PASS
+  w=4  mtp-n3      4/25 identical   registered: must change            PASS
+  w=5  mtp-n4      5/25 identical   registered: identical to control   *** FAIL ***
+  w=6  mtp-n5      5/25 identical   registered: identical to control   *** FAIL ***
+  w=8  mtp-n7      5/25 identical   registered: identical to control   *** FAIL ***
+  w=1 moving would mean the drafter account is wrong. w=5,6,8 moving would mean the
+  rebuild is no cleaner than the first one. w=3,4 not moving would mean the edit never
+  reached the kernel.
+============================================================================================
+FORCED-WARP INTERVENTION
+============================================================================================
+  control     : results/phase_warp_control.json (150 records)
+  forced_up   : results/phase_warp_forced_up.json (150 records)
+  forced_down : results/phase_warp_forced_down2.json (150 records)
+
+============================================================================================
+FORCED_UP : GENERIC table w1->4, w3->4, w4->4, w5->4, w6->4, w8->4
+============================================================================================
+    widths whose warp count changed : [5, 6, 8]
+    widths left at the stock count  : [3, 4]
+
+  --- validity gates (registered: a failure here voids the comparison) ---
+    [PASS] greedy baseline byte-identical across builds
+           width 1 is at 4 warps in both builds; identical 25, differs 0
+    [PASS] intervention did not touch widths it should not have
+           widths [3, 4]: identical 50, differs 0
+    [PASS] intervention had a measurable effect where it was applied
+           widths [5, 6, 8]: identical 15, differs 60
+
+  --- discriminating set ---
+    prompts with all five widths present      : 25
+    of those, control shows the two-group split: 18
+    every 'same' is right-censored at the 400-token cap, uniformly, so this is a
+    statement about the first 400 tokens and not about identity.
+
+  --- registered prediction: widths [5, 6, 8] adopt the [3, 4] fork position ---
+      followed the forced warp count    :   3/18  (17 %)
+      moved, but not onto [3, 4]        :   8/18  (44 %)
+      did not move                      :   7/18  (39 %)
+
+  --- verdict for this direction ---
+    Split result: the prediction held on 3 of 18 informative prompts and failed on
+    the other 15. Registered as unresolved; no account was prepared for a partial
+    effect and none is invented here.
+
+============================================================================================
+FORCED_DOWN : GENERIC table w1->2, w3->2, w4->2, w5->2, w6->2, w8->2
+============================================================================================
+    widths whose warp count changed : [3, 4]
+    widths left at the stock count  : [5, 6, 8]
+
+  --- validity gates (registered: a failure here voids the comparison) ---
+    [N/A ] greedy baseline byte-identical across builds
+           This build maps width 1 to 2 warps against the stock 4, so the baseline is
+           part of the intervention and cannot also be its control. Observed: identical 2, differs 23.
+           PREREGISTRATION.md asserts width 1 is at 4 warps in all three builds while also
+           specifying 1-4 -> 2 here. Both cannot be true; the table is what was built.
+    [FAIL] intervention did not touch widths it should not have
+           widths [5, 6, 8]: identical 15, differs 60
+    [PASS] intervention had a measurable effect where it was applied
+           widths [3, 4]: identical 8, differs 42
+
+  COMPARISON VOID. Not scoring the prediction.
+
+  This is the fourth registered outcome: "The forced build changes fork
+  positions for widths it did not touch. The intervention is not clean;
+  something else in the build differs, and nothing is concluded until that is
+  found." Widths [5, 6, 8] carry the stock warp count in both builds and still
+  produce different output, so the warp count is not the only thing the edit
+  changed. Control and forced-up agree byte for byte at every width forced-up
+  left alone, so the build process itself is deterministic and the effect is
+  specific to this edit.
+
+=== Correction 6, registered before this run ===
+  w=1  baseline    2/25 identical   registered: identical to control   *** FAIL ***
+  w=3  mtp-n2      4/25 identical   registered: must change            PASS
+  w=4  mtp-n3      4/25 identical   registered: must change            PASS
+  w=5  mtp-n4      5/25 identical   registered: identical to control   *** FAIL ***
+  w=6  mtp-n5      5/25 identical   registered: identical to control   *** FAIL ***
+  w=8  mtp-n7      5/25 identical   registered: identical to control   *** FAIL ***
+  w=1 moving would mean the drafter account is wrong. w=5,6,8 moving would mean the
+  rebuild is no cleaner than the first one. w=3,4 not moving would mean the edit never
+  reached the kernel.
+[2026-08-25T07:15:15+08:00] done
