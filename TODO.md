@@ -44,8 +44,12 @@ second-host addendum in `PREREGISTRATION.md`.
       the `mtp-n1` arm Phase V needs.
 - [ ] **#27572 reproduction** (host A, then host B) — the extended sweep reaches the reported
       19 000-token prompts and an `-np` sweep beyond 4, which the first pass never covered.
-- [ ] **RH2 cross-host replication** (host B) — does the width partition survive a different card
-      and a different toolchain? Registered; grouping is the endpoint, not fork positions.
+- [x] **RH2 cross-host replication** (host B) — done. `phase_a_hostB.json`, 175 records: partition
+      clean 25/25, groups differ on 14, fork positions identical to host A on all 25 prompts.
+- [ ] **Forced-warp replication** (host B, until ~09:36) — the same three builds on the second
+      3090. The A6000 result is one device, and the two 3090s are known to agree on fork positions
+      where the A6000 does not, so this separates a property of the table from one of that card.
+      Host B disappears afterwards; nothing else it was holding is still only there.
 - [ ] **Forced-warp intervention** (host C) — three builds of the same revision differing only in
       the `calc_nwarps` GENERIC table. Registered before any of it ran, with the outcomes and the
       baseline identity control written down first.
