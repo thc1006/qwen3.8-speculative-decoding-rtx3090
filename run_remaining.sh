@@ -89,7 +89,42 @@ if [ -f results/phase_r2.json ]; then
   fi
 fi
 
-run_phase phase_c 3 18220 results/phase_c.json || exit 1
+# ---------------------------------------------------------------- public commitments first
+# Both of these were stated in llama.cpp #25618 comment 5396293373 as running or queued, so they
+# come before the phases that only this study cares about.
+
+# f16 KV control. snick525 showed in that thread that q8_0 KV moves greedy output on its own, so
+# every fork position reported so far was taken under a cache that is not output-preserving.
+run_phase phase_kv 1 18215 results/phase_kv.json || exit 1
+python3 harness/divergence_report.py results/phase_kv.json > analysis/phase_kv_divergence.txt 2>&1
+python3 - <<'PYEOF' | tee -a analysis/phase_kv_divergence.txt
+import json, collections
+W = {"mtp-n2": 3, "mtp-n3": 4, "dflash2-n4": 5, "mtp-n5": 6, "dflash2-n7": 8}
+print("\n=== does the width grouping survive f16 KV? ===")
+for tag, path, pas in [("q8_0 KV (Phase A)", "results/phase_a.json", 1),
+                       ("f16  KV (Phase KV)", "results/phase_kv.json", 1)]:
+    try:
+        d = json.load(open(path))
+    except Exception as e:
+        print(f"  {tag}: unreadable ({e})"); continue
+    pos = collections.defaultdict(dict)
+    for r in d["records"]:
+        if r["arm"] in W and r["pass"] == pas and r.get("divergence"):
+            v = r["divergence"]
+            pos[r["prompt"]][W[r["arm"]]] = "same" if v["identical"] else v["first_diff_char"]
+    full = [p for p in pos if len(pos[p]) == 5]
+    lo = sum(1 for p in full if len({pos[p][3], pos[p][4]}) == 1)
+    hi = sum(1 for p in full if len({pos[p][5], pos[p][6], pos[p][8]}) == 1)
+    dif = sum(1 for p in full if len({pos[p][3], pos[p][4]}) == 1
+              and len({pos[p][5], pos[p][6], pos[p][8]}) == 1
+              and {pos[p][3]} != {pos[p][5]})
+    print(f"  {tag}: {len(full)} prompts | w3==w4 on {lo} | w5==w6==w8 on {hi} | "
+          f"groups differ on {dif}")
+print("  The grouping survives if the f16 row matches the q8_0 row. If it does not, the")
+print("  partition was an artefact of the quantized cache and the #25618 comment needs a")
+print("  correction posted to that thread.")
+PYEOF
+log "wrote analysis/phase_kv_divergence.txt"
 
 # The n-max ladder. Phase A fitted k(w) = k0 + c(w-1) on three MTP widths and two DFlash2 widths;
 # two points do not fit a line, and the DFlash2 coefficient was reported as meaningless for that
@@ -98,7 +133,11 @@ run_phase phase_c 3 18220 results/phase_c.json || exit 1
 # only runs at one speculative token, so K=1 is the only depth the two engines share.
 run_phase phase_nmax 3 18225 results/phase_nmax.json || exit 1
 python3 harness/cost_model.py results/phase_nmax.json > analysis/phase_nmax_cost.txt 2>&1
-log "wrote analysis/phase_nmax_cost.txt (the k(w) fit on 8 MTP widths and 4 DFlash2 widths)"
+python3 harness/divergence_report.py results/phase_nmax.json > analysis/phase_nmax_divergence.txt 2>&1
+log "wrote analysis/phase_nmax_{cost,divergence}.txt: the k(w) fit on 8 MTP widths, and the"
+log "  width-2/7/9 groups that llama.cpp #25618 comment 5396293373 predicts"
+
+run_phase phase_c 3 18220 results/phase_c.json || exit 1
 
 # Phase L is a ladder, not a matrix: context depth sets `-c`, which is a server property, so each
 # rung is its own run. Its driver handles the per-rung gating and skips a rung that cannot fit.
