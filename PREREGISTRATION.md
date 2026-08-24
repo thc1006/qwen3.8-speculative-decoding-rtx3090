@@ -532,3 +532,42 @@ percent is a better argument for the patch than the one that was there.
 
 **No measurement was repeated.** The correction is arithmetic applied to counters that were
 already recorded, so every result file is unchanged and only the analysis output moves.
+
+## Declared during Phase R2, 2026-08-24: the top pin does not bind
+
+Recorded while Phase R2 is running, at 250 of 1575 records, before any of its results are
+interpreted. It is a limitation of the design, found by checking the run against its own premise
+rather than by anything failing.
+
+Phase R2 exists because a power cap is a poor compute lever: the clock it produces is an outcome,
+it differs between methods, and it moves during an arm. Pinning with `nvidia-smi -lgc` was meant
+to make the clock a setting. Measured on the first pass:
+
+| condition | between methods | within an arm | power drawn |
+|---|---|---|---|
+| `sm600` | 0.00 % | 0.00 % | 182 to 207 W |
+| `sm1200` | 0.00 % | 0.00 % | 248 to 278 W |
+| `sm1700` | 0.89 % | up to 2.72 % | 381 to 401 W, peaks at 420 |
+
+At 600 and 1200 MHz the pin holds exactly: mean equals min on every record, so every power sample
+sat on the requested clock, and all three methods met the same clock. `sm600 -> sm1200` is
+therefore a matched two-fold compute sweep, which is what H2' needs and what Phase R never had.
+
+At 1700 MHz the pin does not bind, because the 420 W power limit binds first. The baseline draws
+381 W and holds 1710 MHz; `mtp-n3` draws 401 W with peaks at exactly 420 and falls to 1650. So the
+top condition reverts to being an outcome, and the methods land 0.89 % apart. Phase R's
+corresponding figures were 30.0 % and 35.8 % apart with within-arm drift of 71.6 % and 118.9 %, so
+this is a 34-fold improvement rather than a failure, but it is not zero and elasticities that
+cross `sm1700` carry it. The analysis reports matching per condition for that reason.
+
+**Not corrected mid-run.** Raising the power limit for the top condition alone would vary power
+and clock together, which is the confound the phase was built to remove. Lowering the top pin
+would need a restart and would cost the range. The clean interval already exists at
+`sm600 -> sm1200`, so the top point is kept for range and read with its caveat.
+
+**A side observation that supports the mechanism.** At the same pinned 1700 MHz, `mtp-n3` draws
+401 W against the baseline's 381 W. Same clock, more power, so more work per unit time. That is a
+fourth independent line of evidence for speculation converting a bandwidth-bound decode into a
+compute-bound verify, alongside the bandwidth elasticity ratio, the compute elasticity ratio, and
+the higher clock reached under a shared power cap. It was not predicted in advance and is
+recorded as an observation rather than as a test.

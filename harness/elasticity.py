@@ -327,8 +327,11 @@ def report(result: dict) -> None:
     # is measured rather than asserted. Phase R let a power cap decide the clock and the methods
     # landed on different ones; Phase R2 pins the clock so they cannot. Printing Phase R's caveat
     # over Phase R2's data would describe a defect that run exists to remove.
+    # Reported per condition rather than as one verdict, because a pinned run can hold some
+    # conditions exactly and lose others: a pin only binds while the power limit does not, so
+    # the top of a clock ladder can fall back to being an outcome while the rest stay settings.
     cp_axes = [a for a in axes if a.startswith("compute")]
-    rows, worst = [], 0.0
+    rows = []
     for a in cp_axes:
         for c in axes[a][1]:
             per = {m: _clock(result, m, c, SM_KEY) for m in methods
@@ -336,28 +339,36 @@ def report(result: dict) -> None:
             if len(per) < 2:
                 continue
             spread = (max(per.values()) - min(per.values())) / min(per.values())
-            worst = max(worst, spread)
-            rows.append((c, per, spread))
-    if rows and worst <= 0.005:
-        print(f"\n--- the compute intervals ARE matched across methods ---")
-        print("  Every method met the same core clock at each condition, so an interval spans the")
-        print("  same range for all of them and the elasticities above are directly comparable.")
-        for c, per, spread in rows:
-            print(f"    {c:14s} " + "  ".join(f"{m}={v:.0f}" for m, v in sorted(per.items()))
-                  + f"   spread {spread * 100:.2f} %")
-        print("  This is what pinning the clock buys over capping the power, and it is the defect")
-        print("  Phase R2 exists to remove. Phase R could not say this.")
-    elif rows:
-        print(f"\n--- caveat: the compute intervals are not identical across methods ---")
-        print("  Under the same power cap, different methods settle at different core clocks,")
-        print("  because a bandwidth-heavy workload spends more of the budget on memory:")
-        for c, per, spread in rows:
-            print(f"    {c:14s} " + "  ".join(f"{m}={v:.0f}" for m, v in sorted(per.items()))
-                  + f"   spread {spread * 100:.2f} %")
-        print(f"  So an interval spans a different clock range for each method, by up to")
-        print(f"  {worst * 100:.1f} %. Elasticity is regime-dependent (see the two compute intervals")
-        print("  above), so these comparisons are close but not exactly matched. The direction of")
-        print("  the effect is far larger than the mismatch; read the magnitudes with it in mind.")
+            # Within-arm rigidity: mean equal to min proves every sample sat at that value.
+            rigid = {}
+            for m in per:
+                mean_s = _clock_samples(result, m, c, SM_KEY)
+                min_s = _clock_samples(result, m, c, "sm_clock_min_mhz")
+                if mean_s and min_s:
+                    rigid[m] = (statistics.fmean(mean_s) - min(min_s)) / max(min(min_s), 1)
+            rows.append((c, per, spread, rigid))
+    if rows:
+        matched = [r for r in rows if r[2] <= 0.005]
+        print(f"\n--- are the compute intervals matched across methods? "
+              f"{len(matched)} of {len(rows)} conditions ---")
+        print(f"    {'condition':14s} {'spread':>7s} {'drift':>7s}   per-method core clock")
+        for c, per, spread, rigid in rows:
+            drift = max(rigid.values()) if rigid else 0.0
+            mark = "" if spread <= 0.005 else "  <-- not matched"
+            print(f"    {c:14s} {spread:6.2%} {drift:6.2%}   "
+                  + "  ".join(f"{m}={v:.0f}" for m, v in sorted(per.items())) + mark)
+        print("  spread is between methods at the same condition; drift is within an arm,")
+        print("  measured as mean minus min, so 0.00 % means every sample sat on the pin.")
+        if matched:
+            print(f"  The {len(matched)} matched condition(s) give intervals that span the same")
+            print("  clock range for every method, so those elasticities are directly comparable.")
+        if len(matched) < len(rows):
+            print("  Where a condition is not matched the pin did not bind, because the power")
+            print("  limit did first. Check the power column in the operating points above: an")
+            print("  arm whose peak draw reaches the cap cannot hold its requested clock, and a")
+            print("  speculative arm reaches it sooner because it draws more at the same clock.")
+            print("  Elasticities crossing such a condition carry that mismatch; ones that do")
+            print("  not, do not. Phase R, for contrast, was 30.0 % and 35.8 % mismatched.")
 
     # ------------------------------------------------------------------ verdict
     print(f"\n{'=' * 100}\n--- H2 vs H2' on matched intervals ---")
