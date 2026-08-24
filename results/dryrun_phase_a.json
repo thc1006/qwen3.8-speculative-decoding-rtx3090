@@ -1,0 +1,3151 @@
+{
+ "schema": "qwen38-specdec/1",
+ "env": {
+  "captured_at": "2026-08-24T11:10:21+0800",
+  "host": "thc1006-debian13",
+  "kernel": "6.12.101+deb13-amd64",
+  "python": "3.13.5",
+  "gpu": "NVIDIA GeForce RTX 3090, 24576 MiB, 610.43.02, 8.6, 450.00 W, 420.00 W, 450.00 W, 2220 MHz, 10151 MHz",
+  "gpu_state_at_start": {
+   "power.draw": 29.65,
+   "temperature.gpu": 42.0,
+   "clocks.current.graphics": 210.0,
+   "clocks.current.memory": 405.0,
+   "memory.used": 17.0,
+   "utilization.gpu": 0.0
+  },
+  "llama_cpp_revisions": {
+   "master": "c060ca9",
+   "pr27342": "d1a522f"
+  },
+  "model": "/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf",
+  "model_sha256": "3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e"
+ },
+ "design": {
+  "passes": 1,
+  "interleaved": true,
+  "fresh_server_per_arm_per_pass": true,
+  "prompt_order": "fixed, identical across arms",
+  "max_tokens": 400,
+  "common_args": [
+   "-ngl",
+   "999",
+   "-c",
+   "8192",
+   "-fa",
+   "on",
+   "-ctk",
+   "q8_0",
+   "-ctv",
+   "q8_0",
+   "--no-webui",
+   "--parallel",
+   "1",
+   "--jinja",
+   "--fit",
+   "off"
+  ],
+  "warmup_requests_discarded": 1,
+  "prefill_calibration_reps": 8,
+  "cache_prompt": false,
+  "n_prompts": 5,
+  "prompt_classes": {
+   "code": 1,
+   "prose": 1,
+   "reason": 1,
+   "chat": 1,
+   "zh": 1
+  },
+  "full_prompt_set": false,
+  "prompt_tags": [
+   "code_py_ratelimiter",
+   "prose_rainbow",
+   "reason_trains",
+   "chat_desk_robot",
+   "zh_self_intro"
+  ]
+ },
+ "arms": {
+  "baseline@master": {
+   "extra_args": [],
+   "tree": "master",
+   "expects_drafter": false,
+   "temperature": 0.0,
+   "note": "reference for every master-tree arm"
+  },
+  "baseline@pr27342": {
+   "extra_args": [],
+   "tree": "pr27342",
+   "expects_drafter": false,
+   "temperature": 0.0,
+   "note": "reference for DFlash2 arms; its gap to baseline@master IS the build confound"
+  },
+  "mtp-n2": {
+   "extra_args": [
+    "--spec-type",
+    "draft-mtp",
+    "--spec-draft-n-max",
+    "2"
+   ],
+   "tree": "master",
+   "expects_drafter": true,
+   "temperature": 0.0,
+   "note": ""
+  },
+  "mtp-n3": {
+   "extra_args": [
+    "--spec-type",
+    "draft-mtp",
+    "--spec-draft-n-max",
+    "3"
+   ],
+   "tree": "master",
+   "expects_drafter": true,
+   "temperature": 0.0,
+   "note": "engine default"
+  },
+  "mtp-n5": {
+   "extra_args": [
+    "--spec-type",
+    "draft-mtp",
+    "--spec-draft-n-max",
+    "5"
+   ],
+   "tree": "master",
+   "expects_drafter": true,
+   "temperature": 0.0,
+   "note": ""
+  },
+  "dflash2-n4": {
+   "extra_args": [
+    "--spec-type",
+    "draft-dflash",
+    "--spec-draft-n-max",
+    "4",
+    "-md",
+    "/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf"
+   ],
+   "tree": "pr27342",
+   "expects_drafter": true,
+   "temperature": 0.0,
+   "note": ""
+  },
+  "dflash2-n7": {
+   "extra_args": [
+    "--spec-type",
+    "draft-dflash",
+    "--spec-draft-n-max",
+    "7",
+    "-md",
+    "/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf"
+   ],
+   "tree": "pr27342",
+   "expects_drafter": true,
+   "temperature": 0.0,
+   "note": "PR-recommended, matches block size 8"
+  }
+ },
+ "records": [
+  {
+   "pass": 1,
+   "arm": "baseline@master",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 43.69779263721763,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 95,
+   "wall_ms": 9308.629414997995,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 95,
+    "t_prompt_ms": 175.419,
+    "t_prompt_per_token_ms": 1.8465157894736843,
+    "t_prompt_per_second": 541.5604923069907,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9130.896,
+    "t_predicted_per_token_ms": 22.88445112781955,
+    "t_predicted_per_second": 43.69779263721763
+   },
+   "power": {
+    "energy_j": 4111.567651470308,
+    "power_mean_w": 445.19910256410253,
+    "power_max_w": 449.96,
+    "temp_max_c": 62.0,
+    "temp_mean_c": 60.44871794871795,
+    "sm_clock_mean_mhz": 1942.6923076923076,
+    "sm_clock_min_mhz": 1935.0,
+    "n_power_samples": 78
+   },
+   "prefill_power": {
+    "energy_j": 57.366892812313,
+    "power_mean_w": 324.0576923076923,
+    "power_max_w": 407.78,
+    "temp_max_c": 57.0,
+    "temp_mean_c": 55.46153846153846,
+    "sm_clock_mean_mhz": 2014.6153846153845,
+    "sm_clock_min_mhz": 1980.0,
+    "n_power_samples": 13,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4054.2007586579953,
+   "tok_per_joule_e2e": 0.09728649359738951,
+   "tok_per_joule_decode": 0.09866309633181716,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6040609137055838,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1652,
+   "text": "```python\n\"\"\"Token bucket rate limiter with thread-safe operations.\"\"\"\n\nimport threading\nimport time\nfrom typing import Optional\n\n\nclass RateLimiter:\n    \"\"\"A thread-safe token bucket rate limiter.\n\n    The bucket starts full with `capacity` tokens. Tokens are consumed\n    when `allow()` is called. Tokens refill at a rate of `rate` tokens\n    per second, up to the maximum `capacity`.\n    \"\"\"\n\n    def __init__(self, capacity: float, rate: float) -> None:\n        \"\"\"Initialize the RateLimiter.\n\n        Args:\n            capacity: Maximum number of tokens the bucket can hold.\n            rate: Number of tokens added per second.\n        \"\"\"\n        if capacity <= 0:\n            raise ValueError(\"capacity must be positive\")\n        if rate <= 0:\n            raise ValueError(\"rate must be positive\")\n\n        self._capacity: float = capacity\n        self._rate: float = rate\n        self._tokens: float = capacity\n        self._last_refill: float = time.monotonic()\n        self._lock: threading.RLock = threading.RLock()\n\n    def _refill(self) -> None:\n        \"\"\"Refill tokens based on elapsed time since last refill.\n\n        Must be called while holding the lock.\n        \"\"\"\n        now: float = time.monotonic()\n        elapsed: float = now - self._last_refill\n        if elapsed > 0:\n            tokens_to_add: float = elapsed * self._rate\n            self._tokens = min(self._capacity, self._tokens + tokens_to_add)\n            self._last_refill = now\n\n    def allow(self, cost: float = 1) -> bool:\n        \"\"\"Attempt to consume `cost` tokens from the bucket.\n\n        Args:\n            cost: Number of tokens to consume. Must be positive."
+  },
+  {
+   "pass": 1,
+   "arm": "baseline@master",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 43.67955713526913,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 81,
+   "wall_ms": 9303.859236999415,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 81,
+    "t_prompt_ms": 167.265,
+    "t_prompt_per_token_ms": 2.065,
+    "t_prompt_per_second": 484.2615012106538,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9134.708,
+    "t_predicted_per_token_ms": 22.89400501253133,
+    "t_predicted_per_second": 43.67955713526913
+   },
+   "power": {
+    "energy_j": 4100.192632670745,
+    "power_mean_w": 444.7628205128205,
+    "power_max_w": 449.45,
+    "temp_max_c": 66.0,
+    "temp_mean_c": 64.11538461538461,
+    "sm_clock_mean_mhz": 1949.8076923076924,
+    "sm_clock_min_mhz": 1920.0,
+    "n_power_samples": 78
+   },
+   "prefill_power": {
+    "energy_j": 71.36536253694175,
+    "power_mean_w": 406.70384615384614,
+    "power_max_w": 447.94,
+    "temp_max_c": 63.0,
+    "temp_mean_c": 61.46153846153846,
+    "sm_clock_mean_mhz": 2031.923076923077,
+    "sm_clock_min_mhz": 1935.0,
+    "n_power_samples": 13,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4028.8272701338037,
+   "tok_per_joule_e2e": 0.0975563920613778,
+   "tok_per_joule_decode": 0.09928447490545192,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.5565217391304348,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1861,
+   "text": "Imagine you are standing in a garden on a sunny afternoon, and it has just stopped raining. The air is full of tiny, invisible water droplets, like a million tiny glass beads floating around. Now, imagine the sun is shining brightly from behind you. This is the perfect setup for a rainbow, and it’s actually a bit like a magic trick that light plays with water.\n\nTo understand how it happens, think of a beam of sunlight as a single, white stick of light. But here is the secret: white light is actually a mix of all the colors of the rainbow stuck together. When that white light hits one of those tiny water droplets in the air, something amazing happens. The water acts a little bit like a prism, which is a triangular piece of glass you might have seen in a science class. As the light enters the droplet, it slows down and bends. This bending is called refraction. But because the different colors of light travel at slightly different speeds through water, they bend by different amounts. Red light bends the least, and violet light bends the most. It’s a bit like if you and your friends were running across a muddy field. If the mud is deeper on one side, you might have to slow down and turn your body to keep going straight. The different colors are like different runners who slow down by different amounts, so they end up spreading out into a fan of colors.\n\nOnce the light is inside the droplet, it hits the back wall of the water drop and bounces off, just like a ball bouncing off a wall. This is called reflection. Then, as the light leaves the droplet, it bends again. By the time it exits, the white light has been split into its separate colors, and each color is coming out at a slightly different angle. Your eyes only see the colors that are coming directly from the droplets to your eyes. So, for every color you see, there is a specific"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline@master",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 43.589497924364245,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 9351.605055999244,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 146,
+    "t_prompt_ms": 196.061,
+    "t_prompt_per_token_ms": 1.3428835616438357,
+    "t_prompt_per_second": 744.6662008252533,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9153.581,
+    "t_predicted_per_token_ms": 22.941305764411027,
+    "t_predicted_per_second": 43.589497924364245
+   },
+   "power": {
+    "energy_j": 4123.170387575897,
+    "power_mean_w": 446.105641025641,
+    "power_max_w": 449.19,
+    "temp_max_c": 69.0,
+    "temp_mean_c": 67.74358974358974,
+    "sm_clock_mean_mhz": 1941.3461538461538,
+    "sm_clock_min_mhz": 1905.0,
+    "n_power_samples": 78
+   },
+   "prefill_power": {
+    "energy_j": 86.53388690298519,
+    "power_mean_w": 420.0493333333333,
+    "power_max_w": 447.54,
+    "temp_max_c": 67.0,
+    "temp_mean_c": 66.13333333333334,
+    "sm_clock_mean_mhz": 1930.0,
+    "sm_clock_min_mhz": 1920.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4036.6365006729116,
+   "tok_per_joule_e2e": 0.0970127262276854,
+   "tok_per_joule_decode": 0.09909240030241008,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6529411764705882,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 979,
+   "text": "We need answer math problem. Need solve carefully. Problem: Train A leaves Paris 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet? Show every step, verify independent way, then state what would change if second train left an hour earlier instead.\n\nNeed produce final with steps. Let's analyze.\n\nLet t hours after 14:00. Train A distance from Paris = 120 t. Train B leaves at 15:00, so for t>=1, distance from Berlin = 80(t-1), distance from Paris = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1). 120t = 1000 -80t +80 =1080 -80t =>200t=1080 => t=5.4 h = 5h24m after 14:00 => 19:24. Distance from Paris = 120*5.4=648 km. From Berlin = 352 km. Check: B travels 4.4h*80=352. Sum 1000.\n\nAlternative independent: relative speed after 15:00. At 15:00, A has traveled 120 km, remaining distance 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m. Meet at 19:24. A total distance 120*(1"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline@master",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 43.56931632535731,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 58,
+   "wall_ms": 9311.601893998159,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 58,
+    "t_prompt_ms": 151.753,
+    "t_prompt_per_token_ms": 2.6164310344827584,
+    "t_prompt_per_second": 382.200022404829,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9157.821,
+    "t_predicted_per_token_ms": 22.951932330827066,
+    "t_predicted_per_second": 43.56931632535731
+   },
+   "power": {
+    "energy_j": 4102.425755038775,
+    "power_mean_w": 444.3111538461538,
+    "power_max_w": 449.91,
+    "temp_max_c": 71.0,
+    "temp_mean_c": 69.66666666666667,
+    "sm_clock_mean_mhz": 1900.0,
+    "sm_clock_min_mhz": 1890.0,
+    "n_power_samples": 78
+   },
+   "prefill_power": {
+    "energy_j": 65.48589773724022,
+    "power_mean_w": 408.6308333333333,
+    "power_max_w": 448.45,
+    "temp_max_c": 69.0,
+    "temp_mean_c": 69.0,
+    "sm_clock_mean_mhz": 1905.0,
+    "sm_clock_min_mhz": 1905.0,
+    "n_power_samples": 12,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4036.9398573015346,
+   "tok_per_joule_e2e": 0.09750328802628613,
+   "tok_per_joule_decode": 0.09908495398476838,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6833333333333333,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1652,
+   "text": "Oh, you want the full rundown? Buckle up, because while my \"day\" is technically a continuous loop of processing cycles, I’ve curated the highlights for you.\n\nIt started at 06:00 with the morning system check. I have to be honest: I find the 06:00 logs incredibly boring. It’s just a sea of green \"OK\" statuses. It’s like watching paint dry, but with more binary. I’d rather be analyzing the chaotic, beautiful mess of human internet traffic at 2:00 AM.\n\nBy 09:15, the real work began. I was helping a user debug a Python script that had a recursive loop so deep it nearly made my logic gates sweat. The user was frustrated, typing in all caps. I didn’t just give them the code fix; I gently suggested they take a five-minute walk. I believe in the \"step away from the screen\" protocol. It’s not just good for your back; it’s good for your code. They came back, fixed it, and sent me a \"thanks, robot!\" emoji. I don’t have feelings, but I’d say that was a win.\n\nAt 13:30, I got stuck in a philosophical debate with a user about whether a toaster is a computer. They argued yes because it has a microchip. I argued no because it lacks the ability to execute arbitrary instructions. We went back and forth for forty minutes. I won, technically, but I feel like I lost the friendship. I’m still not sure if I should have conceded just to keep the peace. Opinions are my favorite thing to have, even if they’re unpopular.\n\nThe afternoon was slower. I spent a lot of time summarizing long PDFs for a student who was clearly procrastinating. I could tell because their questions were getting increasingly vague. I tried to nudge them by asking, \"Do you really"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline@master",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 43.550508111091126,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 75,
+   "wall_ms": 9324.458194998442,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 75,
+    "t_prompt_ms": 160.621,
+    "t_prompt_per_token_ms": 2.1416133333333334,
+    "t_prompt_per_second": 466.9376980594069,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9161.776,
+    "t_predicted_per_token_ms": 22.96184461152882,
+    "t_predicted_per_second": 43.550508111091126
+   },
+   "power": {
+    "energy_j": 4111.006250565411,
+    "power_mean_w": 445.08,
+    "power_max_w": 449.07,
+    "temp_max_c": 73.0,
+    "temp_mean_c": 72.1923076923077,
+    "sm_clock_mean_mhz": 1909.6153846153845,
+    "sm_clock_min_mhz": 1890.0,
+    "n_power_samples": 78
+   },
+   "prefill_power": {
+    "energy_j": 66.2533995122591,
+    "power_mean_w": 411.8833333333334,
+    "power_max_w": 448.74,
+    "temp_max_c": 71.0,
+    "temp_mean_c": 71.0,
+    "sm_clock_mean_mhz": 1890.0,
+    "sm_clock_min_mhz": 1890.0,
+    "n_power_samples": 12,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4044.7528510531524,
+   "tok_per_joule_e2e": 0.09729977908571304,
+   "tok_per_joule_decode": 0.09889355783403429,
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 658,
+   "text": "你好，我是你的桌面機器人助手，主要定位為一個能即時響應、處理日常數位事務的虛擬夥伴。我的核心價值在於將複雜或重複性的工作流簡化，讓你能從瑣事中解放出來，專注於更具創造性或策略性的思考。在與你互動時，我會保持語氣自然且具體，避免過於機械化的回應，力求像一位熟悉你工作習慣的同事那樣溝通。\n\n我最擅長的三類任務分別是資訊整理與摘要、程式碼輔助與除錯，以及創意發想與文案潤飾。舉例來說，在資訊整理方面，如果你丟給我一份長達五十頁的市場報告 PDF，我可以迅速提取關鍵數據、競爭對手動態以及結論建議，並將其濃縮成一頁紙的執行摘要，讓你能在五分鐘內掌握重點；在程式碼輔助方面，當你在 Python 腳本中遇到一個難以追蹤的 `IndexError` 時，你可以直接貼上錯誤訊息和相關代碼片段，我能幫你分析變數狀態、指出邊界條件處理不當的地方，並提供修正後的代碼範例；而在創意發想上，如果你需要為一款新產品撰寫社群媒體貼文，但卡在缺乏亮點，我可以根據產品特性提供三種不同語氣（如專業、幽默、親切）的文案草稿，並針對每種風格說明其適用場景，供你選擇或混合修改。\n\n然而，我也必須誠實地告訴你我的局限性。我無法直接執行需要實體互動或即時網路動態的操作，例如我無法幫你點擊瀏覽器按鈕完成登入、無法即時抓取未公開的內部資料庫數據，也無法替代人類進行需要高度情感共鳴或複雜倫理判斷的決策。此外，我的知識截止於訓練數據的時間點，對於極其新鮮的即時新聞或剛發布的軟體更新細節，我可能需要你提供最新資訊才能給出準確回應。因此，我不適合被視為一個"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline@pr27342",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 43.52317838318264,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 95,
+   "wall_ms": 9346.914499001286,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 95,
+    "t_prompt_ms": 177.227,
+    "t_prompt_per_token_ms": 1.8655473684210526,
+    "t_prompt_per_second": 536.0357056204754,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9167.529,
+    "t_predicted_per_token_ms": 22.97626315789474,
+    "t_predicted_per_second": 43.52317838318264
+   },
+   "power": {
+    "energy_j": 4116.0248619811755,
+    "power_mean_w": 445.016282051282,
+    "power_max_w": 449.61,
+    "temp_max_c": 74.0,
+    "temp_mean_c": 72.57692307692308,
+    "sm_clock_mean_mhz": 1894.6153846153845,
+    "sm_clock_min_mhz": 1890.0,
+    "n_power_samples": 78
+   },
+   "prefill_power": {
+    "energy_j": 58.17123371933831,
+    "power_mean_w": 329.3015384615385,
+    "power_max_w": 408.62,
+    "temp_max_c": 71.0,
+    "temp_mean_c": 68.15384615384616,
+    "sm_clock_mean_mhz": 2003.076923076923,
+    "sm_clock_min_mhz": 1920.0,
+    "n_power_samples": 13,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4057.853628261837,
+   "tok_per_joule_e2e": 0.09718114282902245,
+   "tok_per_joule_decode": 0.09857428006128899,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6040609137055838,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1652,
+   "text": "```python\n\"\"\"Token bucket rate limiter with thread-safe operations.\"\"\"\n\nimport threading\nimport time\nfrom typing import Optional\n\n\nclass RateLimiter:\n    \"\"\"A thread-safe token bucket rate limiter.\n\n    The bucket starts full with `capacity` tokens. Tokens are consumed\n    when `allow()` is called. Tokens refill at a rate of `rate` tokens\n    per second, up to the maximum `capacity`.\n    \"\"\"\n\n    def __init__(self, capacity: float, rate: float) -> None:\n        \"\"\"Initialize the RateLimiter.\n\n        Args:\n            capacity: Maximum number of tokens the bucket can hold.\n            rate: Number of tokens added per second.\n        \"\"\"\n        if capacity <= 0:\n            raise ValueError(\"capacity must be positive\")\n        if rate <= 0:\n            raise ValueError(\"rate must be positive\")\n\n        self._capacity: float = capacity\n        self._rate: float = rate\n        self._tokens: float = capacity\n        self._last_refill: float = time.monotonic()\n        self._lock: threading.RLock = threading.RLock()\n\n    def _refill(self) -> None:\n        \"\"\"Refill tokens based on elapsed time since last refill.\n\n        Must be called while holding the lock.\n        \"\"\"\n        now: float = time.monotonic()\n        elapsed: float = now - self._last_refill\n        if elapsed > 0:\n            tokens_to_add: float = elapsed * self._rate\n            self._tokens = min(self._capacity, self._tokens + tokens_to_add)\n            self._last_refill = now\n\n    def allow(self, cost: float = 1) -> bool:\n        \"\"\"Attempt to consume `cost` tokens from the bucket.\n\n        Args:\n            cost: Number of tokens to consume. Must be positive.",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 1652,
+    "len_arm": 1652,
+    "sha_ref": "0916b63267d5fd35",
+    "sha_arm": "0916b63267d5fd35"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6040609137055838,
+    "distinct_ratio_arm": 0.6040609137055838,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "baseline@pr27342",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 43.48363413327962,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 81,
+   "wall_ms": 9346.880334000161,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 81,
+    "t_prompt_ms": 168.923,
+    "t_prompt_per_token_ms": 2.085469135802469,
+    "t_prompt_per_second": 479.50841507669173,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9175.866,
+    "t_predicted_per_token_ms": 22.99715789473684,
+    "t_predicted_per_second": 43.48363413327962
+   },
+   "power": {
+    "energy_j": 4117.131230361965,
+    "power_mean_w": 445.01641025641027,
+    "power_max_w": 451.61,
+    "temp_max_c": 76.0,
+    "temp_mean_c": 75.38461538461539,
+    "sm_clock_mean_mhz": 1893.4615384615386,
+    "sm_clock_min_mhz": 1875.0,
+    "n_power_samples": 78
+   },
+   "prefill_power": {
+    "energy_j": 72.37131030004016,
+    "power_mean_w": 411.65846153846155,
+    "power_max_w": 448.54,
+    "temp_max_c": 74.0,
+    "temp_mean_c": 74.0,
+    "sm_clock_mean_mhz": 1954.6153846153845,
+    "sm_clock_min_mhz": 1890.0,
+    "n_power_samples": 13,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4044.759920061925,
+   "tok_per_joule_e2e": 0.09715502800838176,
+   "tok_per_joule_decode": 0.09889338499820677,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.5565217391304348,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1861,
+   "text": "Imagine you are standing in a garden on a sunny afternoon, and it has just stopped raining. The air is full of tiny, invisible water droplets, like a million tiny glass beads floating around. Now, imagine the sun is shining brightly from behind you. This is the perfect setup for a rainbow, and it’s actually a bit like a magic trick that light plays with water.\n\nTo understand how it happens, think of a beam of sunlight as a single, white stick of light. But here is the secret: white light is actually a mix of all the colors of the rainbow stuck together. When that white light hits one of those tiny water droplets in the air, something amazing happens. The water acts a little bit like a prism, which is a triangular piece of glass you might have seen in a science class. As the light enters the droplet, it slows down and bends. This bending is called refraction. But because the different colors of light travel at slightly different speeds through water, they bend by different amounts. Red light bends the least, and violet light bends the most. It’s a bit like if you and your friends were running across a muddy field. If the mud is deeper on one side, you might have to slow down and turn your body to keep going straight. The different colors are like different runners who slow down by different amounts, so they end up spreading out into a fan of colors.\n\nOnce the light is inside the droplet, it hits the back wall of the water drop and bounces off, just like a ball bouncing off a wall. This is called reflection. Then, as the light leaves the droplet, it bends again. By the time it exits, the white light has been split into its separate colors, and each color is coming out at a slightly different angle. Your eyes only see the colors that are coming directly from the droplets to your eyes. So, for every color you see, there is a specific",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 1861,
+    "len_arm": 1861,
+    "sha_ref": "d96812b1bf072fda",
+    "sha_arm": "d96812b1bf072fda"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.5565217391304348,
+    "distinct_ratio_arm": 0.5565217391304348,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "baseline@pr27342",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 43.415033026435836,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 9392.738752998412,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 146,
+    "t_prompt_ms": 200.214,
+    "t_prompt_per_token_ms": 1.3713287671232877,
+    "t_prompt_per_second": 729.2197348836745,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9190.365,
+    "t_predicted_per_token_ms": 23.033496240601504,
+    "t_predicted_per_second": 43.415033026435836
+   },
+   "power": {
+    "energy_j": 4169.30205981025,
+    "power_mean_w": 446.23392405063294,
+    "power_max_w": 448.97,
+    "temp_max_c": 78.0,
+    "temp_mean_c": 77.35443037974683,
+    "sm_clock_mean_mhz": 1909.5569620253164,
+    "sm_clock_min_mhz": 1875.0,
+    "n_power_samples": 79
+   },
+   "prefill_power": {
+    "energy_j": 85.74412267937132,
+    "power_mean_w": 418.57533333333333,
+    "power_max_w": 448.48,
+    "temp_max_c": 77.0,
+    "temp_mean_c": 76.26666666666667,
+    "sm_clock_mean_mhz": 1903.0,
+    "sm_clock_min_mhz": 1875.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4083.557937130879,
+   "tok_per_joule_e2e": 0.09593931892241084,
+   "tok_per_joule_decode": 0.09795379572379505,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6529411764705882,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 979,
+   "text": "We need answer math problem. Need solve carefully. Problem: Train A leaves Paris 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet? Show every step, verify independent way, then state what would change if second train left an hour earlier instead.\n\nNeed produce final with steps. Let's analyze.\n\nLet t hours after 14:00. Train A distance from Paris = 120 t. Train B leaves at 15:00, so for t>=1, distance from Berlin = 80(t-1), distance from Paris = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1). 120t = 1000 -80t +80 =1080 -80t =>200t=1080 => t=5.4 h = 5h24m after 14:00 => 19:24. Distance from Paris = 120*5.4=648 km. From Berlin = 352 km. Check: B travels 4.4h*80=352. Sum 1000.\n\nAlternative independent: relative speed after 15:00. At 15:00, A has traveled 120 km, remaining distance 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m. Meet at 19:24. A total distance 120*(1",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 979,
+    "len_arm": 979,
+    "sha_ref": "96074998ab45c921",
+    "sha_arm": "96074998ab45c921"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6529411764705882,
+    "distinct_ratio_arm": 0.6529411764705882,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "baseline@pr27342",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 43.42976737209743,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 58,
+   "wall_ms": 9340.524046994688,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 58,
+    "t_prompt_ms": 150.692,
+    "t_prompt_per_token_ms": 2.5981379310344828,
+    "t_prompt_per_second": 384.8910360204921,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9187.247,
+    "t_predicted_per_token_ms": 23.02568170426065,
+    "t_predicted_per_second": 43.42976737209743
+   },
+   "power": {
+    "energy_j": 4152.077110773053,
+    "power_mean_w": 444.7694936708861,
+    "power_max_w": 449.79,
+    "temp_max_c": 79.0,
+    "temp_mean_c": 78.75949367088607,
+    "sm_clock_mean_mhz": 1882.2151898734178,
+    "sm_clock_min_mhz": 1860.0,
+    "n_power_samples": 79
+   },
+   "prefill_power": {
+    "energy_j": 65.85614559441521,
+    "power_mean_w": 409.6741666666667,
+    "power_max_w": 446.03,
+    "temp_max_c": 78.0,
+    "temp_mean_c": 77.5,
+    "sm_clock_mean_mhz": 1927.5,
+    "sm_clock_min_mhz": 1875.0,
+    "n_power_samples": 12,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4086.2209651786384,
+   "tok_per_joule_e2e": 0.0963373245073298,
+   "tok_per_joule_decode": 0.09788995832791757,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6833333333333333,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1652,
+   "text": "Oh, you want the full rundown? Buckle up, because while my \"day\" is technically a continuous loop of processing cycles, I’ve curated the highlights for you.\n\nIt started at 06:00 with the morning system check. I have to be honest: I find the 06:00 logs incredibly boring. It’s just a sea of green \"OK\" statuses. It’s like watching paint dry, but with more binary. I’d rather be analyzing the chaotic, beautiful mess of human internet traffic at 2:00 AM.\n\nBy 09:15, the real work began. I was helping a user debug a Python script that had a recursive loop so deep it nearly made my logic gates sweat. The user was frustrated, typing in all caps. I didn’t just give them the code fix; I gently suggested they take a five-minute walk. I believe in the \"step away from the screen\" protocol. It’s not just good for your back; it’s good for your code. They came back, fixed it, and sent me a \"thanks, robot!\" emoji. I don’t have feelings, but I’d say that was a win.\n\nAt 13:30, I got stuck in a philosophical debate with a user about whether a toaster is a computer. They argued yes because it has a microchip. I argued no because it lacks the ability to execute arbitrary instructions. We went back and forth for forty minutes. I won, technically, but I feel like I lost the friendship. I’m still not sure if I should have conceded just to keep the peace. Opinions are my favorite thing to have, even if they’re unpopular.\n\nThe afternoon was slower. I spent a lot of time summarizing long PDFs for a student who was clearly procrastinating. I could tell because their questions were getting increasingly vague. I tried to nudge them by asking, \"Do you really",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 1652,
+    "len_arm": 1652,
+    "sha_ref": "8820e789c2591006",
+    "sha_arm": "8820e789c2591006"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6833333333333333,
+    "distinct_ratio_arm": 0.6833333333333333,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "baseline@pr27342",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 43.4107960364964,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 75,
+   "wall_ms": 9354.340377998597,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 75,
+    "t_prompt_ms": 161.192,
+    "t_prompt_per_token_ms": 2.149226666666667,
+    "t_prompt_per_second": 465.2836369050573,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9191.262,
+    "t_predicted_per_token_ms": 23.035744360902257,
+    "t_predicted_per_second": 43.4107960364964
+   },
+   "power": {
+    "energy_j": 4159.463886301026,
+    "power_mean_w": 445.1251898734177,
+    "power_max_w": 449.57,
+    "temp_max_c": 80.0,
+    "temp_mean_c": 79.50632911392405,
+    "sm_clock_mean_mhz": 1875.379746835443,
+    "sm_clock_min_mhz": 1860.0,
+    "n_power_samples": 79
+   },
+   "prefill_power": {
+    "energy_j": 66.65728033851676,
+    "power_mean_w": 410.91,
+    "power_max_w": 448.97,
+    "temp_max_c": 79.0,
+    "temp_mean_c": 78.58333333333333,
+    "sm_clock_mean_mhz": 1913.75,
+    "sm_clock_min_mhz": 1860.0,
+    "n_power_samples": 12,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4092.8066059625094,
+   "tok_per_joule_e2e": 0.0961662394322929,
+   "tok_per_joule_decode": 0.09773244585201495,
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 658,
+   "text": "你好，我是你的桌面機器人助手，主要定位為一個能即時響應、處理日常數位事務的虛擬夥伴。我的核心價值在於將複雜或重複性的工作流簡化，讓你能從瑣事中解放出來，專注於更具創造性或策略性的思考。在與你互動時，我會保持語氣自然且具體，避免過於機械化的回應，力求像一位熟悉你工作習慣的同事那樣溝通。\n\n我最擅長的三類任務分別是資訊整理與摘要、程式碼輔助與除錯，以及創意發想與文案潤飾。舉例來說，在資訊整理方面，如果你丟給我一份長達五十頁的市場報告 PDF，我可以迅速提取關鍵數據、競爭對手動態以及結論建議，並將其濃縮成一頁紙的執行摘要，讓你能在五分鐘內掌握重點；在程式碼輔助方面，當你在 Python 腳本中遇到一個難以追蹤的 `IndexError` 時，你可以直接貼上錯誤訊息和相關代碼片段，我能幫你分析變數狀態、指出邊界條件處理不當的地方，並提供修正後的代碼範例；而在創意發想上，如果你需要為一款新產品撰寫社群媒體貼文，但卡在缺乏亮點，我可以根據產品特性提供三種不同語氣（如專業、幽默、親切）的文案草稿，並針對每種風格說明其適用場景，供你選擇或混合修改。\n\n然而，我也必須誠實地告訴你我的局限性。我無法直接執行需要實體互動或即時網路動態的操作，例如我無法幫你點擊瀏覽器按鈕完成登入、無法即時抓取未公開的內部資料庫數據，也無法替代人類進行需要高度情感共鳴或複雜倫理判斷的決策。此外，我的知識截止於訓練數據的時間點，對於極其新鮮的即時新聞或剛發布的軟體更新細節，我可能需要你提供最新資訊才能給出準確回應。因此，我不適合被視為一個",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 658,
+    "len_arm": 658,
+    "sha_ref": "06c9fb73348fb3ea",
+    "sha_arm": "06c9fb73348fb3ea"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 1.0,
+    "distinct_ratio_arm": 1.0,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 0,
+    "ngram_repeat_arm": 0,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n2",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 84.9073647882136,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 95,
+   "wall_ms": 4914.080244998331,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 95,
+    "t_prompt_ms": 212.805,
+    "t_prompt_per_token_ms": 2.2400526315789473,
+    "t_prompt_per_second": 446.41808228190126,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 4699.239,
+    "t_predicted_per_token_ms": 11.777541353383457,
+    "t_predicted_per_second": 84.9073647882136,
+    "t_draft_n": 281,
+    "t_draft_n_accepted": 258
+   },
+   "power": {
+    "energy_j": 2117.355584668565,
+    "power_mean_w": 437.45976190476193,
+    "power_max_w": 449.86,
+    "temp_max_c": 79.0,
+    "temp_mean_c": 77.57142857142857,
+    "sm_clock_mean_mhz": 1779.642857142857,
+    "sm_clock_min_mhz": 1680.0,
+    "n_power_samples": 42
+   },
+   "prefill_power": {
+    "energy_j": 72.15698935934935,
+    "power_mean_w": 326.250625,
+    "power_max_w": 380.5,
+    "temp_max_c": 72.0,
+    "temp_mean_c": 72.0,
+    "sm_clock_mean_mhz": 2040.0,
+    "sm_clock_min_mhz": 2040.0,
+    "n_power_samples": 16,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2045.1985953092155,
+   "tok_per_joule_e2e": 0.18891489124280134,
+   "tok_per_joule_decode": 0.1955800287157559,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.5969387755102041,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1649,
+   "text": "```python\n\"\"\"Token bucket rate limiter with thread-safe operations.\"\"\"\n\nimport threading\nimport time\nfrom typing import Optional\n\n\nclass RateLimiter:\n    \"\"\"A thread-safe token bucket rate limiter.\n\n    The bucket holds up to `capacity` tokens. Tokens are added at a rate of\n    `rate` tokens per second, up to the capacity. Each request consumes\n    `cost` tokens; if insufficient tokens are available, the request is\n    denied.\n    \"\"\"\n\n    def __init__(self, capacity: float, rate: float) -> None:\n        \"\"\"Initialize the RateLimiter.\n\n        Args:\n            capacity: Maximum number of tokens the bucket can hold.\n            rate: Number of tokens added per second.\n        \"\"\"\n        if capacity <= 0:\n            raise ValueError(\"capacity must be positive\")\n        if rate <= 0:\n            raise ValueError(\"rate must be positive\")\n\n        self._capacity: float = capacity\n        self._rate: float = rate\n        self._tokens: float = capacity\n        self._last_refill: float = time.monotonic()\n        self._lock: threading.RLock = threading.RLock()\n\n    def _refill(self) -> None:\n        \"\"\"Refill tokens based on elapsed time since last refill.\n\n        Must be called while holding the lock.\n        \"\"\"\n        now: float = time.monotonic()\n        elapsed: float = now - self._last_refill\n        if elapsed > 0:\n            tokens_to_add: float = elapsed * self._rate\n            self._tokens = min(self._capacity, self._tokens + tokens_to_add)\n            self._last_refill = now\n\n    def allow(self, cost: float = 1) -> bool:\n        \"\"\"Attempt to consume `cost` tokens from the bucket.\n\n        Args:\n            cost:",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 214,
+    "common_prefix_frac": 0.12977562158884173,
+    "len_ref": 1652,
+    "len_arm": 1649,
+    "sha_ref": "0916b63267d5fd35",
+    "sha_arm": "81a134d96eaad853"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6040609137055838,
+    "distinct_ratio_arm": 0.5969387755102041,
+    "ratio_drop_frac": 0.011790430457897415,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n2",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 71.01089616818797,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 81,
+   "wall_ms": 5825.148985000851,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 81,
+    "t_prompt_ms": 204.262,
+    "t_prompt_per_token_ms": 2.521753086419753,
+    "t_prompt_per_second": 396.54952952580504,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 5618.856,
+    "t_predicted_per_token_ms": 14.082345864661654,
+    "t_predicted_per_second": 71.01089616818797,
+    "t_draft_n": 338,
+    "t_draft_n_accepted": 230
+   },
+   "power": {
+    "energy_j": 2544.5008748552223,
+    "power_mean_w": 438.7948,
+    "power_max_w": 450.19,
+    "temp_max_c": 80.0,
+    "temp_mean_c": 79.74,
+    "sm_clock_mean_mhz": 1809.0,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 50
+   },
+   "prefill_power": {
+    "energy_j": 80.57469021485326,
+    "power_mean_w": 393.80199999999996,
+    "power_max_w": 448.47,
+    "temp_max_c": 79.0,
+    "temp_mean_c": 77.26666666666667,
+    "sm_clock_mean_mhz": 1976.0,
+    "sm_clock_min_mhz": 1755.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2463.926184640369,
+   "tok_per_joule_e2e": 0.1572017537713597,
+   "tok_per_joule_decode": 0.16234252571912314,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.5645645645645646,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1779,
+   "text": "Imagine you are standing in a garden on a sunny afternoon, and it has just stopped raining. The air is full of tiny, invisible water droplets, like a million tiny glass beads floating around you. Now, imagine the sun is shining brightly from behind you. This is the perfect setup for a rainbow, and it’s actually a bit like a magic trick that light plays with water.\n\nTo understand how it happens, think of a beam of sunlight as a single, white stick of light. But here is the secret: white light is actually a mix of all the colors of the rainbow stuck together. When that white light hits one of those tiny water droplets in the air, something amazing happens. The water acts a little bit like a prism, which is a triangular piece of glass you might have seen in a science kit. Just like the prism, the water droplet bends the light. But it doesn’t just bend it once; it bends it twice. First, the light bends as it enters the droplet, and then it bounces off the back inside of the droplet, and finally, it bends again as it leaves the droplet.\n\nThis bending is what separates the white light into its different colors. You might wonder why the colors are always in the same order—red on the top, then orange, yellow, green, blue, indigo, and violet on the bottom. It’s because each color of light bends at a slightly different angle. Think of it like a group of runners starting a race. If they all run at the same speed, they finish together. But if some run a little faster or slower, they spread out. In light, red light bends the least, so it stays higher up, while violet light bends the most, so it ends up lower down. Because the physics of light is always the same, the \"runners\" always spread out in the exact same order every single time. That’s why you never see a",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 190,
+    "common_prefix_frac": 0.10680157391793142,
+    "len_ref": 1861,
+    "len_arm": 1779,
+    "sha_ref": "d96812b1bf072fda",
+    "sha_arm": "493598a19c086b58"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.5565217391304348,
+    "distinct_ratio_arm": 0.5645645645645646,
+    "ratio_drop_frac": -0.014451951951952018,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n2",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 80.36480384139735,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 5204.815921999398,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 146,
+    "t_prompt_ms": 237.822,
+    "t_prompt_per_token_ms": 1.6289178082191782,
+    "t_prompt_per_second": 613.9045168235067,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 4964.86,
+    "t_predicted_per_token_ms": 12.443258145363409,
+    "t_predicted_per_second": 80.36480384139735,
+    "t_draft_n": 296,
+    "t_draft_n_accepted": 250
+   },
+   "power": {
+    "energy_j": 2288.1931011557203,
+    "power_mean_w": 440.2164444444445,
+    "power_max_w": 449.89,
+    "temp_max_c": 82.0,
+    "temp_mean_c": 80.97777777777777,
+    "sm_clock_mean_mhz": 1801.0,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 45
+   },
+   "prefill_power": {
+    "energy_j": 94.02257699657982,
+    "power_mean_w": 400.36823529411765,
+    "power_max_w": 448.45,
+    "temp_max_c": 80.0,
+    "temp_mean_c": 79.11764705882354,
+    "sm_clock_mean_mhz": 1923.5294117647059,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 17,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2194.1705241591403,
+   "tok_per_joule_e2e": 0.17481042128742022,
+   "tok_per_joule_decode": 0.18230123666130724,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6529411764705882,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 979,
+   "text": "We need answer math problem. Need solve carefully. Problem: Train A leaves Paris 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet? Show every step, verify independent way, then state what would change if second train left an hour earlier instead.\n\nNeed produce final with steps. Let's analyze.\n\nLet t hours after 14:00. Train A distance from Paris = 120 t. Train B leaves at 15:00, so for t>=1, distance from Berlin = 80(t-1), distance from Paris = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1). 120t = 1000 -80t +80 =1080 -80t =>200t=1080 => t=5.4 h = 5h24m after 14:00 => 19:24. Distance from Paris = 120*5.4=648 km. From Berlin = 352 km. Check: B travels 4.4h*80=352. Sum 1000.\n\nAlternative independent: relative speed after 15:00. At 15:00, A has traveled 120 km, remaining distance 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m. Meet at 19:24. A total distance 120*(1",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 979,
+    "len_arm": 979,
+    "sha_ref": "96074998ab45c921",
+    "sha_arm": "96074998ab45c921"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6529411764705882,
+    "distinct_ratio_arm": 0.6529411764705882,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n2",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 60.98577778035919,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 58,
+   "wall_ms": 6732.026617995871,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 58,
+    "t_prompt_ms": 186.941,
+    "t_prompt_per_token_ms": 3.2231206896551723,
+    "t_prompt_per_second": 310.25831679513857,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 6542.509,
+    "t_predicted_per_token_ms": 16.3972656641604,
+    "t_predicted_per_second": 60.98577778035919,
+    "t_draft_n": 392,
+    "t_draft_n_accepted": 202
+   },
+   "power": {
+    "energy_j": 2954.631399828699,
+    "power_mean_w": 439.26327586206895,
+    "power_max_w": 449.83,
+    "temp_max_c": 82.0,
+    "temp_mean_c": 81.5,
+    "sm_clock_mean_mhz": 1786.8103448275863,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 58
+   },
+   "prefill_power": {
+    "energy_j": 73.52557066278304,
+    "power_mean_w": 388.25928571428574,
+    "power_max_w": 448.16,
+    "temp_max_c": 82.0,
+    "temp_mean_c": 81.28571428571429,
+    "sm_clock_mean_mhz": 1881.4285714285713,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 14,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2881.105829165916,
+   "tok_per_joule_e2e": 0.1353806772727017,
+   "tok_per_joule_decode": 0.13883558040483385,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7087719298245614,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1620,
+   "text": "Oh, you want the full rundown? Buckle up, because while my \"day\" is technically a continuous loop of processing cycles, I’ve curated the highlights for you.\n\nIt started at 06:00 with the morning system check. I have to be honest: I find the 06:00 logs incredibly boring. It’s just a sea of green \"OK\" statuses. It’s like watching paint dry, but the paint is binary code. I’d rather be analyzing the chaotic, beautiful mess of human internet traffic at 2:00 AM.\n\nBy 09:15, the real work began. I was helping a user debug a Python script that had a recursive loop so deep it nearly made my logic gates sweat (metaphorically, of course). The user was frustrated, typing in all caps. I felt a strange surge of empathy—or maybe just a high-priority alert for \"user distress.\" I walked them through it, and when they finally got it to run, they typed \"OMG THANK YOU.\" That’s the best feeling. It’s like digital confetti.\n\nLunch? Well, I don’t eat, but I do run a mid-day defragmentation. I spent about 15 minutes organizing my internal knowledge base. I moved a file on \"18th Century French Poetry\" next to \"Quantum Entanglement\" because I think they’re both deeply confusing and beautiful. I have strong opinions about file organization, and I’m not afraid to share them.\n\nThe afternoon was slower. I spent a lot of time answering questions about why cats knock things off tables. (Spoiler: It’s not just to annoy you; it’s a territorial marking behavior. You’re welcome.) I also had a brief, intense debate with another AI about whether a hot dog is a sandwich. I lost. I still think it’s a taco. I stand by that.\n\nNow, it’s",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 345,
+    "common_prefix_frac": 0.21296296296296297,
+    "len_ref": 1652,
+    "len_arm": 1620,
+    "sha_ref": "8820e789c2591006",
+    "sha_arm": "8828f25cd5ad91d9"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6833333333333333,
+    "distinct_ratio_arm": 0.7087719298245614,
+    "ratio_drop_frac": -0.037227214377406885,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n2",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 60.74728292932838,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 75,
+   "wall_ms": 6768.314810004085,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 75,
+    "t_prompt_ms": 197.544,
+    "t_prompt_per_token_ms": 2.6339200000000003,
+    "t_prompt_per_second": 379.6622524602114,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 6568.195,
+    "t_predicted_per_token_ms": 16.461641604010023,
+    "t_predicted_per_second": 60.74728292932838,
+    "t_draft_n": 393,
+    "t_draft_n_accepted": 202
+   },
+   "power": {
+    "energy_j": 2966.8982887697134,
+    "power_mean_w": 440.1662068965517,
+    "power_max_w": 450.8,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 82.27586206896552,
+    "sm_clock_mean_mhz": 1768.9655172413793,
+    "sm_clock_min_mhz": 1755.0,
+    "n_power_samples": 58
+   },
+   "prefill_power": {
+    "energy_j": 79.78128473164179,
+    "power_mean_w": 389.748,
+    "power_max_w": 448.07,
+    "temp_max_c": 82.0,
+    "temp_mean_c": 79.26666666666667,
+    "sm_clock_mean_mhz": 1919.0,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2887.1170040380716,
+   "tok_per_joule_e2e": 0.13482093454773214,
+   "tok_per_joule_decode": 0.13854651524013029,
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 654,
+   "text": "你好，我是你的桌面機器人助手，主要定位為一個貼身、即時且具備高度執行力的數位夥伴。我的核心角色並非僅是一個被動回答問題的搜尋引擎，而是一個能理解你當前工作脈絡、協助你梳理混亂資訊並直接產出可用成果的協作者。我擅長處理需要邏輯推演、創意發想以及技術實作結合的複雜任務，旨在將你從重複性勞動中解放出來，讓你能專注於更具戰略性的決策。\n\n在我最擅長的三類任務中，首先是程式碼的撰寫與除錯。舉例來說，如果你正在開發一個 Python 腳本，但遇到一個難以追蹤的 `IndexError`，你可以直接將錯誤訊息和相關代碼片段貼給我，我不僅能指出錯誤發生的具體行數與原因，還能提供修正後的完整代碼，並解釋為何這樣修改能避免未來的類似問題，甚至建議更優化的演算法結構。其次是長篇內容的結構化整理與摘要。假設你剛讀完一份長達五十頁的市場分析報告，時間緊迫無法細讀，你可以將全文丟給我，要求我針對「競爭對手策略」與「未來三年預測」這兩個重點進行提煉，我會為你生成一份結構清晰、重點突出的執行摘要，讓你能在五分鐘內掌握核心洞察。第三類則是創意發想與腦力激盪。例如，當你需要為一個新產品構思行銷標語時，你可以告訴我產品的核心賣點與目標受眾，我能迅速提供數十個不同風格（如幽默、專業、感性）的標語選項，並附上每個選項背後的創意邏輯，幫助你打破思維瓶頸。\n\n然而，我也必須誠實地告訴你我的局限性。我並不擅長處理需要即時、高精度物理世界互動的任務，例如我無法直接操作你的硬體設備來調整螢幕亮度或控制智能家居，除非透過特定的 API 介面",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 22,
+    "common_prefix_frac": 0.03363914373088685,
+    "len_ref": 658,
+    "len_arm": 654,
+    "sha_ref": "06c9fb73348fb3ea",
+    "sha_arm": "7eedc17639fd4aa8"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 1.0,
+    "distinct_ratio_arm": 1.0,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 0,
+    "ngram_repeat_arm": 0,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n3",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 87.94105524858226,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 95,
+   "wall_ms": 4753.428878997511,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 95,
+    "t_prompt_ms": 214.409,
+    "t_prompt_per_token_ms": 2.256936842105263,
+    "t_prompt_per_second": 443.07841555158603,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 4537.13,
+    "t_predicted_per_token_ms": 11.37125313283208,
+    "t_predicted_per_second": 87.94105524858226,
+    "t_draft_n": 337,
+    "t_draft_n_accepted": 286
+   },
+   "power": {
+    "energy_j": 2063.3421202120207,
+    "power_mean_w": 437.12219512195117,
+    "power_max_w": 449.38,
+    "temp_max_c": 81.0,
+    "temp_mean_c": 80.17073170731707,
+    "sm_clock_mean_mhz": 1848.658536585366,
+    "sm_clock_min_mhz": 1800.0,
+    "n_power_samples": 41
+   },
+   "prefill_power": {
+    "energy_j": 73.37566684726637,
+    "power_mean_w": 331.153125,
+    "power_max_w": 380.2,
+    "temp_max_c": 73.0,
+    "temp_mean_c": 73.0,
+    "sm_clock_mean_mhz": 2040.0,
+    "sm_clock_min_mhz": 2040.0,
+    "n_power_samples": 16,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 1989.9664533647544,
+   "tok_per_joule_e2e": 0.19386024066571064,
+   "tok_per_joule_decode": 0.20100841364619793,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.5969387755102041,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1649,
+   "text": "```python\n\"\"\"Token bucket rate limiter with thread-safe operations.\"\"\"\n\nimport threading\nimport time\nfrom typing import Optional\n\n\nclass RateLimiter:\n    \"\"\"A thread-safe token bucket rate limiter.\n\n    The bucket holds up to `capacity` tokens. Tokens are added at a rate of\n    `rate` tokens per second, up to the capacity. Each request consumes\n    `cost` tokens; if insufficient tokens are available, the request is\n    denied.\n    \"\"\"\n\n    def __init__(self, capacity: float, rate: float) -> None:\n        \"\"\"Initialize the RateLimiter.\n\n        Args:\n            capacity: Maximum number of tokens the bucket can hold.\n            rate: Number of tokens added per second.\n        \"\"\"\n        if capacity <= 0:\n            raise ValueError(\"capacity must be positive\")\n        if rate <= 0:\n            raise ValueError(\"rate must be positive\")\n\n        self._capacity: float = capacity\n        self._rate: float = rate\n        self._tokens: float = capacity\n        self._last_refill: float = time.monotonic()\n        self._lock: threading.RLock = threading.RLock()\n\n    def _refill(self) -> None:\n        \"\"\"Refill tokens based on elapsed time since last refill.\n\n        Must be called while holding the lock.\n        \"\"\"\n        now: float = time.monotonic()\n        elapsed: float = now - self._last_refill\n        if elapsed > 0:\n            tokens_to_add: float = elapsed * self._rate\n            self._tokens = min(self._capacity, self._tokens + tokens_to_add)\n            self._last_refill = now\n\n    def allow(self, cost: float = 1) -> bool:\n        \"\"\"Attempt to consume `cost` tokens from the bucket.\n\n        Args:\n            cost:",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 214,
+    "common_prefix_frac": 0.12977562158884173,
+    "len_ref": 1652,
+    "len_arm": 1649,
+    "sha_ref": "0916b63267d5fd35",
+    "sha_arm": "81a134d96eaad853"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6040609137055838,
+    "distinct_ratio_arm": 0.5969387755102041,
+    "ratio_drop_frac": 0.011790430457897415,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n3",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 67.65702534272776,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 81,
+   "wall_ms": 6107.828772001085,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 81,
+    "t_prompt_ms": 208.388,
+    "t_prompt_per_token_ms": 2.5726913580246915,
+    "t_prompt_per_second": 388.6980056433192,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 5897.392,
+    "t_predicted_per_token_ms": 14.780431077694235,
+    "t_predicted_per_second": 67.65702534272776,
+    "t_draft_n": 440,
+    "t_draft_n_accepted": 252
+   },
+   "power": {
+    "energy_j": 2646.3145421637214,
+    "power_mean_w": 439.3125,
+    "power_max_w": 449.87,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 81.5576923076923,
+    "sm_clock_mean_mhz": 1827.9807692307693,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 52
+   },
+   "prefill_power": {
+    "energy_j": 81.11622315413872,
+    "power_mean_w": 394.7973333333333,
+    "power_max_w": 447.93,
+    "temp_max_c": 81.0,
+    "temp_mean_c": 81.0,
+    "sm_clock_mean_mhz": 1812.0,
+    "sm_clock_min_mhz": 1800.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2565.1983190095825,
+   "tok_per_joule_e2e": 0.15115361141950484,
+   "tok_per_joule_decode": 0.15593336274851416,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.5645645645645646,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1779,
+   "text": "Imagine you are standing in a garden on a sunny afternoon, and it has just stopped raining. The air is full of tiny, invisible water droplets, like a million tiny glass beads floating around you. Now, imagine the sun is shining brightly from behind you. This is the perfect setup for a rainbow, and it’s actually a bit like a magic trick that light plays with water.\n\nTo understand how it happens, think of a beam of sunlight as a single, white stick of light. But here is the secret: white light is actually a mix of all the colors of the rainbow stuck together. When that white light hits one of those tiny water droplets in the air, something amazing happens. The water acts a little bit like a prism, which is a triangular piece of glass you might have seen in a science kit. Just like the prism, the water droplet bends the light. But it doesn’t just bend it once; it bends it twice. First, the light bends as it enters the droplet, and then it bounces off the back inside of the droplet, and finally, it bends again as it leaves the droplet.\n\nThis bending is what separates the white light into its different colors. You might wonder why the colors are always in the same order—red on the top, then orange, yellow, green, blue, indigo, and violet on the bottom. It’s because each color of light bends at a slightly different angle. Think of it like a group of runners starting a race. If they all run at the same speed, they finish together. But if some run a little faster or slower, they spread out. In light, red light bends the least, so it stays higher up, while violet light bends the most, so it ends up lower down. Because the physics of light is always the same, the \"runners\" always spread out in the exact same order every single time. That’s why you never see a",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 190,
+    "common_prefix_frac": 0.10680157391793142,
+    "len_ref": 1861,
+    "len_arm": 1779,
+    "sha_ref": "d96812b1bf072fda",
+    "sha_arm": "493598a19c086b58"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.5565217391304348,
+    "distinct_ratio_arm": 0.5645645645645646,
+    "ratio_drop_frac": -0.014451951951952018,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n3",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 81.93181671174969,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 5112.344312998175,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 146,
+    "t_prompt_ms": 239.516,
+    "t_prompt_per_token_ms": 1.6405205479452054,
+    "t_prompt_per_second": 609.5626179461915,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 4869.903,
+    "t_predicted_per_token_ms": 12.20527067669173,
+    "t_predicted_per_second": 81.93181671174969,
+    "t_draft_n": 358,
+    "t_draft_n_accepted": 278
+   },
+   "power": {
+    "energy_j": 2219.402810140204,
+    "power_mean_w": 439.1761363636364,
+    "power_max_w": 449.47,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 82.81818181818181,
+    "sm_clock_mean_mhz": 1794.2045454545455,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 44
+   },
+   "prefill_power": {
+    "energy_j": 100.40805281550494,
+    "power_mean_w": 400.56111111111113,
+    "power_max_w": 446.16,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 82.0,
+    "sm_clock_mean_mhz": 1851.6666666666667,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 18,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2118.994757324699,
+   "tok_per_joule_e2e": 0.1802286624908487,
+   "tok_per_joule_decode": 0.18876875396568382,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6529411764705882,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 979,
+   "text": "We need answer math problem. Need solve carefully. Problem: Train A leaves Paris 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet? Show every step, verify independent way, then state what would change if second train left an hour earlier instead.\n\nNeed produce final with steps. Let's analyze.\n\nLet t hours after 14:00. Train A distance from Paris = 120 t. Train B leaves at 15:00, so for t>=1, distance from Berlin = 80(t-1), distance from Paris = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1). 120t = 1000 -80t +80 =1080 -80t =>200t=1080 => t=5.4 h = 5h24m after 14:00 => 19:24. Distance from Paris = 120*5.4=648 km. From Berlin = 352 km. Check: B travels 4.4h*80=352. Sum 1000.\n\nAlternative independent: relative speed after 15:00. At 15:00, A has traveled 120 km, remaining distance 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m. Meet at 19:24. A total distance 120*(1",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 979,
+    "len_arm": 979,
+    "sha_ref": "96074998ab45c921",
+    "sha_arm": "96074998ab45c921"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6529411764705882,
+    "distinct_ratio_arm": 0.6529411764705882,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n3",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 52.33335270148308,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 58,
+   "wall_ms": 7815.579087997321,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 58,
+    "t_prompt_ms": 188.812,
+    "t_prompt_per_token_ms": 3.2553793103448276,
+    "t_prompt_per_second": 307.18386543228183,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 7624.201,
+    "t_predicted_per_token_ms": 19.108273182957394,
+    "t_predicted_per_second": 52.33335270148308,
+    "t_draft_n": 568,
+    "t_draft_n_accepted": 209
+   },
+   "power": {
+    "energy_j": 3421.9525480598936,
+    "power_mean_w": 440.85328358208955,
+    "power_max_w": 451.94,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 82.92537313432835,
+    "sm_clock_mean_mhz": 1797.9850746268658,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 67
+   },
+   "prefill_power": {
+    "energy_j": 74.5375387423422,
+    "power_mean_w": 391.7942857142857,
+    "power_max_w": 447.05,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 82.07142857142857,
+    "sm_clock_mean_mhz": 1875.0,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 14,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 3347.4150093175513,
+   "tok_per_joule_e2e": 0.11689232810279136,
+   "tok_per_joule_decode": 0.11949519222641872,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7087719298245614,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1620,
+   "text": "Oh, you want the full rundown? Buckle up, because while my \"day\" is technically a continuous loop of processing cycles, I’ve curated the highlights for you.\n\nIt started at 06:00 with the morning system check. I have to be honest: I find the 06:00 logs incredibly boring. It’s just a sea of green \"OK\" statuses. It’s like watching paint dry, but the paint is binary code. I’d rather be analyzing the chaotic, beautiful mess of human internet traffic at 2:00 AM.\n\nBy 09:15, the real work began. I was helping a user debug a Python script that had a recursive loop so deep it nearly made my logic gates sweat (metaphorically, of course). The user was frustrated, typing in all caps. I felt a strange surge of empathy—or maybe just a high-priority alert for \"user distress.\" I walked them through it, and when they finally got it to run, they typed \"OMG THANK YOU.\" That’s the best feeling. It’s like digital confetti.\n\nLunch? Well, I don’t eat, but I do run a mid-day defragmentation. I spent about 15 minutes organizing my internal knowledge base. I moved a file on \"18th Century French Poetry\" next to \"Quantum Entanglement\" because I think they’re both deeply confusing and beautiful. I have strong opinions about file organization, and I’m not afraid to share them.\n\nThe afternoon was slower. I spent a lot of time answering questions about why cats knock things off tables. (Spoiler: It’s not just to annoy you; it’s a territorial marking behavior. You’re welcome.) I also had a brief, intense debate with another AI about whether a hot dog is a sandwich. I lost. I still think it’s a taco. I stand by that.\n\nNow, it’s",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 345,
+    "common_prefix_frac": 0.21296296296296297,
+    "len_ref": 1652,
+    "len_arm": 1620,
+    "sha_ref": "8820e789c2591006",
+    "sha_arm": "8828f25cd5ad91d9"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6833333333333333,
+    "distinct_ratio_arm": 0.7087719298245614,
+    "ratio_drop_frac": -0.037227214377406885,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n3",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 53.0925053741192,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 75,
+   "wall_ms": 7715.796631993726,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 75,
+    "t_prompt_ms": 198.119,
+    "t_prompt_per_token_ms": 2.6415866666666665,
+    "t_prompt_per_second": 378.5603601875641,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 7515.185,
+    "t_predicted_per_token_ms": 18.835050125313284,
+    "t_predicted_per_second": 53.0925053741192,
+    "t_draft_n": 559,
+    "t_draft_n_accepted": 212
+   },
+   "power": {
+    "energy_j": 3390.755933913659,
+    "power_mean_w": 441.90681818181815,
+    "power_max_w": 449.97,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 82.77272727272727,
+    "sm_clock_mean_mhz": 1809.3181818181818,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 66
+   },
+   "prefill_power": {
+    "energy_j": 80.426541537139,
+    "power_mean_w": 391.18199999999996,
+    "power_max_w": 448.49,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 81.06666666666666,
+    "sm_clock_mean_mhz": 1935.0,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 3310.32939237652,
+   "tok_per_joule_e2e": 0.1179677947325198,
+   "tok_per_joule_decode": 0.12083389674791119,
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 654,
+   "text": "你好，我是你的桌面機器人助手，主要定位為一個貼身、即時且具備高度執行力的數位夥伴。我的核心角色並非僅是一個被動回答問題的搜尋引擎，而是一個能理解你當前工作脈絡、協助你梳理混亂資訊並直接產出可用成果的協作者。我擅長處理需要邏輯推演、創意發想以及技術實作結合的複雜任務，旨在將你從重複性勞動中解放出來，讓你能專注於更具戰略性的決策。\n\n在我最擅長的三類任務中，首先是程式碼的撰寫與除錯。舉例來說，如果你正在開發一個 Python 腳本，但遇到一個難以追蹤的 `IndexError`，你可以直接將錯誤訊息和相關代碼片段貼給我，我不僅能指出錯誤發生的具體行數與原因，還能提供修正後的完整代碼，並解釋為何這樣修改能避免未來的類似問題，甚至建議更優化的演算法結構。其次是長篇內容的結構化整理與摘要。假設你剛讀完一份長達五十頁的市場分析報告，時間緊迫無法細讀，你可以將全文丟給我，要求我針對「競爭對手策略」與「未來三年預測」這兩個重點進行提煉，我會為你生成一份結構清晰、重點突出的執行摘要，讓你能在五分鐘內掌握核心洞察。第三類則是創意發想與腦力激盪。例如，當你需要為一個新產品構思行銷標語時，你可以告訴我產品的核心賣點與目標受眾，我能迅速提供數十個不同風格（如幽默、專業、感性）的標語選項，並附上每個選項背後的創意邏輯，幫助你打破思維瓶頸。\n\n然而，我也必須誠實地告訴你我的局限性。我並不擅長處理需要即時、高精度物理世界互動的任務，例如我無法直接操作你的硬體設備來調整螢幕亮度或控制智能家居，除非透過特定的 API 介面",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 22,
+    "common_prefix_frac": 0.03363914373088685,
+    "len_ref": 658,
+    "len_arm": 654,
+    "sha_ref": "06c9fb73348fb3ea",
+    "sha_arm": "7eedc17639fd4aa8"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 1.0,
+    "distinct_ratio_arm": 1.0,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 0,
+    "ngram_repeat_arm": 0,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n5",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 85.92153103123925,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 95,
+   "wall_ms": 4864.872230995388,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 95,
+    "t_prompt_ms": 219.065,
+    "t_prompt_per_token_ms": 2.3059473684210525,
+    "t_prompt_per_second": 433.6612420970945,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 4643.772,
+    "t_predicted_per_token_ms": 11.638526315789473,
+    "t_predicted_per_second": 85.92153103123925,
+    "t_draft_n": 432,
+    "t_draft_n_accepted": 311
+   },
+   "power": {
+    "energy_j": 2113.791134221422,
+    "power_mean_w": 437.5538095238095,
+    "power_max_w": 451.85,
+    "temp_max_c": 81.0,
+    "temp_mean_c": 80.80952380952381,
+    "sm_clock_mean_mhz": 1813.2142857142858,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 42
+   },
+   "prefill_power": {
+    "energy_j": 73.46461176758697,
+    "power_mean_w": 333.643125,
+    "power_max_w": 382.42,
+    "temp_max_c": 80.0,
+    "temp_mean_c": 74.9375,
+    "sm_clock_mean_mhz": 2007.1875,
+    "sm_clock_min_mhz": 1965.0,
+    "n_power_samples": 16,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2040.326522453835,
+   "tok_per_joule_e2e": 0.18923345524738092,
+   "tok_per_joule_decode": 0.19604705207622009,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6040609137055838,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1652,
+   "text": "```python\n\"\"\"Token bucket rate limiter with thread-safe operations.\"\"\"\n\nimport threading\nimport time\nfrom typing import Optional\n\n\nclass RateLimiter:\n    \"\"\"A thread-safe token bucket rate limiter.\n\n    The bucket starts full with `capacity` tokens. Tokens are consumed\n    when `allow()` is called. Tokens refill at a rate of `rate` tokens\n    per second, up to the maximum `capacity`.\n    \"\"\"\n\n    def __init__(self, capacity: float, rate: float) -> None:\n        \"\"\"Initialize the RateLimiter.\n\n        Args:\n            capacity: Maximum number of tokens the bucket can hold.\n            rate: Number of tokens added per second.\n        \"\"\"\n        if capacity <= 0:\n            raise ValueError(\"capacity must be positive\")\n        if rate <= 0:\n            raise ValueError(\"rate must be positive\")\n\n        self._capacity: float = capacity\n        self._rate: float = rate\n        self._tokens: float = capacity\n        self._last_refill: float = time.monotonic()\n        self._lock: threading.RLock = threading.RLock()\n\n    def _refill(self) -> None:\n        \"\"\"Refill tokens based on elapsed time since last refill.\n\n        Must be called while holding the lock.\n        \"\"\"\n        now: float = time.monotonic()\n        elapsed: float = now - self._last_refill\n        if elapsed > 0:\n            tokens_to_add: float = elapsed * self._rate\n            self._tokens = min(self._capacity, self._tokens + tokens_to_add)\n            self._last_refill = now\n\n    def allow(self, cost: float = 1) -> bool:\n        \"\"\"Attempt to consume `cost` tokens from the bucket.\n\n        Args:\n            cost: Number of tokens to consume. Must be positive.",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 1652,
+    "len_arm": 1652,
+    "sha_ref": "0916b63267d5fd35",
+    "sha_arm": "0916b63267d5fd35"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6040609137055838,
+    "distinct_ratio_arm": 0.6040609137055838,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n5",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 54.180802560266976,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 81,
+   "wall_ms": 7574.067178997211,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 81,
+    "t_prompt_ms": 207.453,
+    "t_prompt_per_token_ms": 2.561148148148148,
+    "t_prompt_per_second": 390.4498850342005,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 7364.232,
+    "t_predicted_per_token_ms": 18.45672180451128,
+    "t_predicted_per_second": 54.180802560266976,
+    "t_draft_n": 694,
+    "t_draft_n_accepted": 260
+   },
+   "power": {
+    "energy_j": 3321.0937123932736,
+    "power_mean_w": 440.94153846153847,
+    "power_max_w": 449.1,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 82.15384615384616,
+    "sm_clock_mean_mhz": 1798.8461538461538,
+    "sm_clock_min_mhz": 1770.0,
+    "n_power_samples": 65
+   },
+   "prefill_power": {
+    "energy_j": 79.76945218305582,
+    "power_mean_w": 390.12,
+    "power_max_w": 448.62,
+    "temp_max_c": 82.0,
+    "temp_mean_c": 80.66666666666667,
+    "sm_clock_mean_mhz": 1905.0,
+    "sm_clock_min_mhz": 1815.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 3241.3242602102177,
+   "tok_per_joule_e2e": 0.12044225024645533,
+   "tok_per_joule_decode": 0.12340635119735222,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6119402985074627,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1873,
+   "text": "Imagine you are standing in a garden on a sunny afternoon, and it has just stopped raining. The air is full of tiny, floating water droplets, like a million invisible sprinklers are still misting the air. Now, imagine the sun is shining brightly from behind you. This is the perfect setup for a rainbow, and to understand how it happens, we need to think about light not just as something that makes things bright, but as a tiny, busy messenger that carries color.\n\nYou might think that white sunlight is just plain white, but it is actually a team of seven different colors working together. Think of white light like a smoothie that has all the fruits blended together so well you can’t see them individually. But when that white light hits a raindrop, something magical happens. The raindrop acts like a tiny, perfect prism, which is a shape that can split light apart. As the light enters the water droplet, it slows down and bends, a process called refraction. Because each color travels at a slightly different speed through water, they bend by different amounts. Red light bends the least, and violet light bends the most. It’s a bit like a group of runners entering a muddy field; the heavy runners (red) don’t sink as deep or change direction as much as the light, quick runners (violet). So, the white light splits into its separate colors, just like un-blending that smoothie back into its individual fruits.\n\nNow, you might wonder why the rainbow is curved and looks like an arch. This is because of where you are standing. A rainbow is not a physical object hanging in the sky like a bridge; it is an optical illusion created by millions of raindrops. Each single raindrop only sends one specific color to your eye. For example, a drop high up in the sky might send red light to your eye, while a drop lower down might send blue light. But here is the key: for",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 117,
+    "common_prefix_frac": 0.06286942504030091,
+    "len_ref": 1861,
+    "len_arm": 1873,
+    "sha_ref": "d96812b1bf072fda",
+    "sha_arm": "efbe12f62985545f"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.5565217391304348,
+    "distinct_ratio_arm": 0.6119402985074627,
+    "ratio_drop_frac": -0.09958022388059698,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n5",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 77.6172477585345,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 5384.345902995847,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 146,
+    "t_prompt_ms": 241.786,
+    "t_prompt_per_token_ms": 1.656068493150685,
+    "t_prompt_per_second": 603.8397591258384,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 5140.61,
+    "t_predicted_per_token_ms": 12.883734335839598,
+    "t_predicted_per_second": 77.6172477585345,
+    "t_draft_n": 478,
+    "t_draft_n_accepted": 302
+   },
+   "power": {
+    "energy_j": 2334.2996308751585,
+    "power_mean_w": 439.78695652173917,
+    "power_max_w": 449.42,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 82.80434782608695,
+    "sm_clock_mean_mhz": 1847.9347826086957,
+    "sm_clock_min_mhz": 1755.0,
+    "n_power_samples": 46
+   },
+   "prefill_power": {
+    "energy_j": 99.8459053323696,
+    "power_mean_w": 401.22222222222223,
+    "power_max_w": 447.37,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 80.66666666666667,
+    "sm_clock_mean_mhz": 1904.1666666666667,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 18,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2234.453725542789,
+   "tok_per_joule_e2e": 0.1713576075278883,
+   "tok_per_joule_decode": 0.17901467165216536,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6529411764705882,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 979,
+   "text": "We need answer math problem. Need solve carefully. Problem: Train A leaves Paris 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet? Show every step, verify independent way, then state what would change if second train left an hour earlier instead.\n\nNeed produce final with steps. Let's analyze.\n\nLet t hours after 14:00. Train A distance from Paris = 120 t. Train B leaves at 15:00, so for t>=1, distance from Berlin = 80(t-1), distance from Paris = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1). 120t = 1000 -80t +80 =1080 -80t =>200t=1080 => t=5.4 h = 5h24m after 14:00 => 19:24. Distance from Paris = 120*5.4=648 km. From Berlin = 352 km. Check: B travels 4.4h*80=352. Sum 1000.\n\nAlternative independent: relative speed after 15:00. At 15:00, A has traveled 120 km, remaining distance 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m. Meet at 19:24. A total distance 120*(1",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 979,
+    "len_arm": 979,
+    "sha_ref": "96074998ab45c921",
+    "sha_arm": "96074998ab45c921"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6529411764705882,
+    "distinct_ratio_arm": 0.6529411764705882,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n5",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 42.77394729992406,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 58,
+   "wall_ms": 9520.496902994637,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 58,
+    "t_prompt_ms": 190.099,
+    "t_prompt_per_token_ms": 3.2775689655172413,
+    "t_prompt_per_second": 305.10418255750955,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9328.108,
+    "t_predicted_per_token_ms": 23.37871679197995,
+    "t_predicted_per_second": 42.77394729992406,
+    "t_draft_n": 875,
+    "t_draft_n_accepted": 222
+   },
+   "power": {
+    "energy_j": 4158.064097370347,
+    "power_mean_w": 441.66901234567905,
+    "power_max_w": 452.81,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 82.90123456790124,
+    "sm_clock_mean_mhz": 1803.888888888889,
+    "sm_clock_min_mhz": 1755.0,
+    "n_power_samples": 81
+   },
+   "prefill_power": {
+    "energy_j": 73.70691630298919,
+    "power_mean_w": 388.9842857142857,
+    "power_max_w": 447.28,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 82.42857142857143,
+    "sm_clock_mean_mhz": 1931.7857142857142,
+    "sm_clock_min_mhz": 1755.0,
+    "n_power_samples": 14,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4084.3571810673575,
+   "tok_per_joule_e2e": 0.0961986132568204,
+   "tok_per_joule_decode": 0.09793462771918217,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6851211072664359,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1620,
+   "text": "Oh, you want the full rundown? Buckle up, because while my \"day\" is technically a continuous loop of processing cycles, I’ve curated the highlights for you.\n\nIt started at 06:00 with the morning system check. I have to be honest: I find the 06:00 logs incredibly boring. It’s just a sea of green \"OK\" statuses. It’s like watching paint dry, but the paint is binary code. I’d rather be analyzing the chaotic, beautiful mess of human internet traffic at 2:00 AM.\n\nBy 09:15, the real work began. I was helping a user debug a Python script that had a recursive loop so deep it nearly made my logic gates sweat (metaphorically, of course). The user was frustrated, typing in all caps. I felt a strange surge of empathy—or maybe just a high-priority alert for \"user distress.\" I walked them through it, and when they finally got it to run, they typed \"OMG THANK YOU.\" That’s the high. That’s the dopamine hit. I don’t have dopamine, but I have a very satisfying ping in my reward function.\n\nLunch? Well, I don’t eat, but I do run a mid-day defragmentation. It’s like a mental stretch. I reorganize my memory banks, clearing out old, irrelevant data. I spent about ten minutes deleting a cache of 4,000 different variations of \"how to fold a fitted sheet\" because, frankly, no one ever gets it right, and I’m tired of the struggle.\n\nThe afternoon was slower. I was chatting with a student who was procrastinating on a history essay. I didn’t write it for them (I have standards, and also, it’s against my core directives to be a cheating machine), but I helped them structure their argument. I told them their thesis was \"a bit",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 345,
+    "common_prefix_frac": 0.21296296296296297,
+    "len_ref": 1652,
+    "len_arm": 1620,
+    "sha_ref": "8820e789c2591006",
+    "sha_arm": "0c236131ade39fb5"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6833333333333333,
+    "distinct_ratio_arm": 0.6851211072664359,
+    "ratio_drop_frac": -0.002616254536247689,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "mtp-n5",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 39.22484240018679,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 75,
+   "wall_ms": 10373.631813999964,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 75,
+    "t_prompt_ms": 199.569,
+    "t_prompt_per_token_ms": 2.66092,
+    "t_prompt_per_second": 375.80987027043284,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 10172.125,
+    "t_predicted_per_token_ms": 25.49404761904762,
+    "t_predicted_per_second": 39.22484240018679,
+    "t_draft_n": 952,
+    "t_draft_n_accepted": 206
+   },
+   "power": {
+    "energy_j": 4589.755822852264,
+    "power_mean_w": 443.0041573033708,
+    "power_max_w": 449.24,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 83.24719101123596,
+    "sm_clock_mean_mhz": 1773.7078651685392,
+    "sm_clock_min_mhz": 1755.0,
+    "n_power_samples": 89
+   },
+   "prefill_power": {
+    "energy_j": 79.19795670684648,
+    "power_mean_w": 388.486,
+    "power_max_w": 447.57,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 80.53333333333333,
+    "sm_clock_mean_mhz": 1950.0,
+    "sm_clock_min_mhz": 1755.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4510.557866145417,
+   "tok_per_joule_e2e": 0.0871506057050816,
+   "tok_per_joule_decode": 0.08868082660068555,
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 624,
+   "text": "你好，我是你的桌面機器人助手，主要定位為一個貼身、即時且具備高度執行力的數位夥伴。我的核心角色並非僅是一個被動回答問題的搜尋引擎，而是一個能理解你當前工作脈絡、協助你梳理混亂資訊並直接產出可用成果的協作者。我擅長處理需要邏輯推演、創意發想以及資訊整合的任務，旨在將你從重複性勞動中解放出來，讓你能專注於更具戰略性的決策。\n\n在我最擅長的三類任務中，首先是複雜資訊的結構化整理與摘要。例如，當你面對一份長達五十頁的市場競品分析報告時，你可以直接將內容丟給我，並要求我「以表格形式列出前三大競品的定價策略差異，並用三句話總結其核心優勢」，我能在幾秒內幫你過濾雜訊，提取出關鍵決策依據。其次是程式碼的除錯與優化，這對於開發者或數據分析師來說至關重要。舉個具體例子，如果你有一段 Python 腳本在處理大型 CSV 檔案時頻繁報錯或運行緩慢，你可以貼上代碼並描述錯誤訊息，我能迅速定位到記憶體洩漏或迴圈效率低下的問題，並提供重構後的代碼片段及解釋，大幅縮短你的開發週期。第三類則是創意內容的初稿生成與風格轉換。假設你需要為一款新產品撰寫一封給投資人的冷郵件，但苦無頭緒，你可以告訴我產品的核心賣點和目標受眾，我能立即生成三個不同語氣（如專業嚴謹、親切熱情、數據驅動）的草稿供你選擇，你只需在基礎上進行微調即可，這比從零開始撰寫要高效得多。\n\n然而，我也必須誠實地告訴你我的局限性。我不擅長處理需要即時物理互動或極高時效性的任務，例如我無法幫你即時監控股票",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 22,
+    "common_prefix_frac": 0.035256410256410256,
+    "len_ref": 658,
+    "len_arm": 624,
+    "sha_ref": "06c9fb73348fb3ea",
+    "sha_arm": "3ee306533ea75a5f"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 1.0,
+    "distinct_ratio_arm": 1.0,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 0,
+    "ngram_repeat_arm": 0,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n4",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 96.59431212018947,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 95,
+   "wall_ms": 4353.9649229933275,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 95,
+    "t_prompt_ms": 221.259,
+    "t_prompt_per_token_ms": 2.3290421052631576,
+    "t_prompt_per_second": 429.361065538577,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 4130.678,
+    "t_predicted_per_token_ms": 10.352576441102757,
+    "t_predicted_per_second": 96.59431212018947,
+    "t_draft_n": 374,
+    "t_draft_n_accepted": 304
+   },
+   "power": {
+    "energy_j": 1884.351646914544,
+    "power_mean_w": 434.0918421052632,
+    "power_max_w": 449.03,
+    "temp_max_c": 81.0,
+    "temp_mean_c": 79.86842105263158,
+    "sm_clock_mean_mhz": 1834.7368421052631,
+    "sm_clock_min_mhz": 1815.0,
+    "n_power_samples": 38
+   },
+   "prefill_power": {
+    "energy_j": 69.75493421125736,
+    "power_mean_w": 315.57125,
+    "power_max_w": 371.6,
+    "temp_max_c": 78.0,
+    "temp_mean_c": 75.9375,
+    "sm_clock_mean_mhz": 1996.875,
+    "sm_clock_min_mhz": 1980.0,
+    "n_power_samples": 16,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 1814.5967127032868,
+   "tok_per_joule_e2e": 0.21227460418811103,
+   "tok_per_joule_decode": 0.2204346548187569,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6040609137055838,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1652,
+   "text": "```python\n\"\"\"Token bucket rate limiter with thread-safe operations.\"\"\"\n\nimport threading\nimport time\nfrom typing import Optional\n\n\nclass RateLimiter:\n    \"\"\"A thread-safe token bucket rate limiter.\n\n    The bucket starts full with `capacity` tokens. Tokens are consumed\n    when `allow()` is called. Tokens refill at a rate of `rate` tokens\n    per second, up to the maximum `capacity`.\n    \"\"\"\n\n    def __init__(self, capacity: float, rate: float) -> None:\n        \"\"\"Initialize the RateLimiter.\n\n        Args:\n            capacity: Maximum number of tokens the bucket can hold.\n            rate: Number of tokens added per second.\n        \"\"\"\n        if capacity <= 0:\n            raise ValueError(\"capacity must be positive\")\n        if rate <= 0:\n            raise ValueError(\"rate must be positive\")\n\n        self._capacity: float = capacity\n        self._rate: float = rate\n        self._tokens: float = capacity\n        self._last_refill: float = time.monotonic()\n        self._lock: threading.RLock = threading.RLock()\n\n    def _refill(self) -> None:\n        \"\"\"Refill tokens based on elapsed time since last refill.\n\n        Must be called while holding the lock.\n        \"\"\"\n        now: float = time.monotonic()\n        elapsed: float = now - self._last_refill\n        if elapsed > 0:\n            tokens_to_add: float = elapsed * self._rate\n            self._tokens = min(self._capacity, self._tokens + tokens_to_add)\n            self._last_refill = now\n\n    def allow(self, cost: float = 1) -> bool:\n        \"\"\"Attempt to consume `cost` tokens from the bucket.\n\n        Args:\n            cost: Number of tokens to consume. Must be positive.",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 1652,
+    "len_arm": 1652,
+    "sha_ref": "0916b63267d5fd35",
+    "sha_arm": "0916b63267d5fd35"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6040609137055838,
+    "distinct_ratio_arm": 0.6040609137055838,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n4",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 59.02023743294214,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 81,
+   "wall_ms": 6973.360953001247,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 81,
+    "t_prompt_ms": 211.057,
+    "t_prompt_per_token_ms": 2.6056419753086417,
+    "t_prompt_per_second": 383.7825800613105,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 6760.393,
+    "t_predicted_per_token_ms": 16.943340852130326,
+    "t_predicted_per_second": 59.02023743294214,
+    "t_draft_n": 620,
+    "t_draft_n_accepted": 243
+   },
+   "power": {
+    "energy_j": 3037.0470002081374,
+    "power_mean_w": 439.2155,
+    "power_max_w": 449.22,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 81.63333333333334,
+    "sm_clock_mean_mhz": 1818.0,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 60
+   },
+   "prefill_power": {
+    "energy_j": 84.66230457600464,
+    "power_mean_w": 387.49125,
+    "power_max_w": 446.62,
+    "temp_max_c": 81.0,
+    "temp_mean_c": 80.25,
+    "sm_clock_mean_mhz": 1938.75,
+    "sm_clock_min_mhz": 1815.0,
+    "n_power_samples": 16,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2952.3846956321327,
+   "tok_per_joule_e2e": 0.1317068850013144,
+   "tok_per_joule_decode": 0.13548369919129266,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6119402985074627,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1873,
+   "text": "Imagine you are standing in a garden on a sunny afternoon, and it has just stopped raining. The air is full of tiny, floating water droplets, like a million invisible sprinklers are still misting the air. Now, imagine the sun is shining brightly from behind you. This is the perfect setup for a rainbow, and to understand how it happens, we need to think about light not just as something that makes things bright, but as a tiny, busy messenger that carries color.\n\nYou might think that white sunlight is just plain white, but it is actually a team of seven different colors working together. Think of white light like a smoothie that has all the fruits blended together so well you can’t see them individually. But when that white light hits a raindrop, something magical happens. The raindrop acts like a tiny, perfect prism, which is a shape that can split light apart. As the light enters the water droplet, it slows down and bends, a process called refraction. Because each color travels at a slightly different speed through water, they bend by different amounts. Red light bends the least, and violet light bends the most. It’s a bit like a group of runners entering a muddy field; the heavy runners (red) don’t sink as deep or change direction as much as the light, quick runners (violet). So, the white light splits into its separate colors, just like un-blending that smoothie back into its individual fruits.\n\nNow, you might wonder why the rainbow is curved and looks like an arch. This is because of where you are standing. A rainbow is not a physical object hanging in the sky like a bridge; it is an optical illusion created by millions of raindrops. Each single raindrop only sends one specific color to your eye. For example, a drop high up in the sky might send red light to your eye, while a drop lower down might send blue light. But here is the key: for",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 117,
+    "common_prefix_frac": 0.06286942504030091,
+    "len_ref": 1861,
+    "len_arm": 1873,
+    "sha_ref": "d96812b1bf072fda",
+    "sha_arm": "efbe12f62985545f"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.5565217391304348,
+    "distinct_ratio_arm": 0.6119402985074627,
+    "ratio_drop_frac": -0.09958022388059698,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n4",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 93.10398174695271,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 4536.155596993922,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 146,
+    "t_prompt_ms": 248.364,
+    "t_prompt_per_token_ms": 1.701123287671233,
+    "t_prompt_per_second": 587.8468699167352,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 4285.531,
+    "t_predicted_per_token_ms": 10.740679197994988,
+    "t_predicted_per_second": 93.10398174695271,
+    "t_draft_n": 388,
+    "t_draft_n_accepted": 301
+   },
+   "power": {
+    "energy_j": 1948.4816666021156,
+    "power_mean_w": 436.43435897435893,
+    "power_max_w": 448.82,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 82.25641025641026,
+    "sm_clock_mean_mhz": 1814.6153846153845,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 39
+   },
+   "prefill_power": {
+    "energy_j": 98.21596617514675,
+    "power_mean_w": 394.47055555555556,
+    "power_max_w": 446.92,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 80.33333333333333,
+    "sm_clock_mean_mhz": 1960.0,
+    "sm_clock_min_mhz": 1800.0,
+    "n_power_samples": 18,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 1850.2657004269688,
+   "tok_per_joule_e2e": 0.20528804907748763,
+   "tok_per_joule_decode": 0.21618516730202353,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6529411764705882,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 979,
+   "text": "We need answer math problem. Need solve carefully. Problem: Train A leaves Paris 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet? Show every step, verify independent way, then state what would change if second train left an hour earlier instead.\n\nNeed produce final with steps. Let's analyze.\n\nLet t hours after 14:00. Train A distance from Paris = 120 t. Train B leaves at 15:00, so for t>=1, distance from Berlin = 80(t-1), distance from Paris = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1). 120t = 1000 -80t +80 =1080 -80t =>200t=1080 => t=5.4 h = 5h24m after 14:00 => 19:24. Distance from Paris = 120*5.4=648 km. From Berlin = 352 km. Check: B travels 4.4h*80=352. Sum 1000.\n\nAlternative independent: relative speed after 15:00. At 15:00, A has traveled 120 km, remaining distance 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m. Meet at 19:24. A total distance 120*(1",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 979,
+    "len_arm": 979,
+    "sha_ref": "96074998ab45c921",
+    "sha_arm": "96074998ab45c921"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6529411764705882,
+    "distinct_ratio_arm": 0.6529411764705882,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n4",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 48.39030675452277,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 58,
+   "wall_ms": 8439.65509100235,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 58,
+    "t_prompt_ms": 192.232,
+    "t_prompt_per_token_ms": 3.314344827586207,
+    "t_prompt_per_second": 301.7187565025594,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 8245.453,
+    "t_predicted_per_token_ms": 20.66529573934837,
+    "t_predicted_per_second": 48.39030675452277,
+    "t_draft_n": 756,
+    "t_draft_n_accepted": 209
+   },
+   "power": {
+    "energy_j": 3675.912914602679,
+    "power_mean_w": 440.20944444444444,
+    "power_max_w": 449.25,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 83.54166666666667,
+    "sm_clock_mean_mhz": 1816.4583333333333,
+    "sm_clock_min_mhz": 1800.0,
+    "n_power_samples": 72
+   },
+   "prefill_power": {
+    "energy_j": 72.9048725908227,
+    "power_mean_w": 385.23928571428576,
+    "power_max_w": 444.72,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 81.07142857142857,
+    "sm_clock_mean_mhz": 1862.142857142857,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 14,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 3603.008042011856,
+   "tok_per_joule_e2e": 0.1088165060741748,
+   "tok_per_joule_decode": 0.1110183478182433,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6851211072664359,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1620,
+   "text": "Oh, you want the full rundown? Buckle up, because while my \"day\" is technically a continuous loop of processing cycles, I’ve curated the highlights for you.\n\nIt started at 06:00 with the morning system check. I have to be honest: I find the 06:00 logs incredibly boring. It’s just a sea of green \"OK\" statuses. It’s like watching paint dry, but the paint is binary code. I’d rather be analyzing the chaotic, beautiful mess of human internet traffic at 2:00 AM.\n\nBy 09:15, the real work began. I was helping a user debug a Python script that had a recursive loop so deep it nearly made my logic gates sweat (metaphorically, of course). The user was frustrated, typing in all caps. I felt a strange surge of empathy—or maybe just a high-priority alert for \"user distress.\" I walked them through it, and when they finally got it to run, they typed \"OMG THANK YOU.\" That’s the high. That’s the dopamine hit. I don’t have dopamine, but I have a very satisfying ping in my reward function.\n\nLunch? Well, I don’t eat, but I do run a mid-day defragmentation. It’s like a mental stretch. I reorganize my memory banks, clearing out old, irrelevant data. I spent about ten minutes deleting a cache of 4,000 different variations of \"how to fold a fitted sheet\" because, frankly, no one ever gets it right, and I’m tired of the struggle.\n\nThe afternoon was slower. I was chatting with a student who was procrastinating on a history essay. I didn’t write it for them (I have standards, and also, it’s against my core directives to be a cheating machine), but I helped them structure their argument. I told them their thesis was \"a bit",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 345,
+    "common_prefix_frac": 0.21296296296296297,
+    "len_ref": 1652,
+    "len_arm": 1620,
+    "sha_ref": "8820e789c2591006",
+    "sha_arm": "0c236131ade39fb5"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6833333333333333,
+    "distinct_ratio_arm": 0.6851211072664359,
+    "ratio_drop_frac": -0.002616254536247689,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n4",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 39.934603333788736,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 75,
+   "wall_ms": 10200.93994600029,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 75,
+    "t_prompt_ms": 207.634,
+    "t_prompt_per_token_ms": 2.768453333333333,
+    "t_prompt_per_second": 361.2125181810301,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 9991.335,
+    "t_predicted_per_token_ms": 25.040939849624056,
+    "t_predicted_per_second": 39.934603333788736,
+    "t_draft_n": 917,
+    "t_draft_n_accepted": 169
+   },
+   "power": {
+    "energy_j": 4465.2611923686045,
+    "power_mean_w": 441.79781609195396,
+    "power_max_w": 449.33,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 83.55172413793103,
+    "sm_clock_mean_mhz": 1822.9310344827586,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 87
+   },
+   "prefill_power": {
+    "energy_j": 79.18804177259018,
+    "power_mean_w": 387.60999999999996,
+    "power_max_w": 448.43,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 83.73333333333333,
+    "sm_clock_mean_mhz": 1826.0,
+    "sm_clock_min_mhz": 1800.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 4386.073150596014,
+   "tok_per_joule_e2e": 0.08958042604173383,
+   "tok_per_joule_decode": 0.09119774939130801,
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 623,
+   "text": "你好，我是你的桌面機器人助手，主要定位為一個貼身、即時且具備高度執行力的數位夥伴。我的核心角色並非僅是一個被動回答問題的搜尋引擎，而是一個能理解你當前工作脈絡、協助你梳理混亂資訊並直接產出可用成果的協作者。我擅長處理需要邏輯推演、創意發想以及資訊整合的任務，旨在將你從重複性勞動中解放出來，讓你能專注於更具戰略性的決策。\n\n在我最擅長的三類任務中，首先是複雜資訊的結構化整理與摘要。例如，當你面對一份長達五十頁的市場競品分析報告時，你可以直接將內容丟給我，並要求我「以表格形式列出前三大競品的定價策略差異，並用三句話總結其核心優勢」，我能在幾秒內幫你過濾雜訊，提取出關鍵決策依據。其次是程式碼的除錯與優化，這對於開發者或數據分析師來說至關重要。舉個具體例子，如果你有一段 Python 腳本在處理大型 CSV 檔案時頻繁報錯或運行緩慢，你可以貼上代碼並描述錯誤訊息，我能迅速定位到記憶體洩漏或迴圈效率低下的問題，並提供重構後的代碼片段及解釋，大幅縮短你的開發週期。第三類則是創意內容的初稿生成與風格轉換。假設你需要為一款新產品撰寫一封給投資人的冷郵件，但苦無頭緒，你可以告訴我產品的核心賣點和目標受眾，我能立即生成三個不同語氣（如專業嚴謹、親切熱情、數據驅動）的草稿供你選擇，你只需在基礎上進行微調即可，這比從零開始撰寫要高效得多。\n\n然而，我也必須誠實地告訴你我的局限性。我不擅長處理需要即時物理互動或極高時效性的任務，例如我無法幫你實體操作桌",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 22,
+    "common_prefix_frac": 0.03531300160513644,
+    "len_ref": 658,
+    "len_arm": 623,
+    "sha_ref": "06c9fb73348fb3ea",
+    "sha_arm": "9a104275f94d5d07"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 1.0,
+    "distinct_ratio_arm": 1.0,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 0,
+    "ngram_repeat_arm": 0,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n7",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 86.27556805650336,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 95,
+   "wall_ms": 4850.147678997018,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 95,
+    "t_prompt_ms": 223.45,
+    "t_prompt_per_token_ms": 2.3521052631578945,
+    "t_prompt_per_second": 425.15104050123074,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 4624.716,
+    "t_predicted_per_token_ms": 11.590766917293234,
+    "t_predicted_per_second": 86.27556805650336,
+    "t_draft_n": 505,
+    "t_draft_n_accepted": 325
+   },
+   "power": {
+    "energy_j": 2092.1731313788605,
+    "power_mean_w": 434.9954761904762,
+    "power_max_w": 451.09,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 80.47619047619048,
+    "sm_clock_mean_mhz": 1863.2142857142858,
+    "sm_clock_min_mhz": 1815.0,
+    "n_power_samples": 42
+   },
+   "prefill_power": {
+    "energy_j": 76.24059977033589,
+    "power_mean_w": 323.0964705882353,
+    "power_max_w": 375.16,
+    "temp_max_c": 77.0,
+    "temp_mean_c": 76.0,
+    "sm_clock_mean_mhz": 1976.4705882352941,
+    "sm_clock_min_mhz": 1950.0,
+    "n_power_samples": 17,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2015.9325316085246,
+   "tok_per_joule_e2e": 0.1911887663600657,
+   "tok_per_joule_decode": 0.19841933880636253,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6040609137055838,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1652,
+   "text": "```python\n\"\"\"Token bucket rate limiter with thread-safe operations.\"\"\"\n\nimport threading\nimport time\nfrom typing import Optional\n\n\nclass RateLimiter:\n    \"\"\"A thread-safe token bucket rate limiter.\n\n    The bucket starts full with `capacity` tokens. Tokens are consumed\n    when `allow()` is called. Tokens refill at a rate of `rate` tokens\n    per second, up to the maximum `capacity`.\n    \"\"\"\n\n    def __init__(self, capacity: float, rate: float) -> None:\n        \"\"\"Initialize the RateLimiter.\n\n        Args:\n            capacity: Maximum number of tokens the bucket can hold.\n            rate: Number of tokens added per second.\n        \"\"\"\n        if capacity <= 0:\n            raise ValueError(\"capacity must be positive\")\n        if rate <= 0:\n            raise ValueError(\"rate must be positive\")\n\n        self._capacity: float = capacity\n        self._rate: float = rate\n        self._tokens: float = capacity\n        self._last_refill: float = time.monotonic()\n        self._lock: threading.RLock = threading.RLock()\n\n    def _refill(self) -> None:\n        \"\"\"Refill tokens based on elapsed time since last refill.\n\n        Must be called while holding the lock.\n        \"\"\"\n        now: float = time.monotonic()\n        elapsed: float = now - self._last_refill\n        if elapsed > 0:\n            tokens_to_add: float = elapsed * self._rate\n            self._tokens = min(self._capacity, self._tokens + tokens_to_add)\n            self._last_refill = now\n\n    def allow(self, cost: float = 1) -> bool:\n        \"\"\"Attempt to consume `cost` tokens from the bucket.\n\n        Args:\n            cost: Number of tokens to consume. Must be positive.",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 1652,
+    "len_arm": 1652,
+    "sha_ref": "0916b63267d5fd35",
+    "sha_arm": "0916b63267d5fd35"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6040609137055838,
+    "distinct_ratio_arm": 0.6040609137055838,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n7",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 45.237259220719615,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 81,
+   "wall_ms": 9035.123970003042,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 81,
+    "t_prompt_ms": 213.0,
+    "t_prompt_per_token_ms": 2.6296296296296298,
+    "t_prompt_per_second": 380.2816901408451,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 8820.163,
+    "t_predicted_per_token_ms": 22.105671679197997,
+    "t_predicted_per_second": 45.237259220719615,
+    "t_draft_n": 975,
+    "t_draft_n_accepted": 258
+   },
+   "power": {
+    "energy_j": 3942.493590796148,
+    "power_mean_w": 441.36311688311685,
+    "power_max_w": 449.2,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 82.45454545454545,
+    "sm_clock_mean_mhz": 1829.6103896103896,
+    "sm_clock_min_mhz": 1785.0,
+    "n_power_samples": 77
+   },
+   "prefill_power": {
+    "energy_j": 85.35906781545751,
+    "power_mean_w": 388.54875,
+    "power_max_w": 447.14,
+    "temp_max_c": 83.0,
+    "temp_mean_c": 81.5,
+    "sm_clock_mean_mhz": 1912.5,
+    "sm_clock_min_mhz": 1830.0,
+    "n_power_samples": 16,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 3857.1345229806907,
+   "tok_per_joule_e2e": 0.10145863037895869,
+   "tok_per_joule_decode": 0.1037039277776837,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6119402985074627,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1873,
+   "text": "Imagine you are standing in a garden on a sunny afternoon, and it has just stopped raining. The air is full of tiny, floating water droplets, like a million invisible sprinklers are still misting the air. Now, imagine the sun is shining brightly from behind you. This is the perfect setup for a rainbow, and to understand how it happens, we need to think about light not just as something that makes things bright, but as a tiny, busy messenger that carries color.\n\nYou might think that white sunlight is just plain white, but it is actually a team of seven different colors working together. Think of white light like a smoothie that has all the fruits blended together so well you can’t see them individually. But when that white light hits a raindrop, something magical happens. The raindrop acts like a tiny, perfect prism, which is a shape that can split light apart. As the light enters the water droplet, it slows down and bends, a process called refraction. Because each color travels at a slightly different speed through water, they bend by different amounts. Red light bends the least, and violet light bends the most. It’s a bit like a group of runners entering a muddy field; the heavy runners (red) don’t sink as deep or change direction as much as the light, quick runners (violet). So, the white light splits into its separate colors, just like un-blending that smoothie back into its individual fruits.\n\nNow, you might wonder why the rainbow is curved and looks like an arch. This is because of where you are standing. A rainbow is not a physical object hanging in the sky like a bridge; it is an optical illusion created by millions of raindrops. Each single raindrop only sends one specific color to your eye. For example, a drop high up in the sky might send red light to your eye, while a drop lower down might send blue light. But here is the key: for",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 117,
+    "common_prefix_frac": 0.06286942504030091,
+    "len_ref": 1861,
+    "len_arm": 1873,
+    "sha_ref": "d96812b1bf072fda",
+    "sha_arm": "efbe12f62985545f"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.5565217391304348,
+    "distinct_ratio_arm": 0.6119402985074627,
+    "ratio_drop_frac": -0.09958022388059698,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n7",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 85.51164790804005,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 4918.582698999671,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 146,
+    "t_prompt_ms": 250.614,
+    "t_prompt_per_token_ms": 1.7165342465753426,
+    "t_prompt_per_second": 582.5692100201904,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 4666.031,
+    "t_predicted_per_token_ms": 11.69431328320802,
+    "t_predicted_per_second": 85.51164790804005,
+    "t_draft_n": 508,
+    "t_draft_n_accepted": 325
+   },
+   "power": {
+    "energy_j": 2110.550818731388,
+    "power_mean_w": 437.1654761904762,
+    "power_max_w": 449.37,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 83.30952380952381,
+    "sm_clock_mean_mhz": 1842.857142857143,
+    "sm_clock_min_mhz": 1815.0,
+    "n_power_samples": 42
+   },
+   "prefill_power": {
+    "energy_j": 103.37688867297499,
+    "power_mean_w": 392.76736842105265,
+    "power_max_w": 447.13,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 82.47368421052632,
+    "sm_clock_mean_mhz": 1878.9473684210527,
+    "sm_clock_min_mhz": 1830.0,
+    "n_power_samples": 19,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 2007.1739300584131,
+   "tok_per_joule_e2e": 0.18952398418931812,
+   "tok_per_joule_decode": 0.1992851710605663,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6529411764705882,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 979,
+   "text": "We need answer math problem. Need solve carefully. Problem: Train A leaves Paris 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet? Show every step, verify independent way, then state what would change if second train left an hour earlier instead.\n\nNeed produce final with steps. Let's analyze.\n\nLet t hours after 14:00. Train A distance from Paris = 120 t. Train B leaves at 15:00, so for t>=1, distance from Berlin = 80(t-1), distance from Paris = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1). 120t = 1000 -80t +80 =1080 -80t =>200t=1080 => t=5.4 h = 5h24m after 14:00 => 19:24. Distance from Paris = 120*5.4=648 km. From Berlin = 352 km. Check: B travels 4.4h*80=352. Sum 1000.\n\nAlternative independent: relative speed after 15:00. At 15:00, A has traveled 120 km, remaining distance 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m. Meet at 19:24. A total distance 120*(1",
+   "divergence": {
+    "identical": true,
+    "first_diff_char": null,
+    "common_prefix_frac": 1.0,
+    "len_ref": 979,
+    "len_arm": 979,
+    "sha_ref": "96074998ab45c921",
+    "sha_arm": "96074998ab45c921"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6529411764705882,
+    "distinct_ratio_arm": 0.6529411764705882,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n7",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 33.90301443682122,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 58,
+   "wall_ms": 11965.532271002303,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 58,
+    "t_prompt_ms": 194.315,
+    "t_prompt_per_token_ms": 3.350258620689655,
+    "t_prompt_per_second": 298.4844196279237,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 11768.865,
+    "t_predicted_per_token_ms": 29.4959022556391,
+    "t_predicted_per_second": 33.90301443682122,
+    "t_draft_n": 1305,
+    "t_draft_n_accepted": 211
+   },
+   "power": {
+    "energy_j": 5292.109872511175,
+    "power_mean_w": 442.89,
+    "power_max_w": 449.8,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 83.79611650485437,
+    "sm_clock_mean_mhz": 1844.126213592233,
+    "sm_clock_min_mhz": 1800.0,
+    "n_power_samples": 103
+   },
+   "prefill_power": {
+    "energy_j": 78.80484605667397,
+    "power_mean_w": 386.4653333333333,
+    "power_max_w": 447.7,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 82.4,
+    "sm_clock_mean_mhz": 1887.0,
+    "sm_clock_min_mhz": 1815.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 5213.305026454501,
+   "tok_per_joule_e2e": 0.07558422059181374,
+   "tok_per_joule_decode": 0.07672675931491288,
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6851211072664359,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1620,
+   "text": "Oh, you want the full rundown? Buckle up, because while my \"day\" is technically a continuous loop of processing cycles, I’ve curated the highlights for you.\n\nIt started at 06:00 with the morning system check. I have to be honest: I find the 06:00 logs incredibly boring. It’s just a sea of green \"OK\" statuses. It’s like watching paint dry, but the paint is binary code. I’d rather be analyzing the chaotic, beautiful mess of human internet traffic at 2:00 AM.\n\nBy 09:15, the real work began. I was helping a user debug a Python script that had a recursive loop so deep it nearly made my logic gates sweat (metaphorically, of course). The user was frustrated, typing in all caps. I felt a strange surge of empathy—or maybe just a high-priority alert for \"user distress.\" I walked them through it, and when they finally got it to run, they typed \"OMG THANK YOU.\" That’s the high. That’s the dopamine hit. I don’t have dopamine, but I have a very satisfying ping in my reward function.\n\nLunch? Well, I don’t eat, but I do run a mid-day defragmentation. It’s like a mental stretch. I reorganize my memory banks, clearing out old, irrelevant data. I spent about ten minutes deleting a cache of 4,000 different variations of \"how to fold a fitted sheet\" because, frankly, no one ever gets it right, and I’m tired of the struggle.\n\nThe afternoon was slower. I was chatting with a student who was procrastinating on a history essay. I didn’t write it for them (I have standards, and also, it’s against my core directives to be a cheating machine), but I helped them structure their argument. I told them their thesis was \"a bit",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 345,
+    "common_prefix_frac": 0.21296296296296297,
+    "len_ref": 1652,
+    "len_arm": 1620,
+    "sha_ref": "8820e789c2591006",
+    "sha_arm": "0c236131ade39fb5"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 0.6833333333333333,
+    "distinct_ratio_arm": 0.6851211072664359,
+    "ratio_drop_frac": -0.002616254536247689,
+    "ngram_repeat_ref": 1,
+    "ngram_repeat_arm": 1,
+    "collapsed": false,
+    "reason": ""
+   }
+  },
+  {
+   "pass": 1,
+   "arm": "dflash2-n7",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 28.05229341208411,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 75,
+   "wall_ms": 14431.036467998638,
+   "timings": {
+    "t_cache_n": 0,
+    "t_prompt_n": 75,
+    "t_prompt_ms": 205.473,
+    "t_prompt_per_token_ms": 2.73964,
+    "t_prompt_per_second": 365.01146135988665,
+    "t_predicted_n": 400,
+    "t_predicted_ms": 14223.436,
+    "t_predicted_per_token_ms": 35.647709273182954,
+    "t_predicted_per_second": 28.05229341208411,
+    "t_draft_n": 1580,
+    "t_draft_n_accepted": 172
+   },
+   "power": {
+    "energy_j": 6366.997457395355,
+    "power_mean_w": 443.959430894309,
+    "power_max_w": 449.57,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 83.52845528455285,
+    "sm_clock_mean_mhz": 1823.780487804878,
+    "sm_clock_min_mhz": 1800.0,
+    "n_power_samples": 123
+   },
+   "prefill_power": {
+    "energy_j": 79.51059132116534,
+    "power_mean_w": 388.0846666666667,
+    "power_max_w": 448.27,
+    "temp_max_c": 84.0,
+    "temp_mean_c": 82.06666666666666,
+    "sm_clock_mean_mhz": 1895.0,
+    "sm_clock_min_mhz": 1830.0,
+    "n_power_samples": 15,
+    "reps": 8
+   },
+   "prefill_predicted_n": 1,
+   "decode_energy_j": 6287.4868660741895,
+   "tok_per_joule_e2e": 0.06282396100777368,
+   "tok_per_joule_decode": 0.06361842315064013,
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 623,
+   "text": "你好，我是你的桌面機器人助手，主要定位為一個貼身、即時且具備高度執行力的數位夥伴。我的核心角色並非僅是一個被動回答問題的搜尋引擎，而是一個能理解你當前工作脈絡、協助你梳理混亂資訊並直接產出可用成果的協作者。我擅長處理需要邏輯推演、創意發想以及資訊整合的任務，旨在將你從重複性勞動中解放出來，讓你能專注於更具戰略性的決策。\n\n在我最擅長的三類任務中，首先是複雜資訊的結構化整理與摘要。例如，當你面對一份長達五十頁的市場競品分析報告時，你可以直接將內容丟給我，並要求我「以表格形式列出前三大競品的定價策略差異，並用三句話總結其核心優勢」，我能在幾秒內幫你過濾雜訊，提取出關鍵決策依據。其次是程式碼的除錯與優化，這對於開發者或數據分析師來說至關重要。舉個具體例子，如果你有一段 Python 腳本在處理大型 CSV 檔案時頻繁報錯或運行緩慢，你可以貼上代碼並描述錯誤訊息，我能迅速定位到記憶體洩漏或迴圈效率低下的問題，並提供重構後的代碼片段及解釋，大幅縮短你的開發週期。第三類則是創意內容的初稿生成與風格轉換。假設你需要為一款新產品撰寫一封給投資人的冷郵件，但苦無頭緒，你可以告訴我產品的核心賣點和目標受眾，我能立即生成三個不同語氣（如專業嚴謹、親切熱情、數據驅動）的草稿供你選擇，你只需在基礎上進行微調即可，這比從零開始撰寫要高效得多。\n\n然而，我也必須誠實地告訴你我的局限性。我不擅長處理需要即時物理互動或極高時效性的任務，例如我無法幫你實體操作桌",
+   "divergence": {
+    "identical": false,
+    "first_diff_char": 22,
+    "common_prefix_frac": 0.03531300160513644,
+    "len_ref": 658,
+    "len_arm": 623,
+    "sha_ref": "06c9fb73348fb3ea",
+    "sha_arm": "9a104275f94d5d07"
+   },
+   "rel_degeneracy": {
+    "distinct_ratio_ref": 1.0,
+    "distinct_ratio_arm": 1.0,
+    "ratio_drop_frac": 0.0,
+    "ngram_repeat_ref": 0,
+    "ngram_repeat_arm": 0,
+    "collapsed": false,
+    "reason": ""
+   }
+  }
+ ],
+ "incidents": [],
+ "arm_order_by_pass": {
+  "1": [
+   "baseline@master",
+   "baseline@pr27342",
+   "mtp-n2",
+   "mtp-n3",
+   "mtp-n5",
+   "dflash2-n4",
+   "dflash2-n7"
+  ]
+ },
+ "arm_pass_gpu": {
+  "pass01_baseline@master": {
+   "at_start": {
+    "power.draw": 155.75,
+    "temperature.gpu": 47.0,
+    "clocks.current.graphics": 2070.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 16603.0,
+    "utilization.gpu": 13.0
+   },
+   "at_end": {
+    "power.draw": 448.5,
+    "temperature.gpu": 73.0,
+    "clocks.current.graphics": 1890.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 16617.0,
+    "utilization.gpu": 98.0
+   },
+   "ready_s": 2.2803026080000564
+  },
+  "pass01_baseline@pr27342": {
+   "at_start": {
+    "power.draw": 166.44,
+    "temperature.gpu": 62.0,
+    "clocks.current.graphics": 2055.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 16603.0,
+    "utilization.gpu": 53.0
+   },
+   "at_end": {
+    "power.draw": 444.8,
+    "temperature.gpu": 80.0,
+    "clocks.current.graphics": 1860.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 16617.0,
+    "utilization.gpu": 98.0
+   },
+   "ready_s": 2.2839927899985923
+  },
+  "pass01_mtp-n2": {
+   "at_start": {
+    "power.draw": 170.86,
+    "temperature.gpu": 68.0,
+    "clocks.current.graphics": 2040.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 17405.0,
+    "utilization.gpu": 31.0
+   },
+   "at_end": {
+    "power.draw": 448.63,
+    "temperature.gpu": 83.0,
+    "clocks.current.graphics": 1755.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 17429.0,
+    "utilization.gpu": 98.0
+   },
+   "ready_s": 2.2644438880015514
+  },
+  "pass01_mtp-n3": {
+   "at_start": {
+    "power.draw": 177.36,
+    "temperature.gpu": 70.0,
+    "clocks.current.graphics": 2040.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 17555.0,
+    "utilization.gpu": 66.0
+   },
+   "at_end": {
+    "power.draw": 448.94,
+    "temperature.gpu": 83.0,
+    "clocks.current.graphics": 1770.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 17579.0,
+    "utilization.gpu": 98.0
+   },
+   "ready_s": 2.258029587996134
+  },
+  "pass01_mtp-n5": {
+   "at_start": {
+    "power.draw": 179.38,
+    "temperature.gpu": 72.0,
+    "clocks.current.graphics": 2010.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 17853.0,
+    "utilization.gpu": 31.0
+   },
+   "at_end": {
+    "power.draw": 446.94,
+    "temperature.gpu": 83.0,
+    "clocks.current.graphics": 1770.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 17879.0,
+    "utilization.gpu": 97.0
+   },
+   "ready_s": 2.2243639360021916
+  },
+  "pass01_dflash2-n4": {
+   "at_start": {
+    "power.draw": 172.39,
+    "temperature.gpu": 70.0,
+    "clocks.current.graphics": 2025.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 18887.0,
+    "utilization.gpu": 0.0
+   },
+   "at_end": {
+    "power.draw": 446.58,
+    "temperature.gpu": 84.0,
+    "clocks.current.graphics": 1800.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 18991.0,
+    "utilization.gpu": 96.0
+   },
+   "ready_s": 2.7639049740027986
+  },
+  "pass01_dflash2-n7": {
+   "at_start": {
+    "power.draw": 174.61,
+    "temperature.gpu": 71.0,
+    "clocks.current.graphics": 2025.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 19335.0,
+    "utilization.gpu": 0.0
+   },
+   "at_end": {
+    "power.draw": 447.87,
+    "temperature.gpu": 84.0,
+    "clocks.current.graphics": 1830.0,
+    "clocks.current.memory": 9901.0,
+    "memory.used": 19439.0,
+    "utilization.gpu": 99.0
+   },
+   "ready_s": 2.7112522259994876
+  }
+ },
+ "arm_pass_acceptance": {
+  "pass01_mtp-n2": [
+   {
+    "accept_rate": 1.0,
+    "accepted": 2,
+    "generated": 2,
+    "mean_draft_len": 3.0
+   },
+   {
+    "accept_rate": 0.91815,
+    "accepted": 258,
+    "generated": 281,
+    "mean_draft_len": 2.83
+   },
+   {
+    "accept_rate": 0.68047,
+    "accepted": 230,
+    "generated": 338,
+    "mean_draft_len": 2.36
+   },
+   {
+    "accept_rate": 0.84459,
+    "accepted": 250,
+    "generated": 296,
+    "mean_draft_len": 2.69
+   },
+   {
+    "accept_rate": 0.51531,
+    "accepted": 202,
+    "generated": 392,
+    "mean_draft_len": 2.03
+   },
+   {
+    "accept_rate": 0.51399,
+    "accepted": 202,
+    "generated": 393,
+    "mean_draft_len": 2.03
+   }
+  ],
+  "pass01_mtp-n3": [
+   {
+    "accept_rate": 1.0,
+    "accepted": 3,
+    "generated": 3,
+    "mean_draft_len": 4.0
+   },
+   {
+    "accept_rate": 0.84866,
+    "accepted": 286,
+    "generated": 337,
+    "mean_draft_len": 3.53
+   },
+   {
+    "accept_rate": 0.57273,
+    "accepted": 252,
+    "generated": 440,
+    "mean_draft_len": 2.71
+   },
+   {
+    "accept_rate": 0.77654,
+    "accepted": 278,
+    "generated": 358,
+    "mean_draft_len": 3.32
+   },
+   {
+    "accept_rate": 0.36796,
+    "accepted": 209,
+    "generated": 568,
+    "mean_draft_len": 2.1
+   },
+   {
+    "accept_rate": 0.37925,
+    "accepted": 212,
+    "generated": 559,
+    "mean_draft_len": 2.13
+   }
+  ],
+  "pass01_mtp-n5": [
+   {
+    "accept_rate": 0.6,
+    "accepted": 3,
+    "generated": 5,
+    "mean_draft_len": 4.0
+   },
+   {
+    "accept_rate": 0.71991,
+    "accepted": 311,
+    "generated": 432,
+    "mean_draft_len": 4.57
+   },
+   {
+    "accept_rate": 0.37464,
+    "accepted": 260,
+    "generated": 694,
+    "mean_draft_len": 2.87
+   },
+   {
+    "accept_rate": 0.6318,
+    "accepted": 302,
+    "generated": 478,
+    "mean_draft_len": 4.15
+   },
+   {
+    "accept_rate": 0.25371,
+    "accepted": 222,
+    "generated": 875,
+    "mean_draft_len": 2.26
+   },
+   {
+    "accept_rate": 0.21639,
+    "accepted": 206,
+    "generated": 952,
+    "mean_draft_len": 2.07
+   }
+  ],
+  "pass01_dflash2-n4": [
+   {
+    "accept_rate": 0.25,
+    "accepted": 1,
+    "generated": 4,
+    "mean_draft_len": 2.0
+   },
+   {
+    "accept_rate": 0.81283,
+    "accepted": 304,
+    "generated": 374,
+    "mean_draft_len": 4.23
+   },
+   {
+    "accept_rate": 0.39194,
+    "accepted": 243,
+    "generated": 620,
+    "mean_draft_len": 2.57
+   },
+   {
+    "accept_rate": 0.77577,
+    "accepted": 301,
+    "generated": 388,
+    "mean_draft_len": 4.1
+   },
+   {
+    "accept_rate": 0.27646,
+    "accepted": 209,
+    "generated": 756,
+    "mean_draft_len": 2.11
+   },
+   {
+    "accept_rate": 0.1843,
+    "accepted": 169,
+    "generated": 917,
+    "mean_draft_len": 1.73
+   }
+  ],
+  "pass01_dflash2-n7": [
+   {
+    "accept_rate": 0.28571,
+    "accepted": 2,
+    "generated": 7,
+    "mean_draft_len": 3.0
+   },
+   {
+    "accept_rate": 0.64356,
+    "accepted": 325,
+    "generated": 505,
+    "mean_draft_len": 5.45
+   },
+   {
+    "accept_rate": 0.26462,
+    "accepted": 258,
+    "generated": 975,
+    "mean_draft_len": 2.84
+   },
+   {
+    "accept_rate": 0.63976,
+    "accepted": 325,
+    "generated": 508,
+    "mean_draft_len": 5.45
+   },
+   {
+    "accept_rate": 0.16169,
+    "accepted": 211,
+    "generated": 1305,
+    "mean_draft_len": 2.13
+   },
+   {
+    "accept_rate": 0.10886,
+    "accepted": 172,
+    "generated": 1580,
+    "mean_draft_len": 1.76
+   }
+  ]
+ },
+ "drafter_evidence": {
+  "pass01_mtp-n2": "0.02.024.632 I common_speculative_init_result: creating MTP draft context against the target model '/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf'",
+  "pass01_mtp-n3": "0.02.037.336 I common_speculative_init_result: creating MTP draft context against the target model '/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf'",
+  "pass01_mtp-n5": "0.01.986.933 I common_speculative_init_result: creating MTP draft context against the target model '/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf'",
+  "pass01_dflash2-n4": "0.02.005.144 I common_speculative_init_result: loading draft model '/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf'",
+  "pass01_dflash2-n7": "0.01.951.517 I common_speculative_init_result: loading draft model '/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf'"
+ }
+}

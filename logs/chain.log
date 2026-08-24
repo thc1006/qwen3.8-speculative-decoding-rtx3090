@@ -1,0 +1,80 @@
+[2026-08-24T12:03:36+08:00] waiting for Phase A
+[2026-08-24T14:13:57+08:00] lock is stale (pid 88444 gone) — Phase A did not finish cleanly
+[2026-08-24T14:13:57+08:00] Phase A: 875/875 records, 0 incidents
+[2026-08-24T14:13:57+08:00] gate 1 passed
+[2026-08-24T14:13:57+08:00] analysing Phase A
+
+(no baseline map in the result file; derived one from arm trees: {'master': 'baseline@master', 'pr27342': 'baseline@pr27342'})
+
+====================================================================================================
+metric: decode_tok_s   passes: 5   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@master                    41.55      41.55     125  zh_tea=0.2%
+baseline@pr27342                   41.55      41.55     125  zh_debug=0.1%
+mtp-n2                             66.39      66.39     125  reason_probability=0.3%
+mtp-n3                             63.29      63.29     125  reason_scheduling=0.2%
+mtp-n5                             54.89      54.89     125  prose_rainbow=0.2%
+dflash2-n4                         63.13      63.13     125  reason_trains=0.2%
+dflash2-n7                         50.95      50.95     125  code_rust_mergesort=0.2%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2                       baseline@master        +59.77 [+56.95, +62.75]  FASTER
+mtp-n3                       baseline@master        +52.32 [+48.47, +56.48]  FASTER
+mtp-n5                       baseline@master        +32.10 [+26.38, +37.75]  FASTER
+dflash2-n4                   baseline@pr27342       +51.94 [+45.56, +58.17]  FASTER
+dflash2-n7                   baseline@pr27342       +22.63 [+14.68, +30.37]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2                     chat: +46.9%  code: +92.0%  prose: +48.6%  reason: +73.6%  zh: +37.7%
+  mtp-n3                     chat: +31.3%  code: +98.9%  prose: +37.0%  reason: +71.2%  zh: +23.2%
+  mtp-n5                     chat:  +7.1%  code: +90.7%  prose:  +7.1%  reason: +54.9%  zh:  +0.6%
+  dflash2-n4                 chat: +30.2%  code:+116.8%  prose: +23.0%  reason: +89.4%  zh:  +0.3%
+  dflash2-n7                 chat:  -4.3%  code: +91.8%  prose: -11.1%  reason: +65.4%  zh: -28.7%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 875
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+baseline@master            0.1005     +0.0%       3980     +0.0%       -          -
+baseline@pr27342           0.1005     +0.0%       3979     -0.0%       -          -
+mtp-n2                     0.1627    +61.8%       2503    -37.1%   0.665       2.32
+mtp-n3                     0.1549    +54.1%       2684    -32.6%   0.558       2.65
+mtp-n5                     0.1343    +33.6%       3228    -18.9%   0.412       3.03
+dflash2-n4                 0.1554    +54.6%       2835    -28.8%   0.474       2.87
+dflash2-n7                 0.1251    +24.5%       3786     -4.9%   0.339       3.33
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  baseline@pr27342           byte-identical 100/100   median shared prefix when forked: -
+  dflash2-n4                 byte-identical 20/100   median shared prefix when forked: 0.228
+  dflash2-n7                 byte-identical 20/100   median shared prefix when forked: 0.228
+  mtp-n2                     byte-identical 24/100   median shared prefix when forked: 0.240
+  mtp-n3                     byte-identical 24/100   median shared prefix when forked: 0.240
+  mtp-n5                     byte-identical 20/100   median shared prefix when forked: 0.228
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@master            reproducible 100/100
+  baseline@pr27342           reproducible 100/100
+  dflash2-n4                 reproducible 100/100
+  dflash2-n7                 reproducible 100/100
+  mtp-n2                     reproducible 100/100
+  mtp-n3                     reproducible 100/100
+  mtp-n5                     reproducible 100/100
+[2026-08-24T14:13:57+08:00] Phase R pre-flight
+[2026-08-24T14:13:57+08:00] GATE 2 FAILED: pre-flight rejected at least one resource condition.
+[2026-08-24T14:13:57+08:00] Phase R NOT started. See logs/preflight_r.log
+A benchmark run holds the GPU lock. Wait for it to finish.
+bench.py -> results/phase_a.json
+pid=88444
+since=2026-08-24T11:30:48+0800
+
