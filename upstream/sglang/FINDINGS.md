@@ -45,28 +45,42 @@ for (uint32_t j = 1; j < num_speculative_tokens; ++j) {
 `cur_index` is never bounds-checked and `prob_acc` is never checked for finiteness. The file
 contains no `isnan`, no `isfinite`, and no comparison of `cur_index` against `num_draft_tokens`.
 
-The NaN path is the one that needs no malformed input at all. A single NaN reaching `prob_acc`
-makes both accept comparisons false, because every comparison against NaN is false. The accept
-branch is the only place `prob_acc` is reset, so it stays NaN, so no candidate is ever accepted,
-so the walk runs until the sibling chain reaches -1. If it does not, the kernel spins forever,
-which is what 100 % utilisation at 25 W looks like.
+**Verified on an RTX 3090, sm_86, the architecture in the report.** `hang_repro.cu` transcribes
+the loop verbatim, adds an iteration counter so a non-terminating walk reports itself instead of
+wedging the device, and runs the two candidate causes factorially. Built with the CUDA 13.3 nvcc,
+no SGLang or sgl-kernel needed, since the loop is self-contained.
 
-That also explains why the same symptom appears on Ampere (#35822), Hopper (#33549) and AMD
-(#29347). Data-dependent non-termination is not an architecture property.
+| sibling chain | NaN in `target_probs` | accepts? | iterations | outcome |
+|---|---|---|---:|---|
+| acyclic | no | no | 2 | terminates |
+| acyclic | no | yes | 2 | terminates |
+| **acyclic** | **yes** | no | **2** | **terminates** |
+| **cyclic** | no | **yes** | **1** | **terminates** |
+| cyclic | no | no | 1000001 | hit the cap |
+| cyclic | yes | no | 1000001 | hit the cap |
+| self-referential | no | no | 1000001 | hit the cap |
 
-Transcribed to CPU in `loop_termination.py`, which needs no GPU because the claim is about
-control flow:
+A first version of this test put a cycle into the row labelled as the NaN case and would have
+supported the wrong conclusion, which was written down before the factorial run corrected it. The
+result that survives is narrower:
 
-| input | result |
-|---|---|
-| well formed tree | terminates in 2 steps |
-| sibling cycle 1 to 3 to 1 | does not terminate |
-| self-referential sibling | does not terminate |
-| **well formed tree, one NaN in `target_probs`** | **does not terminate** |
+- **A cycle in `retrive_next_sibling` is necessary.** Every acyclic case terminates, NaN included.
+- **A cycle is not sufficient.** If any node on the cycle is accepted, `break` leaves the loop, and
+  the row above shows a cyclic chain terminating in one iteration.
+- **NaN is neither necessary nor sufficient on its own.** What it does is guarantee that nothing is
+  ever accepted, because every comparison against NaN is false and the accept branch is the only
+  place `prob_acc` is reset. That removes the accidental escape and turns a survivable cycle into
+  a certain hang.
+
+So the kernel is not the origin of the malformed data; it is the place where malformed data stops
+being recoverable. The origin question points at the tree builder, which is loop 2 below.
+
+Data-dependent non-termination is also not an architecture property, which is consistent with the
+same symptom appearing on Ampere (#35822), Hopper (#33549) and AMD (#29347).
 
 The reporter runs `--kv-cache-dtype fp8_e5m2` on sm_86, which has no native FP8, and reports that
-short requests pass while longer ones hang. A low-range float format holding a growing cache is a
-plausible NaN source, and nothing between it and this loop checks.
+short requests pass while longer ones hang. That is a plausible NaN source and nothing between it
+and this loop checks, but on this evidence NaN alone would slow the walk rather than stop it.
 
 ### 2. `build_tree_kernel`, the parent walk
 
