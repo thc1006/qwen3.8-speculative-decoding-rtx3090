@@ -30,11 +30,11 @@ here, and the question was open again.
 | **Is it worth enabling?** | Yes. MTP at `--spec-draft-n-max 2` is **+59.8 %** [+57.0, +62.8] over no speculation. |
 | **Which n-max?** | **2** for `draft-mtp`, **4** for `draft-dflash` - the best of those measured, and derived from a cost model rather than picked from a table. |
 | **Does DFlash2 beat the built-in MTP head?** | No. **+51.9 %** at its own best depth. It drafts longer blocks and its fixed cost is lower, but acceptance falls faster with depth. |
-| **Energy, or just time?** | Both. **-37 %** decode energy for a 400-token answer (3980 -> 2503 J). No prior-art study publishes an energy figure for this model. |
+| **Energy, or just time?** | Both, in direction. Board telemetry puts decode energy for a 400-token answer at roughly **-37 %** (3980 -> 2503 J), but `power.draw` on Ampere is a time-averaged field and the integration has request-boundary and prefill-subtraction limits, so treat the figure as provisional pending an energy-counter remeasurement. No prior-art study publishes an energy figure for this model. |
 | **Lossless at temperature 0?** | **No.** 76-80 % of greedy requests diverge from the non-speculative baseline. Deterministic, and it reproduces exactly across passes. |
 | **Why does deeper drafting stop paying?** | Each extra verified position costs **c ~ 0.28** of a plain decode step. With both clocks pinned, the baseline and the speculative arms sit in opposite corners: bandwidth elasticity **0.80 against 0.14**, compute elasticity **0.27 against 0.76**. |
 | **Does the MoE result carry over?** | No. The sign flips: net loss there, large net win here. |
-| **Which prompts benefit?** | Code and reasoning most, Chinese least - and `dflash2-n7` is **+22.6 % overall while being a net loss on three of five classes**. |
+| **Which prompts benefit?** | Within this suite, code and reasoning most, the Chinese tasks least - and `dflash2-n7` is **+22.6 % overall while being a net loss on three of five classes**. Thinking mode is collinear with the reason class and the Chinese prompts are different tasks rather than translations, so these are differences between the selected prompts, not language or class effects. |
 
 **Contents** - [What this is not claiming](#what-this-is-not-claiming) |
 [Results](#results-phase-a) | [Cost model](#a-cost-model-not-a-table) |
@@ -136,20 +136,41 @@ units of a plain decode step, as `speedup = mean_len / k` with `k(w) = k0 + c*(w
   <img alt="Three stacked panels against verification width. Top: tokens accepted per target pass rises from 2.3 to 3.3 but falls far below a dotted line showing growth in proportion to width. Middle: the cost of one target pass rises linearly, with c equal to 0.2829 for draft-mtp and 0.2784 for draft-dflash. Bottom: speedup, the ratio of the two, falls from 1.60 to 1.23 across the widths measured." src="analysis/plot_cost_model.png">
 </picture>
 
-| method | widths | k0 | **c** | r^2 |
-|---|---|---:|---:|---:|
-| `draft-mtp` | 3, 4, 6 | 0.8937 | **0.2829** | 0.9998 |
-| `draft-dflash` | 5, 8 | 0.7825 | **0.2784** | (2 points, so r^2 is arithmetic) |
+| phase | method | widths | k0 | **c** | r^2 |
+|---|---|---|---:|---:|---:|
+| A | `draft-mtp` | 3, 4, 6 | 0.8937 | **0.2829** | 0.9998 |
+| A | `draft-dflash` | 5, 8 | 0.7825 | **0.2784** | (2 points, so r^2 is arithmetic) |
+| n-max | `draft-mtp` | 2, 3, 4, 5, 6, 7, 8 | 0.8888 | **0.2904** | 0.9958 |
+| n-max | `draft-dflash` | 3, 5, 7 | 0.9452 | **0.2479** | 0.9948 |
 
-**`c` agrees to 1.6 %** between the target's own built-in nextn head and a structurally unrelated
-1.1 GB block-diffusion drafter, while `k0` differs by 14 %. The marginal cost of verifying one
-more position belongs to the verification path; the fixed cost belongs to the drafter, and
-DFlash2's fixed cost is the *lower* of the two.
+Phase A fitted three MTP widths and two DFlash2 widths; two points make an r^2 of 1 arithmetic
+rather than evidence, which is why `phase_nmax` runs the full ladder. On seven MTP widths the line
+holds at r^2 = 0.9958 with five residual degrees of freedom.
+
+The two fits stop at width 8 deliberately. `MMVQ_MAX_BATCH_SIZE` is 8, so a wider verification
+batch never reaches that kernel at all: at width 9 `k` sits **26 % below** what the MMVQ line
+predicts for MTP and 6.7 % below for DFlash2, and throughput jumps back from +9.1 % at width 8 to
++39.1 % at width 9. Fitting one line across the boundary dragged the MTP coefficient from 0.2904
+to 0.2215 and the fit from 0.9958 to 0.8304. The same boundary shows up a third way: two unrelated
+drafters that share only the verification width agree on the fork position for 25 of 25 prompts at
+widths 3, 5 and 7, and for 8 of 25 at width 9.
+
+**`c` agrees to within 15 %** between the target's own built-in nextn head and a structurally
+unrelated 1.1 GB block-diffusion drafter. `k` is the whole speculative cycle, though: target
+verification, the drafter's own forward passes, sampling, launch and synchronisation, output
+extraction and any per-step state management. Two methods that share everything except the drafter
+narrow the marginal cost to that shared machinery without identifying which part of it, so `c` is
+reported here as a total marginal cost per verified position and not as a target-verification
+cost. Separating the components needs per-context event timing, a replay that skips drafter
+compute, or a profiler decomposition; none of those is in this repo.
 
 `mean_len` saturates with depth while `k` grows linearly, so the ratio has an interior maximum in
-principle. **Over the widths measured here it falls monotonically, so the best setting is simply
-the smallest one tested** - 2 for MTP, 4 for DFlash2, on this card at this target quantisation.
-Establishing that the true optimum is interior needs n-max 1, which `phase_nmax` adds.
+principle. `phase_nmax` now brackets it: width 2 gives **+44.96 % [+43.45, +46.54]** and width 3
+gives **+58.84 % [+55.90, +61.89]**, so the peak sits at width 3 with a tested and slower point on
+each side and non-overlapping intervals. **The best setting is n-max 2 for MTP and n-max 4 for
+DFlash2 on this card at this target quantisation**, and it is now a bracketed maximum rather than
+the smallest width that happened to be tried. It remains the best setting selected on the same
+data it was measured on; confirming it without that selection needs fresh prompts or fresh passes.
 
 <details>
 <summary>Why an RTX 5090 report recommends the opposite setting, and what would have to differ</summary>
@@ -160,12 +181,16 @@ block already paid for. Here n-max 4 beats n-max 7 by a wide margin, 1.520x agai
 
 The model says both can be true, and says what would have to differ. For width 8 to beat width 5
 on this measured acceptance curve, `c` would have to be below **0.0543**; it is 0.2784 here, 5.1
-times too large. Phase R2 shows what moves `c`: with the SM clock pinned, the baseline responds to
-core clock with an elasticity of 0.27 while the speculative arms sit at 0.76-0.81, so `c` is a
-compute cost and falls as compute rises relative to memory bandwidth - exactly the axis separating
-a 5090 from a 3090. The prediction is that a card with `c` under 0.0543 prefers
-the deeper setting with the same drafter and the same acceptance, and measuring `c` needs one
-baseline and three widths.
+times too large. Phase R2 shows what `c` responds to: over the tested GA102 clock ranges the baseline responds to
+core clock with an elasticity of 0.27 while the speculative arms sit at 0.76-0.81. That is
+consistent with `c` being dominated by compute, but clock elasticity is not a bottleneck
+measurement - it also moves with the voltage-frequency curve, power headroom, occupancy and launch
+amortisation - so calling the verify path compute-bound would need per-kernel counters this study
+does not have. Read as a sensitivity threshold rather than a hardware prediction: **holding this
+card's acceptance curve fixed**, width 8 overtakes width 5 once `c` drops below 0.0543, and
+measuring `c` on another card needs one baseline and three widths there. Whether a 5090's `c` is
+below it is not established here, and a different card can also move the acceptance curve, the
+kernel family and the dispatch boundary.
 
 One assumption is doing work there and is not verified: the calculation uses this card's
 `mean_len` curve, taken at `UD-Q4_K_XL`. A higher-precision target may accept more, which would
@@ -207,10 +232,13 @@ Gated DeltaNet and cannot roll back by truncating a KV suffix. Writing that as
 acceptance. Across an acceptance range of **0.096-0.918**, every arm returns **|r| <= 0.0028**
 decode-steps per rejected token, r^2 between 0.001 and 0.060.
 
-The overhead is paid per position **verified**, not per draft **rejected**. That does not make
-rollback free; it bounds how much of the measured cost rollback can account for, and the bound is
-approximately none. The hypothesis was this repo's own, pre-registered, and is reported as
-unsupported.
+No relationship appears that is consistent with that specific proxy. What it bounds is the
+component of cost proportional to `n_max*(1 - acceptance)`, and that component is approximately
+none. It does not bound a fixed checkpoint paid every verification step, a fixed restore paid once
+per rejection, or a cost depending on where in the draft the first rejection lands: the first two
+are absorbed into `k_verify` and are invisible to a slope against acceptance. Separating them needs
+per-step drafted and accepted lengths, which the server does not yet report. The hypothesis was
+this repo's own, pre-registered, and is reported as unsupported in the form it was written.
 
 </details>
 
@@ -229,17 +257,68 @@ Fork positions partition the arms into exactly two groups by verification width,
 `{5,6,8}`, identically in all five passes. **The grouping crosses drafters**: width 5 and width 8
 are DFlash2 while width 6 is the built-in MTP head, and all three agree with each other on every
 prompt. So drafter identity does not predict the grouping and verification width does. That
-boundary is where the CUDA `calc_nwarps` table switches `ncols_dst` from four warps to two.
+boundary co-occurs with the CUDA `calc_nwarps` table switching `ncols_dst` from four warps to two.
+
+Two things qualify that, and both were found by this repo looking for them.
+
+**The intervention does not support the warp count as the cause.** Three builds of the same
+revision, differing only in that table, were pre-registered with their outcomes written down
+first. The forced-up build passes every validity gate - the greedy baseline is byte-identical
+across builds on 25 of 25 prompts, the widths it did not touch are identical on 50 of 50, the
+widths it did touch differ on 60 of 75, and disassembly confirms the edit changed exactly the
+kernels it should and no others. But of the 18 prompts that can discriminate, the registered
+prediction that widths 5, 6 and 8 adopt the `{3,4}` fork positions held on **3**. The forced-down
+direction was void on its first attempt for a reason worth stating: its table row included width
+1, and a drafter decodes one token at a time, so it perturbed every arm through its drafter. A
+corrected build that leaves widths 1 and 2 alone is running. **Warp count is not currently
+supported as the cause of the grouping**, and the co-occurrence above is reported as
+co-occurrence.
+
+**Some of the agreements are censored.** Every arm stops at 400 tokens, which is about 950
+characters of dense Chinese while forks here have been resolved as late as character 1537. A
+record that never differs within its own output is recorded identical, and for the short ones that
+means "did not diverge before the cap" rather than "identical". `harness/truncation_audit.py`
+lists them; on Phase A that is 15 of 25 prompts. The partition is the same computed on all 25 and
+on the 10 with no censored verdict, so it does not depend on the generation length, but the
+individual byte-identity claims do.
 
 This corroborates [llama.cpp #25618](https://github.com/ggml-org/llama.cpp/issues/25618) rather
 than discovering anything: that thread already establishes the phenomenon, its
 quantization-dependence, its drafter-independence, and a root cause on the Vulkan side. What is
-still open is the **CUDA** boundary, and a width-localised boundary is what this repo can add.
+still open is the **CUDA** boundary, and a width-localised boundary is what this repo can add -
+now with the intervention result attached, which points away from the mechanism the thread
+proposes.
 [llama.cpp #26750](https://github.com/ggml-org/llama.cpp/issues/26750) asks the same question on
 Blackwell; this card is sm_86 and cannot answer it. See
 [`docs/UPSTREAM_CONTRIBUTIONS.md`](docs/UPSTREAM_CONTRIBUTIONS.md).
 
 ### Resource response
+
+<details>
+<summary>The speculative arms boosted lower than their own baselines, so the speedups are understated</summary>
+
+Every speculative arm ran at a **lower SM clock than the baseline it is compared against** - 1.98 %
+lower for `dflash2-n7`, 4.17 % lower for `mtp-n5` - and 3 to 5 degrees hotter. Nothing was pinned;
+this is the card boosting less because a speculative arm draws more power for the same wall time.
+
+The direction matters. A treatment arm running *faster* than its control would inflate the effect;
+one running slower deflates it. Correcting with this study's own SM-clock elasticity for the
+interval those clocks sit in, 0.78 for the speculative arms:
+
+| arm | clock vs its baseline | measured | at matched clock |
+|---|---:|---:|---:|
+| `mtp-n2` | -3.87 % | +59.77 % | ~ +64.7 % |
+| `mtp-n3` | -4.01 % | +52.32 % | ~ +57.2 % |
+| `dflash2-n4` | -3.06 % | +51.94 % | ~ +55.7 % |
+| `mtp-n5` | -4.17 % | +32.10 % | ~ +36.5 % |
+| `dflash2-n7` | -1.98 % | +22.63 % | ~ +24.6 % |
+
+The measured column stays the headline, for two reasons. It is the conservative one, and it is
+what the card actually delivers to a user who has not pinned anything. The matched-clock column is
+an estimate from an elasticity measured in a different phase, not a measurement, and it is here so
+that the boost difference is not mistaken for something working in the study's favour.
+
+</details>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_bound_by_dark.png">
@@ -279,13 +358,13 @@ setting rather than something the card negotiates with its power cap.
 
 | | |
 |---|---|
-| target | `unsloth/Qwen3.8-27B-GGUF` | `Qwen3.8-27B-UD-Q4_K_XL.gguf` (17.56 GB) |
+| target | `unsloth/Qwen3.8-27B-GGUF`, `Qwen3.8-27B-UD-Q4_K_XL.gguf` (17.56 GB) |
 | architecture | `qwen35`, 64 layers, `full_attention_interval: 4` -> **48 Gated DeltaNet + 16 full attention**, vocab 248320, native VL |
 | MTP | embedded in the quant: `qwen35.nextn_predict_layers = 1`, `blk.64.nextn.*` present (verified by reading the GGUF) |
 | GPU | 1 x RTX 3090 24 GB, driver 610.43.02, 420 W default, **reset to stock for the primary matrix** - the card was found overclocked and the first Phase A run was discarded ([`docs/GPU_AS_FOUND.md`](docs/GPU_AS_FOUND.md)) |
 | host | Debian 13, kernel 6.12, i9-13900, 31 GB RAM |
 | engine | llama.cpp from source, CUDA 13.3, `CMAKE_CUDA_ARCHITECTURES=86`, two trees with identical flags |
-| trees | `master` @ `c060ca9` (build 200) | **PR #27342** (DFlash2, unmerged) @ `d1a522f` |
+| trees | `master` @ `c060ca9` (build 200), **PR #27342** (DFlash2, unmerged) @ `d1a522f` |
 | prompts | 25, balanced **5 per class** over code / prose / reason / chat / zh; every prompt written to exceed the 400-token cap |
 | sampling | greedy, full sampler chain pinned explicitly, `cache_prompt: false`, `--parallel 1` |
 

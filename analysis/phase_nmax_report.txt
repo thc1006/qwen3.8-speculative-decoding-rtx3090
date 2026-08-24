@@ -1,0 +1,106 @@
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@master                    41.57      41.57      75  zh_moving=0.1%
+baseline@pr27342                   41.57      41.57      75  zh_review=0.1%
+mtp-n1                             60.26      60.26      75  zh_debug=4.3%
+mtp-n2                             66.03      66.03      75  chat_desk_robot=7.0%
+mtp-n3                             63.33      63.33      75  prose_argument=0.2%
+mtp-n4                             60.29      60.29      75  reason_trains=0.4%
+mtp-n5                             54.95      54.95      75  prose_rainbow=0.2%
+mtp-n6                             49.63      49.63      75  reason_probability=0.1%
+mtp-n7                             45.37      45.37      75  reason_probability=0.1%
+mtp-n8                             57.81      57.81      75  code_go_worker=0.3%
+dflash2-n2                         63.89      63.89      75  reason_scheduling=0.3%
+dflash2-n4                         63.20      63.20      75  reason_probability=0.3%
+dflash2-n6                         54.65      54.65      75  reason_scheduling=0.2%
+dflash2-n8                         50.96      50.96      75  code_py_ratelimiter=0.3%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n1                       baseline@master        +44.96 [+43.45, +46.54]  FASTER
+mtp-n2                       baseline@master        +58.84 [+55.90, +61.89]  FASTER
+mtp-n3                       baseline@master        +52.36 [+48.49, +56.55]  FASTER
+mtp-n4                       baseline@master        +45.03 [+39.44, +50.73]  FASTER
+mtp-n5                       baseline@master        +32.18 [+26.46, +37.82]  FASTER
+mtp-n6                       baseline@master        +19.38 [+13.72, +25.16]  FASTER
+mtp-n7                       baseline@master         +9.14 [+3.74, +14.55]  FASTER
+mtp-n8                       baseline@master        +39.07 [+31.84, +46.31]  FASTER
+dflash2-n2                   baseline@pr27342       +53.71 [+50.43, +57.16]  FASTER
+dflash2-n4                   baseline@pr27342       +52.05 [+45.65, +58.28]  FASTER
+dflash2-n6                   baseline@pr27342       +31.48 [+23.80, +39.19]  FASTER
+dflash2-n8                   baseline@pr27342       +22.59 [+14.64, +30.35]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n1                     chat: +38.2%  code: +58.3%  prose: +41.0%  reason: +52.5%  zh: +34.8%
+  mtp-n2                     chat: +43.6%  code: +91.9%  prose: +48.5%  reason: +72.8%  zh: +37.5%
+  mtp-n3                     chat: +31.4%  code: +98.8%  prose: +37.0%  reason: +71.3%  zh: +23.3%
+  mtp-n4                     chat: +22.2%  code: +99.3%  prose: +21.5%  reason: +67.2%  zh: +14.9%
+  mtp-n5                     chat:  +7.1%  code: +90.8%  prose:  +7.2%  reason: +55.1%  zh:  +0.7%
+  mtp-n6                     chat:  -6.1%  code: +79.1%  prose:  -5.9%  reason: +41.4%  zh: -11.6%
+  mtp-n7                     chat: -15.9%  code: +68.3%  prose: -16.1%  reason: +29.7%  zh: -20.4%
+  mtp-n8                     chat:  +7.5%  code:+117.2%  prose:  +4.0%  reason: +65.5%  zh:  +1.2%
+  dflash2-n2                 chat: +45.6%  code: +87.5%  prose: +45.0%  reason: +74.8%  zh: +15.6%
+  dflash2-n4                 chat: +30.3%  code:+116.9%  prose: +23.1%  reason: +89.6%  zh:  +0.3%
+  dflash2-n6                 chat:  +4.6%  code:+104.0%  prose:  -2.0%  reason: +71.2%  zh: -20.5%
+  dflash2-n8                 chat:  -4.3%  code: +91.7%  prose: -11.1%  reason: +65.4%  zh: -28.7%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 1050
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+baseline@master            0.1006     +0.0%       3978     +0.0%       -          -
+baseline@pr27342           0.1006     +0.0%       3977     -0.0%       -          -
+mtp-n1                     0.1477    +46.9%       2720    -31.6%   0.785       1.78
+mtp-n2                     0.1619    +61.0%       2517    -36.7%   0.665       2.32
+mtp-n3                     0.1551    +54.3%       2679    -32.6%   0.558       2.67
+mtp-n4                     0.1476    +46.8%       2880    -27.6%   0.476       2.89
+mtp-n5                     0.1345    +33.8%       3223    -19.0%   0.412       3.05
+mtp-n6                     0.1213    +20.7%       3631     -8.7%   0.363       3.16
+mtp-n7                     0.1108    +10.2%       4024     +1.2%   0.323       3.24
+mtp-n8                     0.1477    +46.8%       3030    -23.8%   0.292       3.31
+dflash2-n2                 0.1571    +56.2%       2633    -33.8%   0.626       2.25
+dflash2-n4                 0.1556    +54.7%       2830    -28.8%   0.474       2.88
+dflash2-n6                 0.1343    +33.5%       3461    -13.0%   0.375       3.23
+dflash2-n8                 0.1251    +24.4%       3787     -4.8%   0.339       3.35
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  dflash2-n2                 byte-identical 18/75   median shared prefix when forked: 0.240
+  dflash2-n4                 byte-identical 15/75   median shared prefix when forked: 0.228
+  dflash2-n6                 byte-identical 15/75   median shared prefix when forked: 0.228
+  dflash2-n8                 byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n1                     byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n2                     byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3                     byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n4                     byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n5                     byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n6                     byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7                     byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n8                     byte-identical 9/75   median shared prefix when forked: 0.172
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@master            reproducible 50/50
+  baseline@pr27342           reproducible 50/50
+  dflash2-n2                 reproducible 50/50
+  dflash2-n4                 reproducible 50/50
+  dflash2-n6                 reproducible 50/50
+  dflash2-n8                 reproducible 50/50
+  mtp-n1                     reproducible 50/50
+  mtp-n2                     reproducible 50/50
+  mtp-n3                     reproducible 50/50
+  mtp-n4                     reproducible 50/50
+  mtp-n5                     reproducible 50/50
+  mtp-n6                     reproducible 50/50
+  mtp-n7                     reproducible 50/50
+  mtp-n8                     reproducible 50/50

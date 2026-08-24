@@ -10,9 +10,9 @@ second-host addendum in `PREREGISTRATION.md`.
 
 | host | GPU | toolchain | what it runs |
 |---|---|---|---|
-| **A** `thc1006-debian13` | RTX 3090, 420 W | CUDA 13.3 | gcc 14.2 | glibc 2.41 | the primary phase chain |
-| **B** `3090` (tailscale) | RTX 3090, **350 W** | CUDA 12.0 | gcc 13.3 | glibc 2.39 | cross-host replication, #27572 |
-| **C** `mailer.cirda` | **RTX A6000 48 GB** | CUDA 12.9 | gcc 12.2 | glibc 2.36 | forced-warp intervention, Phase Q |
+| **A** `thc1006-debian13` | RTX 3090, 420 W | CUDA 13.3 / gcc 14.2 / glibc 2.41 | the primary phase chain |
+| **B** `3090` (tailscale) | RTX 3090, **350 W** | CUDA 12.0 / gcc 13.3 / glibc 2.39 | cross-host replication, #27572 |
+| **C** `mailer.cirda` | **RTX A6000 48 GB** | CUDA 12.9 / gcc 12.2 / glibc 2.36 | forced-warp intervention, Phase Q |
 
 ---
 
@@ -46,10 +46,37 @@ second-host addendum in `PREREGISTRATION.md`.
       19 000-token prompts and an `-np` sweep beyond 4, which the first pass never covered.
 - [x] **RH2 cross-host replication** (host B) - done. `phase_a_hostB.json`, 175 records: partition
       clean 25/25, groups differ on 14, fork positions identical to host A on all 25 prompts.
-- [ ] **Forced-warp replication** (host B, until ~09:36) - the same three builds on the second
-      3090. The A6000 result is one device, and the two 3090s are known to agree on fork positions
-      where the A6000 does not, so this separates a property of the table from one of that card.
-      Host B disappears afterwards; nothing else it was holding is still only there.
+- [ ] **Forced-warp replication** (host B, until 09:35) - the same builds on the second 3090.
+      control done, forced-up running, then the original forced-down and then forced_down2. The
+      A6000 result is one device and the two 3090s agree on fork positions where the A6000 does
+      not, so this separates a property of the table from one of that card.
+- [ ] **forced_down2** (host C now, host B after its chain) - forced-down was void because its
+      1-4 row includes width 1, and a drafter decodes one token at a time, so it perturbed every
+      arm through its drafter. SASS hashing shows both original edits were surgical in the binary
+      (1-4 identical for forced-up, 5-8 identical for forced-down), which is what forced the
+      explanation. forced_down2 splits the row and leaves 1,2 at four warps. Predictions are
+      registered in PREREGISTRATION.md Correction 6, written before the run finished.
+- [ ] **Truncation, extended-cap run** - not started; the design is verified and needs no code.
+      `harness/truncation_audit.py` finds 15 of 25 prompts in phase_a holding a 'same' the
+      400-token cap could have produced. The partition survives on the 10 that do not, so the
+      grouping does not depend on generation length, but the other 15 are unrecovered.
+
+      Run it as `bench.py --matrix <same> --max-tokens 1600` on the host that produced the file.
+      Nothing else changes. Three things were checked before writing this down:
+
+      - `max_tokens` is applied at the single measured request, the same line for every arm, so
+        the baseline is extended too. Comparing a 1600-token arm against a 400-token baseline
+        would manufacture a fork at the baseline's end, and that is the one mistake that would
+        make the whole run worse than useless.
+      - divergence refers to `(baseline, prompt, pass)` from the same run, so the reference is the
+        baseline that ran under the same cap.
+      - 1600 tokens because the densest prompt, `zh_tea`, is 1.37 chars/token and that gives it
+        2188 characters against the 1537-character study threshold. Every other prompt clears it
+        by more.
+
+      The control is free: divergence is deterministic here, 150 of 150 arm-by-prompt cells agree
+      across all five passes of phase_a, so every already-resolved fork must come back at the same
+      character. One that does not means something other than the cap changed.
 - [ ] **Forced-warp intervention** (host C) - three builds of the same revision differing only in
       the `calc_nwarps` GENERIC table. Registered before any of it ran, with the outcomes and the
       baseline identity control written down first.
@@ -80,6 +107,156 @@ second-host addendum in `PREREGISTRATION.md`.
 | **llama.cpp [#27676](https://github.com/ggml-org/llama.cpp/pull/27676)** | open | the verification-step counter. One line in `server_slot_stats::to_json()` plus assertions in `tools/server/tests/unit/test_speculative.py`. Verified both ways on a CPU-only build of `c060ca9`: unpatched `KeyError: 'draft_n_verif_steps'`, patched `1 passed`. Motivation is exact accounting, not benchmark convenience. |
 | **llama.cpp `output_reorder()` gate** | verified, not filed | the `embd_nextn` swap is unconditional but the buffer is token-indexed when `embeddings_nextn_masked` is off. One line, plus a masked/unmasked regression. Does not claim to fix #27572. |
 | **llama.cpp #25618 / #27407 / #27623** | tracked | comment counts in `docs/UPSTREAM_CONTRIBUTIONS.md` are dated; re-read before quoting. |
+
+---
+
+## Audit response, opened 2026-08-25 07:10
+
+An external source-and-inference audit graded the repo A- on discipline and throughput, and C- to
+D on mechanism attribution. Every item below was checked against the data before being accepted;
+two of its claims did not hold and are recorded as such. The user authorised full re-runs where
+the fix needs them.
+
+### A. Truthfulness of what is already written
+
+- [x] **A1** `c` no longer attributed to target verification. It is the whole cycle - verification,
+      the drafter's own forwards, sampling, launch, synchronisation, output extraction, state
+      management - and two drafters sharing all but one of those narrows it without identifying it.
+- [x] **A2** the rollback bound scoped to the component proportional to `n_max(1 - acceptance)`.
+      A fixed per-step checkpoint or per-rejection restore lands in `k_verify` and is invisible to
+      a slope against acceptance.
+- [x] **A3** "`c` is a compute cost" downgraded to SM-clock-sensitive. Clock elasticity also moves
+      with the voltage-frequency curve, power headroom, occupancy and launch amortisation.
+- [x] **A4** the 5090 paragraph relabelled a sensitivity threshold. It was already conditional on
+      holding acceptance fixed; the sentence before it was not.
+- [x] **A5** the -37 % decode energy marked provisional. `power.draw` and `power.draw.average`
+      return the same number on this card, so the sampler integrates one-second averages at 10 Hz.
+- [x] **A6** class and language scoped to this suite. `think=True` is 5 of 5 reason prompts and 0
+      of the other 20, so thinking is collinear with the class, and the Chinese prompts are
+      different tasks rather than translations.
+- [x] **A7** the warp section carries the intervention result: forced-up passes every gate and the
+      registered prediction held on 3 of 18 discriminating prompts.
+- [ ] **A8** `prompts.py` docstring still says "3 x 5 = 15" for a 25-prompt suite and claims
+      `think` is crossed with class. Rewrite to describe the design that exists and name the
+      collinearity as a limitation.
+- [ ] **A9** `elasticity.py:405` asserts "compute-bound verify" as a conclusion. Same downgrade.
+
+Two audit claims that did not hold: the README never says "compute-bound" (the phrase is in
+`elasticity.py` and, correctly, in the preregistration as the hypothesis under test), and it did
+not assert warp causation - it stated co-occurrence and called the CUDA boundary open. The gap
+there was omission, not misstatement.
+
+### B. Analyser correctness, no re-run needed
+
+- [x] **B1** `width_groups.py` mapped width 9 to one warp. `MMVQ_MAX_BATCH_SIZE` is 8, so that
+      width never reaches MMVQ and the table predicts nothing for it. H8 now reports NOT TESTABLE
+      for off-path widths and scores the rest.
+- [x] **B2** `cost_model.py` fitted one line across the MMVQ boundary, dragging the MTP
+      coefficient from 0.2904 to 0.2215 and the fit from r2 = 0.9958 to 0.8304.
+- [x] **B3** `analyze.py` still used `mean_len = n / (n - accepted)`, the form `cost_model.py` was
+      corrected away from. Two mean lengths in one repo.
+- [x] **B4** `bench.py` decode tok/J used `predicted_n` against an energy figure with the first
+      token subtracted out.
+- [x] **B5** five algebraic invariant tests, each verified by reintroducing its defect on a copy.
+- [x] **B6** `ascii_sweep.py` put a pipe inside markdown table cells and broke five rows.
+- [x] **B7** `truncation_audit.py` measured in characters and reported 15 of 25 Phase A prompts as
+      censored while the rest were clean. That was the unit. The design fixes the window in tokens,
+      and characters per token run 1.36 to 6.17 across this suite, so in tokens every record has the
+      same 400-token window and the differential censoring does not exist. The "cleaner subset"
+      robustness check both analysers had grown is removed, because there is no cleaner subset.
+- [x] **B8** three states, read off `finish_reason` rather than inferred from a threshold:
+      diverged at token t, identical through EOS, right-censored at the cap. **5825 of 5825 records
+      across every file stopped at the cap and none reached EOS**, so every identical verdict in
+      the study is right-censored, uniformly. Forks resolve as late as token 334 of 400 in Phase A
+      and 379 of 400 in the A6000 warp control.
+- [x] **B9** pass agreement asserted rather than assumed: 150 cells in Phase A and 300 in n-max are
+      measured more than once and all agree.
+- [x] **B11** the repair recorded in `phase_a.json` verified rather than trusted: no measured field
+      differs from `phase_a.pre_repair.json`, exactly 150 records gained a divergence and all are in
+      pass 5, and recomputing those 150 independently disagrees on none. The thermal gate is also
+      not a no-op: 34 of 35 arm-passes waited, median 30 s, GPU at stock throughout.
+- [x] **B12** found while looking for a clock confound, and it runs the other way: every speculative
+      arm boosted 2.0 to 4.2 % **lower** than its own baseline and ran 3 to 5 degrees hotter,
+      because it draws more power for the same wall time. A treatment slower than its control
+      deflates the effect. At matched clock `mtp-n2` would be about +64.7 % rather than +59.8 %.
+      The measured figure stays the headline as the conservative one.
+- [x] **B10** `analyze.py` excluded records that did not hit the cap without saying so.
+      Speculation moves where a request stops - 76 to 80 % of these diverge from their baseline -
+      so that selects on a post-treatment variable. `build_series_itt` applies no exclusion and
+      `report()` now prints both counts every run. On Phase A they are the same 875, so the
+      headline never depended on it; it starts to matter at D2's larger budget.
+- [x] **B13** the log cross-check in `cost_model.py` skipped an arm-pass silently when its line
+      count did not match, which turns the check off rather than failing it. It now names what it
+      skipped. Verified running on Phase A: 625 requests compared, 0 mismatched, and the derived
+      mean length tracks the server's printed one to within its printing precision.
+- [x] **B14** acceptance checked end to end. It is parsed from the server log into
+      `arm_pass_acceptance`, which holds 26 entries per arm-pass against 25 prompts because the
+      drafter-evidence request runs first. The consumer requires exactly one extra and zips from
+      index 1, so it is aligned; the cost model takes acceptance from the per-request timings
+      regardless.
+
+- [x] **B15** the request path verified against the claims made about it. `cache_prompt: false`
+      is sent and `t_cache_n` is 0 on all 875 Phase A records. The sampler chain is pinned
+      explicitly - `top_k` 1, every penalty neutral, mirostat off - so "greedy" means the same
+      thing in every arm. The compared text is `reasoning_content + content`, so a divergence
+      inside a thinking block is seen and the characters-per-token conversion is over the whole
+      generation.
+- [x] **B16** the two trees' baselines coincide, which every cross-tree comparison depends on:
+      **125 of 125 byte-identical**, decode rate apart by -0.02 %, paired bootstrap
+      -0.008 % [-0.029, +0.012], spanning zero.
+- [x] **B17** prefill energy is subtracted. The `subtracted` flag is None on Phase A because the
+      flag was added after that run, but `decode_energy_j` is below the request total on all 875
+      records at a median ratio of 0.977, and phase_nmax carries the flag as True at 0.976. About
+      2.3 % of request energy is prefill, so the -37 % figure is computed on decode energy.
+- [x] **B18** power sampling density: 38 samples minimum, 71 median per record, so no energy
+      integral rests on a handful of points. The effective rate is 0.85 of the nominal 10 Hz
+      because each `nvidia-smi` call takes longer than the interval; the trapezoid handles the
+      uneven spacing, and the one-second averaging behind `power.draw` remains the reason C3
+      moves to the counter.
+
+### C. Harness design, requires a full re-run
+
+- [ ] **C1** prompt order is fixed and blocked by class: code, code, code, prose, prose, prose,
+      reason, ... so class is confounded with session age. Seeded permutation per pass, identical
+      across arms within a pass, different between passes, ordinal position kept in the record.
+- [ ] **C2** seven arms over five passes means each arm visits five of seven order positions and a
+      different five. Run the full Latin rotation, or randomise and carry order position into the
+      model.
+- [ ] **C3** energy from the NVML total-energy counter rather than integrated `power.draw`.
+      `pynvml` is not installed here; the card supports the counter.
+- [ ] **C4** record the kernel family, tile configuration, warp count and build variant in the
+      result artifact instead of hard-coding the table in Python, so a future upstream kernel
+      change cannot silently invalidate an analyser.
+- [ ] **C5** same-token replay: score the baseline's token sequence under width N rather than
+      letting the arm generate freely, so cost attribution compares one trajectory.
+
+### D. Re-runs, in dependency order
+
+- [ ] **D1** `forced_down2` - running on host C, queued on host B behind its chain.
+- [ ] **D2** extended cap. Design verified, no code change: `--max-tokens 1600` on the host that
+      produced the file. 1600 because the densest prompt is 1.37 chars/token against a
+      1537-character threshold. The control is free: divergence is deterministic, 150 of 150.
+- [ ] **D3** Phase B - `n_max` crossed with `p_min`. The only design here that can separate
+      drafted volume from rejection volume, and therefore the only one that can identify the
+      rollback components A2 leaves open.
+- [ ] **D4** full re-run of Phase A under the C1/C2/C3 harness, once those land.
+- [ ] **D5** factorial prompts: class crossed with thinking, language crossed with matched task,
+      short and medium output lengths alongside the 400-token regime.
+
+### E. Upstream
+
+- [ ] **E1** llama.cpp `embd_nextn` row-index mode gate. Small, correctness-only, independently
+      testable. `AGENTS.md` there forbids an agent pushing or opening the PR, so the branch and
+      tests are prepared and the submit step is the author's.
+- [ ] **E2** SGLang consumer-side sibling hardening, separate from #36201's builder fix, covering
+      both `TreeSpeculativeSamplingTargetOnly` and `VerifyTreeGreedy`. Per-request status buffer
+      with an atomic first-error, not a per-thread printf.
+- [ ] **E3** llama.cpp acceptance histogram from the per-position survival counts the server
+      already keeps, with reconciliation tests, then an AIPerf adapter against its existing
+      `SpecDecodeAcceptanceRecord` schema rather than a new one.
+- [ ] **E4** `embd_layer_inp` index-space reproducer before any claim is made about it.
+- [ ] **E5** quantized batch-invariance conformance harness across backend, quant, width, context,
+      flash attention and parallelism.
 
 ## Deleted from scope, with reasons
 

@@ -1,0 +1,82 @@
+============================================================================================
+FORK POSITION BY VERIFICATION WIDTH
+============================================================================================
+  source: results/phase_nmax.json
+  widths: [2, 3, 4, 5, 6, 7, 8, 9]
+  7 of 25 prompts hold a 'same' that a generation cap shorter than 1673 chars could have produced:
+    chat_music, chat_travel, code_py_ratelimiter, code_rust_mergesort, code_sql_report, reason_probability, reason_trains
+  The grouping below is computed on all 25, then again on the 18 without one.
+  MMVQ_PARAMETERS_GENERIC warps: w2=4  w3=4  w4=4  w5=2  w6=2  w7=2  w8=2  w9=n/a
+  widths [9] exceed MMVQ_MAX_BATCH_SIZE (8) and take a
+  different kernel family, so the table makes no prediction for them.
+
+--- control: two drafters at the same width must agree ---
+    w=3  draft-dflash vs draft-mtp: 25/25 prompts agree
+    w=5  draft-dflash vs draft-mtp: 25/25 prompts agree
+    w=7  draft-dflash vs draft-mtp: 25/25 prompts agree
+    w=9  draft-dflash vs draft-mtp: 8/25 prompts agree   <-- DISAGREE, the width account fails here
+
+--- observed groups (identical fork vector across every prompt) ---
+    {2, 3, 4}  warps [4]
+    {8, 5, 6, 7}  warps [2]
+    {9}  warps n/a (off the MMVQ path)
+
+--- the same grouping on the 18 prompts with no censored 'same' ---
+    {2, 3, 4}  warps [4]
+    {8, 5, 6, 7}  warps [2]
+    {9}  warps n/a (off the MMVQ path)
+    Same partition. The grouping does not depend on any verdict the cap could
+    have produced, so the generation length is not what created it.
+
+--- H8: does the grouping follow calc_nwarps? ---
+    NOT TESTABLE at widths [9]: they exceed MMVQ_MAX_BATCH_SIZE and do not
+    share the MMVQ execution path, so calc_nwarps makes no prediction for them.
+    Scored on the widths that do share it: [2, 3, 4, 5, 6, 7, 8]
+    predicted from the table: [{2, 3, 4}, {8, 5, 6, 7}]
+    observed:                 [{2, 3, 4}, {8, 5, 6, 7}]
+    Two drafters disagree at width(s) {9}, which are off the MMVQ
+    path. That does not bear on the widths below, and is itself the boundary showing
+    up in the control as well as in the cost fit.
+    H8 SUPPORTED. The partition is exactly the warp-count table.
+
+--- H8a: does width 2 diverge at all on CUDA? ---
+    width 2 diverges on 19 of 25 prompts
+    H8a SUPPORTED. CUDA and Vulkan agree on where divergence begins.
+
+--- competing account: is the grouping just an acceptance threshold? ---
+    w=2 -> w=3: acceptance gap 0.1395   no boundary
+    w=3 -> w=4: acceptance gap 0.0872   no boundary
+    w=4 -> w=5: acceptance gap 0.0832   GROUP BOUNDARY
+    w=5 -> w=6: acceptance gap 0.0622   no boundary
+    w=7 -> w=8: acceptance gap 0.0459   no boundary
+    w=6 -> w=7: acceptance gap 0.0431   no boundary
+    The largest gap, w=2 to w=3, is not a boundary,
+    so a single acceptance threshold does not pick out the observed split.
+
+--- fork position per prompt ---
+    prompt                         w=2     w=3     w=4     w=5     w=6     w=7     w=8     w=9
+    chat_advice                    650     650     650     830     830     830     830     197
+    chat_desk_robot                345     345     345     345     345     345     345     345
+    chat_disagree                  363     363     363     308     308     308     308     308
+    chat_music                    same    same    same     175     175     175     175     107
+    chat_travel                   same    same    same    same    same    same    same     239
+    code_go_worker                 586     586     586     158     158     158     158     497
+    code_nginx_cfg                 546     546     546     546     546     546     546     546
+    code_py_ratelimiter            214     214     214    same    same    same    same     214
+    code_rust_mergesort           same    same    same    same    same    same    same    same
+    code_sql_report               same    same    same    same    same    same    same     174
+    prose_argument                 962     962     962    1381    1381    1381    1381    1271
+    prose_bookshelves               49      49      49    1104    1104    1104    1104      49
+    prose_letter                    31      31      31      31      31      31      31     225
+    prose_market                   424     424     424     424     424     424     424     602
+    prose_rainbow                  190     190     190     117     117     117     117     117
+    reason_invariant               535     535     535     535     535     535     535     364
+    reason_probability            same    same    same     733     733     733     733    same
+    reason_scheduling              486     486     486     150     150     150     150     136
+    reason_trains                 same    same    same    same    same    same    same    same
+    reason_zebra                   335     335     335     335     335     335     335     335
+    zh_debug                        12      12      12     201     201     201     201      12
+    zh_moving                      420     420     420     142     142     142     142     178
+    zh_review                      471     471     471      98      98      98      98      98
+    zh_self_intro                   22      22      22      22      22      22      22     273
+    zh_tea                         233     233     233     165     165     165     165     199

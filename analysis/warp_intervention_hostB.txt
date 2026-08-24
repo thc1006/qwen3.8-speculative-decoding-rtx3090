@@ -1,0 +1,64 @@
+============================================================================================
+FORCED-WARP INTERVENTION
+============================================================================================
+  control     : results/phase_warp_control_hostB.json (150 records)
+  forced_up   : results/phase_warp_forced_up_hostB.json (150 records)
+  forced_down : results/phase_warp_forced_down_hostB.json (150 records)
+
+============================================================================================
+FORCED_UP : GENERIC table w1->4, w3->4, w4->4, w5->4, w6->4, w8->4
+============================================================================================
+    widths whose warp count changed : [5, 6, 8]
+    widths left at the stock count  : [3, 4]
+
+  --- validity gates (registered: a failure here voids the comparison) ---
+    [PASS] greedy baseline byte-identical across builds
+           width 1 is at 4 warps in both builds; identical 25, differs 0
+    [PASS] intervention did not touch widths it should not have
+           widths [3, 4]: identical 50, differs 0
+    [PASS] intervention had a measurable effect where it was applied
+           widths [5, 6, 8]: identical 12, differs 63
+
+  --- discriminating set ---
+    prompts with all five widths present      : 25
+    of those, control shows the two-group split: 14
+    every 'same' is right-censored at the 400-token cap, uniformly, so this is a
+    statement about the first 400 tokens and not about identity.
+
+  --- registered prediction: widths [5, 6, 8] adopt the [3, 4] fork position ---
+      followed the forced warp count    :   4/14  (29 %)
+      moved, but not onto [3, 4]        :   8/14  (57 %)
+      did not move                      :   2/14  (14 %)
+
+  --- verdict for this direction ---
+    Split result: the prediction held on 4 of 14 informative prompts and failed on
+    the other 10. Registered as unresolved; no account was prepared for a partial
+    effect and none is invented here.
+
+============================================================================================
+FORCED_DOWN : GENERIC table w1->2, w3->2, w4->2, w5->2, w6->2, w8->2
+============================================================================================
+    widths whose warp count changed : [3, 4]
+    widths left at the stock count  : [5, 6, 8]
+
+  --- validity gates (registered: a failure here voids the comparison) ---
+    [N/A ] greedy baseline byte-identical across builds
+           This build maps width 1 to 2 warps against the stock 4, so the baseline is
+           part of the intervention and cannot also be its control. Observed: identical 4, differs 21.
+           PREREGISTRATION.md asserts width 1 is at 4 warps in all three builds while also
+           specifying 1-4 -> 2 here. Both cannot be true; the table is what was built.
+    [FAIL] intervention did not touch widths it should not have
+           widths [5, 6, 8]: identical 12, differs 63
+    [PASS] intervention had a measurable effect where it was applied
+           widths [3, 4]: identical 8, differs 42
+
+  COMPARISON VOID. Not scoring the prediction.
+
+  This is the fourth registered outcome: "The forced build changes fork
+  positions for widths it did not touch. The intervention is not clean;
+  something else in the build differs, and nothing is concluded until that is
+  found." Widths [5, 6, 8] carry the stock warp count in both builds and still
+  produce different output, so the warp count is not the only thing the edit
+  changed. Control and forced-up agree byte for byte at every width forced-up
+  left alone, so the build process itself is deterministic and the effect is
+  specific to this edit.

@@ -1,0 +1,89 @@
+====================================================================================================
+VERIFICATION-STEP COST MODEL     speedup = mean_len / k
+  mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)   [derived; the API has
+            no verification-step count, and this is low by <1 %. See the docstring.]
+====================================================================================================
+[integrity] derived mean_len vs the server's printed mean len: 900 requests, mean gap -0.0052, worst 0.0600
+            within the log's own %5.2f printing precision, so the derivation tracks the server.
+
+[integrity] API counters vs llama.cpp log lines: 900 requests compared, 0 mismatched  -- two independent sources agree to the token
+
+--- k by arm (pooled over classes and passes) ---
+arm              spec             w    n   k mean    k sd         k range
+mtp-n1           draft-mtp        2   75   1.2302  0.0212   1.218-1.321
+mtp-n2           draft-mtp        3   75   1.4644  0.0356   1.445-1.642
+dflash2-n2       draft-dflash     3   75   1.4614  0.0060   1.450-1.474
+mtp-n3           draft-mtp        4   75   1.7492  0.0072   1.735-1.768
+mtp-n4           draft-mtp        5   75   1.9921  0.0098   1.971-2.015
+dflash2-n4       draft-dflash     5   75   1.8949  0.0098   1.876-1.925
+mtp-n5           draft-mtp        6   75   2.3041  0.0109   2.283-2.328
+mtp-n6           draft-mtp        7   75   2.6459  0.0121   2.621-2.678
+dflash2-n6       draft-dflash     7   75   2.4537  0.0135   2.419-2.485
+mtp-n7           draft-mtp        8   75   2.9684  0.0147   2.939-2.999
+mtp-n8           draft-mtp        9   75   2.3788  0.0146   2.356-2.423
+dflash2-n8       draft-dflash     9   75   2.7323  0.0159   2.699-2.773
+
+--- TEST 1: is the overhead charged to REJECTION? ---
+    Model a rejection-proportional cost r (decode-steps per rejected draft token):
+        k = k_verify + r * n_max * (1 - acceptance)
+        => dk/d(acceptance) = -r * n_max,   so  r = -slope / n_max
+    A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+
+arm               n    accept range     slope     r2  r estimate  reading
+mtp-n1            1  0.622-0.980   -0.0150  0.007     0.01499  r negligible (k spread 8.38%)
+mtp-n2            2  0.418-0.918   -0.0256  0.013     0.01281  r negligible (k spread 13.50%)
+dflash2-n2        2  0.274-0.915    0.0009  0.001    -0.00043  r <= 0 - no rejection cost detected (k spread 1.64%)
+mtp-n3            3  0.325-0.857    0.0096  0.057    -0.00320  r <= 0 - no rejection cost detected (k spread 1.87%)
+mtp-n4            4  0.212-0.782    0.0170  0.100    -0.00424  r <= 0 - no rejection cost detected (k spread 2.22%)
+dflash2-n4        4  0.162-0.843    0.0200  0.213    -0.00500  r <= 0 - no rejection cost detected (k spread 2.57%)
+mtp-n5            5  0.173-0.720    0.0165  0.074    -0.00330  r <= 0 - no rejection cost detected (k spread 1.96%)
+mtp-n6            6  0.146-0.703    0.0292  0.173    -0.00486  r <= 0 - no rejection cost detected (k spread 2.16%)
+dflash2-n6        6  0.113-0.791    0.0240  0.149    -0.00400  r <= 0 - no rejection cost detected (k spread 2.65%)
+mtp-n7            7  0.125-0.644    0.0295  0.106    -0.00421  r <= 0 - no rejection cost detected (k spread 2.04%)
+mtp-n8            8  0.125-0.599    0.0757  0.612    -0.00946  r <= 0 - no rejection cost detected (k spread 2.83%)
+dflash2-n8        8  0.096-0.695    0.0368  0.225    -0.00460  r <= 0 - no rejection cost detected (k spread 2.71%)
+
+  Largest r across arms: +0.01499 decode-steps per rejected draft token.
+  Acceptance spans roughly 0.096-0.980 in this data - nearly a ten-fold range -
+  so a rejection-driven overhead of any consequence would have shown up here.
+  Reading: the verification overhead is paid per position VERIFIED, not per
+  draft REJECTED. This does not say rollback is free; it bounds how much of
+  the observed cost rollback can account for.
+
+--- TEST 2: k vs verification width, per method ---
+    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified
+    position in serial-decode-step equivalents, over the whole cycle rather than
+    attributed to any one component; see the note under the fits.
+  draft-dflash   MMVQ widths [3, 5, 7]  ->  k0=0.9443  c=0.2481  r2=0.9947
+      w= 3  k=1.4614  fit=1.4405  resid=+0.0209
+      w= 5  k=1.8949  fit=1.9367  resid=-0.0418
+      w= 7  k=2.4537  fit=2.4328  resid=+0.0209
+      w= 9  k=2.7323  OFF THE MMVQ PATH (> 8); the MMVQ line would predict 2.9290, so it sits -6.7 %
+            excluded from the fit: it is a different kernel, not a residual
+  draft-mtp      MMVQ widths [2, 3, 4, 5, 6, 7, 8]  ->  k0=0.8888  c=0.2904  r2=0.9958
+      w= 2  k=1.2302  fit=1.1793  resid=+0.0510
+      w= 3  k=1.4644  fit=1.4697  resid=-0.0053
+      w= 4  k=1.7492  fit=1.7602  resid=-0.0110
+      w= 5  k=1.9921  fit=2.0506  resid=-0.0585
+      w= 6  k=2.3041  fit=2.3411  resid=-0.0369
+      w= 7  k=2.6459  fit=2.6315  resid=+0.0144
+      w= 8  k=2.9684  fit=2.9220  resid=+0.0465
+      w= 9  k=2.3788  OFF THE MMVQ PATH (> 8); the MMVQ line would predict 3.2124, so it sits -26.0 %
+            excluded from the fit: it is a different kernel, not a residual
+
+  Two methods with independent drafters fitted separately. Agreement in `c` with
+  a difference in `k0` is consistent with the marginal cost sitting outside the
+  drafter, but it does not identify it. What `k` measures is the whole speculative
+  cycle: target verification, the drafter's own forwards, sampling, launch and
+  synchronisation, output extraction and any per-step state management. The two
+  methods share every one of those except the drafter, so a shared slope narrows
+  the cost to that shared machinery without saying which part of it. Separating
+  them needs per-context CUDA-event timing, a replay that skips drafter compute,
+  or a profiler decomposition - none of which this file has.
+
+--- implied optimum ---
+    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k
+    has an interior maximum in principle. Over the widths measured here it falls
+    monotonically, so what follows is the best TESTED point, not a fitted optimum:
+  draft-dflash   n2=1.537x  n4=1.521x  n6=1.315x  n8=1.226x   -> best n-max = 2
+  draft-mtp      n1=1.450x  n2=1.588x  n3=1.524x  n4=1.450x  n5=1.322x  n6=1.194x  n7=1.091x  n8=1.391x   -> best n-max = 2
