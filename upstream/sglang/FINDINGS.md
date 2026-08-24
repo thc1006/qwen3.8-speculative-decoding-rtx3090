@@ -151,12 +151,57 @@ A NaN guard on `prob_acc` and a bounds check on `cur_index` are worth discussing
 bound alone restores liveness, which is the part that matters: a slower answer beats a wedged
 server, and today the watchdog kills the process at 300 s.
 
-## What is not done
+## Run on hardware, 2026-08-25: both loops confirmed on sm_86
 
-Nothing has been run on a GPU. The next step is a direct call to
-`tree_speculative_sampling_target_only` with a cyclic tree and with a NaN probability, on real
-hardware, to confirm the kernel hangs and that the bound releases it. That test needs a GPU that
-is not busy, because a hanging kernel holds one at 100 %.
+An idle RTX A6000 became available. It is **compute capability 8.6, the same as the 2x A2 in the
+report**, so this is the reporting architecture rather than an approximation. Raw output in
+[`hardware_sm86.txt`](hardware_sm86.txt); nvcc 12.9, `-arch=sm_86`.
+
+### Loop 1, the sibling walk
+
+| case | iterations as-is | hit the cap | bounded |
+|---|---:|---|---:|
+| acyclic, no NaN, nothing accepted | 2 | no | 2 |
+| acyclic, no NaN, accepts | 2 | no | 2 |
+| acyclic, **with NaN** | 2 | **no** | 2 |
+| **cycle 1<->3, no NaN, no accept** | **1 000 001** | **yes** | 4 |
+| cycle 1<->3, no NaN, accepts | 1 | no | 1 |
+| **cycle 1<->3, with NaN** | **1 000 001** | **yes** | 4 |
+| **self sibling 1 -> 1** | **1 000 001** | **yes** | 4 |
+
+Three readings, and the factorial is what separates them. **A cycle alone is sufficient**: row 4
+has no NaN anywhere and still does not terminate. **A NaN alone is not**: row 3 is acyclic, carries
+a NaN, and exits in two steps. **A cycle is not sufficient either if anything in it is accepted**:
+row 5 exits at the first iteration. The failing condition is a cycle with no acceptance inside it.
+
+This matters for the thread, because the report's own hypothesis leans on NaN probabilities. NaN
+is neither necessary nor sufficient here; the cycle is what wedges the walk, and a NaN only
+matters because it guarantees nothing is ever accepted.
+
+The bound releases every non-terminating case at four iterations and leaves every terminating case
+**unchanged**, which is the same result `loop_fix_check.py` reached in simulation over 4 000
+random valid trees.
+
+### Loop 2, the parent walk that PR #36201 bounds
+
+`ancestor not selected` runs 200 001 iterations, hits the cap, and reaches **offset 4 against a
+row that ends at 2** — the write past the row is real, not inferred, and the runaway counter leaks
+into `positions` as `200007`. `ancestor chain loops` behaves the same. With the guard both cases
+terminate in one and three iterations, offsets stay inside the row, and **the two valid cases are
+byte-identical with and without it**.
+
+### What this does and does not establish
+
+It establishes that both loops are non-terminating on the reporting architecture, that the
+proposed bounds release them, and that neither bound changes a valid input.
+
+It does not establish that either fix resolves #35822. The chain that would connect them is:
+the builder's out-of-row write corrupts a neighbouring row, which produces a malformed sibling
+chain, which wedges the sampler. Every link in that chain is now measured except the middle one —
+that the out-of-row write specifically turns `retrive_next_sibling` into a cycle. Until that is
+shown, the two are separate defects that happen to sit in the same feature.
+
+There is still no server-level reproduction, no TP=2, and no AWQ Qwen3.8 on this host.
 
 The existing unit test at `python/sglang/kernels/aot/tests/speculative/test_speculative_sampling.py`
 covers one well-formed tree and has no liveness, malformed-input or NaN case.

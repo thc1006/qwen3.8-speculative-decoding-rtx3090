@@ -1,0 +1,38 @@
+host:   mailer.cirda.nycu.edu.tw
+gpu:    NVIDIA RTX A6000, 8.6, 580.95.05
+nvcc:   Cuda compilation tools, release 12.9, V12.9.86
+date:   2026-08-25T02:45:26+08:00
+
+======== 1. sibling walk, TreeSpeculativeSamplingTargetOnly ========
+iteration cap 1000000; a valid sibling walk needs at most 4 steps
+
+  case                              iters (as-is)   accepted   hit cap   iters (bounded)
+  acyclic, no NaN, nothing accepted              2          0        no   2
+  acyclic, no NaN, accepts                      2          2        no   2
+  acyclic, WITH NaN                             2          0        no   2
+  cycle 1 <-> 3, no NaN, no accept        1000001          0       YES   4
+  cycle 1 <-> 3, no NaN, accepts                1          1        no   1
+  cycle 1 <-> 3, WITH NaN                 1000001          0       YES   4
+  self sibling 1 -> 1, no NaN             1000001          0       YES   4
+
+every non-terminating case is released by the bound, and terminating cases are unchanged
+
+======== 2. parent walk, build_tree_efficient ========
+draft_token_num 4, tree_mask holds 32 bools, selected_index is 3 wide per batch
+the search loop bound is draft_token_num, one wider than selected_index
+
+  case                                         iters  hit cap max off / row end
+  valid ancestor chain                             3       no        2 / 2   positions [7, 10, 9, 8, 11, 14, 13, 12]
+      mask [1000][1111][1011][1001][1000][1111][1011][1001]
+  valid ancestor chain [guarded]                   3       no        2 / 2   positions [7, 10, 9, 8, 11, 14, 13, 12]
+      mask [1000][1111][1011][1001][1000][1111][1011][1001]
+  ancestor not selected                       200001      YES        4 / 2   positions [7, 200007, 200007, 8, 11, 13, 13, 12]  <-- outside its row
+      mask [1000][1100][1110][1101][1000][1100][1110][1101]
+  ancestor not selected [guarded]                  1       no        2 / 2   positions [7, 8, 8, 8, 11, 12, 12, 12]
+      mask [1000][1100][1010][1001][1000][1100][1010][1001]
+  ancestor chain loops                        200001      YES        2 / 2   positions [7, 200007, 200007, 8, 11, 200011, 200011, 12]
+      mask [1000][1110][1010][1001][1000][1110][1010][1001]
+  ancestor chain loops [guarded]                   3       no        2 / 2   positions [7, 10, 10, 8, 11, 14, 14, 12]
+      mask [1000][1110][1010][1001][1000][1110][1010][1001]
+
+the guard stops both the runaway walk and the write past the row
