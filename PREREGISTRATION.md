@@ -628,3 +628,30 @@ deterministic and reproduced exactly across five passes, and nothing here says t
 output is worse, only that it is different. The reason it is worth reporting is that greedy
 decoding is documented as reproducible, and a user comparing two runs has no way to know a
 verification width changed the arithmetic under them.
+
+## Registered 2026-08-24, after posting to llama.cpp #25618 and before `phase_nmax` runs
+
+The comment posted to that thread says the onset width is not something this study has, because
+Phase A never ran `--spec-draft-n-max 1`. `phase_nmax` does run it, as `mtp-n1`, which is
+verification width 2. So the answer arrives in a few hours and is worth committing to first.
+
+Width 2 is exactly where the Vulkan onset sits. `frizikk` traced it to a `MUL_MAT` that takes
+`mul_mat_vec_q8_0_f32_f32` at `N=1` and `quantize_q8_1_x4` plus MMVQ at `N=2`, and `Ankk98` said
+the same thing in the opening comments from behaviour alone: `n_max=1` was fine and `n_max>=2` was
+not. Both are Vulkan.
+
+**H8a (the onset is the same on CUDA).** `mtp-n1`, at width 2, diverges from the non-speculative
+baseline on at least one prompt.
+
+- If it does, CUDA and Vulkan agree on where divergence begins, and the `{2,3,4}` group of H8 is
+  a grouping among widths that all already diverge.
+- If `mtp-n1` is byte-identical on all 25 prompts, CUDA's onset is above Vulkan's. That would be
+  a real backend difference and more interesting than the grouping, and it would need saying in
+  the thread promptly, since the comment already there implies the onset is settled.
+- Registered as a genuine question. Phase A's shallowest arm was width 3 and it diverged on 21 of
+  25 prompts, which says nothing about width 2 either way.
+
+**A control that arrives for free.** `phase_nmax` runs both an MTP and a DFlash2 arm at widths 3,
+5, 7 and 9. `snick525` established drafter independence at one width on Vulkan; this repeats it at
+four widths on CUDA without costing an extra arm. If the two drafters ever disagree at the same
+width, the width-grouping account fails and H8 goes with it.
