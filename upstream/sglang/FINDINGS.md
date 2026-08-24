@@ -100,14 +100,43 @@ while (true) {
 }
 ```
 
-The inner search has no not-found case. When it falls through, `cur_position` equals
-`draft_token_num`, and the next iteration uses that to **write** `tree_mask` one past the end.
-An out-of-bounds write here can corrupt the very arrays the sampling kernel then walks, so the
-two loops are not independent: this one is a candidate source of the malformed tree the other one
-cannot survive.
+**The same search appears twice in this file and only one copy handles failure.** The `tid == 0`
+branch runs it and then checks:
 
-Reachability is not established. The claim here is what the code does when the search fails, not
-that it does fail in the reporter's run.
+```c
+if (parent_position == draft_token_num) {
+  printf("WARNING: invalid eagle tree!!! Detected a token with no parent token selected. "
+         "Please check if the logprob has nan. The token will be ignored to keep proceeding.\n");
+  continue;
+}
+```
+
+The `tid != 0` branch above runs the same search with no such check, and feeds the result straight
+back into the next iteration of `while (true)`.
+
+Shapes, from `build_tree_kernel_efficient`. In QLEN_ONLY mode `tree_mask` holds
+`N * bs * N` bools with `token_tree_idx = N*N*bid + N*tid + 1`, so offsets from `-1` to `N-2` are
+this thread's row. `selected_index` is `top_scores_index`, indexed as
+`selected_index[bid * (N - 1) + cur_position]`, so it is `N - 1` wide per batch item.
+
+- The search bound is `cur_position < draft_token_num`, one wider than `selected_index`, so its
+  last iteration reads past the row even when the search succeeds.
+- A successful match at the last position leaves `cur_position = N - 1`, and the next iteration
+  writes `tree_mask` at the first element of the following thread's row.
+- A failed search leaves `cur_position = N`, one further again, and for the last `(bid, tid)`
+  that is past the end of the allocation.
+- With no `parent_tb_idx == 0` ever reached, `while (true)` does not exit.
+
+**Reachability of a cycle, checked and not supported.** The obvious theory was that the retrieve
+arrays carry stale pointers between steps. They do not: `build_tree_kernel_efficient` allocates
+`torch.full((3, bs, num_verify_tokens), -1, ...)` fresh on every call, so a token skipped by the
+`continue` above keeps `-1`. The builder also inserts children at the head of the list while `i`
+counts downward, which makes `sibling[i] > i` for every link, so the chains it produces are
+strictly increasing and cannot contain a cycle. A cycle therefore has to come from somewhere
+other than this builder's normal path, and the out-of-bounds write above is the candidate.
+
+There is a `# TODO: make them torch.empty` on that allocation. If it is ever taken, the stale
+pointer theory becomes live.
 
 ## Proposed fix for loop 1, and why it is safe
 
