@@ -258,6 +258,7 @@ def chat(
     seed: int = 20260824,
     think: bool = False,
     timeout_s: float = 600.0,
+    cache_prompt: bool = False,
 ) -> dict:
     body = {
         "messages": [{"role": "system", "content": system},
@@ -268,7 +269,8 @@ def chat(
         "stream": False,
         # Qwen3.8 exposes reasoning control through the chat template.
         "chat_template_kwargs": {"enable_thinking": bool(think)},
-        # MUST stay false. llama-server reuses the prompt prefix across requests by default;
+        # Default false, and that default is load-bearing for every phase except the
+        # long-context one. llama-server reuses the prompt prefix across requests by default;
         # prompts in this set share a system message within a class, so later prompts would be
         # served partly from cache and read faster for a reason unrelated to the arm. Worse,
         # prefix caching is known to INTERACT with speculative decoding rather than merely
@@ -276,7 +278,10 @@ def chat(
         # to ~71%, and a confound of exactly this shape is what forced the retraction of the
         # sibling repo's first published vLLM MTP result. Measuring with it on would repeat
         # that mistake.
-        "cache_prompt": False,
+        # The long-context phase turns this on deliberately: there, every request shares a
+        # filler of tens of thousands of tokens, re-prefilling it per request would dominate the
+        # run, and the KV that decode sees is identical whether it was cached or recomputed.
+        "cache_prompt": bool(cache_prompt),
     }
     if temperature == 0.0:
         # "temperature 0" is not by itself a guarantee of greedy decoding: llama-server carries

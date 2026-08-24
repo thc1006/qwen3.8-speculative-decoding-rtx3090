@@ -31,10 +31,19 @@ class Interval:
     lo: float
     hi: float
     n_clusters: int
+    # Classes that contributed no variance because they hold a single prompt. Resampling one
+    # item with replacement always returns that item, so such a class makes the interval
+    # narrower than the design can justify. An interval with any of these is a lower bound on
+    # the true width, and callers must say so rather than print it as if it were estimated.
+    singleton_classes: tuple = ()
 
     @property
     def spans_zero(self) -> bool:
         return self.lo <= 0.0 <= self.hi
+
+    @property
+    def width_understated(self) -> bool:
+        return bool(self.singleton_classes)
 
     def __str__(self) -> str:
         return f"{self.point:+.2f} [{self.lo:+.2f}, {self.hi:+.2f}]"
@@ -78,6 +87,12 @@ def paired_cluster_bootstrap(
     stratified design and keeps every bootstrap replicate balanced.
 
     `relative=True` returns percentage change rather than absolute delta.
+
+    Resampling happens within each class, so a class holding a single prompt contributes zero
+    variance: drawing one item with replacement always returns that item. If every class holds
+    one prompt the interval collapses onto the point estimate and reads as perfect precision
+    when it actually means the design could not estimate precision at all. Such classes are
+    listed in `Interval.singleton_classes` and flagged by `Interval.width_understated`.
     """
     tags = sorted(set(baseline) & set(arm))
     if not tags:
@@ -116,7 +131,9 @@ def paired_cluster_bootstrap(
     reps.sort()
     lo = reps[max(0, int(math.floor((alpha / 2) * n_boot)))]
     hi = reps[min(n_boot - 1, int(math.ceil((1 - alpha / 2) * n_boot)) - 1)]
-    return Interval(point=point, lo=lo, hi=hi, n_clusters=len(tags))
+    singletons = tuple(sorted(c for c, ts in by_class.items() if len(ts) == 1))
+    return Interval(point=point, lo=lo, hi=hi, n_clusters=len(tags),
+                    singleton_classes=singletons)
 
 
 def per_class_intervals(

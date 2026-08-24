@@ -31,6 +31,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import devices as DEV
+import filler as FILLER
 import gpustate as G
 import prompts as P
 import quality
@@ -85,6 +86,19 @@ def _append_jsonl(path: Path, rec: dict) -> None:
             os.fsync(fh.fileno())
     except OSError:
         pass
+
+
+def _with_filler(filler_text: str, user: str) -> str:
+    """Frame the filler as a document the question is about, so the model has a reason for it.
+
+    Dropping tens of thousands of tokens of unexplained prose in front of a question makes the
+    model try to continue the novel. Naming it as a document to be set aside keeps the answer
+    on the question while the KV cache still carries the depth, which is the thing being varied.
+    """
+    if not filler_text:
+        return user
+    return (f"Reference document (background only, do not summarise it):\n\n{filler_text}\n\n"
+            f"---\n\nIgnore the document above unless it is relevant. {user}")
 
 
 def _pid_tree(pid: int) -> tuple[int, ...]:
@@ -169,6 +183,11 @@ def environment_snapshot(trees: dict[str, Path], model: Path) -> dict:
     }
 
 
+# Set by main() when the matrix itself declares a reduced prompt set (Phase L), as opposed to
+# --prompts-per-class being passed on the command line to dry-run a matrix.
+PROMPT_SUBSET_IS_DELIBERATE = False
+
+
 def run_matrix(
     arms: list[Arm],
     *,
@@ -188,6 +207,8 @@ def run_matrix(
     settle_temp_c: float | None = 60.0,
     settle_margin_c: float = 8.0,
     required_vram_gb: float = 0.0,
+    context_filler_tokens: int = 0,
+    cache_prompt: bool = False,
     settle_max_wait_s: float = 240.0,
     allow_non_stock: bool = False,
 ) -> dict:
@@ -279,11 +300,16 @@ def run_matrix(
                        "ecc_mode": DEV.ecc_mode(gpu_index)},
             "neighbour_devices_at_start": neighbours,
             "thermal_settle_max_wait_s": settle_max_wait_s,
-            "cache_prompt": False,
+            "cache_prompt": cache_prompt,
             "n_prompts": len(P.PROMPTS),
             "prompt_classes": {c: len(P.by_class(c)) for c in P.CLASSES},
             "full_prompt_set": len(P.PROMPTS) == 25,
+            # A short prompt set is either a cheap dry run or a matrix's declared design. Only
+            # the first invalidates the result, so the two are recorded apart rather than being
+            # collapsed into one "not full" flag that a later reader would have to guess about.
+            "prompt_subset_declared_by_matrix": PROMPT_SUBSET_IS_DELIBERATE,
             "prompt_tags": [p.tag for p in P.PROMPTS],
+            "context_filler_tokens_requested": context_filler_tokens,
         },
         "baseline_map": baseline_map or {},
         "arms": {a.name: {"extra_args": a.extra_args, "tree": a.tree,
@@ -387,9 +413,27 @@ def run_matrix(
                 # After the server is up, it is the ONLY permitted GPU tenant.
                 T.assert_gpu_exclusive(gpu_index, allow_pids=_pid_tree(h.proc.pid))
 
+                # Long-context phases prepend a shared block of real prose. It is built once
+                # per arm, against this server's own tokenizer, and the REALISED token count is
+                # recorded: a depth that did not materialise must be visible in the data.
+                filler_text, filler_n = "", 0
+                if context_filler_tokens:
+                    filler_text, filler_n = FILLER.filler_of(port, context_filler_tokens)
+                    result.setdefault("arm_pass_filler", {})[tag] = {
+                        "requested": context_filler_tokens, "realised": filler_n,
+                        "chars": len(filler_text)}
+                    print(f"  filler: {filler_n} tokens realised "
+                          f"({context_filler_tokens} requested)", flush=True)
+                    if abs(filler_n - context_filler_tokens) > 64:
+                        result["incidents"].append({
+                            "pass": p_idx, "arm": arm.name, "kind": "filler_depth_missed",
+                            "detail": f"requested {context_filler_tokens} tokens, "
+                                      f"realised {filler_n}"})
+
                 for i in range(warmup):
                     wr = S.chat(port, "You are concise.", f"warmup {i}",
-                                max_tokens=32, temperature=arm.temperature)
+                                max_tokens=32, temperature=arm.temperature,
+                                cache_prompt=cache_prompt)
                 # Behavioural proof, on a real generation, that the speculative path actually
                 # ran. The server log says what llama.cpp printed; t_draft_n says what it did.
                 if arm.expects_drafter:
@@ -409,18 +453,28 @@ def run_matrix(
                     # minimum the integrator requires, so energy would come back None and the
                     # entire decode tok/J column would be empty. Repeating K times and dividing
                     # gives a window that can actually be integrated.
+                    # With the cache on, repeats after the first are served from it and measure
+                    # nothing. A long-context prefill is seconds long anyway, so one pass is
+                    # plenty to integrate.
+                    reps_here = 1 if cache_prompt else prefill_reps
                     with T.sampling(index=gpu_index, interval_s=power_interval_s) as pfs:
-                        for _ in range(prefill_reps):
-                            pf = S.chat(port, pr.system, pr.user, max_tokens=1,
-                                        temperature=arm.temperature, think=pr.think)
+                        for _ in range(reps_here):
+                            # Must be the SAME prompt as the measured request, filler included.
+                            # Calibrating against a short prompt and subtracting that from a
+                            # long-context request would leave most of the prefill energy in
+                            # the "decode" figure.
+                            pf = S.chat(port, pr.system, _with_filler(filler_text, pr.user),
+                                        max_tokens=1, temperature=arm.temperature,
+                                        think=pr.think, cache_prompt=cache_prompt)
                     prefill_power = pfs.summary()
                     if prefill_power.get("energy_j") is not None:
-                        prefill_power["energy_j"] /= prefill_reps
-                    prefill_power["reps"] = prefill_reps
+                        prefill_power["energy_j"] /= reps_here
+                    prefill_power["reps"] = reps_here
 
                     with T.sampling(index=gpu_index, interval_s=power_interval_s) as ps:
-                        r = S.chat(port, pr.system, pr.user, max_tokens=max_tokens,
-                                   temperature=arm.temperature, think=pr.think)
+                        r = S.chat(port, pr.system, _with_filler(filler_text, pr.user),
+                                   max_tokens=max_tokens, temperature=arm.temperature,
+                                   think=pr.think, cache_prompt=cache_prompt)
                     power = ps.summary()
 
                     text = (r.get("reasoning_content") or "") + (r.get("content") or "")
@@ -434,10 +488,19 @@ def run_matrix(
                     tok_per_j_e2e = (predicted_n / energy) if (energy and predicted_n) else None
                     decode_energy = None
                     tok_per_j_decode = None
-                    if energy is not None and prefill_energy is not None:
+                    if cache_prompt:
+                        # With the prompt cache on, the calibration request above has already
+                        # populated the cache, so the measured request skips the prefill and its
+                        # energy is decode energy. Subtracting a separately measured prefill here
+                        # would remove work the measured request never did, and at long context
+                        # that lands the figure below zero.
+                        decode_energy = energy
+                        prefill_power["subtracted"] = False
+                    elif energy is not None and prefill_energy is not None:
                         decode_energy = energy - prefill_energy
-                        if decode_energy > 0 and predicted_n:
-                            tok_per_j_decode = predicted_n / decode_energy
+                        prefill_power["subtracted"] = True
+                    if decode_energy and decode_energy > 0 and predicted_n:
+                        tok_per_j_decode = predicted_n / decode_energy
 
                     # Direct verification that prompt caching is really off, rather than
                     # trusting that the request field was honoured: llama.cpp reports how many
@@ -465,6 +528,7 @@ def run_matrix(
                         "hit_cap": predicted_n >= max_tokens,
                         "finish_reason": r.get("finish_reason"),
                         "prompt_tokens": r.get("prompt_tokens"),
+                        "filler_tokens": filler_n,
                         "cache_n": cache_n,
                         "wall_ms": r.get("wall_ms"),
                         "timings": {k: v for k, v in r.items() if k.startswith("t_")},
@@ -605,13 +669,33 @@ def main() -> None:
     sys.path.insert(0, str(HERE / "matrices"))
     mod = importlib.import_module(args.matrix)
 
-    if args.prompts_per_class:
+    # A matrix may declare a reduced prompt set as part of its design: Phase L varies context
+    # depth, not prompt class, and a full 25-prompt arm at 96 K would run for hours. That is a
+    # different thing from --prompts-per-class, which exists to dry-run a matrix cheaply, and the
+    # two are labelled differently so a dry run can never be read back as a result.
+    declared_ppc = int(getattr(mod, "PROMPTS_PER_CLASS", 0))
+    per_class = args.prompts_per_class or declared_ppc
+    global PROMPT_SUBSET_IS_DELIBERATE
+    deliberate = bool(declared_ppc) and not args.prompts_per_class
+    PROMPT_SUBSET_IS_DELIBERATE = deliberate
+    if per_class:
         kept = []
         for cls in P.CLASSES:
-            kept.extend(P.by_class(cls)[:args.prompts_per_class])
+            kept.extend(P.by_class(cls)[:per_class])
         P.PROMPTS = tuple(kept)
-        print(f"!! REDUCED PROMPT SET: {len(P.PROMPTS)} prompts "
-              f"({args.prompts_per_class}/class). This is a dry run, not a result.")
+        if deliberate:
+            print(f"prompt set: {len(P.PROMPTS)} prompts ({per_class}/class), "
+                  f"declared by the {args.matrix} matrix.")
+        else:
+            print(f"!! REDUCED PROMPT SET: {len(P.PROMPTS)} prompts "
+                  f"({per_class}/class). This is a dry run, not a result.")
+
+    # A matrix may also shorten generation; Phase L does, because a 400-token generation past the
+    # decode cliff takes minutes. An explicit --max-tokens on the command line still wins.
+    max_tokens = args.max_tokens
+    if max_tokens == P.MAX_TOKENS and hasattr(mod, "MAX_TOKENS"):
+        max_tokens = int(mod.MAX_TOKENS)
+        print(f"max_tokens: {max_tokens}, declared by the {args.matrix} matrix.")
 
     run_matrix(
         mod.ARMS,
@@ -623,10 +707,12 @@ def main() -> None:
         port=args.port,
         out_path=Path(args.out),
         gpu_index=args.gpu,
-        max_tokens=args.max_tokens,
+        max_tokens=max_tokens,
         allow_non_stock=args.allow_non_stock,
         baseline_map=getattr(mod, "BASELINE_MAP", None),
         required_vram_gb=getattr(mod, "REQUIRES_VRAM_GB", 0.0),
+        context_filler_tokens=getattr(mod, "CONTEXT_FILLER_TOKENS", 0),
+        cache_prompt=getattr(mod, "CACHE_PROMPT", False),
         settle_temp_c=(None if args.settle_floor else 60.0),
     )
 
