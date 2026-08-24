@@ -94,13 +94,26 @@ def run_case(n_slots: int, n_req: int, n_prompt_tokens: int, concurrent: bool,
         S.assert_drafter_loaded(handle, "draft-mtp")
 
         # A distinct slice per request, so no two share a prefix.
-        prompts = []
+        n_ctx_slot = None
+        for ln in handle.log_text().splitlines():
+            if "n_ctx_slot" in ln:
+                try:
+                    n_ctx_slot = int(ln.split("n_ctx_slot =")[1].split(",")[0])
+                except (IndexError, ValueError):
+                    pass
+                break
+        prompts, realised = [], []
         for i in range(n_req):
             text, got = FILLER.filler_of(port, n_prompt_tokens,
                                          offset_chars=i * 400_000)
             prompts.append(text + "\n\nSummarise the passage above in one sentence.")
+            realised.append(got)
             if abs(got - n_prompt_tokens) > 64:
                 print(f"    filler for request {i} realised {got} of {n_prompt_tokens}")
+        if n_ctx_slot and max(realised) > n_ctx_slot:
+            print(f"    NOT TESTABLE: prompt {max(realised)} tokens against n_ctx_slot "
+                  f"{n_ctx_slot}. Raise -c to n_slots * prompt, or the server refuses and the "
+                  f"case measures nothing.")
         t0 = time.time()
         responses = fire(port, prompts, max_tokens=128, concurrent=concurrent)
         wall = time.time() - t0
@@ -111,17 +124,26 @@ def run_case(n_slots: int, n_req: int, n_prompt_tokens: int, concurrent: bool,
     # The warmup-free path: every acceptance line here belongs to one of our requests.
     rates = [a["accept_rate"] for a in acc]
     zero = [r for r in rates if r == 0.0]
-    empty = [r for r in responses if isinstance(r, dict) and not r.get("content")]
+    errs = [r.get("error") for r in responses if isinstance(r, dict) and r.get("error")]
+    # A request the server refused is not an empty completion. Counting it as one turns a
+    # context that is too small into something that looks like the reported symptom, and an
+    # earlier version of this file did exactly that for three of five cases while still
+    # printing "does not reproduce".
+    empty = [r for r in responses
+             if isinstance(r, dict) and not r.get("error") and not r.get("content")]
     return {
         "tag": tag, "n_slots": n_slots, "n_req": n_req,
-        "prompt_tokens": n_prompt_tokens, "concurrent": concurrent,
+        "prompt_tokens": n_prompt_tokens, "realised_prompt_tokens": realised,
+        "n_ctx_per_slot": n_ctx_slot, "concurrent": concurrent,
         "wall_s": round(wall, 1),
         "acceptance": [round(r, 5) for r in rates],
         "acceptance_min": min(rates) if rates else None,
         "acceptance_mean": round(statistics.fmean(rates), 5) if rates else None,
         "exactly_zero": len(zero),
         "empty_completions": len(empty),
-        "errors": [r.get("error") for r in responses if isinstance(r, dict) and r.get("error")],
+        "rejected": len(errs),
+        "tested": len(errs) == 0,
+        "errors": errs[:4],
     }
 
 
@@ -210,21 +232,33 @@ def main() -> int:
     finally:
         G.release_lock()
 
-    print(f"\n{'case':34s} {'acceptance (per request)':32s} {'zero':>5s} {'empty':>6s}")
+    print(f"\n{'case':34s} {'acceptance (per request)':32s} {'zero':>5s} {'empty':>6s} {'rej':>4s}")
     for r in results:
         print(f"  {r['tag']:32s} {str(r['acceptance'])[:30]:32s} "
-              f"{r['exactly_zero']:5d} {r['empty_completions']:6d}")
+              f"{r['exactly_zero']:5d} {r['empty_completions']:6d} {r.get('rejected', 0):4d}")
+
     broken = [r for r in results if r.get("case_failed")]
+    # A case whose requests the server refused measured nothing. Counting it as a clean run is
+    # how an earlier version of this file printed "does not reproduce" while three of five cases
+    # had every request rejected for exceeding n_ctx_slot.
+    untested = [r for r in results if r.get("rejected")]
     if broken:
-        print(f"\n  {len(broken)} case(s) did not run: "
-              + ", ".join(r["tag"] for r in broken))
+        print(f"\n  {len(broken)} case(s) did not run: " + ", ".join(r["tag"] for r in broken))
+    if untested:
+        print(f"\n  {len(untested)} case(s) measured nothing because the server refused every")
+        print("  request. n_ctx is divided across slots, so a prompt must fit in n_ctx / n_slots:")
+        for r in untested:
+            print(f"    {r['tag']}: prompt {max(r.get('realised_prompt_tokens') or [0])} tokens, "
+                  f"n_ctx_slot {r.get('n_ctx_per_slot')}")
+
     failing = [r for r in results if r["exactly_zero"]]
     if failing:
         shortest = min(r["prompt_tokens"] for r in failing if r["concurrent"])
         print(f"\n  reproduces on CUDA. Shortest concurrent prompt that collapses: {shortest} tokens.")
-    elif broken:
-        print("\n  no collapse seen, but some cases did not run, so this is not yet a negative")
-        print("  result. Rerun the failed cases before concluding anything.")
+    elif broken or untested:
+        print("\n  no collapse seen in the cases that ran, but some measured nothing, so this is")
+        print("  NOT a negative result yet. Raise -c so every prompt fits one slot, rerun those")
+        print("  cases, and only then say anything about whether it reproduces.")
     else:
         print("\n  does not reproduce on CUDA at any tested length, which narrows #27572 to HIP")
         print("  or to something else in the reporter's configuration.")
