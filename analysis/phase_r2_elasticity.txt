@@ -1,0 +1,120 @@
+====================================================================================================
+RESOURCE RESPONSE — elasticities per interval (never pooled across a regime change)
+====================================================================================================
+
+--- measured operating points ---
+method     condition    tok/s   SM MHz  mem MHz      W
+baseline   sm1200      37.57     1200     9501    278
+baseline   sm1200-bwhi    38.33     1200     9901    284
+baseline   sm1200-bwlo    36.70     1200     9101    272
+baseline   sm1700      41.28     1710     9501    381
+baseline   sm1700-bwhi    42.64     1710     9901    390
+baseline   sm1700-bwlo    39.88     1710     9101    371
+baseline   sm600       21.51      600     9501    207
+mtp-n3     sm1200      48.70     1200     9501    260
+mtp-n3     sm1200-bwhi    48.78     1200     9901    263
+mtp-n3     sm1200-bwlo    48.53     1200     9101    257
+mtp-n3     sm1700      63.38     1698     9501    401
+mtp-n3     sm1700-bwhi    63.72     1689     9901    402
+mtp-n3     sm1700-bwlo    62.96     1703     9101    399
+mtp-n3     sm600       25.86      600     9501    191
+mtp-n7     sm1200      33.97     1200     9501    247
+mtp-n7     sm1200-bwhi    34.04     1200     9901    250
+mtp-n7     sm1200-bwlo    33.89     1200     9101    245
+mtp-n7     sm1700      45.13     1708     9501    397
+mtp-n7     sm1700-bwhi    45.47     1703     9901    400
+mtp-n7     sm1700-bwlo    44.80     1710     9101    393
+mtp-n7     sm600       17.82      600     9501    182
+
+--- series inferred from the clocks each condition actually produced ---
+  memory bandwidth @ core ~1200 MHz: sm1200-bwlo -> sm1200 -> sm1200-bwhi
+  memory bandwidth @ core ~1710 MHz: sm1700-bwlo -> sm1700 -> sm1700-bwhi
+  compute (SM clock) @ memory ~9101 MHz: sm1200-bwlo -> sm1700-bwlo
+  compute (SM clock) @ memory ~9501 MHz: sm600 -> sm1200 -> sm1700
+  compute (SM clock) @ memory ~9901 MHz: sm1200-bwhi -> sm1700-bwhi
+
+====================================================================================================
+--- memory bandwidth @ core ~1200 MHz ---
+
+  interval sm1200-bwlo -> sm1200
+    baseline     9101 ->   9501  elasticity  0.542 [ 0.536,  0.547]
+    mtp-n3       9101 ->   9501  elasticity  0.078 [ 0.066,  0.098]  ( 0.14x baseline)
+    mtp-n7       9101 ->   9501  elasticity  0.059 [ 0.054,  0.063]  ( 0.11x baseline)
+
+  interval sm1200 -> sm1200-bwhi
+    baseline     9501 ->   9901  elasticity  0.489 [ 0.482,  0.496]
+    mtp-n3       9501 ->   9901  elasticity  0.041 [ 0.036,  0.047]  ( 0.08x baseline)
+    mtp-n7       9501 ->   9901  elasticity  0.044 [ 0.042,  0.047]  ( 0.09x baseline)
+
+====================================================================================================
+--- memory bandwidth @ core ~1710 MHz ---
+
+  interval sm1700-bwlo -> sm1700
+    baseline     9101 ->   9501  elasticity  0.805 [ 0.795,  0.812]
+    mtp-n3       9101 ->   9501  elasticity  0.151 [ 0.127,  0.174]  ( 0.19x baseline)
+    mtp-n7       9101 ->   9501  elasticity  0.173 [ 0.165,  0.182]  ( 0.22x baseline)
+
+  interval sm1700 -> sm1700-bwhi
+    baseline     9501 ->   9901  elasticity  0.787 [ 0.779,  0.798]
+    mtp-n3       9501 ->   9901  elasticity  0.132 [ 0.117,  0.151]  ( 0.17x baseline)
+    mtp-n7       9501 ->   9901  elasticity  0.179 [ 0.166,  0.190]  ( 0.23x baseline)
+
+====================================================================================================
+--- compute (SM clock) @ memory ~9101 MHz ---
+
+  interval sm1200-bwlo -> sm1700-bwlo
+    baseline     1200 ->   1710  elasticity  0.234 [ 0.234,  0.235]
+    mtp-n3       1200 ->   1703  elasticity  0.743 [ 0.739,  0.748]  ( 3.17x baseline)
+    mtp-n7       1200 ->   1710  elasticity  0.789 [ 0.787,  0.791]  ( 3.37x baseline)
+
+====================================================================================================
+--- compute (SM clock) @ memory ~9501 MHz ---
+
+  interval sm600 -> sm1200
+    baseline      600 ->   1200  elasticity  0.804 [ 0.804,  0.805]
+    mtp-n3        600 ->   1200  elasticity  0.913 [ 0.912,  0.914]  ( 1.14x baseline)
+    mtp-n7        600 ->   1200  elasticity  0.931 [ 0.928,  0.935]  ( 1.16x baseline)
+
+  interval sm1200 -> sm1700
+    baseline     1200 ->   1710  elasticity  0.266 [ 0.265,  0.267]
+    mtp-n3       1200 ->   1698  elasticity  0.759 [ 0.753,  0.764]  ( 2.85x baseline)
+    mtp-n7       1200 ->   1708  elasticity  0.805 [ 0.803,  0.807]  ( 3.02x baseline)
+
+====================================================================================================
+--- compute (SM clock) @ memory ~9901 MHz ---
+
+  interval sm1200-bwhi -> sm1700-bwhi
+    baseline     1200 ->   1710  elasticity  0.301 [ 0.300,  0.302]
+    mtp-n3       1200 ->   1689  elasticity  0.782 [ 0.775,  0.788]  ( 2.60x baseline)
+    mtp-n7       1200 ->   1703  elasticity  0.827 [ 0.824,  0.830]  ( 2.75x baseline)
+
+====================================================================================================
+--- the bandwidth lever is clean here ---
+  memory bandwidth @ core ~1200 MHz: core clock 1200 to 1200 MHz across the sweep, a spread of 0.00 %.
+  memory bandwidth @ core ~1710 MHz: core clock 1708 to 1710 MHz across the sweep, a spread of 0.10 %.
+  The core clock is pinned rather than left to fall out of a power cap, so raising
+  the memory clock does not take budget from the core and there is no cross term
+  to remove. Phase R needed that correction; this run does not.
+
+--- are the compute intervals matched across methods? 5 of 7 conditions ---
+    condition       spread   drift   per-method core clock
+    sm1200-bwlo     0.00%  0.00%   baseline=1200  mtp-n3=1200  mtp-n7=1200
+    sm1700-bwlo     0.39%  3.23%   baseline=1710  mtp-n3=1703  mtp-n7=1710
+    sm600           0.00%  0.00%   baseline=600  mtp-n3=600  mtp-n7=600
+    sm1200          0.00%  0.00%   baseline=1200  mtp-n3=1200  mtp-n7=1200
+    sm1700          0.71%  2.90%   baseline=1710  mtp-n3=1698  mtp-n7=1708  <-- not matched
+    sm1200-bwhi     0.00%  0.00%   baseline=1200  mtp-n3=1200  mtp-n7=1200
+    sm1700-bwhi     1.24%  5.24%   baseline=1710  mtp-n3=1689  mtp-n7=1703  <-- not matched
+  spread is between methods at the same condition; drift is within an arm,
+  measured as mean minus min, so 0.00 % means every sample sat on the pin.
+  The 5 matched condition(s) give intervals that span the same
+  clock range for every method, so those elasticities are directly comparable.
+  Where a condition is not matched the pin did not bind, because the power
+  limit did first. Check the power column in the operating points above: an
+  arm whose peak draw reaches the cap cannot hold its requested clock, and a
+  speculative arm reaches it sooner because it draws more at the same clock.
+  Elasticities crossing such a condition carry that mismatch; ones that do
+  not, do not. Phase R, for contrast, was 30.0 % and 35.8 % mismatched.
+
+====================================================================================================
+--- H2 vs H2' on matched intervals ---

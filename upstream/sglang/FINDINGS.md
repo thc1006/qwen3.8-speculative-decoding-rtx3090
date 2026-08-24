@@ -240,6 +240,60 @@ into a buffer of the same size, so that write is out of bounds on the same input
 separately observed here, because the kernel dies at the read that precedes it, and it is not
 claimed as observed.
 
+### The three questions a reviewer asks of a guard in a hot loop
+
+Raw output in [`hardware_sm86_guard.txt`](hardware_sm86_guard.txt), sources
+[`diff_test.cu`](diff_test.cu) and [`bench_guard.cu`](bench_guard.cu).
+
+**A. Does the bound change the result on a tree the builder can produce?** The generator builds
+trees the way the CUDA builder does, pushing children at the head of the parent's list while the
+index counts downward, because generating them any other way would test a shape the builder cannot
+emit. Both variants run on the same trees and the full accepted sequence is compared, not just its
+length.
+
+| width | trees | mismatches | longest sibling chain seen | the bound |
+|---:|---:|---:|---:|---:|
+| 4 | 20 224 | **0** | 3 | 4 |
+| 8 | 20 224 | **0** | 5 | 8 |
+| 16 | 20 224 | **0** | 6 | 16 |
+| 32 | 20 224 | **0** | 7 | 32 |
+| 64 | 20 224 | **0** | **7** | 64 |
+
+**B. Is the bound ever close to binding?** No, and it gets further away as the width grows. A
+sibling chain is the child list of one node, so its length grows like the log of the tree size
+while the bound grows linearly. At width 64 the longest chain in 20 224 trees is 7 against a bound
+of 64. The guard cannot fire on a well-formed tree by a factor of nine.
+
+**C. What does it cost?** Measured at the shipped configuration, which matters: the dispatch is
+`nblks(batch_size)`, `nthrs(1024)`, and the walk is **not** guarded by `tx == 0`, so all 1024
+threads run it redundantly. Timing it at one thread would understate both.
+
+Across batch sizes 1 to 256 and widths 8 to 64, the guard costs **0.4 % to 4.0 %, typically about
+2 %**, of a kernel that takes 3 to 12 microseconds. Two things put that in scale. The kernel is
+called once per decode step, and a decode step on this class of model is tens of milliseconds. And
+this times **the walk alone**: the shipped kernel also runs the sampling reduction across the
+vocabulary, so 2 % is an upper bound on the fraction it would be there.
+
+### The live hang at the shipped launch shape
+
+The first live run used one thread, which a reviewer would rightly question. Repeated at the real
+shape:
+
+| launch | idle | spinning | SM clock |
+|---|---:|---:|---:|
+| `<<<1,1>>>` | 24.1 W | 98 W | 1950 MHz |
+| `<<<1,1024>>>` | 24.3 W | 100.5 W | 1950 MHz |
+| `<<<8,1024>>>` | 25.5 W | **119 W** | 1935 MHz |
+
+Going from one thread to 1024 adds almost nothing, because every thread walks the same chain and
+reads the same addresses, so the loads broadcast out of cache and generate no extra traffic. That
+is the reason the power stays low, and it is the same reason the report describes a device that
+looks fully utilised while drawing very little.
+
+At the shipped shape the fraction of board power lines up with the report: 119 W of the A6000's
+300 W is 40 %, and the report's 25 W of the A2's 60 W is 42 %. The earlier single-thread figure
+of 33 % understated it.
+
 ### What this does and does not establish
 
 It establishes that both loops are non-terminating on the reporting architecture, that the

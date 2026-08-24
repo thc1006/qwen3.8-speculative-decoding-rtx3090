@@ -51,6 +51,7 @@ import stats as ST  # noqa: E402
 OUT = ROOT / "analysis"
 RESULT = ROOT / "results/phase_a.json"
 RESULT_R = ROOT / "results/phase_r.json"
+RESULT_R2 = ROOT / "results/phase_r2.json"
 
 DPI = 150
 FIG_W = 9.0          # inches; 9.0 x 150 = 1350 px, close to GitHub's column
@@ -387,11 +388,88 @@ def fig_bandwidth(result_r):
                "Phase R2 replaces with a pinned clock.")
 
 
+# ------------------------------------------------------------------ 6. what speculation is bound by
+# Phase R2 pins the SM clock instead of capping power, so both levers move independently and the
+# denominator of each elasticity is a setting rather than an outcome. That makes the two axes
+# comparable, which is what this figure needs.
+R2_HI = ("sm1700-bwlo", "sm1700", "sm1700-bwhi")     # bandwidth sweep at a pinned 1710 MHz core
+R2_COMPUTE = (("sm600", "sm1200"), ("sm1200", "sm1700"))
+R2_METHODS = [("baseline", None, "o"), ("mtp-n3", WONG["blue"], "s"), ("mtp-n7", WONG["green"], "^")]
+
+
+def _elast(res, m, lo, hi, key):
+    cells = EL._cells(res)
+    x_lo, x_hi = EL._clock(res, m, lo, key), EL._clock(res, m, hi, key)
+    return EL._paired_elasticity(cells[(m, lo)], cells[(m, hi)], x_lo, x_hi,
+                                 x_lo_samples=EL._clock_samples(res, m, lo, key),
+                                 x_hi_samples=EL._clock_samples(res, m, hi, key))
+
+
+def fig_bound_by(res):
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(FIG_W, 8.0))
+
+    # --- the plane: bandwidth elasticity against compute elasticity, at the top of the clock range
+    # the two speculative points sit almost on top of each other, so their labels are offset
+    # rather than anchored, or they overlap
+    OFFS = {"baseline": (14, 0, "left"), "mtp-n3": (-10, -26, "right"), "mtp-n7": (10, 18, "left")}
+    for m, col, mk in R2_METHODS:
+        col = col or C("neutral")
+        bw = fmean([_elast(res, m, a, b, EL.MEM_KEY)[0]
+                    for a, b in zip(R2_HI, R2_HI[1:])])
+        cp = _elast(res, m, "sm1200", "sm1700", EL.SM_KEY)[0]
+        ax1.plot([bw], [cp], marker=mk, ms=14, color=col, markeredgecolor=C("bg"),
+                 markeredgewidth=1.5, zorder=3, label=m)
+        dx, dy, ha = OFFS[m]
+        ax1.annotate(f"{m}\n({bw:.2f}, {cp:.2f})", (bw, cp), textcoords="offset points",
+                     xytext=(dx, dy), fontsize=9.6, color=col, va="center", ha=ha)
+    ax1.plot([0, 1], [1, 0], color=C("mut"), ls=":", lw=1.0, zorder=1)
+    ax1.text(0.06, 0.90, "compute-bound", fontsize=9.6, color=C("mut"))
+    ax1.text(0.62, 0.06, "bandwidth-bound", fontsize=9.6, color=C("mut"))
+    ax1.set_xlim(-0.03, 1.0); ax1.set_ylim(-0.03, 1.0)
+    ax1.set_xlabel("bandwidth elasticity   d(ln tok/s) / d(ln memory clock)")
+    ax1.set_ylabel("compute elasticity\nd(ln tok/s) / d(ln SM clock)")
+    ax1.set_title("Speculation does not speed up a bandwidth-bound decode.\n"
+                  "It moves the workload into the other corner", pad=10)
+    ax1.grid(alpha=0.5); _despine(ax1)
+
+    # --- the same thing as a regime change: the baseline stops responding to clock, speculation
+    #     does not
+    labels, width = [], 0.26
+    xs = np.arange(len(R2_COMPUTE))
+    for i, (m, col, mk) in enumerate(R2_METHODS):
+        col = col or C("neutral")
+        vals, errs = [], [[], []]
+        for lo, hi in R2_COMPUTE:
+            e, elo, ehi = _elast(res, m, lo, hi, EL.SM_KEY)
+            vals.append(e); errs[0].append(e - elo); errs[1].append(ehi - e)
+        ax2.bar(xs + (i - 1) * width, vals, width * 0.92, color=col, label=m, zorder=2)
+        ax2.errorbar(xs + (i - 1) * width, vals, yerr=errs, fmt="none", ecolor=C("fg"),
+                     capsize=3, lw=1.2, zorder=3)
+        for x, v in zip(xs + (i - 1) * width, vals):
+            ax2.text(x, v + 0.025, f"{v:.2f}", ha="center", fontsize=9.2, color=C("fg"))
+    ax2.set_xticks(xs, ["600 → 1200 MHz\nboth still compute-starved",
+                        "1200 → 1710 MHz\nthe baseline hits its bandwidth ceiling"], fontsize=9.6)
+    ax2.set_ylabel("compute elasticity")
+    ax2.set_ylim(0, 1.08)
+    ax2.set_title("Below 1200 MHz everything scales with clock. Above it, only\n"
+                  "the speculative arms still do", pad=10)
+    ax2.legend(frameon=False, ncol=3, loc="upper right")
+    ax2.grid(axis="y", alpha=0.5); _despine(ax2)
+
+    fig.subplots_adjust(left=0.155, right=0.975, top=0.925, hspace=0.55)
+    _save(fig, "plot_bound_by", bottom=0.10,
+          note="Phase R2, 1575 requests, 0 incidents. The SM clock is pinned with nvidia-smi -lgc "
+               "rather than produced by a power cap, so each elasticity has a setting in its "
+               "denominator instead of an outcome. Intervals are a cluster bootstrap over prompts "
+               "and over the measured clock, per interval, never pooled across a regime change.")
+
+
 def main():
     OUT.mkdir(exist_ok=True)
     result = A.load(RESULT)
     series, prompt_class, _, _ = A.build_series(result, "decode_tok_s")
     result_r = A.load(RESULT_R) if RESULT_R.exists() else None
+    result_r2 = A.load(RESULT_R2) if RESULT_R2.exists() else None
     for mode in ("light", "dark"):
         print(f"  --- {mode}")
         with theme(mode):
@@ -401,6 +479,8 @@ def main():
             fig_width_partition(result)
             if result_r:
                 fig_bandwidth(result_r)
+            if result_r2:
+                fig_bound_by(result_r2)
 
 
 if __name__ == "__main__":

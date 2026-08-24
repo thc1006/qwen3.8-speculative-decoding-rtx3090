@@ -1,0 +1,66 @@
+====================================================================================================
+VERIFICATION-STEP COST MODEL     speedup = mean_len / k
+  mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)   [derived; the API has
+            no verification-step count, and this is low by <1 %. See the docstring.]
+====================================================================================================
+[integrity] derived mean_len vs the server's printed mean len: 1050 requests, mean gap -0.0043, worst 0.0494
+            within the log's own %5.2f printing precision, so the derivation tracks the server.
+
+[integrity] API counters vs llama.cpp log lines: 1050 requests compared, 0 mismatched  -- two independent sources agree to the token
+
+--- k by arm (pooled over classes and passes) ---
+arm              spec             w    n   k mean    k sd         k range
+mtp-n3@sm600     draft-mtp        4   75   2.9424  1.0310   2.209-4.406
+mtp-n3@sm1200    draft-mtp        4   75   1.5621  0.5477   1.171-2.342
+mtp-n3@sm1700    draft-mtp        4   75   1.2005  0.4208   0.898-1.805
+mtp-n3@sm1200-bwlo draft-mtp        4   75   1.5674  0.5499   1.175-2.354
+mtp-n3@sm1200-bwhi draft-mtp        4   75   1.5595  0.5472   1.170-2.340
+mtp-n3@sm1700-bwlo draft-mtp        4   75   1.2086  0.4250   0.903-1.819
+mtp-n3@sm1700-bwhi draft-mtp        4   75   1.1940  0.4182   0.893-1.797
+mtp-n7@sm600     draft-mtp        8   75   5.1933  1.8118   3.872-7.796
+mtp-n7@sm1200    draft-mtp        8   75   2.7220  0.9549   2.037-4.093
+mtp-n7@sm1700    draft-mtp        8   75   2.0482  0.7178   1.533-3.082
+mtp-n7@sm1200-bwlo draft-mtp        8   75   2.7288  0.9571   2.043-4.105
+mtp-n7@sm1200-bwhi draft-mtp        8   75   2.7167  0.9520   2.034-4.085
+mtp-n7@sm1700-bwlo draft-mtp        8   75   2.0633  0.7236   1.544-3.105
+mtp-n7@sm1700-bwhi draft-mtp        8   75   2.0340  0.7142   1.519-3.065
+
+--- TEST 1: is the overhead charged to REJECTION? ---
+    Model a rejection-proportional cost r (decode-steps per rejected draft token):
+        k = k_verify + r * n_max * (1 - acceptance)
+        => dk/d(acceptance) = -r * n_max,   so  r = -slope / n_max
+    A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+
+arm               n    accept range     slope     r2  r estimate  reading
+mtp-n3@sm600      3  0.325-0.857    0.0049  0.000    -0.00165  r <= 0 — no rejection cost detected (k spread 74.68%)
+mtp-n3@sm1200     3  0.325-0.857    0.0171  0.000    -0.00569  r <= 0 — no rejection cost detected (k spread 75.00%)
+mtp-n3@sm1700     3  0.325-0.857    0.0071  0.000    -0.00235  r <= 0 — no rejection cost detected (k spread 75.62%)
+mtp-n3@sm1200-bwlo  3  0.325-0.857    0.0178  0.000    -0.00593  r <= 0 — no rejection cost detected (k spread 75.19%)
+mtp-n3@sm1200-bwhi  3  0.325-0.857    0.0182  0.000    -0.00608  r <= 0 — no rejection cost detected (k spread 75.07%)
+mtp-n3@sm1700-bwlo  3  0.325-0.857    0.0105  0.000    -0.00351  r <= 0 — no rejection cost detected (k spread 75.79%)
+mtp-n3@sm1700-bwhi  3  0.325-0.857    0.0030  0.000    -0.00101  r <= 0 — no rejection cost detected (k spread 75.67%)
+mtp-n7@sm600      7  0.125-0.644   -0.0317  0.000     0.00453  r negligible (k spread 75.57%)
+mtp-n7@sm1200     7  0.125-0.644    0.0339  0.000    -0.00484  r <= 0 — no rejection cost detected (k spread 75.53%)
+mtp-n7@sm1700     7  0.125-0.644    0.0358  0.000    -0.00512  r <= 0 — no rejection cost detected (k spread 75.61%)
+mtp-n7@sm1200-bwlo  7  0.125-0.644    0.0349  0.000    -0.00499  r <= 0 — no rejection cost detected (k spread 75.54%)
+mtp-n7@sm1200-bwhi  7  0.125-0.644    0.0354  0.000    -0.00506  r <= 0 — no rejection cost detected (k spread 75.46%)
+mtp-n7@sm1700-bwlo  7  0.125-0.644    0.0423  0.000    -0.00605  r <= 0 — no rejection cost detected (k spread 75.64%)
+mtp-n7@sm1700-bwhi  7  0.125-0.644    0.0287  0.000    -0.00410  r <= 0 — no rejection cost detected (k spread 75.97%)
+
+  Largest r across arms: +0.00453 decode-steps per rejected draft token.
+  Acceptance spans roughly 0.125-0.857 in this data — nearly a ten-fold range —
+  so a rejection-driven overhead of any consequence would have shown up here.
+  Reading: the verification overhead is paid per position VERIFIED, not per
+  draft REJECTED. This does not say rollback is free; it bounds how much of
+  the observed cost rollback can account for.
+
+--- TEST 2: k vs verification width, per method ---
+    fitting k = k0 + c*(w-1); c is the marginal cost of one more verified position
+  draft-mtp      widths [4, 8]  ->  k0=0.7187  c=0.2954  r2=1.0000
+      w= 4  k=1.6049  fit=1.6049  resid=+0.0000
+      w= 8  k=2.7866  fit=2.7866  resid=+0.0000
+
+--- implied optimum ---
+    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k
+    has an interior maximum. Observed best per method:
+  draft-mtp      n3=2.006x  n7=1.414x   -> best n-max = 3

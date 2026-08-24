@@ -1,0 +1,139 @@
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@sm600                     21.51      21.51      75  prose_argument=0.2%
+mtp-n3@sm600                       25.86      25.86      75  reason_probability=0.0%
+mtp-n7@sm600                       17.82      17.82      75  chat_travel=5.4%
+baseline@sm1200                    37.57      37.57      75  code_go_worker=0.3%
+mtp-n3@sm1200                      48.70      48.70      75  code_go_worker=0.3%
+mtp-n7@sm1200                      33.97      33.97      75  code_rust_mergesort=0.1%
+baseline@sm1700                    41.28      41.28      75  chat_desk_robot=0.7%
+mtp-n3@sm1700                      63.38      63.38      75  reason_probability=0.6%
+mtp-n7@sm1700                      45.13      45.13      75  zh_self_intro=0.3%
+baseline@sm1200-bwlo               36.70      36.70      75  chat_travel=0.2%
+mtp-n3@sm1200-bwlo                 48.53      48.53      75  prose_rainbow=1.6%
+mtp-n7@sm1200-bwlo                 33.89      33.89      75  prose_argument=0.1%
+baseline@sm1200-bwhi               38.33      38.33      75  reason_probability=0.2%
+mtp-n3@sm1200-bwhi                 48.78      48.78      75  prose_rainbow=0.1%
+mtp-n7@sm1200-bwhi                 34.04      34.04      75  reason_scheduling=0.1%
+baseline@sm1700-bwlo               39.88      39.88      75  reason_probability=0.2%
+mtp-n3@sm1700-bwlo                 62.96      62.96      75  chat_advice=0.4%
+mtp-n7@sm1700-bwlo                 44.80      44.80      75  prose_letter=0.1%
+baseline@sm1700-bwhi               42.64      42.64      75  reason_trains=0.2%
+mtp-n3@sm1700-bwhi                 63.72      63.72      75  reason_zebra=0.3%
+mtp-n7@sm1700-bwhi                 45.47      45.47      75  code_nginx_cfg=0.2%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n3@sm600                 baseline@sm600         +20.20 [+17.12, +23.51]  FASTER
+mtp-n7@sm600                 baseline@sm600         -17.17 [-21.31, -13.00]  SLOWER
+mtp-n3@sm1200                baseline@sm1200        +29.63 [+26.34, +33.18]  FASTER
+mtp-n7@sm1200                baseline@sm1200         -9.55 [-14.03, -5.03]  SLOWER
+mtp-n3@sm1700                baseline@sm1700        +53.52 [+49.65, +57.68]  FASTER
+mtp-n7@sm1700                baseline@sm1700         +9.33 [+3.95, +14.78]  FASTER
+mtp-n3@sm1200-bwlo           baseline@sm1200-bwlo   +32.24 [+28.91, +35.81]  FASTER
+mtp-n7@sm1200-bwlo           baseline@sm1200-bwlo    -7.66 [-12.23, -3.03]  SLOWER
+mtp-n3@sm1200-bwhi           baseline@sm1200-bwhi   +27.26 [+24.03, +30.73]  FASTER
+mtp-n7@sm1200-bwhi           baseline@sm1200-bwhi   -11.21 [-15.60, -6.75]  SLOWER
+mtp-n3@sm1700-bwlo           baseline@sm1700-bwlo   +57.90 [+53.90, +62.21]  FASTER
+mtp-n7@sm1700-bwlo           baseline@sm1700-bwlo   +12.34 [+6.82, +17.95]  FASTER
+mtp-n3@sm1700-bwhi           baseline@sm1700-bwhi   +49.43 [+45.63, +53.52]  FASTER
+mtp-n7@sm1700-bwhi           baseline@sm1700-bwhi    +6.62 [+1.36, +11.95]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n3@sm600               chat:  +3.6%  code: +56.9%  prose:  +7.8%  reason: +35.3%  zh:  -2.7%
+  mtp-n7@sm600               chat: -36.5%  code: +28.0%  prose: -36.4%  reason:  -1.2%  zh: -39.7%
+  mtp-n3@sm1200              chat: +12.0%  code: +68.9%  prose: +16.4%  reason: +45.8%  zh:  +5.1%
+  mtp-n7@sm1200              chat: -30.2%  code: +39.3%  prose: -30.5%  reason:  +7.6%  zh: -34.0%
+  mtp-n3@sm1700              chat: +32.4%  code:+100.4%  prose: +38.1%  reason: +72.4%  zh: +24.2%
+  mtp-n7@sm1700              chat: -15.5%  code: +68.2%  prose: -15.9%  reason: +30.1%  zh: -20.2%
+  mtp-n3@sm1200-bwlo         chat: +14.3%  code: +72.3%  prose: +18.5%  reason: +48.8%  zh:  +7.3%
+  mtp-n7@sm1200-bwlo         chat: -28.7%  code: +42.2%  prose: -29.1%  reason:  +9.9%  zh: -32.6%
+  mtp-n3@sm1200-bwhi         chat: +10.0%  code: +65.7%  prose: +14.3%  reason: +43.2%  zh:  +3.2%
+  mtp-n7@sm1200-bwhi         chat: -31.5%  code: +36.7%  prose: -31.8%  reason:  +5.7%  zh: -35.2%
+  mtp-n3@sm1700-bwlo         chat: +36.3%  code:+105.7%  prose: +42.0%  reason: +77.7%  zh: +27.8%
+  mtp-n7@sm1700-bwlo         chat: -13.2%  code: +72.7%  prose: -13.5%  reason: +33.6%  zh: -17.9%
+  mtp-n3@sm1700-bwhi         chat: +28.8%  code: +95.2%  prose: +34.4%  reason: +67.9%  zh: +20.8%
+  mtp-n7@sm1700-bwhi         chat: -17.7%  code: +64.1%  prose: -18.0%  reason: +26.9%  zh: -22.2%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 1575
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+baseline@sm600             0.1041     +0.0%       3843     +0.0%       -          -
+mtp-n3@sm600               0.1360    +30.7%       3054    -20.5%   0.558       2.65
+mtp-n7@sm600               0.0982     -5.7%       4538    +18.1%   0.323       3.22
+baseline@sm1200            0.1358    +30.5%       2945    -23.4%       -          -
+mtp-n3@sm1200              0.1877    +80.3%       2216    -42.3%   0.558       2.65
+mtp-n7@sm1200              0.1380    +32.6%       3230    -16.0%   0.323       3.22
+baseline@sm1700            0.1089     +4.6%       3674     -4.4%       -          -
+mtp-n3@sm1700              0.1588    +52.6%       2624    -31.7%   0.558       2.65
+mtp-n7@sm1700              0.1146    +10.1%       3914     +1.8%   0.323       3.22
+baseline@sm1200-bwlo       0.1354    +30.1%       2954    -23.1%       -          -
+mtp-n3@sm1200-bwlo         0.1894    +82.0%       2195    -42.9%   0.558       2.65
+mtp-n7@sm1200-bwlo         0.1390    +33.6%       3208    -16.5%   0.323       3.22
+baseline@sm1200-bwhi       0.1355    +30.2%       2953    -23.2%       -          -
+mtp-n3@sm1200-bwhi         0.1863    +79.0%       2232    -41.9%   0.558       2.65
+mtp-n7@sm1200-bwhi         0.1371    +31.7%       3254    -15.3%   0.323       3.22
+baseline@sm1700-bwlo       0.1081     +3.8%       3701     -3.7%       -          -
+mtp-n3@sm1700-bwlo         0.1585    +52.3%       2632    -31.5%   0.558       2.65
+mtp-n7@sm1700-bwlo         0.1149    +10.4%       3905     +1.6%   0.323       3.22
+baseline@sm1700-bwhi       0.1100     +5.6%       3638     -5.3%       -          -
+mtp-n3@sm1700-bwhi         0.1595    +53.3%       2611    -32.1%   0.558       2.65
+mtp-n7@sm1700-bwhi         0.1144     +9.9%       3920     +2.0%   0.323       3.22
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  baseline@sm1200            byte-identical 75/75   median shared prefix when forked: -
+  baseline@sm1200-bwhi       byte-identical 75/75   median shared prefix when forked: -
+  baseline@sm1200-bwlo       byte-identical 75/75   median shared prefix when forked: -
+  baseline@sm1700            byte-identical 75/75   median shared prefix when forked: -
+  baseline@sm1700-bwhi       byte-identical 75/75   median shared prefix when forked: -
+  baseline@sm1700-bwlo       byte-identical 75/75   median shared prefix when forked: -
+  mtp-n3@sm1200              byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@sm1200-bwhi         byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@sm1200-bwlo         byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@sm1700              byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@sm1700-bwhi         byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@sm1700-bwlo         byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3@sm600               byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n7@sm1200              byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@sm1200-bwhi         byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@sm1200-bwlo         byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@sm1700              byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@sm1700-bwhi         byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@sm1700-bwlo         byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7@sm600               byte-identical 15/75   median shared prefix when forked: 0.228
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@sm1200            reproducible 50/50
+  baseline@sm1200-bwhi       reproducible 50/50
+  baseline@sm1200-bwlo       reproducible 50/50
+  baseline@sm1700            reproducible 50/50
+  baseline@sm1700-bwhi       reproducible 50/50
+  baseline@sm1700-bwlo       reproducible 50/50
+  baseline@sm600             reproducible 50/50
+  mtp-n3@sm1200              reproducible 50/50
+  mtp-n3@sm1200-bwhi         reproducible 50/50
+  mtp-n3@sm1200-bwlo         reproducible 50/50
+  mtp-n3@sm1700              reproducible 50/50
+  mtp-n3@sm1700-bwhi         reproducible 50/50
+  mtp-n3@sm1700-bwlo         reproducible 50/50
+  mtp-n3@sm600               reproducible 50/50
+  mtp-n7@sm1200              reproducible 50/50
+  mtp-n7@sm1200-bwhi         reproducible 50/50
+  mtp-n7@sm1200-bwlo         reproducible 50/50
+  mtp-n7@sm1700              reproducible 50/50
+  mtp-n7@sm1700-bwhi         reproducible 50/50
+  mtp-n7@sm1700-bwlo         reproducible 50/50
+  mtp-n7@sm600               reproducible 50/50

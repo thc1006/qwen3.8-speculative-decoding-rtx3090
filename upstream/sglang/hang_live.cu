@@ -5,6 +5,10 @@
 // with two changes and no others:
 //   1. an iteration counter, so a non-terminating walk reports itself instead of wedging the GPU
 //   2. an optional bound, which is the proposed fix
+// Everything else, including the two writes in the accept branch, is as shipped. An earlier
+// version dropped those two writes; they sit in the branch that breaks, so they could not affect
+// termination, but `predicts` is indexed by a value read from `retrive_index` and that is its own
+// out-of-bounds path, which dropping them would have hidden.
 // Types match the real instantiation: DType=float, IdType2=int64_t.
 //
 // Built and run without SGLang or sgl-kernel: the claim is about this loop, and the loop is
@@ -21,6 +25,7 @@ __global__ void walk(
     const int64_t* retrive_index, const int64_t* retrive_next_token,
     const int64_t* retrive_next_sibling, const int64_t* candidates,
     const float* target_probs, const float* uniform_samples, float* draft_probs,
+    int32_t* predicts, int32_t* accept_index,
     uint32_t num_speculative_tokens, uint32_t num_draft_tokens, uint32_t d,
     float threshold_single, float threshold_acc,
     unsigned long long cap, int bounded,
@@ -51,7 +56,9 @@ __global__ void walk(
         prob_acc = 0.f;
         cur_prob_offset = (bx * num_draft_tokens + cur_index) * d;
         coin = uniform_samples[bx * num_draft_tokens + cur_index];
+        predicts[last_accepted_retrive_idx] = (int32_t)draft_token_id;
         ++num_accepted_tokens;
+        accept_index[bx * num_speculative_tokens + num_accepted_tokens] = (int32_t)draft_index;
         last_accepted_retrive_idx = draft_index;
         break;
       } else {
@@ -76,8 +83,13 @@ __global__ void walk(
 //
 // Case: "cycle 1 <-> 3, no NaN, no accept", the minimal sufficient one from the factorial.
 #include <limits.h>
+#include <stdlib.h>
 
-int main() {
+int main(int argc, char** argv) {
+  // The shipped dispatch is nblks(batch_size), nthrs(1024), and the walk is not guarded by
+  // tx == 0, so every thread in the block runs it. Default to that shape.
+  const int GRID  = (argc > 1) ? atoi(argv[1]) : 1;
+  const int BLOCK = (argc > 2) ? atoi(argv[2]) : 1024;
   const uint32_t N = 4, D = 8, NSPEC = 3;
   const int64_t nxt[4]  = {1,-1,-1,-1};
   const int64_t sib[4]  = {-1,3,-1,1};      // 1 -> 3 -> 1
@@ -85,13 +97,15 @@ int main() {
   const float   coin    = 1.0f;             // nothing is ever accepted
 
   int64_t *d_idx,*d_nxt,*d_sib,*d_cand; float *d_tp,*d_us,*d_dp;
-  unsigned long long *d_it; int *d_acc,*d_cap;
+  unsigned long long *d_it; int *d_acc,*d_cap; int32_t *d_pred,*d_ai;
   CUDA_OK(cudaMalloc(&d_idx,N*sizeof(int64_t)));  CUDA_OK(cudaMalloc(&d_nxt,N*sizeof(int64_t)));
   CUDA_OK(cudaMalloc(&d_sib,N*sizeof(int64_t)));  CUDA_OK(cudaMalloc(&d_cand,N*sizeof(int64_t)));
   CUDA_OK(cudaMalloc(&d_tp,N*D*sizeof(float)));   CUDA_OK(cudaMalloc(&d_us,N*sizeof(float)));
   CUDA_OK(cudaMalloc(&d_dp,N*D*sizeof(float)));
   CUDA_OK(cudaMalloc(&d_it,sizeof(unsigned long long)));
   CUDA_OK(cudaMalloc(&d_acc,sizeof(int)));        CUDA_OK(cudaMalloc(&d_cap,sizeof(int)));
+  CUDA_OK(cudaMalloc(&d_pred,N*sizeof(int32_t)));  CUDA_OK(cudaMalloc(&d_ai,NSPEC*sizeof(int32_t)));
+  CUDA_OK(cudaMemset(d_pred,0,N*sizeof(int32_t))); CUDA_OK(cudaMemset(d_ai,-1,NSPEC*sizeof(int32_t)));
 
   int64_t h_idx[N]; for (uint32_t i=0;i<N;++i) h_idx[i]=(int64_t)i;
   float h_tp[N*D];  for (uint32_t i=0;i<N*D;++i) h_tp[i]=0.0f;
@@ -105,11 +119,11 @@ int main() {
   CUDA_OK(cudaMemcpy(d_us,h_us,sizeof(h_us),cudaMemcpyHostToDevice));
   CUDA_OK(cudaMemset(d_dp,0,N*D*sizeof(float)));
 
-  printf("launching walk<<<1,1>>> with cap=ULLONG_MAX, bounded=0\n");
+  printf("launching walk<<<%d,%d>>> with cap=ULLONG_MAX, bounded=0\n", GRID, BLOCK);
   printf("this call does not return; kill the process to release the device\n");
   fflush(stdout);
 
-  walk<<<1,1>>>(d_idx,d_nxt,d_sib,d_cand,d_tp,d_us,d_dp,NSPEC,N,D,1.0f,1.0f,
+  walk<<<GRID,BLOCK>>>(d_idx,d_nxt,d_sib,d_cand,d_tp,d_us,d_dp,d_pred,d_ai,NSPEC,N,D,1.0f,1.0f,
                 ULLONG_MAX,0,d_it,d_acc,d_cap);
   cudaDeviceSynchronize();
 
