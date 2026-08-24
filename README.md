@@ -12,9 +12,9 @@ saturation threshold forces the verify pass to load the union of K positions' ex
 is dense-hybrid — no experts, no routing, no union — so that mechanism cannot decide the answer
 here, and the question was open again.
 
-> **Status, 2026-08-25.** Phase A complete (875 measurements, 0 incidents). Phase R complete
-> (1125). Phase R2 running. Later phases designed and not yet measured; each says so where it
-> appears.
+> **Status, 2026-08-25.** Phase A complete (875 measurements, 0 incidents), Phase R complete
+> (1125), **Phase R2 complete (1575, 0 incidents)**. Phase KV and the n-max ladder are running.
+> Later phases are designed and not yet measured; each says so where it appears.
 
 **It is not open any more.**
 
@@ -32,7 +32,7 @@ here, and the question was open again.
 | **Does DFlash2 beat the built-in MTP head?** | No. **+51.9 %** at its own best depth. It drafts longer blocks and its fixed cost is lower, but acceptance falls faster with depth. |
 | **Energy, or just time?** | Both. **−37 %** decode energy for a 400-token answer (3980 → 2503 J). No prior-art study publishes an energy figure for this model. |
 | **Lossless at temperature 0?** | **No.** 76–80 % of greedy requests diverge from the non-speculative baseline. Deterministic, and it reproduces exactly across passes. |
-| **Why does deeper drafting stop paying?** | Speculation converts a bandwidth-bound decode into a compute-bound verify. Each extra verified position costs **c ≈ 0.28** of a plain decode step. |
+| **Why does deeper drafting stop paying?** | Each extra verified position costs **c ≈ 0.28** of a plain decode step. With both clocks pinned, the baseline and the speculative arms sit in opposite corners: bandwidth elasticity **0.80 against 0.14**, compute elasticity **0.27 against 0.76**. |
 | **Does the MoE result carry over?** | No. The sign flips: net loss there, large net win here. |
 | **Which prompts benefit?** | Code and reasoning most, Chinese least — and `dflash2-n7` is **+22.6 % overall while being a net loss on three of five classes**. |
 
@@ -160,9 +160,10 @@ block already paid for. Here n-max 4 beats n-max 7 by a wide margin, 1.520× aga
 
 The model says both can be true, and says what would have to differ. For width 8 to beat width 5
 on this measured acceptance curve, `c` would have to be below **0.0543**; it is 0.2784 here, 5.1
-times too large. Phase R shows what moves `c`: speculation converts a bandwidth-bound decode into
-a compute-bound verify, so `c` falls as compute rises relative to memory bandwidth — exactly the
-axis separating a 5090 from a 3090. The prediction is that a card with `c` under 0.0543 prefers
+times too large. Phase R2 shows what moves `c`: with the SM clock pinned, the baseline responds to
+core clock with an elasticity of 0.27 while the speculative arms sit at 0.76-0.81, so `c` is a
+compute cost and falls as compute rises relative to memory bandwidth — exactly the axis separating
+a 5090 from a 3090. The prediction is that a card with `c` under 0.0543 prefers
 the deeper setting with the same drafter and the same acceptance, and measuring `c` needs one
 baseline and three widths.
 
@@ -241,25 +242,38 @@ Blackwell; this card is sm_86 and cannot answer it. See
 ### Resource response
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_bandwidth_elasticity_dark.png">
-  <img alt="Two stacked panels. Top: decode throughput as a percentage of each method's own stock value against memory clock from 9101 to 9901 MHz. The baseline rises about six percent across the range while both speculative arms stay within one percent. Bottom: bandwidth elasticity per interval, 0.78 and 0.72 for the baseline against 0.10 to 0.17 for the speculative arms." src="analysis/plot_bandwidth_elasticity.png">
+  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_bound_by_dark.png">
+  <img alt="Two panels. Top: bandwidth elasticity against compute elasticity at the top of the clock range. The baseline sits at 0.80 bandwidth and 0.27 compute; both speculative arms sit near 0.15 bandwidth and 0.78 compute, in the opposite corner. Bottom: compute elasticity by interval. From 600 to 1200 MHz all three are between 0.80 and 0.93; from 1200 to 1710 MHz the baseline falls to 0.27 while the speculative arms stay at 0.76 and 0.80." src="analysis/plot_bound_by.png">
 </picture>
 
-Phase R varies memory bandwidth and power budget independently, 1125 measurements. Its pre-flight
-confirmed the assumption the design rests on: lowering the power limit to 250 W and 175 W leaves
-the memory clock at 9501 MHz unchanged, so the two levers are genuinely separable on this card.
+Phase R varied memory bandwidth and power budget independently, 1125 measurements, and confirmed
+the assumption the design rests on: lowering the power limit to 250 W and 175 W leaves the memory
+clock at 9501 MHz unchanged, so the two levers are separable on this card. Its own review then
+found that a power cap is a poor compute lever, because the clock it produces is an outcome rather
+than a setting. **Phase R2** re-ran the compute axis with the SM clock pinned at 600, 1200 and
+1710 MHz, 1575 measurements, 0 incidents, and it is the one quoted here.
 
-The baseline's throughput tracks memory clock with an elasticity of **0.72–0.78**. The
-speculative arms sit at **0.10–0.17**, a factor of four to seven lower. That is the mechanism
-behind `c`: speculation spends one target pass on several positions at once, which converts a
-bandwidth-bound decode into a compute-bound verify.
+At the top of the clock range the two workloads sit in opposite corners:
 
-On the other axis Phase R measured the speculative arms at **1.71–1.74×** the baseline's
-sensitivity to core clock — the same reading from the other side. That number is not load-bearing
-here, because Phase R's own review then found a power cap to be a poor compute lever: the clock it
-produces is an outcome rather than a setting. **Phase R2** is re-running the compute axis with the
-SM clock pinned at 600, 1200 and 1700 MHz, and the compute elasticity is quoted from it once it
-lands.
+| | bandwidth elasticity | compute elasticity | bound by |
+|---|---:|---:|---|
+| baseline | **0.79-0.81** | **0.27** | memory bandwidth |
+| mtp-n3 | 0.13-0.15 | 0.76 | compute |
+| mtp-n7 | 0.17-0.18 | 0.81 | compute |
+
+The two elasticities very nearly swap. That is what speculation does to the workload: one target
+pass scores several positions at once, so the decode stops waiting on memory and starts waiting on
+arithmetic.
+
+The regime matters and the intervals show where it changes. From 600 to 1200 MHz everything is
+compute-starved and everything scales with clock: baseline 0.804, mtp-n3 0.913, mtp-n7 0.931.
+From 1200 to 1710 MHz the baseline hits its bandwidth ceiling and stops responding, 0.266, while
+the speculative arms keep scaling at 0.759 and 0.805. The ratio between them therefore is not one
+number: it is 1.14x in the low regime and 2.85x in the high one, which is why this repo reports
+elasticities per interval and never pools them across a regime change.
+
+Pinning also tightened the intervals to the third decimal, because the denominator is now a
+setting rather than something the card negotiates with its power cap.
 
 ## Design
 
@@ -321,7 +335,9 @@ existed, in the addenda to [`PREREGISTRATION.md`](PREREGISTRATION.md).
 
 | phase | question | status |
 |---|---|---|
-| **R2** | does the compute elasticity hold with the SM clock pinned rather than power-capped? | running |
+| **R2** | does the compute elasticity hold with the SM clock pinned rather than power-capped? | **complete**, 1575 measurements, 0 incidents |
+| **KV** | does the width partition survive an f16 cache, or was it an artefact of q8_0? | complete |
+| **n-max** | the full width ladder, 2 to 9, for the CUDA boundary question | running |
 | **C** | does drafter quantization change the answer, and does the predecessor's v3.0 need an erratum? | queued |
 | **L** | does the long-context decode collapse of [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) reproduce on sm_86, and does speculation survive it? | designed, ladder to 96K |
 | **M** | does `draft-mtp` at small n-max escape the MoE penalty that `draft-simple` at n-max 8 suffers? | designed, anchored on reproducing the predecessor's −44.6 % |

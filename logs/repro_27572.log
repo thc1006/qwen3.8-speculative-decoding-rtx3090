@@ -1,0 +1,59 @@
+plan
+  -np 4  4 request(s) together  256 prompt tokens
+  -np 4  4 request(s) together  1024 prompt tokens
+  -np 4  4 request(s) together  4096 prompt tokens
+  -np 4  4 request(s) together  8192 prompt tokens
+  -np 4  4 request(s) together  16384 prompt tokens
+  -np 1  4 request(s) one at a time  16384 prompt tokens
+  -np 4  1 request(s) one at a time  16384 prompt tokens
+
+model   Qwen3.8-27B-UD-Q4_K_XL.gguf  present
+binary  present
+flags   -ngl 999 --fit off -c 81920 -b 1024 -ub 256 -fa on -ctk q4_0 -ctv q4_0 --no-webui --jinja --metrics --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 --spec-type draft-mtp --spec-draft-n-max 4
+
+=== configuration probe (-lv 5, not part of the sweep) ===
+    0.00.112.454 I cmn  common_param:   - CUDA0   : NVIDIA GeForce RTX 3090 (24123 MiB, 23843 MiB free)
+    0.00.203.889 I llama_prepare_model_devices: using device CUDA0 (NVIDIA GeForce RTX 3090) (0000:01:00.0) - 23843 MiB free
+    0.00.364.709 D load_tensors: layer   0 assigned to device CUDA0, is_swa = 0
+    0.00.364.711 D load_tensors: layer   1 assigned to device CUDA0, is_swa = 0
+    0.00.364.711 D load_tensors: layer   2 assigned to device CUDA0, is_swa = 0
+    0.00.364.711 D load_tensors: layer   3 assigned to device CUDA0, is_swa = 0
+    0.00.364.712 D load_tensors: layer   4 assigned to device CUDA0, is_swa = 0
+    0.00.364.712 D load_tensors: layer   5 assigned to device CUDA0, is_swa = 0
+    0.00.364.712 D load_tensors: layer   6 assigned to device CUDA0, is_swa = 0
+    0.00.364.712 D load_tensors: layer   7 assigned to device CUDA0, is_swa = 0
+    0.00.364.712 D load_tensors: layer   8 assigned to device CUDA0, is_swa = 0
+    0.00.364.713 D load_tensors: layer   9 assigned to device CUDA0, is_swa = 0
+
+=== -np 4, 4 req, 256 tokens, concurrent ===
+    acceptance [0.625, 0.35417, 0.27632, 0.26087]  exactly zero: 0  empty: 0
+
+=== -np 4, 4 req, 1024 tokens, concurrent ===
+    acceptance [0.63636, 0.4, 0.25, 0.26087]  exactly zero: 0  empty: 0
+
+=== -np 4, 4 req, 4096 tokens, concurrent ===
+    acceptance [0.3, 0.39286, 0.28846, 0.43421]  exactly zero: 0  empty: 0
+
+=== -np 4, 4 req, 8192 tokens, concurrent ===
+    acceptance [0.32609, 0.43421, 0.45, 0.47222]  exactly zero: 0  empty: 0
+
+=== -np 4, 4 req, 16384 tokens, concurrent ===
+    acceptance [0.33065, 0.36538, 0.38636, 0.43421]  exactly zero: 0  empty: 0
+
+=== -np 1, 4 req, 16384 tokens, sequential ===
+    acceptance [0.37037, 0.32143, 0.4, 0.45312]  exactly zero: 0  empty: 0
+
+=== -np 4, 1 req, 16384 tokens, sequential ===
+    acceptance [0.37037]  exactly zero: 0  empty: 0
+
+case                               acceptance (per request)          zero  empty
+  np4_256tok_conc                  [0.625, 0.35417, 0.27632, 0.26       0      0
+  np4_1024tok_conc                 [0.63636, 0.4, 0.25, 0.26087]        0      0
+  np4_4096tok_conc                 [0.3, 0.39286, 0.28846, 0.4342       0      0
+  np4_8192tok_conc                 [0.32609, 0.43421, 0.45, 0.472       0      0
+  np4_16384tok_conc                [0.33065, 0.36538, 0.38636, 0.       0      0
+  np1_16384tok_seq                 [0.37037, 0.32143, 0.4, 0.4531       0      0
+  np4_16384tok_seq                 [0.37037]                            0      0
+
+  does not reproduce on CUDA at any tested length, which narrows #27572 to HIP
+  or to something else in the reporter's configuration.

@@ -292,7 +292,8 @@ def report(result: dict) -> None:
 
     print("\n--- implied optimum ---")
     print("    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k")
-    print("    has an interior maximum. Observed best per method:")
+    print("    has an interior maximum in principle. Over the widths measured here it falls")
+    print("    monotonically, so what follows is the best TESTED point, not a fitted optimum:")
     for method, g in sorted(by_method.items()):
         best: dict[int, float] = defaultdict(float)
         cnt: dict[int, list[float]] = defaultdict(list)

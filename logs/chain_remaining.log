@@ -15,3 +15,17 @@
 [2026-08-25T03:01:29+08:00] wrote analysis/phase_r2_{report,cost,divergence}.txt
 [2026-08-25T03:01:33+08:00] wrote analysis/phase_r2_elasticity.txt
 [2026-08-25T03:01:33+08:00] starting phase_kv: expecting 175 records
+[2026-08-25T03:34:14+08:00] phase_kv exited rc=0 with 175/175 records
+[2026-08-25T03:34:15+08:00] wrote analysis/phase_kv_{report,cost,divergence}.txt
+
+=== does the width grouping survive f16 KV? ===
+  q8_0 KV (Phase A): 25 prompts | w3==w4 on 25 | w5==w6==w8 on 25 | groups differ on 14
+  f16  KV (Phase KV): 25 prompts | w3==w4 on 25 | w5==w6==w8 on 25 | groups differ on 14
+  The grouping survives if the f16 row matches the q8_0 row. If it does not, the
+  partition was an artefact of the quantized cache and the #25618 comment needs a
+  correction posted to that thread.
+[2026-08-25T03:34:15+08:00] wrote analysis/phase_kv_divergence.txt
+[2026-08-25T03:34:15+08:00] starting the llama.cpp #27572 CUDA reproduction
+[2026-08-25T03:37:51+08:00] repro #27572 returned rc=0; see repro/results_27572.json
+      does not reproduce on CUDA at any tested length, which narrows #27572 to HIP
+[2026-08-25T03:37:51+08:00] starting phase_nmax: expecting 1050 records

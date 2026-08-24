@@ -858,3 +858,71 @@ version** apart, not a point release apart, and the upgrade narrowed that gap wi
 "Different driver" therefore joins "different CUDA toolkit" and "different compiler" in the list of
 things that separate the two hosts, and it is the largest of the three. It does not affect any within-host
 comparison, which is the only kind RH1 and RH2 make.
+
+## Correction 4, registered 2026-08-25, BEFORE `phase_nmax` runs: H8's third group cannot exist
+
+H8 was registered on 2026-08-24 as a three-way partition of fork position by verification width,
+`{2,3,4}` against `{5,6,7,8}` against `{9}`, from the `calc_nwarps` table in
+`ggml/src/ggml-cuda/mmvq.cu`, which returns 4 warps up to `ncols_dst` 4, 2 warps from 5 to 8 and
+1 above 8.
+
+Reading the dispatch rather than the table shows the third group cannot be produced by that
+mechanism. `ggml_cuda_mul_mat_vec_q` is selected only when
+
+    src1->ne[1] <= MMVQ_MAX_BATCH_SIZE
+
+and `mmvq.cuh` line 3 defines that as **8**, with the comment "Max. batch size for which to use
+MMVQ kernels." A verification width of 9 therefore never reaches MMVQ at all; it is served by a
+different kernel. The `default: return 1;` arm of `calc_nwarps` is unreachable on this path for
+the GENERIC table, which is the table an sm_86 device selects.
+
+**What this changes.** The registered prediction for widths 2 to 8 stands unaltered: two groups,
+split between 4 and 5, from 4 warps against 2. The prediction for width 9 is **withdrawn**. If
+width 9 forks differently from `{5,6,7,8}`, that is a boundary between two different kernels and
+not evidence about the warp count, and `harness/width_groups.py` must report it as such rather
+than as the third arm of H8. If it forks the same as `{5,6,7,8}`, that is also uninformative
+about warps for the same reason.
+
+This is recorded before `phase_nmax` has produced a record; `phase_kv` is still running and
+`phase_nmax` is behind it in the chain.
+
+## Registered 2026-08-25, before any of it runs: the forced-warp intervention
+
+Everything measured so far is observational. The width grouping is consistent with `calc_nwarps`,
+but consistency is not causation: any quantity that changes at the same width would fit the same
+data. The experiment that separates them is to change the warp count **without changing the
+width**.
+
+`calc_nwarps` is `constexpr` and its result is used as a compile-time constant at `mmvq.cu` line
+562, which sizes the cross-warp reduction buffer at line 680
+
+    __shared__ float tmp_shared[nwarps-1][ncols_dst][rows_per_cuda_block][warp_size];
+
+and bounds the reduction loop at line 710, `for (int l = 0; l < nwarps-1; ++l)`. So `nwarps` is
+not merely correlated with the reduction order, it **is** the width of the reduction tree. Editing
+the table therefore changes the summation order and nothing about the width, the drafter, the
+weights or the prompt.
+
+Three builds, from the same revision `c060ca9`, in a clone kept separate from `llamacpp-master`
+so the primary tree is never rebuilt:
+
+| build | GENERIC table | prediction |
+|---|---|---|
+| **control** | unmodified: 1-4 → 4, 5-8 → 2 | reproduces this host's own grouping |
+| **forced-up** | 1-4 → 4, **5-8 → 4** | widths 5, 6, 8 move to the `{3,4}` fork positions |
+| **forced-down** | **1-4 → 2**, 5-8 → 2 | widths 3, 4 move to the `{5,6,8}` fork positions |
+
+Registered outcomes:
+
+- **Both directions follow the forced warp count and not the width.** The warp count is the cause.
+  Nothing else in the build changed, and the two directions rule out an accidental one-way effect.
+- **Neither moves.** `calc_nwarps` is not the mechanism, H8's account is wrong however well the
+  observational data fitted it, and the llama.cpp #25618 comment needs a correction.
+- **One direction moves and the other does not.** Reported as such and treated as unresolved. The
+  asymmetry would itself need explaining, and no story is prepared for it in advance.
+- **The forced build changes fork positions for widths it did not touch.** The intervention is not
+  clean; something else in the build differs, and nothing is concluded until that is found.
+
+The greedy baseline is included in every build as a control: it runs at width 1, which the table
+maps to 4 warps in all three builds, so **its output must be byte-identical across the three**. If
+it is not, the builds differ by more than the table and the comparison is void.
