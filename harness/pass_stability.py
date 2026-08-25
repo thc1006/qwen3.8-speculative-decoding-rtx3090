@@ -20,6 +20,13 @@ Two dispersions, and Correction 16 exists because they are not the same quantity
 
 Both are printed. Neither is a verdict on its own.
 
+What the signature does NOT settle is which arms get it. The obvious guess -- that arm-passes doing
+more, shorter GPU operations per second leave more room for gaps -- was tested and fails:
+corr(within-pass sd, target forwards per second) is +0.08 on Phase M, +0.25 on NMAX, +0.11 on A and
+**-0.26** on R2, weak and inconsistent in sign. Throughput does no better (+0.10, +0.43, +0.36,
+-0.29). It was a story fitted to which arms happened to be noisy and it is recorded here as
+refuted, so it does not get invented again.
+
 Where a run recorded `arm_pass_host_load` -- added after that incident, so not present in files
 written before it -- the competing CPU at arm entry is joined on, and an arm-pass that is both an
 outlier and contended is named as such rather than left to a timestamp comparison.
