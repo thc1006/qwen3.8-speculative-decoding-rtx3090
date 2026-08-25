@@ -1831,3 +1831,43 @@ pass, which is the fix Correction 19 names and which this matrix cannot do retro
 Nothing in the reported comparisons depends on the answer. Within a pass every arm divides by the
 same baseline whatever its position, so ranking, sign, and `mtp-n2` being the best MTP depth are
 untouched either way.
+
+## Correction 19b, registered 2026-08-26 03:35, still BEFORE `baseline-dense` runs: a session trend, and how 19a is to be scored
+
+Two things found while the pre-registered test is still pending. Both are registered before the arm
+it turns on has run.
+
+**First, pass 1 is systematically the slowest.** Over the seven arms that have all three passes,
+paired per prompt:
+
+| | mean vs pass 1 | sd across arms | arms faster |
+|---|---|---|---|
+| pass 2 | **+1.47 %** | 2.14 | |
+| pass 3 | **+2.21 %** | 1.86 | 5 of 7 faster in both |
+
+A session-level warm-up, not an arm property and not the build: it is present in arms that ran
+nowhere near the build window, and the build sat inside pass 2, which is the middle value.
+
+This also settles `moe-mtp-n3` from Corrections 15 to 18 more firmly than Correction 17 could. With
+three passes it is **pass 1** that is the outlier there, at -4.75 % against +2.19 % and +2.78 %, and
+pass 1 closed nineteen minutes before the first object file was written. Two passes could not have
+shown this: each was measured against the other, so the means were mirror images and neither could
+be identified as the odd one.
+
+**Second, how Correction 19a is to be scored.** Its prediction was that `baseline-dense` in pass 3
+is about 2 % *lower* than in pass 2. The session trend runs the other way, roughly +0.7 % from pass
+2 to pass 3, so the raw prediction is the conservative one: a position effect now has to overcome a
+tailwind to show up as an absolute drop.
+
+Both readings are to be reported, and neither chosen after seeing them:
+
+* **raw** -- `baseline-dense` pass 3 against pass 2, as registered in 19a;
+* **trend-adjusted** -- the same, minus the pass-2-to-pass-3 change averaged over every other arm
+  with both passes, which removes the session move.
+
+Confirmation on the raw reading is the stronger result. Confirmation only after adjustment is
+weaker and is to be labelled as such. Neither, and 19a is refuted.
+
+Noting also that the trend cuts *for* Correction 19 on the observation that prompted it:
+`baseline-moe` fell 1.95 % from pass 1 to pass 2 while the session as a whole rose 1.47 %, so
+relative to its own session it lost about 3.4 points while moving from first place to last.
