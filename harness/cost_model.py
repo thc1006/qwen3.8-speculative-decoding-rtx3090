@@ -339,6 +339,40 @@ def report(result: dict) -> None:
                   f"MMVQ line would predict {pred:.4f}, so it sits {rel:+.1f} %")
             print(f"            excluded from the fit: it is a different kernel, not a residual")
 
+    # Same-trajectory check. Once a speculative arm diverges from its baseline it is no longer
+    # decoding the same tokens, so acceptance and cost after the fork are measured on a different
+    # history. A record that came out byte-identical shares the whole trajectory, and fitting `c`
+    # on those alone is the comparison the rest of this file cannot make. If the two coefficients
+    # disagree, the fit above is describing two token sequences rather than two widths.
+    div = {}
+    for r in result["records"]:
+        v = r.get("divergence")
+        if v is not None:
+            div[(r["arm"], r["prompt"], r["pass"])] = not v.get("identical")
+    print("\n--- the same fit on requests that never diverged from their baseline ---")
+    for method, g in sorted(by_method.items()):
+        pts_all: dict[int, list[float]] = defaultdict(list)
+        pts_same: dict[int, list[float]] = defaultdict(list)
+        for r in g:
+            if r["width"] > mmvq_max:
+                continue
+            pts_all[r["width"]].append(r["k"])
+            if div.get((r["arm"], r["prompt"], r["pass"])) is False:
+                pts_same[r["width"]].append(r["k"])
+        ws = sorted(w for w in pts_same if len(pts_same[w]) >= 2 and w in pts_all)
+        if len(ws) < 3:
+            print(f"  {method:14s} only {len(ws)} widths keep two or more non-diverging records; "
+                  f"not fitted")
+            continue
+        _, c_all, _ = _linfit([w - 1 for w in ws], [statistics.fmean(pts_all[w]) for w in ws])
+        _, c_same, _ = _linfit([w - 1 for w in ws], [statistics.fmean(pts_same[w]) for w in ws])
+        n_same = sum(len(pts_same[w]) for w in ws)
+        n_all = sum(len(pts_all[w]) for w in ws)
+        gap = 100.0 * (c_same - c_all) / c_all if c_all else float("nan")
+        flag = "" if abs(gap) < 5 else "   <-- the fit above is describing trajectories, not widths"
+        print(f"  {method:14s} c on all {n_all:4d} = {c_all:.4f}   c on the {n_same:3d} that "
+              f"never diverged = {c_same:.4f}   {gap:+.1f} %{flag}")
+
     ms = [m for m in by_method if len({r['width'] for r in by_method[m]}) >= 2]
     if len(ms) >= 2:
         print("\n  Two methods with independent drafters fitted separately. Agreement in `c` with")

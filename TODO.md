@@ -235,8 +235,17 @@ there was omission, not misstatement.
       of being described with today's constant. Three defects this study shipped were exactly a
       kernel fact written into Python and later untrue; this is the fix for the class rather than
       for the instances. Twenty tests, including one that the GENERIC switch has no case 9.
-- [ ] **C5** same-token replay: score the baseline's token sequence under width N rather than
-      letting the arm generate freely, so cost attribution compares one trajectory.
+- [~] **C5** same-token replay. **The full version needs an upstream feature**: llama-server has
+      no teacher-forcing or scoring mode, only free generation, so nothing in the harness can make
+      a speculative arm replay the baseline's tokens. Like E3, that is an issue to raise rather
+      than code to write.
+
+      The part that can be done here is done. A record that came out byte-identical shares its
+      whole trajectory with its baseline, and fitting `c` on those alone is the same-trajectory
+      comparison. It gives 0.2898 against 0.2904 for `draft-mtp` and 0.2476 against 0.2481 for
+      `draft-dflash`, 0.2 % in both, so divergence does not move the coefficient. `cost_model.py`
+      prints it every run. The threat was real in principle and does not bite here; the replay
+      mode would still be needed to say the same about anything measured *after* a fork.
 
 ### D. Re-runs, in dependency order
 

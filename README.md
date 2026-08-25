@@ -164,6 +164,14 @@ reported here as a total marginal cost per verified position and not as a target
 cost. Separating the components needs per-context event timing, a replay that skips drafter
 compute, or a profiler decomposition; none of those is in this repo.
 
+One threat to `c` can be checked without any of them. Once an arm diverges from its baseline it is
+decoding a different token sequence, so what follows is not a comparison of two widths on one
+trajectory. Between a fifth and a quarter of these requests come out byte-identical, and those
+share the whole trajectory. Fitting on those alone gives **0.2898 against 0.2904 for `draft-mtp`
+and 0.2476 against 0.2481 for `draft-dflash`**, a gap of 0.2 % in both. Divergence does not move
+the coefficient here. `cost_model.py` prints this comparison on every run rather than leaving it
+as a one-off.
+
 `mean_len` saturates with depth while `k` grows linearly, so the ratio has an interior maximum in
 principle. `phase_nmax` now brackets it: width 2 gives **+44.96 % [+43.45, +46.54]** and width 3
 gives **+58.84 % [+55.90, +61.89]**, so the peak sits at width 3 with a tested and slower point on
