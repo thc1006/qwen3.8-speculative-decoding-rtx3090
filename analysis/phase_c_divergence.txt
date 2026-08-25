@@ -1,0 +1,132 @@
+====================================================================================================
+BYTE-LEVEL DIVERGENCE FROM THE NON-SPECULATIVE BASELINE (greedy, same prompt & pass)
+====================================================================================================
+
+--- prevalence ---
+arm                        n  identical    rate  median shared prefix  earliest fork
+dflash2-bf16              75         15   20.0%                 0.228             22
+dflash2-q4k               75         15   20.0%                 0.228             22
+dflash2-q8                75         15   20.0%                 0.228             22
+draft08b-n4               75         15   20.0%                 0.445             12
+draft08b-n8               75          9   12.0%                 0.299             12
+ngram-cache               75         27   36.0%                 0.312            214
+ngram-map-k               75         75  100.0%                     -              -
+ngram-mod                 75         75  100.0%                     -              -
+
+--- batch-shape signature: fork position per prompt, by arm ---
+    (identical fork positions across drafters that share only their verification
+     width is the signature of reduction-order-dependent argmax flips)
+
+prompt                dflash2-bf16   dflash2-q4k    dflash2-q8   draft08b-n4   draft08b-n8   ngram-cache   ngram-map-k     ngram-mod
+chat_advice                   @830          @830          @830         @1180          @650          @236          SAME          SAME
+chat_desk_robot               @345          @345          @345          @345          @814          @345          SAME          SAME
+chat_disagree                 @308          @308          @308          @785          @363          @308          SAME          SAME
+chat_music                    @175          @175          @175          SAME          @945          SAME          SAME          SAME
+chat_travel                   SAME          SAME          SAME         @1245         @1042          @327          SAME          SAME
+code_go_worker                @158          @158          @158         @1014          @497          @586          SAME          SAME
+code_nginx_cfg                @546          @546          @546          @546          @546          @546          SAME          SAME
+code_py_ratelimiter           SAME          SAME          SAME          SAME          SAME          @214          SAME          SAME
+code_rust_mergesort           SAME          SAME          SAME          SAME          SAME          SAME          SAME          SAME
+code_sql_report               SAME          SAME          SAME          SAME          @174          SAME          SAME          SAME
+prose_argument               @1381         @1381         @1381         @1050         @1050          @962          SAME          SAME
+prose_bookshelves            @1104         @1104         @1104          @900          @591          @591          SAME          SAME
+prose_letter                   @31           @31           @31           @31           @31          @282          SAME          SAME
+prose_market                  @424          @424          @424          @602          @588          @588          SAME          SAME
+prose_rainbow                 @117          @117          @117          @190          @190          @948          SAME          SAME
+reason_invariant              @535          @535          @535          @535          @364          @364          SAME          SAME
+reason_probability            @733          @733          @733          @426          @426          @426          SAME          SAME
+reason_scheduling             @150          @150          @150          @486          @136          @486          SAME          SAME
+reason_trains                 SAME          SAME          SAME          SAME          SAME          SAME          SAME          SAME
+reason_zebra                  @335          @335          @335          @470          @363          @497          SAME          SAME
+zh_debug                      @201          @201          @201           @12           @12          SAME          SAME          SAME
+zh_moving                     @142          @142          @142          @351          @330          SAME          SAME          SAME
+zh_review                      @98           @98           @98          @494           @98          SAME          SAME          SAME
+zh_self_intro                  @22           @22           @22          @322           @53          SAME          SAME          SAME
+zh_tea                        @165          @165          @165          @199          @165          SAME          SAME          SAME
+
+  prompts where at least two arms fork at the SAME character: 20/25
+
+--- does the fork position move with n-max? ---
+  chat_advice              dflash2-bf16=830  dflash2-q4k=830  dflash2-q8=830  draft08b-n4=1180  draft08b-n8=650  ngram-cache=236
+  chat_desk_robot          dflash2-bf16=345  dflash2-q4k=345  dflash2-q8=345  draft08b-n4=345  draft08b-n8=814  ngram-cache=345
+  chat_disagree            dflash2-bf16=308  dflash2-q4k=308  dflash2-q8=308  draft08b-n4=785  draft08b-n8=363  ngram-cache=308
+  chat_music               dflash2-bf16=175  dflash2-q4k=175  dflash2-q8=175  draft08b-n8=945
+  chat_travel              draft08b-n4=1245  draft08b-n8=1042  ngram-cache=327
+  code_go_worker           dflash2-bf16=158  dflash2-q4k=158  dflash2-q8=158  draft08b-n4=1014  draft08b-n8=497  ngram-cache=586
+  code_nginx_cfg           dflash2-bf16=546  dflash2-q4k=546  dflash2-q8=546  draft08b-n4=546  draft08b-n8=546  ngram-cache=546
+  prose_argument           dflash2-bf16=1381  dflash2-q4k=1381  dflash2-q8=1381  draft08b-n4=1050  draft08b-n8=1050  ngram-cache=962
+  prose_bookshelves        dflash2-bf16=1104  dflash2-q4k=1104  dflash2-q8=1104  draft08b-n4=900  draft08b-n8=591  ngram-cache=591
+  prose_letter             dflash2-bf16=31  dflash2-q4k=31  dflash2-q8=31  draft08b-n4=31  draft08b-n8=31  ngram-cache=282
+  prose_market             dflash2-bf16=424  dflash2-q4k=424  dflash2-q8=424  draft08b-n4=602  draft08b-n8=588  ngram-cache=588
+  prose_rainbow            dflash2-bf16=117  dflash2-q4k=117  dflash2-q8=117  draft08b-n4=190  draft08b-n8=190  ngram-cache=948
+  reason_invariant         dflash2-bf16=535  dflash2-q4k=535  dflash2-q8=535  draft08b-n4=535  draft08b-n8=364  ngram-cache=364
+  reason_probability       dflash2-bf16=733  dflash2-q4k=733  dflash2-q8=733  draft08b-n4=426  draft08b-n8=426  ngram-cache=426
+  reason_scheduling        dflash2-bf16=150  dflash2-q4k=150  dflash2-q8=150  draft08b-n4=486  draft08b-n8=136  ngram-cache=486
+  reason_zebra             dflash2-bf16=335  dflash2-q4k=335  dflash2-q8=335  draft08b-n4=470  draft08b-n8=363  ngram-cache=497
+  zh_debug                 dflash2-bf16=201  dflash2-q4k=201  dflash2-q8=201  draft08b-n4=12  draft08b-n8=12
+  zh_moving                dflash2-bf16=142  dflash2-q4k=142  dflash2-q8=142  draft08b-n4=351  draft08b-n8=330
+  zh_review                dflash2-bf16=98  dflash2-q4k=98  dflash2-q8=98  draft08b-n4=494  draft08b-n8=98
+  zh_self_intro            dflash2-bf16=22  dflash2-q4k=22  dflash2-q8=22  draft08b-n4=322  draft08b-n8=53
+  zh_tea                   dflash2-bf16=165  dflash2-q4k=165  dflash2-q8=165  draft08b-n4=199  draft08b-n8=165
+
+--- determinism across passes (same arm, same prompt) ---
+arm                     checked  reproducible
+dflash2-bf16                 25            25
+dflash2-q4k                  25            25
+dflash2-q8                   25            25
+draft08b-n4                  25            25
+draft08b-n8                  25            25
+ngram-cache                  25            25
+ngram-map-k                  25            25
+ngram-mod                    25            25
+
+--- arm metadata (for a bug report) ---
+  dflash2-bf16           tree=pr27342   args=--spec-type draft-dflash --spec-draft-n-max 4 -md /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/dflash2/Qwen3.8-27B-DFlash2-BF16.gguf
+  dflash2-q4k            tree=pr27342   args=--spec-type draft-dflash --spec-draft-n-max 4 -md /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+  dflash2-q8             tree=pr27342   args=--spec-type draft-dflash --spec-draft-n-max 4 -md /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/dflash2/Qwen3.8-27B-DFlash2-Q8_0.gguf
+  draft08b-n4            tree=master    args=--spec-type draft-simple --spec-draft-n-max 4 -md /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/draft08b/Qwen3.5-0.8B-Q4_K_M.gguf
+  draft08b-n8            tree=master    args=--spec-type draft-simple --spec-draft-n-max 8 -md /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/draft08b/Qwen3.5-0.8B-Q4_K_M.gguf
+  ngram-cache            tree=master    args=--spec-type ngram-cache --spec-draft-n-max 4
+  ngram-map-k            tree=master    args=--spec-type ngram-map-k --spec-draft-n-max 4
+  ngram-mod              tree=master    args=--spec-type ngram-mod --spec-draft-n-max 4
+
+  gpu           : NVIDIA GeForce RTX 3090, 24576 MiB, 610.43.02, 8.6, 420.00 W, 420.00 W, 450.00 W, 2130 MHz, 9751 MHz
+  llama.cpp     : {'master': 'c060ca9', 'pr27342': 'd1a522f'}
+  model sha256  : 3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e
+  overclock     : {'power_limit_w': 420.0, 'power_default_limit_w': 420.0, 'power_min_limit_w': 100.0, 'power_max_limit_w': 450.0, 'clocks_max_graphics_mhz': 2130.0, 'clocks_max_memory_mhz': 9751.0, 'clocks_max_sm_mhz': 2130.0, 'mem_transfer_rate_offset': 0.0, 'graphics_clock_offset': 0.0, 'is_stock': True}
+  design        : greedy, sampler chain pinned, cache_prompt=False, max_tokens=400
+
+====================================================================================================
+GROUP STABILITY  (3 passes: [1, 2, 3])
+====================================================================================================
+
+--- 1. determinism: same arm + prompt across passes ---
+arm                     prompts  stable  unstable  examples
+dflash2-bf16                 25      25         0  
+dflash2-q4k                  25      25         0  
+dflash2-q8                   25      25         0  
+draft08b-n4                  25      25         0  
+draft08b-n8                  25      25         0  
+ngram-cache                  25      25         0  
+ngram-map-k                  25      25         0  
+ngram-mod                    25      25         0  
+
+  every fork position reproduces exactly across passes.
+
+--- 2/3. fork-position partition of arms, per pass ---
+  pass 1: modal partition on 3/25 prompts -> {dflash2-bf16,dflash2-q4k,dflash2-q8} | {draft08b-n4} | {draft08b-n8} | {ngram-cache} | {ngram-map-k,ngram-mod}
+  pass 2: modal partition on 3/25 prompts -> {dflash2-bf16,dflash2-q4k,dflash2-q8} | {draft08b-n4} | {draft08b-n8} | {ngram-cache} | {ngram-map-k,ngram-mod}
+  pass 3: modal partition on 3/25 prompts -> {dflash2-bf16,dflash2-q4k,dflash2-q8} | {draft08b-n4} | {draft08b-n8} | {ngram-cache} | {ngram-map-k,ngram-mod}
+
+  partition identical in every pass: True
+  -> the grouping is a stable property of the configuration, not a single-pass coincidence.
+
+--- 4. does the partition track n-max or the drafter? ---
+  dflash2-bf16           spec-type=draft-dflash   n-max=4
+  dflash2-q4k            spec-type=draft-dflash   n-max=4
+  dflash2-q8             spec-type=draft-dflash   n-max=4
+  draft08b-n4            spec-type=draft-simple   n-max=4
+  draft08b-n8            spec-type=draft-simple   n-max=8
+  ngram-cache            spec-type=ngram-cache    n-max=4
+  ngram-map-k            spec-type=ngram-map-k    n-max=4
+  ngram-mod              spec-type=ngram-mod      n-max=4

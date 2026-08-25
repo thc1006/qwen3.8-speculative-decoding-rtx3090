@@ -1,0 +1,84 @@
+
+[selection] per-protocol and intention-to-treat hold the same 750 records; the exclusion rule does no work here.
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@master                    41.56      41.56      75  chat_travel=0.2%
+baseline@pr27342                   41.55      41.55      75  prose_rainbow=0.3%
+dflash2-q4k                        63.17      63.17      75  chat_disagree=0.2%
+dflash2-q8                         63.73      63.73      75  code_nginx_cfg=0.5%
+dflash2-bf16                       61.70      61.70      75  code_py_ratelimiter=1.0%
+draft08b-n4                        29.71      29.71      75  code_rust_mergesort=1.0%
+draft08b-n8                        29.18      29.18      75  code_py_ratelimiter=0.8%
+ngram-cache                        38.13      38.13      75  zh_self_intro=0.2%
+ngram-mod                          41.48      41.48      75  reason_zebra=0.3%
+ngram-map-k                        41.48      41.48      75  prose_argument=0.2%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+dflash2-q4k                  baseline@pr27342       +52.01 [+45.60, +58.25]  FASTER
+dflash2-q8                   baseline@pr27342       +53.36 [+46.91, +59.67]  FASTER
+dflash2-bf16                 baseline@pr27342       +48.48 [+42.20, +54.67]  FASTER
+draft08b-n4                  baseline@master        -28.52 [-31.16, -25.67]  SLOWER
+draft08b-n8                  baseline@master        -29.81 [-33.09, -26.39]  SLOWER
+ngram-cache                  baseline@master          -8.27 [-9.17, -7.39]  SLOWER
+ngram-mod                    baseline@master          -0.20 [-0.22, -0.17]  SLOWER
+ngram-map-k                  baseline@master          -0.19 [-0.29, -0.09]  SLOWER
+
+--- SECONDARY (exploratory): per-class effect ---
+  dflash2-q4k                chat: +30.1%  code:+117.1%  prose: +23.0%  reason: +89.5%  zh:  +0.3%
+  dflash2-q8                 chat: +31.4%  code:+117.9%  prose: +24.4%  reason: +92.2%  zh:  +0.8%
+  dflash2-bf16               chat: +27.5%  code:+111.4%  prose: +19.8%  reason: +86.0%  zh:  -2.3%
+  draft08b-n4                chat: -40.2%  code:  +4.5%  prose: -41.7%  reason: -24.9%  zh: -40.2%
+  draft08b-n8                chat: -46.6%  code: +15.8%  prose: -47.4%  reason: -24.6%  zh: -46.3%
+  ngram-cache                chat: -13.3%  code:  -4.1%  prose:  -8.9%  reason: -14.5%  zh:  -0.5%
+  ngram-mod                  chat:  -0.2%  code:  -0.2%  prose:  -0.2%  reason:  -0.2%  zh:  -0.3%
+  ngram-map-k                chat:  -0.2%  code:  -0.2%  prose:  -0.2%  reason:  -0.2%  zh:  -0.2%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 750
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+baseline@master            0.1003     +0.0%       3977     +0.0%       -          -
+baseline@pr27342           0.1003     +0.0%       3977     -0.0%       -          -
+dflash2-q4k                0.1552    +54.8%       2833    -28.8%   0.474       2.88
+dflash2-q8                 0.1566    +56.1%       2810    -29.4%   0.477       2.90
+dflash2-bf16               0.1522    +51.7%       2893    -27.3%   0.478       2.90
+draft08b-n4                0.0842    -16.1%       5031    +26.5%   0.376       1.90
+draft08b-n8                0.0857    -14.6%       5179    +30.2%   0.249       2.10
+ngram-cache                0.0934     -6.9%       4286     +7.8%   0.000       1.00
+ngram-mod                  0.1001     -0.2%       3986     +0.2%       -          -
+ngram-map-k                0.1002     -0.2%       3984     +0.2%   0.083       1.01
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  dflash2-bf16               byte-identical 15/75   median shared prefix when forked: 0.228
+  dflash2-q4k                byte-identical 15/75   median shared prefix when forked: 0.228
+  dflash2-q8                 byte-identical 15/75   median shared prefix when forked: 0.228
+  draft08b-n4                byte-identical 15/75   median shared prefix when forked: 0.445
+  draft08b-n8                byte-identical 9/75   median shared prefix when forked: 0.299
+  ngram-cache                byte-identical 27/75   median shared prefix when forked: 0.312
+  ngram-map-k                byte-identical 75/75   median shared prefix when forked: -
+  ngram-mod                  byte-identical 75/75   median shared prefix when forked: -
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@master            reproducible 50/50
+  baseline@pr27342           reproducible 50/50
+  dflash2-bf16               reproducible 50/50
+  dflash2-q4k                reproducible 50/50
+  dflash2-q8                 reproducible 50/50
+  draft08b-n4                reproducible 50/50
+  draft08b-n8                reproducible 50/50
+  ngram-cache                reproducible 50/50
+  ngram-map-k                reproducible 50/50
+  ngram-mod                  reproducible 50/50

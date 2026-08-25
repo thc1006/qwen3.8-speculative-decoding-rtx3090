@@ -1,0 +1,74 @@
+====================================================================================================
+VERIFICATION-STEP COST MODEL     speedup = mean_len / k
+  mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)   [derived; the API has
+            no verification-step count, and this is low by <1 %. See the docstring.]
+====================================================================================================
+[integrity] derived mean_len vs the server's printed mean len: 375 requests, mean gap -0.2972, worst 1.7462
+            the gap is systematic, not rounding. The derivation is wrong, not the counters. See collect()'s docstring.
+
+[integrity] the log cross-check was SKIPPED for 6 arm-pass(es) whose line count did not match:
+              pass01_ngram-cache: 21 log lines against 22 expected
+              pass01_ngram-map-k: 2 log lines against 3 expected
+              pass02_ngram-cache: 21 log lines against 22 expected
+              pass02_ngram-map-k: 2 log lines against 3 expected
+              pass03_ngram-cache: 21 log lines against 22 expected
+            That check is off for those, not passing for them.
+
+[integrity] API counters vs llama.cpp log lines: 375 requests compared, 0 mismatched  -- two independent sources agree to the token
+
+--- k by arm (pooled over classes and passes) ---
+arm              spec             w    n   k mean    k sd         k range
+dflash2-q4k      draft-dflash     5   75   1.8958  0.0096   1.873-1.921
+dflash2-q8       draft-dflash     5   75   1.8886  0.0106   1.856-1.916
+dflash2-bf16     draft-dflash     5   75   1.9511  0.0140   1.914-1.981
+draft08b-n4      draft-simple     5   75   2.6410  0.0677   2.562-2.786
+ngram-cache      ngram-cache      5   63   1.1122  0.0636   1.015-1.245
+ngram-map-k      ngram-map-k      5    6   1.0120  0.0015   1.010-1.013
+draft08b-n8      draft-simple     9   75   2.9608  0.0828   2.847-3.132
+
+--- TEST 1: is the overhead charged to REJECTION? ---
+    Model a rejection-proportional cost r (decode-steps per rejected draft token):
+        k = k_verify + r * n_max * (1 - acceptance)
+        => dk/d(acceptance) = -r * n_max,   so  r = -slope / n_max
+    A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+
+arm               n    accept range     slope     r2  r estimate  reading
+dflash2-q4k       4  0.162-0.843    0.0144  0.116    -0.00361  r <= 0 - no rejection cost detected (k spread 2.56%)
+dflash2-q8        4  0.167-0.868    0.0182  0.152    -0.00456  r <= 0 - no rejection cost detected (k spread 3.22%)
+dflash2-bf16      4  0.165-0.868    0.0164  0.071    -0.00409  r <= 0 - no rejection cost detected (k spread 3.41%)
+draft08b-n4       4  0.192-0.735    0.3678  0.946    -0.09195  r <= 0 - no rejection cost detected (k spread 8.49%)
+ngram-cache       4  0.000-0.000    0.0000    nan    -0.00000  r <= 0 - no rejection cost detected (k spread 20.63%)
+ngram-map-k       4  0.000-0.167    0.0145  0.820    -0.00363  r <= 0 - no rejection cost detected (k spread 0.36%)
+draft08b-n8       8  0.106-0.611    0.4863  0.948    -0.06079  r <= 0 - no rejection cost detected (k spread 9.61%)
+
+  Largest r across arms: -0.00000 decode-steps per rejected draft token.
+  Acceptance spans roughly 0.000-0.868 in this data - nearly a ten-fold range -
+  so a rejection-driven overhead of any consequence would have shown up here.
+  Reading: the verification overhead is paid per position VERIFIED, not per
+  draft REJECTED. This does not say rollback is free; it bounds how much of
+  the observed cost rollback can account for.
+
+--- TEST 2: k vs verification width, per method ---
+    MMVQ dispatch limit 8, from the analyser's constant: this file predates harness/kernel_facts.py
+    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified
+    position in serial-decode-step equivalents, over the whole cycle rather than
+    attributed to any one component; see the note under the fits.
+  draft-dflash   only one width (5) - cannot fit
+  draft-simple   fewer than two widths on the MMVQ path - cannot fit
+  ngram-cache    only one width (5) - cannot fit
+  ngram-map-k    only one width (5) - cannot fit
+
+--- the same fit on requests that never diverged from their baseline ---
+  draft-dflash   only 1 widths keep two or more non-diverging records; not fitted
+  draft-simple   only 1 widths keep two or more non-diverging records; not fitted
+  ngram-cache    only 1 widths keep two or more non-diverging records; not fitted
+  ngram-map-k    only 1 widths keep two or more non-diverging records; not fitted
+
+--- implied optimum ---
+    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k
+    has an interior maximum in principle. Over the widths measured here it falls
+    monotonically, so what follows is the best TESTED point, not a fitted optimum:
+  draft-dflash   n4=1.513x   -> best n-max = 4
+  draft-simple   n4=0.715x  n8=0.702x   -> best n-max = 4
+  ngram-cache    n4=0.902x   -> best n-max = 4
+  ngram-map-k    n4=0.998x   -> best n-max = 4
