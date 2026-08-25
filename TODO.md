@@ -83,9 +83,16 @@ second-host addendum in `PREREGISTRATION.md`.
 
 ## Next, in order
 
-- [ ] **Phase C** - drafter quantization. Also decides whether the predecessor's v3.0 needs an
-      erratum.
-- [ ] **Phase L** - the context-depth ladder to 96 K, against llama.cpp #27623.
+- [x] **Phase C** - complete 2026-08-25 10:43, 750/750, 0 incidents. Drafter quantization barely
+      matters and the highest precision is the slowest: q8 +53.4 %, q4k +52.0 %, bf16 +48.5 %
+      against baseline, so a bf16 drafter costs about five points to run. The class effect is
+      larger than the quantization effect: code +117 %, reason +90 %, zh +0.8 %. `ngram-mod` and
+      `ngram-map-k` sit at -0.2 %, consistent with drafting on almost nothing; `ngram-cache` is
+      -8.3 %. Both baselines agree to 0.01 tok/s across the two trees.
+- [ ] **Phase L** - the context-depth ladder to 96 K, against llama.cpp #27623. Started 10:43:24;
+      rung 1 of 5 at 11.9 s/record. Rungs 8192, 32768 and 65536 sit below the reported ~80 K
+      cliff, so the fourth rung is what decides whether the ladder takes four hours or thirteen.
+      `.ladder_budget_s` holds a seconds count that stops it at a rung boundary.
 - [ ] **Phase M** - dense against MoE under one protocol, anchored on reproducing the
       predecessor's -44.6 %.
 - [ ] **Phase Q** - the target-quantization ladder. Needs host C to itself; `UD-Q6_K_XL` and
@@ -147,6 +154,18 @@ not assert warp causation - it stated co-occurrence and called the CUDA boundary
 there was omission, not misstatement.
 
 ### B. Analyser correctness, no re-run needed
+
+- [x] **The cache check tested one invariant and reported it as the other** - `bench.py` fired on
+      any `t_cache_n > 0` with "despite cache_prompt=False" as a constant string. `phase_l` sets
+      `CACHE_PROMPT = True` deliberately, so it raised one incident per request against a
+      condition it never claimed: 45 records, 45 incidents when this was caught, and 900 over the
+      full ladder, enough to bury a real one. Fixed in 8143dd3 to check whichever direction the
+      matrix declared, and a miss under `CACHE_PROMPT = True` is now its own incident, which is
+      the one the deep rungs need since it means the KV cache was evicted. Nothing measured moved:
+      exclusion is decided per record by `analyze._usable()` and never reads this list, and the
+      energy path had already taken its `cache_prompt` branch. Rung 1 was mid-flight and python
+      imports once, so `harness/repair_cache_incidents.py` clears its 180 and keeps them under
+      `incidents_repaired`.
 
 - [x] **B1** `width_groups.py` mapped width 9 to one warp. `MMVQ_MAX_BATCH_SIZE` is 8, so that
       width never reaches MMVQ and the table predicts nothing for it. H8 now reports NOT TESTABLE
