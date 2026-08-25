@@ -245,12 +245,30 @@ there was omission, not misstatement.
 
 ### E. Upstream
 
-- [ ] **E1** llama.cpp `embd_nextn` row-index mode gate. Small, correctness-only, independently
-      testable. `AGENTS.md` there forbids an agent pushing or opening the PR, so the branch and
-      tests are prepared and the submit step is the author's.
-- [ ] **E2** SGLang consumer-side sibling hardening, separate from #36201's builder fix, covering
-      both `TreeSpeculativeSamplingTargetOnly` and `VerifyTreeGreedy`. Per-request status buffer
-      with an atomic first-error, not a per-thread printf.
+- [x] **E1** llama.cpp output-row / token-row index-space fix, prepared as
+      `upstream/llamacpp/0002-output-reorder-index-space.patch` (155 lines, DCO, `libllama.so`
+      compiles). `output_swaps` is built from output-row ordering and `output_reorder()` applied
+      it to two buffers that are not indexed that way: `embd_nextn` when
+      `embeddings_nextn_masked` is off, and `embd_layer_inp` in every mode. A test showing that
+      interleaved sequences give unsorted `out_ids` - the state that makes `output_reorder()` do
+      any work at all - is added to `tests/test-batch-alloc.cpp` and passes, 206 assertions in
+      that file, 0 failures. **Source-level proof, not a runtime reproducer**: no scrambled
+      embedding has been observed. Submitting is the author's step; `AGENTS.md` there forbids an
+      agent pushing or opening a PR.
+- [x] **E2** SGLang consumer-side sibling hardening, prepared as
+      `upstream/sglang/0002-bound-sibling-walks.patch` plus a seven-case test matrix in
+      `test_speculative_sampling_malformed.py`: self-loop, two-node cycle, out-of-row first hop,
+      out-of-row sibling, a negative that is not the -1 sentinel, and a candidate id above and
+      below the vocabulary, against a well-formed tree pinned as a regression.
+
+      The audit asked for a per-request status buffer instead of the device printf. Not taken:
+      upstream already reports this exact class by printf in four places with the wording this
+      patch matches, there is no status-buffer pattern in these kernels, and adding one means
+      changing the kernel signature, the launcher and the Python binding. The concern behind it -
+      a printf from all 1024 threads - is already handled by the `tx == 0` guard, and
+      `VerifyTreeGreedy` launches `dim3 block(1)`.
+
+      **Not yet run**: it needs a free GPU and the card is mid-benchmark.
 - [ ] **E3** llama.cpp acceptance histogram from the per-position survival counts the server
       already keeps, with reconciliation tests, then an AIPerf adapter against its existing
       `SpecDecodeAcceptanceRecord` schema rather than a new one.

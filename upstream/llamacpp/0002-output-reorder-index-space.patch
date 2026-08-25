@@ -1,0 +1,155 @@
+From 020325f4bfb5eff4a72b672cca9a5c436b694438 Mon Sep 17 00:00:00 2001
+From: thc1006 <84045975+thc1006@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 07:47:46 +0800
+Subject: [PATCH 1/2] llama : do not apply the output-row permutation to
+ token-row indexed buffers
+
+output_swaps is built from output-row ordering, in the !sorted_output && n_outputs > 1 path whose
+own comment notes it is mostly relevant for recurrent models. output_reorder() then applies it to
+every extracted buffer, but two of them are not indexed by output row.
+
+embd_nextn is written both ways, selected by the same flag its accessor reads:
+
+    n_rows = masked ? n_outputs      : ubatch.n_tokens
+    offset = masked ? n_outputs_prev : n_tokens_prev
+
+and get_embeddings_nextn_ith() returns data + i*n_embd for the unmasked case, whose comment says
+"nextn rows are stored densely, indexed by raw token position", against output_resolve_row(i) for
+the masked one. Permuting the unmasked buffer by output row scrambles rows the caller then reads
+by token position. The swap is now gated on the masked flag.
+
+embd_layer_inp is token-row indexed in every mode. extract_layer_inputs() is called with
+n_tokens_prev and ubatch.n_tokens and writes at token_offset * row_floats, with no output-row
+involvement anywhere, and get_embeddings_layer_inp() hands back the buffer base rather than
+resolving a row. It has no output-row ordering to restore, so it is no longer permuted.
+
+Both are reached only when a batch's output ids need reordering and there is more than one output.
+These buffers feed EAGLE3 and DFlash-style drafters as per-token target features, which is where a
+scrambled row shows up as a drafter that silently proposes from the wrong token's state.
+
+Signed-off-by: thc1006 <84045975+thc1006@users.noreply.github.com>
+---
+ src/llama-context.cpp | 26 +++++++++++++++-----------
+ 1 file changed, 15 insertions(+), 11 deletions(-)
+
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 0402044..b6a42fe 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -2221,7 +2221,6 @@ void llama_context::extract_layer_inputs(const llm_graph_result * res, size_t to
+ 
+ void llama_context::output_reorder() {
+     const uint64_t n_vocab     = model.vocab.n_tokens();
+-    const uint64_t n_embd      = model.hparams.n_embd;
+     const uint64_t n_embd_out  = model.hparams.n_embd_out();
+ 
+     for (size_t s = 0; s < output_swaps.size(); ++s) {
+@@ -2240,21 +2239,26 @@ void llama_context::output_reorder() {
+             }
+         }
+ 
+-        if (embd_nextn.size > 0) {
++        // output_swaps is built from output-row ordering, so it may only be applied to buffers
++        // that are indexed by output row. embd_nextn is written by output row when
++        // embeddings_nextn_masked is set and by token row when it is not:
++        //
++        //     n_rows = masked ? n_outputs      : ubatch.n_tokens
++        //     offset = masked ? n_outputs_prev : n_tokens_prev
++        //
++        // and get_embeddings_nextn_ith() indexes it the same two ways. Permuting the unmasked
++        // buffer with an output-row permutation scrambles rows the caller then reads by token
++        // position.
++        if (embd_nextn.size > 0 && cparams.embeddings_nextn_masked) {
+             for (uint64_t k = 0; k < n_embd_out; k++) {
+                 std::swap(embd_nextn.data[i0*n_embd_out + k], embd_nextn.data[i1*n_embd_out + k]);
+             }
+         }
+ 
+-        if (embd_layer_inp.size() > 0) {
+-            for (int lid = 0; lid < (int) embd_layer_inp.size(); ++lid) {
+-                if (embd_layer_inp[lid].size > 0) {
+-                    for (uint64_t k = 0; k < n_embd; ++k) {
+-                        std::swap(embd_layer_inp[lid].data[i0*n_embd + k], embd_layer_inp[lid].data[i1*n_embd + k]);
+-                    }
+-                }
+-            }
+-        }
++        // embd_layer_inp is token-row indexed in every mode: extract_layer_inputs() writes it at
++        // token_offset * row_floats with no output-row involvement, and
++        // get_embeddings_layer_inp() hands back the buffer base. It has no output-row ordering to
++        // restore, so it is never permuted here.
+ 
+         if (!sampling.samplers.empty()) {
+             assert(sampling.logits.size > 0);
+-- 
+2.47.3
+
+
+From bb224617d7bc525fcd9ad05424c104adacf37b1c Mon Sep 17 00:00:00 2001
+From: thc1006 <84045975+thc1006@users.noreply.github.com>
+Date: Tue, 25 Aug 2026 07:51:27 +0800
+Subject: [PATCH 2/2] tests : show that a batch of interleaved sequences gives
+ unsorted out_ids
+
+output_reorder() only does work when out_ids come back out of order: output_swaps is built inside
+`if (!sorted_output && n_outputs > 1)`. Nothing in the suite reached that state, so the buffers it
+permutes were never exercised through it.
+
+Interleaving two sequences and requesting an output on every token is enough. split_equal groups
+by sequence, so the outputs come back as batch indices 0, 2, 1, 3 and out_ids is not the identity.
+
+Signed-off-by: thc1006 <84045975+thc1006@users.noreply.github.com>
+---
+ tests/test-batch-alloc.cpp | 36 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/tests/test-batch-alloc.cpp b/tests/test-batch-alloc.cpp
+index 66d29d6..0ac9318 100644
+--- a/tests/test-batch-alloc.cpp
++++ b/tests/test-batch-alloc.cpp
+@@ -349,6 +349,42 @@ static void test_split(testing & t) {
+         t.assert_equal(3u, ub.n_tokens);
+     });
+ 
++    // Reaching an unsorted out_ids is what makes llama_context::output_reorder() do any work at
++    // all: it builds output_swaps only when !sorted_output, and then permutes every extracted
++    // buffer by output row. Two of those buffers are token-row indexed - embd_nextn when
++    // embeddings_nextn_masked is off, and embd_layer_inp in every mode - so the permutation has
++    // to be gated. This case shows the ordering that triggers it.
++    t.test("interleaved_seqs_give_unsorted_out_ids", [&](testing & t) {
++        batch_builder bb;
++        bb.add(0, {0}, true);   // batch index 0
++        bb.add(0, {1}, true);   // batch index 1
++        bb.add(1, {0}, true);   // batch index 2
++        bb.add(1, {1}, true);   // batch index 3
++
++        llama_batch_allocr ba(1);
++        t.assert_true(ba.init(bb.make(), vocab, nullptr, bb.n_embd, 4, false));
++
++        llama_ubatch ub = ba.split_equal(8, false, 0);
++        t.assert_equal(4u, ub.n_tokens);
++
++        // split_equal groups tokens by sequence, so the outputs come back in the order
++        // s0(batch 0), s0(batch 2), s1(batch 1), s1(batch 3).
++        const auto & out_ids = ba.get_out_ids();
++        t.assert_equal((size_t) 4, out_ids.size());
++        t.assert_equal(0, out_ids[0]);
++        t.assert_equal(2, out_ids[1]);
++        t.assert_equal(1, out_ids[2]);
++        t.assert_equal(3, out_ids[3]);
++
++        bool sorted = true;
++        for (size_t i = 0; i < out_ids.size(); ++i) {
++            if (out_ids[i] != (int64_t) i) {
++                sorted = false;
++            }
++        }
++        t.assert_true(!sorted);
++    });
++
+     t.test("split_equal_unequal_lengths", [&](testing & t) {
+         batch_builder bb;
+         for (int i = 0; i < 4; ++i) {
+-- 
+2.47.3
+
