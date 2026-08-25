@@ -14,6 +14,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import completeness as _CO  # noqa: E402
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -120,6 +124,7 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
     # --baseline-map is how a dual-tree study silently compares a PR-branch arm against a
     # master-branch baseline.
     baseline_map = baseline_map or result.get("baseline_map") or {}
+    _CO.warn_if_incomplete(result)
     itt_series, _ = build_series_itt(result)
     n_pp = sum(len(v) for arm in series.values() for v in arm.values())
     n_itt = sum(len(v) for arm in itt_series.values() for v in arm.values())

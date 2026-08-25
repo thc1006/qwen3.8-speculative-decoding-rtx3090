@@ -34,6 +34,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import completeness as _CO  # noqa: E402
 import statistics
 from collections import defaultdict
 
@@ -295,6 +299,7 @@ def report(result: dict) -> None:
             print("  draft REJECTED. This does not say rollback is free; it bounds how much of")
             print("  the observed cost rollback can account for.")
 
+    _CO.warn_if_incomplete(result)
     mmvq_max, from_record = recorded_mmvq_max(result)
     print("\n--- TEST 2: k vs verification width, per method ---")
     print("    MMVQ dispatch limit %d, %s" % (

@@ -20,6 +20,10 @@ Usage:  python3 harness/width_groups.py results/phase_nmax.json
 """
 import collections
 import json
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import completeness as _CO  # noqa: E402
 import os
 import sys
 
@@ -103,6 +107,7 @@ def spec_of(arm: str, meta: dict) -> str:
 def main() -> int:
     path = sys.argv[1] if len(sys.argv) > 1 else "results/phase_nmax.json"
     d = json.load(open(path))
+    _CO.warn_if_incomplete(d, path)
     arms = d.get("arms", {})
 
     if is_intervention_file(d, path):

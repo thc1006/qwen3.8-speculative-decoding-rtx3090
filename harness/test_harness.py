@@ -268,6 +268,31 @@ class TestAlgebraicInvariants(unittest.TestCase):
                       "averaging mattered, so it belongs in the record rather than being "
                       "recomputable in principle")
 
+    def test_an_incomplete_result_is_announced(self):
+        """A table in the README was filled from a file the run was still appending to.
+
+        phase_nmax at 1025 of 1050 gave a DFlash2 coefficient of 0.2479; finished it gives 0.2481.
+        Small enough to survive review and wrong, and nothing said the file was short.
+        """
+        import completeness as CO
+        short = {"design": {"passes": 3},
+                 "arms": {"a": {}, "b": {}},
+                 "records": [{"arm": "a", "prompt": f"p{i}", "pass": 1} for i in range(5)]}
+        n, expected, _ = CO.completeness(short)
+        self.assertEqual((n, expected), (5, 30))
+        self.assertFalse(CO.warn_if_incomplete(short))
+
+        whole = dict(short, records=[{"arm": a, "prompt": f"p{i}", "pass": p}
+                                     for a in ("a", "b") for i in range(5) for p in (1, 2, 3)])
+        self.assertTrue(CO.warn_if_incomplete(whole))
+
+    def test_the_analysers_call_it(self):
+        import analyze, cost_model, width_groups
+        for mod in (analyze, cost_model, width_groups):
+            self.assertIn("warn_if_incomplete", inspect.getsource(mod),
+                          f"{mod.__name__} can be pointed at a half-written file and would say "
+                          f"nothing about it")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

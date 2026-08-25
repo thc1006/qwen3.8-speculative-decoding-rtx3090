@@ -141,7 +141,7 @@ units of a plain decode step, as `speedup = mean_len / k` with `k(w) = k0 + c*(w
 | A | `draft-mtp` | 3, 4, 6 | 0.8937 | **0.2829** | 0.9998 |
 | A | `draft-dflash` | 5, 8 | 0.7825 | **0.2784** | (2 points, so r^2 is arithmetic) |
 | n-max | `draft-mtp` | 2, 3, 4, 5, 6, 7, 8 | 0.8888 | **0.2904** | 0.9958 |
-| n-max | `draft-dflash` | 3, 5, 7 | 0.9452 | **0.2479** | 0.9948 |
+| n-max | `draft-dflash` | 3, 5, 7 | 0.9443 | **0.2481** | 0.9947 |
 
 Phase A fitted three MTP widths and two DFlash2 widths; two points make an r^2 of 1 arithmetic
 rather than evidence, which is why `phase_nmax` runs the full ladder. On seven MTP widths the line
