@@ -50,6 +50,32 @@ second-host addendum in `PREREGISTRATION.md`.
       control done, forced-up running, then the original forced-down and then forced_down2. The
       A6000 result is one device and the two 3090s agree on fork positions where the A6000 does
       not, so this separates a property of the table from one of that card.
+- [x] **Forced-warp intervention, v2 four-build set** - complete 2026-08-25 11:52 on the A6000.
+      All four at 150/150. The registered prediction failed in both directions, and the failure is
+      a null rather than a void: the intervention had no effect at all.
+
+      The build gates that voided v1 all hold here. `libggml-base` is identical across the four
+      (67f70901eb8c485f), so no cmake reconfigure moved the CPU-side library. control and control2
+      are byte-identical in `libggml-cuda`, and their SASS is identical in 0 of 6202 kernels
+      differing, and their 150 outputs match byte for byte. That is the control the v1 set never
+      had, and it is what makes a difference from a forced build attributable to the table.
+
+      The edit reached the machine code and only there. Hashing every kernel: forced_up differs
+      from control in 92 of 6202, all 92 `mul_mat_vec_q`, template ints {5,6,7,8} at 23 quant
+      types each; forced_down2 differs in 46, all `mul_mat_vec_q`, {3,4} at 23 each. So the
+      registered reading "the edited table row never reached the kernel" is refuted.
+
+      What is left is that the warp count changes nothing observable. Output: 0 of 75 records
+      differ for forced_up, 0 of 50 for forced_down2. Throughput: every forced-vs-control delta
+      sits inside the control-vs-control2 band, which is +/-1 %. The warp count is not what puts
+      the verification widths into two groups.
+
+      This does not support an upstream claim. The measurement is end-to-end decode, and at
+      n_max 7 the drafter runs seven times at ncols_dst 1 for one verification at width 8, so a
+      kernel-level effect can be real and still sit under the noise. `test-backend-ops` perf mode
+      on MUL_MAT would separate the two; until it is run, "the warp count does not matter" and
+      "this kernel is not where the time goes" are both consistent with the data.
+
 - [ ] **forced_down2** (host C now, host B after its chain) - forced-down was void because its
       1-4 row includes width 1, and a drafter decodes one token at a time, so it perturbed every
       arm through its drafter. SASS hashing shows both original edits were surgical in the binary
