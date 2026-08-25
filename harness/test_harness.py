@@ -1692,6 +1692,26 @@ class TestAnchorEstimatorMatchesBand(unittest.TestCase):
                          "the registered penalty")
         self.assertIn("half-widths", v["reason"])
 
+    def test_the_chain_uses_the_module_and_not_an_inline_copy(self):
+        """run_remaining.sh had its own anchor, and it was a different one.
+
+        The inline block computed a pooled median and compared it against a band calibrated on a
+        class-stratified figure. Its own header named both predecessor numbers, -10.8 % raw and
+        -21.5 % stratified, and the band brackets only the second, so a faithful replication of the
+        raw figure would have failed the gate written for it. On the completed run the two
+        estimators differ by 6.7 points.
+
+        A second copy of an analysis is the defect, not the formula it used, so this checks that
+        the chain calls the module rather than that the old arithmetic is gone.
+        """
+        src = (Path(__file__).parent.parent / "run_remaining.sh").read_text(encoding="utf-8")
+        self.assertIn("harness/anchor_verdict.py", src,
+                      "the chain no longer runs the anchor it gates the MoE deletion on")
+        self.assertNotIn("REPLICATION ANCHOR (0.8B", src,
+                         "run_remaining.sh still carries its own copy of the anchor")
+        # the deletion gate must still read the marker the module writes
+        self.assertIn("results/phase_m_anchor_ok", src)
+
     def test_a_stale_marker_cannot_gate_a_later_run(self):
         import subprocess
         import tempfile

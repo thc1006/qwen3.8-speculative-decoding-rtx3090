@@ -166,30 +166,13 @@ log "wrote analysis/phase_l_ladder.txt"
 # Phase M swaps the target for the 35B-A3B MoE. It must clear its replication anchor before any
 # of its other arms mean anything, so the check is printed right after the run.
 run_phase phase_m 3 18240 results/phase_m.json || exit 1
-python3 - <<'PYEOF' | tee -a analysis/phase_m_anchor.txt
-import json, statistics as st
-d = json.load(open("results/phase_m.json"))
-by = {}
-for r in d["records"]:
-    by.setdefault(r["arm"], []).append(r["decode_tok_s"])
-b = st.median(by.get("baseline-moe", [0]))
-a = st.median(by.get("moe-draft08b-n8", [0]))
-print("REPLICATION ANCHOR (0.8B draft-then-verify: -10.8 % raw, -21.5 % class-stratified)")
-print(f"  baseline-moe     {b:7.1f} tok/s")
-print(f"  moe-draft08b-n8  {a:7.1f} tok/s   net {(a - b) / b * 100:+.1f} %" if b else "  no baseline")
-if b and a:
-    delta = (a - b) / b * 100
-    # The gate was -25 %, calibrated against a -44.6 % that belongs to a different method. A
-    # correct replication of the 0.8B arm lands near -21.5 %, which the old gate would have failed.
-    if -32 < delta < -12:
-        print("  anchor holds; the penalty reproduces on this harness")
-        open("results/phase_m_anchor_ok", "w").write(f"{delta:+.2f}\n")
-    else:
-        print("  ANCHOR DOES NOT HOLD. The predecessor's comparable arm was -21.5 % "
-              "class-stratified and this is outside a -12 % to -32 % band, so nothing else in "
-              "Phase M should be read as a statement about the predecessor until this is "
-              "understood. The MoE target is kept so it can be chased.")
-PYEOF
+# The anchor lives in harness/anchor_verdict.py. The block that was here computed a POOLED
+# MEDIAN and compared it against a band calibrated on a CLASS-STRATIFIED figure -- its own
+# header named both, -10.8 % raw and -21.5 % stratified, and the band brackets only the
+# second, so a faithful replication of the raw number would have failed the gate written for
+# it. On the completed run the two estimators differ by 6.7 points. See PREREGISTRATION.md
+# Correction 13.
+python3 harness/anchor_verdict.py results/phase_m.json | tee -a analysis/phase_m_anchor.txt
 
 # Phase Q needs disk that Phase M's 22 GB MoE target is sitting on, so the deletion happens here
 # rather than inside run_phase_q.sh, and only against a Phase M result that is actually complete.
