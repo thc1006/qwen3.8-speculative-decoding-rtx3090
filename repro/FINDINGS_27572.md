@@ -4,8 +4,28 @@ Updated 2026-08-25. Host B, RTX 3090 (350 W SKU), CUDA 12.0, llama.cpp `c060ca9`
 `Qwen3.8-27B-UD-Q4_K_XL`, `--spec-type draft-mtp --spec-draft-n-max 4`, `-ctk q4_0 -ctv q4_0`.
 
 The report is on HIP/gfx1151: draft acceptance collapses to exactly 0.0 under `-np N` when
-concurrent requests carry long prompts, traced to an async device-to-host copy of `t_h_nextn`
-racing a later graph that reuses the same buffer. The open question is whether CUDA has it too.
+concurrent requests carry long prompts. The open question here was whether CUDA has it too.
+
+**The cause is not settled, and this file no longer states one.** The issue title and its first
+account named an async device-to-host copy of `t_h_nextn` racing a later graph over the same
+buffer. The reporter's own probe refuted that: reading the device tensor at the spec-hook entry
+found it already NaN on 647 of 652 probes, so the graph was producing NaN and the copy was
+delivering it faithfully. That rules out the extract side, which is what the title assumed.
+
+The account that replaced it is a write-after-read on the graph inputs: `set_inputs` for ubatch
+k+1 writes into tensors ubatch k's graph is still reading, because `graph_compute_async` does not
+wait and the guard that would is gated on `cparams.pipeline_parallel`, which needs more than one
+device. That fits the measurements and is not proven either. Two reasons to keep it open. The
+fix that removes the symptom is `ggml_backend_sched_synchronize`, a fence over every backend, so
+its working does not single out the input write. And the reason offered for CUDA being safe, that
+the legacy default stream synchronizes implicitly, does not describe this code: the copy uses
+`cudaStreamPerThread`, which the CUDA docs say "does not synchronize with other streams (just
+like explicitly created streams)", the compute streams are created `cudaStreamNonBlocking`, which
+the legacy stream excludes anyway, and `cudaStreamLegacy` appears nowhere in `ggml-cuda.cu`. HIP
+compiles the same `.cu` files. So a clean CUDA run bounds the timing; it does not show the
+ordering is there.
+
+What follows is therefore a non-reproduction on this hardware and software, stated as that.
 
 ## Tested, and no collapse in any of them
 
