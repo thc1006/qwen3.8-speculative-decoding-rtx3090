@@ -30,6 +30,27 @@ def load(path: Path) -> dict:
     return json.loads(Path(path).read_text())
 
 
+def _width(arms: dict, arm: str) -> int:
+    """Verification width, n_max + 1, from the arm's own recorded flags."""
+    ea = (arms.get(arm) or {}).get("extra_args") or []
+    for i, t in enumerate(ea):
+        if t == "--spec-draft-n-max" and i + 1 < len(ea):
+            try:
+                return int(ea[i + 1]) + 1
+            except ValueError:
+                return 1
+    return 1
+
+
+def _family(arms: dict, arm: str) -> str:
+    """Drafter family, so arms that share only a width can be told from arms that share more."""
+    ea = (arms.get(arm) or {}).get("extra_args") or []
+    for i, t in enumerate(ea):
+        if t == "--spec-type" and i + 1 < len(ea):
+            return ea[i + 1]
+    return "none"
+
+
 def report(result: dict) -> None:
     arms = result.get("arms", {})
     recs = result["records"]
@@ -70,6 +91,8 @@ def report(result: dict) -> None:
     w = max(len(p) for p in prompts) + 1
     print(f"\n{'prompt':{w}s} " + " ".join(f"{a[:12]:>13s}" for a in arm_names))
     shared_signature = 0
+    cross_family = 0
+    comparable = 0
     for pr in prompts:
         cells = []
         pos = []
@@ -85,9 +108,42 @@ def report(result: dict) -> None:
                 pos.append(d["first_diff_char"])
         if len(pos) >= 2 and len(set(pos)) < len(pos):
             shared_signature += 1
+        # The caption asks for drafters that share ONLY their width. Arms of one family at one
+        # width share far more than that, so counting them here is counting the thing the claim
+        # assumes. On phase_c the three DFlash2 arms differ only in drafter quantization and
+        # agree on 25 of 25, which alone produces a pooled 20 of 25 and carries no information
+        # about width. Reported apart: one representative per family, then the count.
+        fam_pos = {}
+        for a in arm_names:
+            passes = div[a].get(pr, {})
+            dd = passes.get(min(passes)) if passes else None
+            if dd is None or dd["identical"]:
+                continue
+            f, wd = _family(arms, a), _width(arms, a)
+            fam_pos.setdefault((f, wd), dd["first_diff_char"])
+        by_width = defaultdict(list)
+        for (f, wd), v in fam_pos.items():
+            by_width[wd].append(v)
+        if any(len(v) >= 2 and len(set(v)) < len(v) for v in by_width.values()):
+            cross_family += 1
+        if len({(f, wd) for (f, wd) in fam_pos}) and any(
+                len({f for (f, wd2) in fam_pos if wd2 == wd}) >= 2 for wd in by_width):
+            comparable += 1
         print(f"{pr:{w}s} " + " ".join(cells))
     print(f"\n  prompts where at least two arms fork at the SAME character: "
           f"{shared_signature}/{len(prompts)}")
+    if comparable:
+        print(f"  of the {comparable} prompts where two families are comparable at one width,")
+        print(f"  they land on the same character on                               : "
+              f"{cross_family}/{comparable}")
+        print("  The first line counts same-family arms too, and a family at one width agrees")
+        print("  with itself by construction, so where the two numbers are far apart the first")
+        print("  one is measuring the family and not the width.")
+    else:
+        print("  NOT MEASURABLE HERE: no width in this file carries two drafter families, so the")
+        print("  caption's criterion cannot be evaluated. The line above counts arms that differ")
+        print("  in width, in family, or in neither, and on its own says which of those only in")
+        print("  a matrix built to separate them. phase_nmax is the file that does.")
 
     print("\n--- does the fork position move with n-max? ---")
     groups: dict[str, list[int]] = defaultdict(list)

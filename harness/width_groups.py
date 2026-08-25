@@ -28,6 +28,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import speclen  # noqa: E402
+import statistics as _stats  # noqa: E402
 import truncation_audit as TA  # noqa: E402
 
 # ncols_dst -> warps, MMVQ_PARAMETERS_GENERIC, which is what sm_86 falls through to.
@@ -172,6 +174,22 @@ def main() -> int:
         print("  different kernel family, so the table makes no prediction for them.")
 
     # -------------------------------------------------- control: drafters must agree at a width
+    # Effective width per (asked width, drafter): one plus the drafts actually proposed per
+    # verification step. Recorded here rather than assumed from the flag, because the two
+    # differ by a full column at the top of this ladder.
+    _acc = collections.defaultdict(list)
+    for r in d["records"]:
+        tm = r.get("timings") or {}
+        dn = tm.get("t_draft_n") or 0
+        fw = speclen.forwards(r)
+        if not dn or not fw:
+            continue
+        am = arms.get(r["arm"]) or {}
+        ww, sp = width_of(r["arm"], am), spec_of(r["arm"], am)
+        if ww:
+            _acc[(ww, sp)].append(dn / fw + 1.0)
+    eff_width = {k: _stats.median(v) for k, v in _acc.items() if v}
+
     print("\n--- control: two drafters at the same width must agree ---")
     shared = 0
     control_failed = []
@@ -183,10 +201,27 @@ def main() -> int:
         a, b = cell[(w, specs[0])], cell[(w, specs[1])]
         common = sorted(set(a) & set(b))
         same = sum(1 for p in common if a[p] == b[p])
+        # The control asks whether two drafters AT THE SAME WIDTH agree. n_max is what was
+        # asked for; the width actually verified is one plus what the drafter proposed, and a
+        # drafter that does not fill its budget verifies narrower than its label. On this file
+        # the two drafters match to 0.00 columns at widths 3, 5 and 7 and differ by 0.99 at
+        # width 9, where DFlash2 fills 87 % of n_max and MTP 99 %: 7.94 columns against 8.93,
+        # one inside MMVQ_MAX_BATCH_SIZE and one past it. Their disagreement there is not the
+        # control failing, it is the control never having applied.
+        ea, eb = eff_width.get((w, specs[0])), eff_width.get((w, specs[1]))
+        gap = abs(ea - eb) if (ea is not None and eb is not None) else None
+        if gap is not None and gap > 0.25:
+            print(f"    w={w}  {specs[0]} vs {specs[1]}: {same}/{len(common)} prompts agree"
+                  f"   <-- NOT A CONTROL: effective widths {ea:.2f} and {eb:.2f} differ by "
+                  f"{gap:.2f} columns")
+            print(f"          Both were asked for width {w}. They did not verify at the same one,")
+            print(f"          so nothing here bears on whether width determines the fork.")
+            continue
         if same != len(common):
             control_failed.append(w)
         flag = "" if same == len(common) else "   <-- DISAGREE, the width account fails here"
-        print(f"    w={w}  {specs[0]} vs {specs[1]}: {same}/{len(common)} prompts agree{flag}")
+        extra = f"   [effective {ea:.2f} vs {eb:.2f}]" if gap is not None else ""
+        print(f"    w={w}  {specs[0]} vs {specs[1]}: {same}/{len(common)} prompts agree{flag}{extra}")
     if not shared:
         print("    only one drafter per width in this file; control not available")
 
@@ -258,7 +293,19 @@ def main() -> int:
     if failed_testable:
         pass
     elif set(map(frozenset, observed)) == set(map(frozenset, predicted)):
-        print("    H8 SUPPORTED. The partition is exactly the warp-count table.")
+        print("    The partition is exactly the warp-count table.")
+        # Consistency, and this file only ever had consistency to offer. The intervention that
+        # was registered to settle it has since run: four builds from one configure, the GENERIC
+        # table edited up at widths 5 to 8 and down at 3 and 4. SASS says the edit reached the
+        # machine code and only there, 92 and 46 mul_mat_vec_q kernels at exactly those
+        # ncols_dst, and Ampere dispatches every quantized type through MMVQ at ne11 1 to 8, so
+        # the edited kernels are the ones that run. The forced builds changed the kernel by up
+        # to 26.68 % of its runtime and changed not one output byte in 150 records each.
+        print("    H8 IS NOT A CAUSAL CLAIM. Forcing the warp count moves this kernel's runtime")
+        print("    by up to 26.7 % and moves no output byte, so it cannot move a fork position,")
+        print("    which is a property of the text. The table coincides with the boundary; it is")
+        print("    not what puts the widths into two groups. See analysis/warp_intervention_v2.txt")
+        print("    and logs/sass_v2_summary.log. Whatever else changes at this width is open.")
     else:
         print("    H8 NOT SUPPORTED. The grouping tracks something other than the warp count,")
         print("    and the mechanism offered in llama.cpp #25618 needs withdrawing there.")

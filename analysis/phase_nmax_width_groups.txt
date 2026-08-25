@@ -8,15 +8,18 @@ FORK POSITION BY VERIFICATION WIDTH
   resolved as late as token 334 (83 % of the window) when 400 is the cap.
   7 of 25 prompts carry at least one. The censoring is uniform, so no
   subset of prompts is cleaner than another; TODO.md D2 is the run that resolves it.
+  MMVQ dispatch limit 8, from the analyser's constant: this file predates harness/kernel_facts.py
   MMVQ_PARAMETERS_GENERIC warps: w2=4  w3=4  w4=4  w5=2  w6=2  w7=2  w8=2  w9=n/a
   widths [9] exceed MMVQ_MAX_BATCH_SIZE (8) and take a
   different kernel family, so the table makes no prediction for them.
 
 --- control: two drafters at the same width must agree ---
-    w=3  draft-dflash vs draft-mtp: 25/25 prompts agree
-    w=5  draft-dflash vs draft-mtp: 25/25 prompts agree
-    w=7  draft-dflash vs draft-mtp: 25/25 prompts agree
-    w=9  draft-dflash vs draft-mtp: 8/25 prompts agree   <-- DISAGREE, the width account fails here
+    w=3  draft-dflash vs draft-mtp: 25/25 prompts agree   [effective 2.99 vs 2.99]
+    w=5  draft-dflash vs draft-mtp: 25/25 prompts agree   [effective 4.98 vs 4.98]
+    w=7  draft-dflash vs draft-mtp: 25/25 prompts agree   [effective 6.95 vs 6.95]
+    w=9  draft-dflash vs draft-mtp: 8/25 prompts agree   <-- NOT A CONTROL: effective widths 7.94 and 8.93 differ by 0.99 columns
+          Both were asked for width 9. They did not verify at the same one,
+          so nothing here bears on whether width determines the fork.
 
 --- observed groups (identical fork vector across every prompt) ---
     {2, 3, 4}  warps [4]
@@ -29,10 +32,12 @@ FORK POSITION BY VERIFICATION WIDTH
     Scored on the widths that do share it: [2, 3, 4, 5, 6, 7, 8]
     predicted from the table: [{2, 3, 4}, {8, 5, 6, 7}]
     observed:                 [{2, 3, 4}, {8, 5, 6, 7}]
-    Two drafters disagree at width(s) {9}, which are off the MMVQ
-    path. That does not bear on the widths below, and is itself the boundary showing
-    up in the control as well as in the cost fit.
-    H8 SUPPORTED. The partition is exactly the warp-count table.
+    The partition is exactly the warp-count table.
+    H8 IS NOT A CAUSAL CLAIM. Forcing the warp count moves this kernel's runtime
+    by up to 26.7 % and moves no output byte, so it cannot move a fork position,
+    which is a property of the text. The table coincides with the boundary; it is
+    not what puts the widths into two groups. See analysis/warp_intervention_v2.txt
+    and logs/sass_v2_summary.log. Whatever else changes at this width is open.
 
 --- H8a: does width 2 diverge at all on CUDA? ---
     width 2 diverges on 19 of 25 prompts

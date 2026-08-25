@@ -548,6 +548,62 @@ class TestAlgebraicInvariants(unittest.TestCase):
                          if not l.strip().startswith("#"))
         self.assertIn("ANCHORS DIFFER", code)
         self.assertIn("anchors", code)
+    def test_the_width_control_checks_they_verified_at_the_same_width(self):
+        """n_max is what was asked for. The width verified is one plus what the drafter proposed.
+
+        On phase_nmax the two drafters match to 0.00 columns at widths 3, 5 and 7 and agree on
+        25 of 25 prompts at each. At width 9 DFlash2 fills 87 % of its budget and MTP 99 %, so
+        they verify at 7.94 and 8.93 columns, one inside MMVQ_MAX_BATCH_SIZE and one past it,
+        and they agree on 8 of 25. That was printed as the width account failing. The control
+        had never applied there.
+        """
+        import width_groups as W
+        code = "\n".join(l for l in inspect.getsource(W).splitlines()
+                         if not l.strip().startswith("#"))
+        self.assertIn("NOT A CONTROL", code,
+                      "a control between two arms that verified at different widths must say so "
+                      "rather than report a disagreement")
+        self.assertIn("eff_width", code)
+        self.assertIn("speclen.forwards", code,
+                      "effective width has to come from the drafts actually proposed per "
+                      "verification step, not from the flag")
+
+    def test_the_partition_is_not_reported_as_causal(self):
+        """The forced-warp intervention has run and the observational verdict predates it.
+
+        The partition matches calc_nwarps exactly. Forcing that table moves the kernel by up to
+        26.68 % of its runtime and moves no output byte in 150 records per direction, with SASS
+        showing the edit reached only the kernels at the edited ncols_dst and dispatch showing
+        Ampere runs them. A mechanism that cannot change the text cannot change where two texts
+        diverge.
+        """
+        import width_groups as W
+        code = inspect.getsource(W)
+        self.assertNotIn("H8 SUPPORTED. The partition is exactly the warp-count table.", code,
+                         "that sentence asserts a cause the intervention refuted")
+        self.assertIn("H8 IS NOT A CAUSAL CLAIM", code)
+        self.assertIn("warp_intervention_v2", code,
+                      "the verdict should point at the evidence that settled it")
+
+    def test_fork_agreement_separates_family_from_width(self):
+        """The caption asks for drafters sharing ONLY their width, and the count included arms
+        sharing far more.
+
+        On phase_c the three DFlash2 arms differ only in drafter quantization and agree on 25 of
+        25, which alone produces a pooled 20 of 25 and says nothing about width. The count for
+        the caption's own criterion is 7 of 20.
+        """
+        import divergence_report as DR
+        code = "\n".join(l for l in inspect.getsource(DR).splitlines()
+                         if not l.strip().startswith("#"))
+        self.assertIn("NOT MEASURABLE HERE", code,
+                      "a file where no width carries two families cannot evaluate the criterion, "
+                      "and a bare zero would read as disagreement")
+        self.assertTrue(hasattr(DR, "_family") and hasattr(DR, "_width"))
+        arms = {"a": {"extra_args": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "4"]}}
+        self.assertEqual(DR._width(arms, "a"), 5)
+        self.assertEqual(DR._family(arms, "a"), "draft-mtp")
+        self.assertEqual(DR._width({}, "missing"), 1)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -1,0 +1,48 @@
+
+[selection] per-protocol and intention-to-treat hold the same 180 records; the exclusion rule does no work here.
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 15 ({'code': 3, 'prose': 3, 'reason': 3, 'chat': 3, 'zh': 3})
+design: interleaved=True  cache_prompt=True  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@32k                       35.14      35.14      45  code_nginx_cfg=0.2%
+baseline@32k-pr                    35.13      35.13      45  zh_debug=0.2%
+mtp-n2@32k                         54.06      54.06      45  code_rust_mergesort=0.3%
+dflash2-n4@32k                     51.49      51.49      45  code_py_ratelimiter=0.3%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2@32k                   baseline@32k           +53.86 [+49.87, +57.51]  FASTER
+dflash2-n4@32k               baseline@32k-pr        +46.57 [+37.52, +55.41]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2@32k                 chat: +47.0%  code: +71.8%  prose: +45.2%  reason: +66.2%  zh: +39.1%
+  dflash2-n4@32k             chat: +18.9%  code: +80.9%  prose: +29.0%  reason: +96.0%  zh:  +7.9%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 180
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+baseline@32k               0.0843     +0.0%       1887     +0.0%       -          -
+baseline@32k-pr            0.0844     +0.1%       1885     -0.1%       -          -
+mtp-n2@32k                 0.1292    +53.4%       1243    -34.1%   0.655       2.30
+dflash2-n4@32k             0.1249    +48.2%       1364    -27.7%   0.436       2.72
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  dflash2-n4@32k             byte-identical 15/45   median shared prefix when forked: 0.256
+  mtp-n2@32k                 byte-identical 9/45   median shared prefix when forked: 0.565
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@32k               reproducible 30/30
+  baseline@32k-pr            reproducible 30/30
+  dflash2-n4@32k             reproducible 30/30
+  mtp-n2@32k                 reproducible 30/30

@@ -1,0 +1,128 @@
+====================================================================================================
+BYTE-LEVEL DIVERGENCE FROM THE NON-SPECULATIVE BASELINE (greedy, same prompt & pass)
+====================================================================================================
+
+--- prevalence ---
+arm                        n  identical    rate  median shared prefix  earliest fork
+baseline@pr27342         125        125  100.0%                     -              -
+dflash2-n4               125         25   20.0%                 0.228             22
+dflash2-n7               125         25   20.0%                 0.228             22
+mtp-n2                   125         30   24.0%                 0.240             12
+mtp-n3                   125         30   24.0%                 0.240             12
+mtp-n5                   125         25   20.0%                 0.228             22
+
+--- batch-shape signature: fork position per prompt, by arm ---
+    (identical fork positions across drafters that share only their verification
+     width is the signature of reduction-order-dependent argmax flips)
+
+prompt                baseline@pr2    dflash2-n4    dflash2-n7        mtp-n2        mtp-n3        mtp-n5
+chat_advice                   SAME          @830          @830          @650          @650          @830
+chat_desk_robot               SAME          @345          @345          @345          @345          @345
+chat_disagree                 SAME          @308          @308          @363          @363          @308
+chat_music                    SAME          @175          @175          SAME          SAME          @175
+chat_travel                   SAME          SAME          SAME          SAME          SAME          SAME
+code_go_worker                SAME          @158          @158          @586          @586          @158
+code_nginx_cfg                SAME          @546          @546          @546          @546          @546
+code_py_ratelimiter           SAME          SAME          SAME          @214          @214          SAME
+code_rust_mergesort           SAME          SAME          SAME          SAME          SAME          SAME
+code_sql_report               SAME          SAME          SAME          SAME          SAME          SAME
+prose_argument                SAME         @1381         @1381          @962          @962         @1381
+prose_bookshelves             SAME         @1104         @1104           @49           @49         @1104
+prose_letter                  SAME           @31           @31           @31           @31           @31
+prose_market                  SAME          @424          @424          @424          @424          @424
+prose_rainbow                 SAME          @117          @117          @190          @190          @117
+reason_invariant              SAME          @535          @535          @535          @535          @535
+reason_probability            SAME          @733          @733          SAME          SAME          @733
+reason_scheduling             SAME          @150          @150          @486          @486          @150
+reason_trains                 SAME          SAME          SAME          SAME          SAME          SAME
+reason_zebra                  SAME          @335          @335          @335          @335          @335
+zh_debug                      SAME          @201          @201           @12           @12          @201
+zh_moving                     SAME          @142          @142          @420          @420          @142
+zh_review                     SAME           @98           @98          @471          @471           @98
+zh_self_intro                 SAME           @22           @22           @22           @22           @22
+zh_tea                        SAME          @165          @165          @233          @233          @165
+
+  prompts where at least two arms fork at the SAME character: 21/25
+  NOT MEASURABLE HERE: no width in this file carries two drafter families, so the
+  caption's criterion cannot be evaluated. The line above counts arms that differ
+  in width, in family, or in neither, and on its own says which of those only in
+  a matrix built to separate them. phase_nmax is the file that does.
+
+--- does the fork position move with n-max? ---
+  chat_advice              dflash2-n4=830  dflash2-n7=830  mtp-n2=650  mtp-n3=650  mtp-n5=830
+  chat_desk_robot          dflash2-n4=345  dflash2-n7=345  mtp-n2=345  mtp-n3=345  mtp-n5=345
+  chat_disagree            dflash2-n4=308  dflash2-n7=308  mtp-n2=363  mtp-n3=363  mtp-n5=308
+  chat_music               dflash2-n4=175  dflash2-n7=175  mtp-n5=175
+  code_go_worker           dflash2-n4=158  dflash2-n7=158  mtp-n2=586  mtp-n3=586  mtp-n5=158
+  code_nginx_cfg           dflash2-n4=546  dflash2-n7=546  mtp-n2=546  mtp-n3=546  mtp-n5=546
+  code_py_ratelimiter      mtp-n2=214  mtp-n3=214
+  prose_argument           dflash2-n4=1381  dflash2-n7=1381  mtp-n2=962  mtp-n3=962  mtp-n5=1381
+  prose_bookshelves        dflash2-n4=1104  dflash2-n7=1104  mtp-n2=49  mtp-n3=49  mtp-n5=1104
+  prose_letter             dflash2-n4=31  dflash2-n7=31  mtp-n2=31  mtp-n3=31  mtp-n5=31
+  prose_market             dflash2-n4=424  dflash2-n7=424  mtp-n2=424  mtp-n3=424  mtp-n5=424
+  prose_rainbow            dflash2-n4=117  dflash2-n7=117  mtp-n2=190  mtp-n3=190  mtp-n5=117
+  reason_invariant         dflash2-n4=535  dflash2-n7=535  mtp-n2=535  mtp-n3=535  mtp-n5=535
+  reason_probability       dflash2-n4=733  dflash2-n7=733  mtp-n5=733
+  reason_scheduling        dflash2-n4=150  dflash2-n7=150  mtp-n2=486  mtp-n3=486  mtp-n5=150
+  reason_zebra             dflash2-n4=335  dflash2-n7=335  mtp-n2=335  mtp-n3=335  mtp-n5=335
+  zh_debug                 dflash2-n4=201  dflash2-n7=201  mtp-n2=12  mtp-n3=12  mtp-n5=201
+  zh_moving                dflash2-n4=142  dflash2-n7=142  mtp-n2=420  mtp-n3=420  mtp-n5=142
+  zh_review                dflash2-n4=98  dflash2-n7=98  mtp-n2=471  mtp-n3=471  mtp-n5=98
+  zh_self_intro            dflash2-n4=22  dflash2-n7=22  mtp-n2=22  mtp-n3=22  mtp-n5=22
+  zh_tea                   dflash2-n4=165  dflash2-n7=165  mtp-n2=233  mtp-n3=233  mtp-n5=165
+
+--- determinism across passes (same arm, same prompt) ---
+arm                     checked  reproducible
+baseline@pr27342             25            25
+dflash2-n4                   25            25
+dflash2-n7                   25            25
+mtp-n2                       25            25
+mtp-n3                       25            25
+mtp-n5                       25            25
+
+--- arm metadata (for a bug report) ---
+  baseline@pr27342       tree=pr27342   args=
+  dflash2-n4             tree=pr27342   args=--spec-type draft-dflash --spec-draft-n-max 4 -md /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+  dflash2-n7             tree=pr27342   args=--spec-type draft-dflash --spec-draft-n-max 7 -md /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+  mtp-n2                 tree=master    args=--spec-type draft-mtp --spec-draft-n-max 2
+  mtp-n3                 tree=master    args=--spec-type draft-mtp --spec-draft-n-max 3
+  mtp-n5                 tree=master    args=--spec-type draft-mtp --spec-draft-n-max 5
+
+  gpu           : NVIDIA GeForce RTX 3090, 24576 MiB, 610.43.02, 8.6, 420.00 W, 420.00 W, 450.00 W, 2130 MHz, 9751 MHz
+  llama.cpp     : {'master': 'c060ca9', 'pr27342': 'd1a522f'}
+  model sha256  : 3f227079003add2511437e5b1e94812e363385225bf6a9b47b0054a72bc8b01e
+  overclock     : {'power_limit_w': 420.0, 'power_default_limit_w': 420.0, 'power_min_limit_w': 100.0, 'power_max_limit_w': 450.0, 'clocks_max_graphics_mhz': 2130.0, 'clocks_max_memory_mhz': 9751.0, 'clocks_max_sm_mhz': 2130.0, 'mem_transfer_rate_offset': 0.0, 'graphics_clock_offset': 0.0, 'is_stock': True}
+  design        : greedy, sampler chain pinned, cache_prompt=False, max_tokens=400
+
+====================================================================================================
+GROUP STABILITY  (5 passes: [1, 2, 3, 4, 5])
+====================================================================================================
+
+--- 1. determinism: same arm + prompt across passes ---
+arm                     prompts  stable  unstable  examples
+baseline@pr27342             25      25         0  
+dflash2-n4                   25      25         0  
+dflash2-n7                   25      25         0  
+mtp-n2                       25      25         0  
+mtp-n3                       25      25         0  
+mtp-n5                       25      25         0  
+
+  every fork position reproduces exactly across passes.
+
+--- 2/3. fork-position partition of arms, per pass ---
+  pass 1: modal partition on 11/25 prompts -> {baseline@pr27342} | {dflash2-n4,dflash2-n7,mtp-n5} | {mtp-n2,mtp-n3}
+  pass 2: modal partition on 11/25 prompts -> {baseline@pr27342} | {dflash2-n4,dflash2-n7,mtp-n5} | {mtp-n2,mtp-n3}
+  pass 3: modal partition on 11/25 prompts -> {baseline@pr27342} | {dflash2-n4,dflash2-n7,mtp-n5} | {mtp-n2,mtp-n3}
+  pass 4: modal partition on 11/25 prompts -> {baseline@pr27342} | {dflash2-n4,dflash2-n7,mtp-n5} | {mtp-n2,mtp-n3}
+  pass 5: modal partition on 11/25 prompts -> {baseline@pr27342} | {dflash2-n4,dflash2-n7,mtp-n5} | {mtp-n2,mtp-n3}
+
+  partition identical in every pass: True
+  -> the grouping is a stable property of the configuration, not a single-pass coincidence.
+
+--- 4. does the partition track n-max or the drafter? ---
+  baseline@pr27342       spec-type=none           n-max=None
+  dflash2-n4             spec-type=draft-dflash   n-max=4
+  dflash2-n7             spec-type=draft-dflash   n-max=7
+  mtp-n2                 spec-type=draft-mtp      n-max=2
+  mtp-n3                 spec-type=draft-mtp      n-max=3
+  mtp-n5                 spec-type=draft-mtp      n-max=5
