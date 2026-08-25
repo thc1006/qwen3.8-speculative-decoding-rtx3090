@@ -1756,3 +1756,42 @@ that from a memory or scheduling effect on the device.
 No reported figure changes. The paired endpoints are unaffected: every arm meets the same prompt
 order and the comparison is within-pass. What changes is that "this arm-pass was noisy" is now a
 readable property with a named mechanism rather than an anomaly.
+
+## Correction 19, 2026-08-26 02:55: the baseline's position within a pass moves, and every effect is divided by it
+
+Recorded as a suspicion with a named mechanism, not a finding. The evidence is one observation.
+
+`bench.py` rotates arm order by one position per pass, `rot = (p_idx - 1) % len(arms)`. Correction
+12 reordered Phase M so matched pairs sit adjacent, which makes both halves of a pair meet the same
+conditions. It did not address the baseline, and the baseline is divided into *every* arm's effect.
+
+With 21 arms the rotation shifts each arm one place earlier per pass, except the arm that wraps.
+Between passes 1 and 2 that arm was `baseline-moe`, which went from **position 1 of 21 to position
+21 of 21** while every other arm moved by -1. It measured **1.95 % slower** in pass 2.
+
+Every MoE effect is that baseline's reciprocal, so a 1.95 % slower baseline lifts them all. The
+group means are consistent with exactly that:
+
+| | baseline position shift | baseline throughput | mean effect shift of its arms |
+|---|---|---|---|
+| MoE | +20 | -1.95 % | **+3.7 pp** |
+| dense | -1 | +0.49 % | **+0.2 pp** |
+
+Two groups differing in the thing hypothesised, in the predicted direction. That is suggestive and
+it is still one lever: twenty arms moved -1 and their deltas span -0.95 % to +5.00 %, which is the
+ordinary noise band, so they carry no information about position.
+
+**A test is available and is not yet due.** Pass 3 rotates by two, putting `baseline-moe` at
+position 20 -- late again. If it is slow there too, position is doing the work; if it returns to
+pass-1 levels, this was noise in a single arm-pass.
+
+What this does not touch: the ranking, the sign, and any comparison between arms *within* a pass,
+because those share one baseline whatever its position. `mtp-n2` is the best MTP depth in both
+passes on both targets by a wide margin. What it does touch is the absolute effect size, which on
+the MoE side may carry a baseline-position component of roughly two points -- material for figures
+quoted as +27.6 % against +29.1 %. Averaging three passes visits three positions and averages part
+of it out.
+
+If it holds, the design fix is not more passes: it is measuring the baseline more than once per
+pass, so every arm is divided by a baseline measured near it rather than by one that may sit twenty
+places away.
