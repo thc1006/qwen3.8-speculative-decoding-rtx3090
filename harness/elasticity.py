@@ -400,9 +400,15 @@ def report(result: dict) -> None:
         cp = next((r for l, _, _, _, r in lines if l.startswith("compute")), None)
         if bw is not None and cp is not None:
             if bw < 1 and cp > 1:
-                print("    -> less bandwidth-elastic AND more compute-elastic than baseline.")
-                print("       Speculation has converted a bandwidth-bound decode into a")
-                print("       compute-bound verify. Consistent with H2'; inconsistent with H2.")
+                print("    -> less bandwidth-elastic AND more compute-elastic than baseline over")
+                print("       these clock intervals. Consistent with H2' and inconsistent with H2.")
+                print("       Not a bottleneck measurement: elasticity also moves with the")
+                print("       voltage-frequency curve, power headroom, boost behaviour, occupancy")
+                print("       and launch amortisation, none of which this measures. Calling the")
+                print("       verify path compute-bound needs achieved DRAM bandwidth, SM and")
+                print("       tensor utilisation, stall reasons and per-kernel times, which means")
+                print("       a profiler. What this shows is that the speculative arms respond to")
+                print("       core clock where the baseline responds to memory clock.")
             elif bw >= 1:
                 print("    -> at least as bandwidth-elastic as baseline: consistent with H2.")
             else:

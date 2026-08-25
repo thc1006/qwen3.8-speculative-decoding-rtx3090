@@ -42,6 +42,22 @@ MMVQ_MAX_BATCH_SIZE = 8
 from pathlib import Path
 
 
+
+def recorded_mmvq_max(d, fallback=MMVQ_MAX_BATCH_SIZE):
+    """The dispatch limit this result was actually produced under, if the file records it.
+
+    Falls back to the constant above and says so, because a run from before harness/kernel_facts.py
+    existed carries no such record and silently using today's value is how an analyser starts
+    describing a build it never saw.
+    """
+    facts = ((d.get("design") or {}).get("kernel_facts") or {})
+    seen = {t.get("mmvq", {}).get("mmvq_max_batch_size") for t in facts.values()}
+    seen.discard(None)
+    if len(seen) == 1:
+        return next(iter(seen)), True
+    return fallback, False
+
+
 def _linfit(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     """Least squares y = a + b x. Returns (a, b, r2)."""
     n = len(xs)
@@ -279,7 +295,11 @@ def report(result: dict) -> None:
             print("  draft REJECTED. This does not say rollback is free; it bounds how much of")
             print("  the observed cost rollback can account for.")
 
+    mmvq_max, from_record = recorded_mmvq_max(result)
     print("\n--- TEST 2: k vs verification width, per method ---")
+    print("    MMVQ dispatch limit %d, %s" % (
+        mmvq_max, "read from this run's own record" if from_record
+        else "from the analyser's constant: this file predates harness/kernel_facts.py"))
     print("    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified")
     print("    position in serial-decode-step equivalents, over the whole cycle rather than")
     print("    attributed to any one component; see the note under the fits.")
@@ -298,8 +318,8 @@ def report(result: dict) -> None:
         # family, so a single line through both sides is a line through two regimes. On phase_nmax
         # that dragged the MTP coefficient from 0.2915 to 0.2215 and the fit quality from
         # r2 = 0.9959 to 0.8304, and the width-9 point sits 26 % below what the MMVQ line predicts.
-        on_path = [w for w in sorted(pts) if w <= MMVQ_MAX_BATCH_SIZE]
-        off_path = [w for w in sorted(pts) if w > MMVQ_MAX_BATCH_SIZE]
+        on_path = [w for w in sorted(pts) if w <= mmvq_max]
+        off_path = [w for w in sorted(pts) if w > mmvq_max]
         if len(on_path) < 2:
             print(f"  {method:14s} fewer than two widths on the MMVQ path - cannot fit")
             continue

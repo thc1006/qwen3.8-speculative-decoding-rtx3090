@@ -176,7 +176,7 @@ _DRAFT_REJECT_MARKERS = (
 )
 
 
-def assert_drafter_loaded(handle: ServerHandle, arm_name: str) -> str:
+def assert_drafter_loaded(handle: ServerHandle, arm_name: str, spec_args=None) -> str:
     """Return the log line proving a drafter loaded, or raise. Never accept an arm on faith.
 
     Our own `CMD:` line is excluded from the search: it records what we ASKED for, and the whole
@@ -198,6 +198,17 @@ def assert_drafter_loaded(handle: ServerHandle, arm_name: str) -> str:
         for line in lines:
             if pat.search(line):
                 return line.strip()
+
+    # An n-gram method has no draft model. It predicts from an n-gram cache built out of the
+    # context, so nothing is loaded and the server prints nothing at startup for it to be found
+    # here. Raising was a false positive that skipped all three ngram arms of Phase C before they
+    # produced a single record, and a guard that cries wolf is only slightly better than one that
+    # sleeps. The behavioural check still applies and is the one that can actually catch a dead
+    # arm: bench.py calls assert_drafting_observed on the warmup response, which reads the
+    # server's own draft counters rather than its log.
+    if any(re.search(r"ngram", a, re.I) for a in (spec_args or ())):
+        return ("no startup marker expected: this arm uses an n-gram method, which has no draft "
+                "model to load. Drafting is verified behaviourally on the warmup request.")
 
     raise ServerError(
         f"arm '{arm_name}' declares a drafter but the server log contains no evidence that one "

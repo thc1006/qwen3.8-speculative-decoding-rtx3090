@@ -224,9 +224,14 @@ there was omission, not misstatement.
       model.
 - [ ] **C3** energy from the NVML total-energy counter rather than integrated `power.draw`.
       `pynvml` is not installed here; the card supports the counter.
-- [ ] **C4** record the kernel family, tile configuration, warp count and build variant in the
-      result artifact instead of hard-coding the table in Python, so a future upstream kernel
-      change cannot silently invalidate an analyser.
+- [x] **C4** `harness/kernel_facts.py` reads the dispatch facts out of the tree that is about to
+      run - `MMVQ_MAX_BATCH_SIZE` from `mmvq.cuh`, the GENERIC arm of `calc_nwarps` parsed as a
+      case table, and the sha256 of `libggml-cuda.so` rather than of the 17 KB launcher - and
+      `bench.py` records them per run. `cost_model.py` and `width_groups.py` prefer the recorded
+      limit and print which source they used, so a run from before this existed says so instead
+      of being described with today's constant. Three defects this study shipped were exactly a
+      kernel fact written into Python and later untrue; this is the fix for the class rather than
+      for the instances. Twenty tests, including one that the GENERIC switch has no case 9.
 - [ ] **C5** same-token replay: score the baseline's token sequence under width N rather than
       letting the arm generate freely, so cost attribution compares one trajectory.
 

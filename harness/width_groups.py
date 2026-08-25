@@ -37,6 +37,22 @@ import truncation_audit as TA  # noqa: E402
 MMVQ_MAX_BATCH_SIZE = 8
 
 
+
+def recorded_mmvq_max(d, fallback=MMVQ_MAX_BATCH_SIZE):
+    """The dispatch limit this result was actually produced under, if the file records it.
+
+    Falls back to the constant above and says so, because a run from before harness/kernel_facts.py
+    existed carries no such record and silently using today's value is how an analyser starts
+    describing a build it never saw.
+    """
+    facts = ((d.get("design") or {}).get("kernel_facts") or {})
+    seen = {t.get("mmvq", {}).get("mmvq_max_batch_size") for t in facts.values()}
+    seen.discard(None)
+    if len(seen) == 1:
+        return next(iter(seen)), True
+    return fallback, False
+
+
 def warps_for(width: int) -> int | None:
     """Warps for a width, or None when the width does not run through MMVQ.
 
@@ -138,6 +154,10 @@ def main() -> int:
         print(f"  {len(censored)} of {len(prompts)} prompts carry at least one. The censoring is "
               f"uniform, so no")
         print(f"  subset of prompts is cleaner than another; TODO.md D2 is the run that resolves it.")
+    _mm, _rec = recorded_mmvq_max(d)
+    print("  MMVQ dispatch limit %d, %s" % (
+        _mm, "read from this run's own record" if _rec
+        else "from the analyser's constant: this file predates harness/kernel_facts.py"))
     print(f"  MMVQ_PARAMETERS_GENERIC warps: "
           + "  ".join(f"w{w}=" + ("n/a" if warps_for(w) is None else str(warps_for(w)))
                       for w in widths))

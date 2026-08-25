@@ -2,7 +2,7 @@
 
 Four design constraints, each forced by a documented failure mode in prior work:
 
-1. BALANCED BY CLASS (3 x 5 = 15). Every prior study of speculative decoding on this model
+1. BALANCED BY CLASS (5 classes x 5 prompts = 25). Every prior study of speculative decoding on this model
    family reports the effect splits sharply by prompt class -- code/structured prompts gain,
    free prose often loses, sometimes with opposite SIGNS in the same run. An unbalanced set
    makes the headline mean an artifact of the class mixture. The primary endpoint is therefore
@@ -21,9 +21,22 @@ Four design constraints, each forced by a documented failure mode in prior work:
    only produce a handful of distinct resamples and the resulting interval is decorative. Five
    is the minimum at which the per-class interval carries information.
 
-4. THINKING IS A FACTOR, NOT A CONSTANT. Most published work on this model runs thinking OFF
-   everywhere; real agentic traffic runs it ON. `think` is crossed with class so the
-   interaction can be measured instead of assumed.
+4. THINKING IS ON FOR THE REASON CLASS AND OFF EVERYWHERE ELSE, WHICH IS NOT A CROSSED
+   DESIGN. Most published work on this model runs thinking off everywhere and real agentic
+   traffic runs it on, so it had to appear somewhere. It appears in all five `reason` prompts
+   and in none of the other twenty, which makes it **perfectly collinear with that class**: no
+   contrast in this set can separate a thinking effect from a reason-class effect, and an
+   earlier version of this docstring claimed the two were crossed. Any per-class result that
+   involves `reason` is therefore a statement about reason-with-thinking, not about either one.
+
+   The Chinese prompts carry the same problem in a second dimension. They are different tasks
+   rather than translations of the English ones, so a difference between `zh` and the rest is
+   language confounded with task content, output format and tokens per character.
+
+   Fixing either needs a different prompt set: thinking crossed with class where the model
+   supports it, and matched task pairs across languages. That is TODO.md D5, and until it runs
+   these differences are between the prompts that were selected and not between classes or
+   languages.
 """
 from __future__ import annotations
 

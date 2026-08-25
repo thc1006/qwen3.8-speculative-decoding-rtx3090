@@ -155,9 +155,41 @@ class TestAlgebraicInvariants(unittest.TestCase):
         import cost_model as CM
         self.assertEqual(CM.MMVQ_MAX_BATCH_SIZE, 8)
         src = inspect.getsource(CM)
-        self.assertIn("w <= MMVQ_MAX_BATCH_SIZE", src,
+        self.assertIn("w <= mmvq_max", src,
                       "widths past the MMVQ dispatch limit take a different kernel; including "
                       "them in one line drags the MTP coefficient by 24 percent")
+        self.assertIn("recorded_mmvq_max(result)", src,
+                      "the limit must come from the run's own record where it has one, so a "
+                      "future upstream change to MMVQ_MAX_BATCH_SIZE cannot silently make this "
+                      "analyser describe a build it never saw")
+
+    def test_the_limit_is_read_from_the_result_when_the_result_records_it(self):
+        import cost_model as CM
+        import width_groups as WG
+        no_record = {"design": {}}
+        with_record = {"design": {"kernel_facts": {
+            "master": {"mmvq": {"mmvq_max_batch_size": 16}}}}}
+        for mod in (CM, WG):
+            v, from_rec = mod.recorded_mmvq_max(no_record)
+            self.assertEqual((v, from_rec), (mod.MMVQ_MAX_BATCH_SIZE, False),
+                             f"{mod.__name__} should fall back and say so")
+            v, from_rec = mod.recorded_mmvq_max(with_record)
+            self.assertEqual((v, from_rec), (16, True),
+                             f"{mod.__name__} should prefer the recorded limit")
+
+    def test_kernel_facts_reads_the_generic_table_rather_than_assuming_it(self):
+        import kernel_facts as KF
+        import os
+        tree = "llamacpp-master"
+        if not os.path.isdir(tree):
+            self.skipTest("the master tree is not present")
+        f = KF.mmvq_facts(tree)
+        self.assertEqual(f["mmvq_max_batch_size"], 8)
+        self.assertEqual(f["generic_nwarps"]["4"], 4)
+        self.assertEqual(f["generic_nwarps"]["5"], 2)
+        self.assertNotIn("9", f["generic_nwarps"],
+                         "the GENERIC switch has no case 9; a reader that invents one is how "
+                         "width 9 got a warp count the table never assigns")
 
     def test_width_groups_makes_no_warp_prediction_off_the_mmvq_path(self):
         import width_groups as W

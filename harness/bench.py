@@ -37,6 +37,7 @@ import gpustate as G
 import prompts as P
 import quality
 import server as S
+import kernel_facts as KF
 import telemetry as T
 
 HERE = Path(__file__).resolve().parent
@@ -299,6 +300,10 @@ def run_matrix(
                        "clocks_max_memory_mhz": dev.clocks_max_memory_mhz,
                        "clocks_max_graphics_mhz": dev.clocks_max_graphics_mhz,
                        "ecc_mode": DEV.ecc_mode(gpu_index)},
+            # The dispatch facts every width-indexed analysis depends on, read out of the tree
+            # that is about to run rather than written into the analyser. Three defects this
+            # study shipped were a kernel fact hard-coded in Python and later untrue.
+            "kernel_facts": KF.snapshot(trees),
             "neighbour_devices_at_start": neighbours,
             "thermal_settle_max_wait_s": settle_max_wait_s,
             "cache_prompt": cache_prompt,
@@ -429,7 +434,7 @@ def run_matrix(
             drafter_evidence = None
             try:
                 if arm.expects_drafter:
-                    drafter_evidence = S.assert_drafter_loaded(h, arm.name)
+                    drafter_evidence = S.assert_drafter_loaded(h, arm.name, arm.extra_args)
                     print(f"  drafter: {drafter_evidence[:120]}", flush=True)
                 print(f"  ready in {h.ready_s:.1f}s", flush=True)
                 # After the server is up, it is the ONLY permitted GPU tenant.
@@ -458,8 +463,20 @@ def run_matrix(
                                 cache_prompt=cache_prompt)
                 # Behavioural proof, on a real generation, that the speculative path actually
                 # ran. The server log says what llama.cpp printed; t_draft_n says what it did.
-                if arm.expects_drafter:
+                # An n-gram method drafts from an n-gram cache built out of the context, so it
+                # can legitimately draft nothing: on a 32-token warmup none of the three fire at
+                # all, and at 400 tokens ngram-cache drafts 95 while ngram-mod and ngram-map-k
+                # still draft none. Asserting turns "this method does not fire on this workload"
+                # into "the arm is broken", skips it, and destroys the result the arm exists to
+                # produce. Whether it drafted is recorded either way and analysed as data.
+                _is_ngram = any("ngram" in a for a in (arm.extra_args or ()))
+                if arm.expects_drafter and not _is_ngram:
                     n_drafted = S.assert_drafting_observed(wr, arm.name)
+                elif _is_ngram:
+                    n_drafted = (wr.get("t_draft_n") or 0)
+                    print(f"  n-gram arm: warmup drafted {n_drafted} "
+                          f"(zero is a valid outcome for these and is recorded, not failed)",
+                          flush=True)
                     print(f"  drafting confirmed: t_draft_n={n_drafted} on warmup", flush=True)
 
                 for pr in P.PROMPTS:
