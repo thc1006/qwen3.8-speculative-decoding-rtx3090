@@ -126,8 +126,21 @@ def main():
         b = base[0]
         vals = [(d, st.median(r["decode_tok_s"] for r in by[(d, b)]))
                 for d in sorted(rungs) if by.get((d, b))]
+        # The report puts the collapse past about 80 K. Rungs below that cannot test it, and an
+        # earlier version scored best-against-worst over whatever rungs existed: at 8 K and 32 K
+        # it printed "DOES NOT REPRODUCE ... #27623 is not architecture-independent" from two
+        # depths that are both under the threshold. That is a conclusion about a depth this run
+        # had not reached.
+        CLIFF_DEPTH = 80000
+        deepest = max(d for d, _ in vals) if vals else 0
         if len(vals) < 2:
             print("  need at least two rungs")
+        elif deepest < CLIFF_DEPTH:
+            print(f"  {b}: {vals[0][1]:.1f} tok/s at {vals[0][0]} -> {vals[-1][1]:.1f} tok/s at {deepest}")
+            print(f"  VERDICT WITHHELD. The report puts the collapse past about {CLIFF_DEPTH//1000} K and the")
+            print(f"  deepest rung here is {deepest}. Nothing below the threshold can reproduce or refute it;")
+            print(f"  the ratio over these rungs is {max(v for _, v in vals)/min(v for _, v in vals):.1f}x and describes")
+            print(f"  ordinary degradation, not the cliff.")
         else:
             worst = min(vals, key=lambda x: x[1])
             best = max(vals, key=lambda x: x[1])
