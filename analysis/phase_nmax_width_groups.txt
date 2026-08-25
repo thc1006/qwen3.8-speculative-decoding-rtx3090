@@ -3,9 +3,11 @@ FORK POSITION BY VERIFICATION WIDTH
 ============================================================================================
   source: results/phase_nmax.json
   widths: [2, 3, 4, 5, 6, 7, 8, 9]
-  7 of 25 prompts hold a 'same' that a generation cap shorter than 1673 chars could have produced:
-    chat_music, chat_travel, code_py_ratelimiter, code_rust_mergesort, code_sql_report, reason_probability, reason_trains
-  The grouping below is computed on all 25, then again on the 18 without one.
+  every 'same' below is right-censored: the generation stopped at the 400-token cap,
+  so it means 'did not diverge within 400 tokens', not 'identical'. Forks here have been
+  resolved as late as token 334 (83 % of the window) when 400 is the cap.
+  7 of 25 prompts carry at least one. The censoring is uniform, so no
+  subset of prompts is cleaner than another; TODO.md D2 is the run that resolves it.
   MMVQ_PARAMETERS_GENERIC warps: w2=4  w3=4  w4=4  w5=2  w6=2  w7=2  w8=2  w9=n/a
   widths [9] exceed MMVQ_MAX_BATCH_SIZE (8) and take a
   different kernel family, so the table makes no prediction for them.
@@ -20,13 +22,6 @@ FORK POSITION BY VERIFICATION WIDTH
     {2, 3, 4}  warps [4]
     {8, 5, 6, 7}  warps [2]
     {9}  warps n/a (off the MMVQ path)
-
---- the same grouping on the 18 prompts with no censored 'same' ---
-    {2, 3, 4}  warps [4]
-    {8, 5, 6, 7}  warps [2]
-    {9}  warps n/a (off the MMVQ path)
-    Same partition. The grouping does not depend on any verdict the cap could
-    have produced, so the generation length is not what created it.
 
 --- H8: does the grouping follow calc_nwarps? ---
     NOT TESTABLE at widths [9]: they exceed MMVQ_MAX_BATCH_SIZE and do not

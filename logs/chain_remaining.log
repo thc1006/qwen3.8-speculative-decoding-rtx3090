@@ -38,3 +38,28 @@
 [2026-08-25T06:55:11+08:00] wrote analysis/phase_nmax_{cost,divergence}.txt: the k(w) fit on 8 MTP widths, and the
 [2026-08-25T06:55:11+08:00]   width-2/7/9 groups that llama.cpp #25618 comment 5396293373 predicts
 [2026-08-25T06:55:11+08:00] starting phase_c: expecting 750 records
+[2026-08-25T07:40:56+08:00] waiting for whatever holds the lock now
+[2026-08-25T07:40:56+08:00] phase_r2: 1575/1575
+[2026-08-25T07:40:57+08:00] wrote analysis/phase_r2_{report,cost,divergence}.txt
+[2026-08-25T07:41:02+08:00] wrote analysis/phase_r2_elasticity.txt
+[2026-08-25T07:41:02+08:00] phase_kv already complete (175/175); skipping
+
+=== does the width grouping survive f16 KV? ===
+  q8_0 KV (Phase A): 25 prompts | w3==w4 on 25 | w5==w6==w8 on 25 | groups differ on 14
+  f16  KV (Phase KV): 25 prompts | w3==w4 on 25 | w5==w6==w8 on 25 | groups differ on 14
+  The grouping survives if the f16 row matches the q8_0 row. If it does not, the
+  partition was an artefact of the quantized cache and the #25618 comment needs a
+  correction posted to that thread.
+[2026-08-25T07:41:02+08:00] wrote analysis/phase_kv_divergence.txt
+[2026-08-25T07:41:02+08:00] starting the llama.cpp #27572 CUDA reproduction
+[2026-08-25T07:44:36+08:00] repro #27572 returned rc=0; see repro/results_27572.json
+      does not reproduce on CUDA at any tested length, which narrows #27572 to HIP
+[2026-08-25T07:44:36+08:00] phase_nmax already complete (1050/1050); skipping
+[2026-08-25T07:44:36+08:00] wrote analysis/phase_nmax_width_groups.txt: the H8 and H8a verdicts
+        w=9  draft-dflash vs draft-mtp: 8/25 prompts agree   <-- DISAGREE, the width account fails here
+        H8 SUPPORTED. The partition is exactly the warp-count table.
+        H8a SUPPORTED. CUDA and Vulkan agree on where divergence begins.
+[2026-08-25T07:44:36+08:00] wrote analysis/phase_nmax_{cost,divergence}.txt: the k(w) fit on 8 MTP widths, and the
+[2026-08-25T07:44:36+08:00]   width-2/7/9 groups that llama.cpp #25618 comment 5396293373 predicts
+[2026-08-25T07:44:36+08:00] phase_c has a partial result (175/750); archiving
+[2026-08-25T07:44:36+08:00] starting phase_c: expecting 750 records

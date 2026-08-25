@@ -1137,3 +1137,36 @@ finishes:
 Writing this down now matters more than usual: the second outcome would invalidate a line of work
 this repo has spent a day on, and the temptation to find a reason the control does not apply would
 be strongest exactly then.
+
+## Correction 7a, registered 2026-08-25 08:05, with the control still at 100 of 150
+
+The 3090 reproduced the A6000's forced_down2 gate failures - baseline 7 of 25 identical against
+2 of 25, widths 5, 6 and 8 at 4 of 25 against 5 of 25 - so whatever it is, it is not one card.
+
+Then a confound turned up in how the runs were scheduled, and it is written down here before the
+control finishes because it is exactly the kind of thing that would otherwise be noticed
+afterwards and used to explain away whichever result was inconvenient.
+
+| comparison | how it ran | width-1 gate |
+|---|---|---|
+| control against forced-up | same chain, back to back at 04:33 | **25 of 25** |
+| control against forced-down | same chain, back to back at 05:14 | 4 of 25, and that build did change width 1 |
+| control against forced_down2 | a separate invocation at 06:29, 37 minutes later | **2 of 25**, and that build did not change width 1 |
+
+The only comparison that holds at width 1 is the back-to-back one. Build variant is confounded
+with invocation session, and the failing gate is the one where the two are not the same session.
+
+The determinism control now running is control against control in a separate invocation, which is
+the contrast that separates them. Its outcomes were registered in Correction 7; this narrows what
+each of them means:
+
+- **150 of 150.** A separate invocation does reproduce, the session is not the confound, and
+  forced_down2 changing widths whose machine code is byte-identical is a real effect still without
+  a name.
+- **Fewer than 150.** A separate invocation does not reproduce on its own, and forced_down2's gate
+  failures are session effects rather than build effects. The forced-up gates would survive, since
+  they were taken back to back, but no comparison across invocations in this study can be read,
+  and the intervention needs re-running with every build in one session.
+
+Under either outcome the throughput results are untouched: they are paired within a run and
+averaged over passes, which is what that design is for.
