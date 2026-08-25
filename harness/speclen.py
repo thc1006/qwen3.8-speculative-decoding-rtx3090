@@ -24,6 +24,16 @@ exact value instead. The patch that exposes it is in upstream/.
 """
 
 
+# On the move into this file the derived form changed from (predicted_n - 1) / F to
+# 1 + accepted / F. Those are the same identity, since predicted_n - 1 = accepted + F, and they
+# are not the same in floating point: 174 of phase_nmax's 1050 records differ, by at most
+# 8.9e-16, which is about four ULP. The reports print four decimals and were byte-identical
+# across the move, so that check could not have seen it; one point in
+# analysis/plot_dispatch_boundary.png sat on a pixel boundary and moved, which is how it
+# surfaced. The new form is kept because it is the one that stays exact when
+# draft_n_verif_steps arrives and F is counted rather than solved for.
+
+
 def forwards(rec):
     """-> target forward passes in the decode phase, or None if the counters cannot say.
 

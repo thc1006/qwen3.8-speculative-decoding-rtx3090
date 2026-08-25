@@ -250,6 +250,20 @@ there was omission, not misstatement.
 
 ### B. Analyser correctness, no re-run needed
 
+- [x] **A refactor verified on printed output moved one pixel in a plot** - `mean_len` moved into
+      `harness/speclen.py` and the derived form changed from `(predicted_n - 1) / F` to
+      `1 + accepted / F`. Those are one identity, since `predicted_n - 1 = accepted + F`, and they
+      are not one floating-point expression: 174 of phase_nmax's 1050 records differ, by at most
+      8.9e-16, about four ULP. The move was checked by diffing the reports of `analyze.py` and
+      `cost_model.py` before and after, on two files, and they were byte-identical. That check
+      cannot see four ULP, because the reports print four decimals. Regenerating the figures found
+      it: `plot_dispatch_boundary.png` differs in exactly one pixel, at (494, 437), in both the
+      light and dark versions, where a point sat on a rounding boundary. The commit message for
+      the move said byte-identical output "is what says the refactor changed nothing", which is
+      too strong. It says the refactor changed nothing at the precision the reports carry. The new
+      form is kept because it is the one that stays exact once `draft_n_verif_steps` arrives and F
+      is counted rather than solved for, and the difference is recorded in `speclen.py`.
+
 - [x] **The cache check tested one invariant and reported it as the other** - `bench.py` fired on
       any `t_cache_n > 0` with "despite cache_prompt=False" as a constant string. `phase_l` sets
       `CACHE_PROMPT = True` deliberately, so it raised one incident per request against a

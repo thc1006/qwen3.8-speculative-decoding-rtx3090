@@ -151,7 +151,7 @@ holds at r^2 = 0.9958 with five residual degrees of freedom.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_dispatch_boundary_dark.png">
-  <img alt="The cost of one verification step against verification width, from the n-max ladder. Widths 2 through 8 for draft-mtp and 3 through 7 for draft-dflash rise on a straight line, with c equal to 0.2904 at r-squared 0.9958 and 0.2481 at 0.9947. A vertical line marks MMVQ_MAX_BATCH_SIZE at 8. Width 9 sits past it with an open marker, 26 percent below the line for draft-mtp and 7 percent below for draft-dflash." src="analysis/plot_dispatch_boundary.png">
+  <img alt="The cost of one verification step against verification width, from the n-max ladder. Widths 2 through 8 for draft-mtp and 3, 5 and 7 for draft-dflash rise on a straight line, with c equal to 0.2904 at r-squared 0.9958 and 0.2481 at 0.9947. A vertical line marks MMVQ_MAX_BATCH_SIZE at 8. Width 9 sits past it with an open marker, 26 percent below the line for draft-mtp and 7 percent below for draft-dflash." src="analysis/plot_dispatch_boundary.png">
 </picture>
 
 The two fits stop at width 8 deliberately. `MMVQ_MAX_BATCH_SIZE` is 8, so a wider verification
@@ -494,8 +494,10 @@ python3 harness/test_harness.py
 python3 harness/bench.py --matrix phase_a --passes 5 --out results/phase_a.json
 python3 harness/analyze.py results/phase_a.json
 
-# figures (the only step that needs a third-party package)
-pip install matplotlib && python3 analysis/plot.py
+# figures (the only step that needs a third-party package). Use the venv's interpreter:
+# the harness itself runs on the system python, matplotlib is installed only here, and
+# analysis/plot.py imports it at module level.
+.venv/bin/pip install matplotlib && .venv/bin/python analysis/plot.py
 ```
 
 `harness/bench.py --prompts-per-class 1` runs a reduced dry run; reduced runs label themselves in
