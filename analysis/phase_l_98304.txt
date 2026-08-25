@@ -1,0 +1,60 @@
+
+[selection] per-protocol and intention-to-treat hold the same 180 records; the exclusion rule does no work here.
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 15 ({'code': 3, 'prose': 3, 'reason': 3, 'chat': 3, 'zh': 3})
+design: interleaved=True  cache_prompt=True  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@96k                       26.53      26.53      45  code_py_ratelimiter=0.6%
+baseline@96k-pr                    26.37      26.37      45  zh_self_intro=10.2%
+mtp-n2@96k                         40.70      40.70      45  zh_debug=0.6%
+dflash2-n4@96k                     42.22      42.22      45  code_py_ratelimiter=10.6%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2@96k                   baseline@96k           +53.44 [+48.78, +58.12]  FASTER
+dflash2-n4@96k               baseline@96k-pr        +59.79 [+50.21, +69.38]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2@96k                 chat: +39.5%  code: +69.3%  prose: +47.4%  reason: +70.9%  zh: +40.1%
+  dflash2-n4@96k             chat: +43.8%  code: +98.6%  prose: +39.6%  reason:+102.2%  zh: +14.7%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 180
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+
+--- energy window coverage: 98.9 % of wall time (min 95.9 %) ---
+  Energy outside the first and last sample is not in the figure above.
+
+--- averaged against instantaneous power, per arm ---
+  baseline@96k            +0.10 %   n=45
+  baseline@96k-pr         +0.28 %   n=45
+  dflash2-n4@96k          +1.18 %   n=45
+  mtp-n2@96k              +1.53 %   n=45
+  Positive means power.draw integrated low. It leaves the baselines nearly alone
+  and understates the speculative arms, so an energy saving read off the averaged
+  field is larger than the instantaneous field supports, by about this much.
+baseline@96k               0.0628     +0.0%       2531     +0.0%       -          -
+baseline@96k-pr            0.0625     -0.5%       2545     +0.5%       -          -
+mtp-n2@96k                 0.0967    +54.0%       1663    -34.3%   0.646       2.28
+dflash2-n4@96k             0.1008    +60.5%       1678    -33.7%   0.451       2.77
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  dflash2-n4@96k             byte-identical 18/45   median shared prefix when forked: 0.168
+  mtp-n2@96k                 byte-identical 18/45   median shared prefix when forked: 0.168
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@96k               reproducible 30/30
+  baseline@96k-pr            reproducible 30/30
+  dflash2-n4@96k             reproducible 30/30
+  mtp-n2@96k                 reproducible 30/30
