@@ -194,10 +194,13 @@ With `speedup = mean_len(w) / (k0 + c(w-1))`, width 8 beats width 5 only when
     mean_len(8) / (k0 + 7c)  >  mean_len(5) / (k0 + 4c)
 
 On the acceptance curve measured here, `mean_len` 2.883 at w=5 and 3.353 at w=8 with k0 = 0.7825,
-that requires **c < 0.0543**. Measured here `c` is 0.2784, so this card is 5.1 times over the
-threshold and the shallower setting wins. Phase R identifies what moves `c`: speculation turns a
-bandwidth-bound decode into a compute-bound verify, so `c` falls as compute rises against memory
-bandwidth, which is the axis between the two cards.
+that requires **c < 0.0543**. Phase A's two DFlash2 points give `c` = 0.2784, 5.1 times over the
+threshold; the completed ladder gives 0.2481 over widths 3, 5 and 7, 4.6 times over. Either way the
+shallower setting wins here. Phase R2 measures what `c` travels with: over the tested GA102 clock
+ranges the baseline responds mostly to the memory clock and the speculative arms mostly to the SM
+clock. That is consistent with `c` being dominated by arithmetic, and the 5090 sits further along
+that axis, but elasticity is a response measurement and does not establish which resource either
+card is bound by.
 
 **Why this is worth posting rather than a correction.** It converts "n-max 7 is right" and "n-max
 4 is right" into one number that either card can measure, from one baseline and three widths, and
@@ -234,11 +237,19 @@ worth enabling" is currently answered on throughput alone.
 
 ## 4. The cost model, as an explanation not a table
 
-`speedup = mean_len / k` with `k(w) = k0 + c*(w-1)` fits to r^2 = 0.9998 on the built-in MTP head,
-and the marginal cost `c` agrees to 1.7 % between MTP (0.2803) and the structurally unrelated
-DFlash2 drafter (0.2757) while the fixed cost `k0` differs by 14 %. That says the per-position
-cost belongs to the verification path and the fixed cost belongs to the drafter, and it explains
-*why* deep drafting loses, in a form that predicts the optimum instead of tabulating it.
+`speedup = mean_len / k` with `k(w) = k0 + c*(w-1)` fits to r^2 = 0.9958 for the built-in MTP
+head over widths 2-8 and 0.9947 for the DFlash2 drafter over 3, 5 and 7, on the completed n-max
+ladder. It explains *why* deep drafting stops paying, in a form that predicts an optimum rather
+than tabulating one.
+
+An earlier two-point fit on Phase A put the two marginal costs within 1.7 % of each other, and
+this section used to read that as the per-position cost belonging to the verification path and the
+fixed cost to the drafter. The completed ladder does not support it. The coefficients are
+**0.2904** for MTP and **0.2481** for DFlash2, and paired on the 25 prompts both are fitted on,
+`c(dflash) - c(mtp)` is **-0.0424 [-0.0434, -0.0413]**, which clears zero. Part of the marginal
+cost moves with the drafter. `k0` is 0.8888 against 0.9443, so the fixed cost is the higher one for
+DFlash2, not the lower. What is contributable here is the model and the coefficients with
+intervals, not the attribution.
 
 Relevant to [#25187](https://github.com/ggml-org/llama.cpp/issues/25187) (FR-Spec draft-vocab
 trimming research), which is about reducing drafter cost, meaning `k0` rather than `c`.

@@ -5,7 +5,9 @@ record of them as much as a guard. `analyze.py` claimed one of these existed bef
 
 Run: python3 harness/test_harness.py
 """
+import collections
 import inspect
+import json
 import time
 import sys
 import unittest
@@ -971,6 +973,229 @@ class TestForkPositionUnits(unittest.TestCase):
         self.assertNotIn('min((d["first_diff_char"] for d in forks)', src,
                          "the character column is back on the unfiltered field, so it and the "
                          "token column no longer describe the same records")
+
+
+class TestRungDriverGates(unittest.TestCase):
+    """A completeness gate that passes on zero records is worse than no gate.
+
+    Both rung drivers compute an expected record count in python and then gate on
+    `got >= EXPECTED`. If that python fails for any reason the count is empty, the gate is
+    `0 >= 0`, and run_phase_q.sh goes on to delete the rung's weights: 20 to 30 GB removed for a
+    run that measured nothing. Found by dry-running the driver from the wrong directory.
+    """
+
+    ROOT = Path(__file__).parent.parent
+
+    def test_both_drivers_refuse_an_unusable_expected_count(self):
+        checked = 0
+        for name in ("run_phase_q.sh", "run_phase_qsmall.sh"):
+            f = self.ROOT / name
+            if not f.exists():
+                continue
+            src = f.read_text(encoding="utf-8")
+            self.assertIn("EXPECTED", src, f"{name}: no expected count at all")
+            self.assertRegex(
+                src, r'case\s+"\$\{EXPECTED\}"\s+in',
+                f"{name}: the expected record count is used without being checked first. "
+                f"An empty or zero value makes every completeness gate pass.")
+            self.assertIn("exit 1", src, f"{name}: the guard does not stop the run")
+            checked += 1
+        if checked == 0:
+            self.skipTest("no rung driver present")
+
+
+class TestMatrixBaselinePairing(unittest.TestCase):
+    """An arm has to be scored against a baseline that ran the same model.
+
+    Phase M grew a dense side, and its BASELINE_MAP was a comprehension that sent every arm to
+    baseline-moe. A dense arm scored against an MoE baseline does not measure speculation at all;
+    it measures the difference between two models, and it would have looked like a clean number.
+    """
+
+    ROOT = Path(__file__).parent
+
+    def _matrices(self):
+        """Every matrix that imports, and a hard failure for any that does not import benignly.
+
+        A bare `except: continue` here would have swallowed a syntax error in any matrix and
+        reported a pass over whatever was left. The only import failure this test accepts is a
+        matrix refusing to load because its model file is absent, which several do on purpose.
+        """
+        import importlib
+        d = self.ROOT / "matrices"
+        if not d.exists():
+            self.skipTest("no matrices directory")
+        sys.path.insert(0, str(d))
+        for f in sorted(d.glob("phase_*.py")):
+            try:
+                yield f.stem, importlib.import_module(f.stem)
+            except RuntimeError as e:
+                if "is missing" in str(e) or "not found" in str(e).lower():
+                    continue  # staged elsewhere; the matrix says so itself
+                raise AssertionError(f"{f.stem} failed to import: {e}") from e
+            except Exception as e:
+                raise AssertionError(f"{f.stem} failed to import: {type(e).__name__}: {e}") from e
+
+    def test_every_arm_is_paired_with_a_baseline_on_its_own_model(self):
+        checked = 0
+        for name, mod in self._matrices():
+            arms = getattr(mod, "ARMS", None)
+            bmap = getattr(mod, "BASELINE_MAP", None)
+            if not arms or not bmap:
+                continue
+            model_of = {a.name: str(getattr(a, "model", None) or getattr(mod, "MODEL", ""))
+                        for a in arms}
+            for arm, base in bmap.items():
+                if arm == base:
+                    continue  # analyze.py skips a self-mapping
+                self.assertIn(base, model_of, f"{name}: {arm} maps to unknown baseline {base}")
+                self.assertEqual(
+                    model_of[arm], model_of[base],
+                    f"{name}: {arm} runs {model_of[arm]} but is scored against {base}, "
+                    f"which runs {model_of[base]}")
+                checked += 1
+        if checked == 0:
+            self.skipTest("no matrix declares both ARMS and BASELINE_MAP")
+
+
+class TestReadmeMatchesArtifacts(unittest.TestCase):
+    """The README's headline numbers, checked against the files they came from.
+
+    Every drift this repo has shipped had the same shape: a number was copied into the README,
+    the run that produced it was superseded, and the prose stayed. It claimed n-max 4 was the
+    best DFlash2 setting while `cost_model.py` printed 2; it said the depth ladder had two of
+    five rungs in the same sentence that quoted the third. Prose cannot be diffed against a
+    result file by eye, so it is diffed here instead.
+    """
+
+    ROOT = Path(__file__).parent.parent
+
+    def _readme(self):
+        f = self.ROOT / "README.md"
+        if not f.exists():
+            self.skipTest("no README.md")
+        return f.read_text(encoding="utf-8")
+
+    def _prose(self):
+        """README plus every docs page, as one string.
+
+        Splitting the README moved the cost-model prose into docs/COST_MODEL.md, and the check
+        below went on passing because it was only reading README.md. A claim is a claim wherever
+        it is written, so the scan follows the prose rather than the file it started in.
+        """
+        parts = [self._readme()]
+        for f in sorted((self.ROOT / "docs").glob("*.md")):
+            parts.append(f.read_text(encoding="utf-8"))
+        return "\n".join(parts)
+
+    def _load(self, name):
+        f = self.ROOT / "results" / name
+        if not f.exists():
+            self.skipTest(f"no results/{name}")
+        return json.loads(f.read_text())
+
+    def test_best_nmax_in_the_readme_is_the_best_in_the_ladder(self):
+        """The 'Which n-max?' cell against the argmax of the completed ladder.
+
+        Convention the cell has to keep: a setting it recommends is in bold, and nothing else in
+        that cell is. The row said `**2**` for MTP and `**4**` for DFlash2 while the ladder and
+        `cost_model.py` both put DFlash2's best at 2.
+        """
+        import re
+        import statistics
+        recs = self._load("phase_nmax.json")["records"]
+        rate = collections.defaultdict(list)
+        for r in recs:
+            v = r.get("decode_tok_s")
+            if v:
+                rate[r["arm"]].append(v)
+        best = set()
+        for fam in ("mtp", "dflash2"):
+            arms = {a: statistics.median(v) for a, v in rate.items() if a.startswith(fam + "-n")}
+            self.assertTrue(arms, f"no {fam} arms in phase_nmax.json")
+            best.add(int(re.search(r"n(\d+)$", max(arms, key=arms.get)).group(1)))
+
+        cell = [ln for ln in self._readme().splitlines() if ln.startswith("| **Which n-max?**")]
+        self.assertEqual(len(cell), 1, "the 'Which n-max?' row moved or was renamed")
+        claimed = {int(x) for x in re.findall(r"\*\*(\d+)\*\*", cell[0])}
+        self.assertEqual(claimed, best,
+                         f"the ladder's best n-max values are {sorted(best)} but the README cell "
+                         f"marks {sorted(claimed)}:\n{cell[0]}")
+
+    def test_the_readme_does_not_claim_c_agrees_when_it_does_not(self):
+        """The shared-machinery reading is only available while the two coefficients agree.
+
+        Phase A's two-point fit had them 1.6 % apart and the README inferred that the marginal
+        cost sits in the machinery both methods share. On the completed ladder they are 15 %
+        apart on a paired interval that clears zero, and the inference does not survive it.
+        """
+        import cost_model as CM
+        res = self._load("phase_nmax.json")
+        rows = CM.collect(res)
+        by_method = collections.defaultdict(list)
+        for r in rows:
+            by_method[r["spec_type"]].append(r)
+        mmvq = CM.recorded_mmvq_max(res)[0]
+        fits = {}
+        for m, g in by_method.items():
+            on = sorted({r["width"] for r in g if r["width"] <= mmvq})
+            if len(on) >= 2:
+                fits[m] = (g, on)
+        if len(fits) != 2:
+            self.skipTest("need two fitted methods")
+        (ma, (ga, oa)), (mb, (gb, ob)) = sorted(fits.items())
+        d = CM.delta_c_ci(ga, oa, gb, ob, n_boot=400)
+        self.assertIsNotNone(d, "the paired delta could not be computed")
+
+        text = self._prose()
+        if not d.spans_zero:
+            self.assertNotIn("`c` agrees", text,
+                             f"the paired interval [{d.lo:+.4f}, {d.hi:+.4f}] clears zero, so the "
+                             "README must not say the coefficients agree")
+
+    def test_phase_l_rung_count_matches_the_files_on_disk(self):
+        """'N of five rungs complete' against the result files that actually hold 180 records."""
+        import re
+        complete = 0
+        for f in sorted((self.ROOT / "results").glob("phase_l_*.json")):
+            if ".partial." in f.name:
+                continue
+            try:
+                if len(json.loads(f.read_text())["records"]) >= 180:
+                    complete += 1
+            except Exception:
+                pass
+        if complete == 0:
+            self.skipTest("no complete phase_l rungs")
+        words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+        text = self._readme()
+        stated = set()
+        for m in re.finditer(r"\b(one|two|three|four|five|\d+) of five rungs", text):
+            g = m.group(1)
+            stated.add(words.get(g, int(g) if g.isdigit() else 0))
+        self.assertTrue(stated, "the README no longer states a rung count out of five")
+        self.assertEqual(stated, {complete},
+                         f"{complete} rungs hold 180 records; the README says {sorted(stated)}")
+
+    def test_reproduce_pins_the_commits_the_trees_are_actually_at(self):
+        """A reproduce block that clones a moving branch reproduces something else."""
+        import re
+        import subprocess
+        text = self._readme()
+        pins = dict(re.findall(r"^(LLAMA_MASTER_COMMIT|DFLASH2_COMMIT)=([0-9a-f]{7,40})",
+                               text, re.M))
+        self.assertEqual(set(pins), {"LLAMA_MASTER_COMMIT", "DFLASH2_COMMIT"},
+                         "the reproduce block does not pin both trees")
+        for var, tree in (("LLAMA_MASTER_COMMIT", "llamacpp-master"),
+                          ("DFLASH2_COMMIT", "llamacpp-dflash2")):
+            d = self.ROOT / tree
+            if not (d / ".git").exists():
+                continue
+            head = subprocess.run(["git", "-C", str(d), "rev-parse", "--short", "HEAD"],
+                                  capture_output=True, text=True).stdout.strip()
+            if head:
+                self.assertEqual(pins[var], head,
+                                 f"{tree} is at {head} but the README pins {pins[var]}")
 
 
 if __name__ == "__main__":

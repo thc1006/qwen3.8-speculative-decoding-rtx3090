@@ -1,0 +1,57 @@
+
+[selection] per-protocol and intention-to-treat hold the same 180 records; the exclusion rule does no work here.
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 15 ({'code': 3, 'prose': 3, 'reason': 3, 'chat': 3, 'zh': 3})
+design: interleaved=True  cache_prompt=True  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@80k                       28.31      28.31      45  prose_rainbow=0.1%
+baseline@80k-pr                    28.01      28.01      45  code_rust_mergesort=8.3%
+mtp-n2@80k                         43.46      43.46      45  code_py_ratelimiter=0.2%
+dflash2-n4@80k                     45.03      45.03      45  reason_trains=0.2%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2@80k                   baseline@80k           +53.50 [+48.56, +58.23]  FASTER
+dflash2-n4@80k               baseline@80k-pr        +61.12 [+52.50, +69.38]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2@80k                 chat: +46.4%  code: +72.0%  prose: +39.9%  reason: +71.0%  zh: +38.1%
+  dflash2-n4@80k             chat: +44.8%  code: +98.8%  prose: +39.0%  reason:+113.0%  zh: +10.1%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 180
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+
+--- averaged against instantaneous power, per arm ---
+  baseline@80k            +0.08 %   n=45
+  baseline@80k-pr         +0.39 %   n=45
+  dflash2-n4@80k          +0.99 %   n=45
+  mtp-n2@80k              +0.96 %   n=45
+  Positive means power.draw integrated low. It leaves the baselines nearly alone
+  and understates the speculative arms, so an energy saving read off the averaged
+  field is larger than the instantaneous field supports, by about this much.
+baseline@80k               0.0674     +0.0%       2359     +0.0%       -          -
+baseline@80k-pr            0.0667     -1.0%       2386     +1.1%       -          -
+mtp-n2@80k                 0.1033    +53.2%       1559    -33.9%   0.647       2.28
+dflash2-n4@80k             0.1078    +59.9%       1574    -33.3%   0.456       2.80
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  dflash2-n4@80k             byte-identical 27/45   median shared prefix when forked: 0.107
+  mtp-n2@80k                 byte-identical 18/45   median shared prefix when forked: 0.199
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@80k               reproducible 30/30
+  baseline@80k-pr            reproducible 30/30
+  dflash2-n4@80k             reproducible 30/30
+  mtp-n2@80k                 reproducible 30/30

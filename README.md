@@ -12,17 +12,26 @@ saturation threshold forces the verify pass to load the union of K positions' ex
 is dense-hybrid - no experts, no routing, no union - so that mechanism cannot decide the answer
 here, and the question was open again.
 
-> **Status, 2026-08-25.** Complete: Phase A (875 measurements, 0 incidents), Phase R (1125),
+Phase C has since measured the predecessor's own drafting configuration on this dense target: a
+0.8B draft-then-verify drafter at n-max 8 runs at **-29.8 % [-33.1, -26.4]**. The predecessor's
+comparable arm, re-analysed on the class-stratified estimand this repo uses, was -21.5 %
+([`docs/METHODOLOGY_AUDIT.md`](docs/METHODOLOGY_AUDIT.md)). The dense model loses **more**, with
+no experts at all, so expert routing cannot be what makes that configuration lose. What separates
+a win from a loss here is the drafting method, not the architecture. Phase M is being re-scoped
+around that.
+
+> **Status, 2026-08-25.** Complete: Phase A (875 request records, 0 incidents), Phase R (1125),
 > Phase R2 (1575, 0 incidents), Phase KV (175), the n-max ladder (1050), Phase C (750), and the
 > four-build forced-warp intervention (600) with its disassembly and kernel benchmark. The depth
-> ladder is running and has two of five rungs. Phase M and Phase Q are queued behind it. Later
+> ladder has four of five rungs complete (8 K, 32 K, 64 K, 80 K) and the 96 K rung is running.
+> Phase M and Phase Q are designed but have no measurements. Later
 > phases are designed and not yet measured; each says so where it appears.
 
-**It is not open any more.**
+**For this single-stream, 8K-context, 400-token regime, it is not open any more.**
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_headline_dark.png">
-  <img alt="Dot-and-whisker plot of five speculative arms against a non-speculative baseline of 41.55 tok/s. mtp-n2 at verification width 3 is +59.8 % with a 95 % interval of +57.0 to +62.8; mtp-n3 +52.3 %; dflash2-n4 +51.9 %; mtp-n5 +32.1 %; dflash2-n7 +22.6 %. Every interval lies clear of zero." src="analysis/plot_headline.png">
+  <img alt="Dot-and-whisker plot of five speculative arms against a non-speculative baseline of 41.55 tok/s. mtp-n2 at verification width 3 is +59.8 % with a nominal 95 % interval of +57.0 to +62.8; mtp-n3 +52.3 %; dflash2-n4 +51.9 %; mtp-n5 +32.1 %; dflash2-n7 +22.6 %. Every interval lies clear of zero." src="analysis/plot_headline.png">
 </picture>
 
 ## Findings
@@ -30,12 +39,12 @@ here, and the question was open again.
 | | |
 |---|---|
 | **Is it worth enabling?** | Yes. MTP at `--spec-draft-n-max 2` is **+59.8 %** [+57.0, +62.8] over no speculation. |
-| **Which n-max?** | **2** for `draft-mtp`, **4** for `draft-dflash` - the best of those measured, and derived from a cost model rather than picked from a table. |
-| **Does DFlash2 beat the built-in MTP head?** | No. **+51.9 %** at its own best depth. It drafts longer blocks and its fixed cost is lower, but acceptance falls faster with depth. |
-| **Energy, or just time?** | Both, in direction, and the direction is smaller than it first read. Board telemetry puts decode energy for a 400-token answer at **-37 %** (3980 -> 2503 J). All three limits on that figure have now been measured rather than named, and all three flatter it. `power.draw` on Ampere is a rolling average of about a second: sampled beside the instantaneous field, the two integrals agree to 0.00-0.34 % on the baselines and differ by 0.58-1.97 % on the speculative arms, always the same sign, so the averaged field understates exactly the arms being compared, worth about 1.1 points. The prefill subtraction removes a `max_tokens=1` calibration that runs on a server with the drafter already loaded, so it costs 10-17 % more energy on a speculative arm than on a baseline and takes out more than prefill: worth 0.3 to 0.8 points. The integral runs first sample to last, and the sampler's period is its nvidia-smi query plus the interval rather than the interval alone, so about 4 % of the request sits outside the window; that one moves the absolute figure rather than the ratio. Corrected for the two that bias the comparison the saving is nearer **-35 %**. `analyze.py` prints the per-arm gap and the window coverage wherever energy appears. An energy-counter remeasurement would settle the absolute magnitude. No prior-art study publishes an energy figure for this model. |
-| **Lossless at temperature 0?** | **No.** 76-80 % of greedy requests diverge from the non-speculative baseline. Deterministic, and it reproduces exactly across passes. |
-| **Why does deeper drafting stop paying?** | Each extra verified position costs **c ~ 0.28** of a plain decode step. With both clocks pinned, the baseline and the speculative arms sit in opposite corners: bandwidth elasticity **0.80 against 0.14**, compute elasticity **0.27 against 0.76**. |
-| **Does the MoE result carry over?** | No. The sign flips: net loss there, large net win here. |
+| **Which n-max?** | **2** for both, on the completed ladder. For `draft-mtp` it is the highest of the eight depths tested and has a slower tested point on each side. For `draft-dflash` it is the highest of the four tested, 1.7 points above `n-max=4`, but it is also the shallowest DFlash2 depth in the ladder, so it is not bracketed, and no direct paired interval between 2 and 4 has been computed. |
+| **Does DFlash2 beat the built-in MTP head?** | Not on the best point estimate: **+58.8 %** for MTP `n-max=2` against **+53.7 %** for DFlash2 `n-max=2` on the same ladder. This is not a paired test between the two methods, and they run on different llama.cpp trees against their own matched baselines. At the 80 K depth rung the ordering reverses, on overlapping intervals. |
+| **Energy, or just time?** | Both, in direction, and the direction is smaller than it first read. Board telemetry puts decode energy for a 400-token answer at **-37 %** (3980 -> 2503 J); correcting the two measured biases that flatter the comparison brings it nearer **-35 %**. The direction survives every audit, the exact magnitude does not: an energy-counter remeasurement is what would settle it. Details below. |
+| **Bit-exact with serial greedy decoding?** | **No.** Depending on the arm, 76-80 % of requests had diverged **by output token 400**. Every request hit the token cap and none reached EOS, so the rest are right-censored: no divergence was observed inside the window, which is not identity through to the end of an answer. The divergence is deterministic and reproduces exactly across passes. |
+| **Why does deeper drafting stop paying?** | Each extra verified position costs **c ~ 0.25-0.29** of a plain decode step across the whole speculative cycle, while accepted length shows diminishing increments. Over the measured clock intervals the baseline is the more memory-clock-sensitive workload and the speculative arms the more SM-clock-sensitive ones. That is a response measurement, not a roofline or a per-kernel bottleneck attribution. |
+| **Does the predecessor's negative result transfer?** | Not directly. The sign differs between the two studies: a net loss on the 3B-active MoE, a large net win here. Attributing that difference to MoE routing or expert saturation needs the matched Phase M experiment, which has not run. The two studies also differ in model, target, drafter, card, power limit, llama.cpp revision and protocol. |
 | **Which prompts benefit?** | Within this suite, code and reasoning most, the Chinese tasks least - and `dflash2-n7` is **+22.6 % overall while being a net loss on three of five classes**. Thinking mode is collinear with the reason class and the Chinese prompts are different tasks rather than translations, so these are differences between the selected prompts, not language or class effects. |
 
 **Contents** - [What this is not claiming](#what-this-is-not-claiming) |
@@ -73,8 +82,13 @@ why deeper drafting stops paying.
 
 ## Results: Phase A
 
-7 arms x 25 prompts x 5 passes = **875 measurements, 0 incidents, 0 excluded, 0 quality-flagged.**
-Intervals are a paired cluster bootstrap over prompts, on the class-stratified effect.
+7 arms x 25 prompts x 5 passes = **875 request records, 0 incidents, 0 excluded, 0 quality-flagged.**
+The inferential unit is the prompt, `n = 25`; the 5 passes are repeated measurements of the same
+prompt, not independent samples, and 875 is not a sample size. Intervals are a paired cluster
+bootstrap over prompts, on the class-stratified effect, and are **nominal** 95 %: this repo's own
+simulation puts the percentile interval's actual coverage at 88.0-90.9 % at `n = 25`, so the
+widths printed here are optimistic by roughly 15-25 %. `analyze.py` names any verdict that sits
+inside that margin.
 
 | arm | verify width | tok/s | vs own-tree baseline | tok/J | decode J per request |
 |---|---:|---:|---|---:|---:|
@@ -87,8 +101,11 @@ Intervals are a paired cluster bootstrap over prompts, on the class-stratified e
 | dflash2-n7 | 8 | 50.95 | +22.6 % [+14.7, +30.4] | 0.1251 | 3786 |
 
 The two trees agree to 41.55 tok/s and produce **byte-identical output on 125/125 prompt-passes**,
-so nothing in the DFlash2 numbers is attributable to the unmerged branch. Run-to-run CV within a
-prompt is <= 0.3 %.
+so no no-speculation offset between the branches was detected here, and every DFlash2 arm is
+estimated against its same-tree baseline. That controls the branch's baseline main effect. It
+cannot rule out an interaction between the branch and the DFlash2 method itself, because
+`draft-dflash` does not exist on the master tree and so cannot be run there. Run-to-run CV within
+a prompt is <= 0.3 %.
 
 <details>
 <summary>How the energy figures are measured, and why prefill is subtracted per arm</summary>
@@ -99,6 +116,8 @@ saving. Prefill is measured per arm rather than assumed constant, and it is not:
 baseline against 83.2 J for `dflash2-n7`, because a speculative arm processes the prompt through
 its drafter as well. `joule`, `tok/J` and `watt` appear zero times in PR #27342's 60-comment
 thread.
+
+Both, in direction, and the direction is smaller than it first read. Board telemetry puts decode energy for a 400-token answer at **-37 %** (3980 -> 2503 J). All three limits on that figure have now been measured rather than named, and all three flatter it. `power.draw` on Ampere is a rolling average of about a second: sampled beside the instantaneous field, the two integrals agree to 0.00-0.34 % on the baselines and differ by 0.58-1.97 % on the speculative arms, always the same sign, so the averaged field understates exactly the arms being compared, worth about 1.1 points. The prefill subtraction removes a `max_tokens=1` calibration that runs on a server with the drafter already loaded, so it costs 10-17 % more energy on a speculative arm than on a baseline and takes out more than prefill: worth 0.3 to 0.8 points. The integral runs first sample to last, and the sampler's period is its nvidia-smi query plus the interval rather than the interval alone, so about 4 % of the request sits outside the window; that one moves the absolute figure rather than the ratio. Corrected for the two that bias the comparison the saving is nearer **-35 %**. `analyze.py` prints the per-arm gap and the window coverage wherever energy appears. An energy-counter remeasurement would settle the absolute magnitude. No prior-art study publishes an energy figure for this model.
 
 </details>
 
@@ -124,284 +143,45 @@ thread.
 
 `dflash2-n7` is +22.6 % overall. It is also a net loss on three of five classes. That is the same
 failure this repo documents in the predecessor's own headline, where a mixture statistic got
-reported as an effect - except here it runs the other way: the average flatters an arm that hurts
-most of the workload. Which is why the primary endpoint is class-stratified.
+reported as an effect - except here it runs the other way: the average flatters an arm that is
+negative on most of the classes this suite declares. It is not negative on most of any real
+workload, because the five classes carry equal weight by construction and no deployment traffic
+mix has been measured. Which is why the primary endpoint is class-stratified, and why a
+deployment figure would have to reweight these classes by its own traffic.
 
-### A cost model, not a table
+### The verification-step cost model
 
-llama.cpp reports enough per request to recover the cost of one speculative verification step in
-units of a plain decode step, as `speedup = mean_len / k` with `k(w) = k0 + c*(w - 1)` and
-`w = n_max + 1`.
+`speedup = mean_len / k`, with `k(w) = k0 + c*(w-1)` fitted inside the MMVQ dispatch path. On the
+completed ladder that is **c = 0.2904** for `draft-mtp` over widths 2-8 and **0.2481** for
+`draft-dflash` over 3, 5 and 7. Paired on the 25 prompts both are fitted on, the difference is
+**-0.0424 [-0.0434, -0.0413]** and clears zero, so the two methods do not share a marginal cost
+and part of it moves with the drafter. Width 9 leaves the kernel and is analysed separately.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_cost_model_dark.png">
-  <img alt="Three stacked panels against verification width. Top: tokens accepted per target pass rises from 2.3 to 3.3 but falls far below a dotted line showing growth in proportion to width. Middle: the cost of one target pass rises linearly, with c equal to 0.2829 for draft-mtp and 0.2784 for draft-dflash. Bottom: speedup, the ratio of the two, falls from 1.60 to 1.23 across the widths measured." src="analysis/plot_cost_model.png">
-</picture>
+Derivation, the dispatch boundary, and what `k` does and does not identify:
+[`docs/COST_MODEL.md`](docs/COST_MODEL.md).
 
-| phase | method | widths | k0 | **c** | r^2 |
-|---|---|---|---:|---:|---:|
-| A | `draft-mtp` | 3, 4, 6 | 0.8937 | **0.2829** | 0.9998 |
-| A | `draft-dflash` | 5, 8 | 0.7825 | **0.2784** | (2 points, so r^2 is arithmetic) |
-| n-max | `draft-mtp` | 2, 3, 4, 5, 6, 7, 8 | 0.8888 | **0.2904** | 0.9958 |
-| n-max | `draft-dflash` | 3, 5, 7 | 0.9443 | **0.2481** | 0.9947 |
+### Greedy output divergence
 
-Phase A fitted three MTP widths and two DFlash2 widths; two points make an r^2 of 1 arithmetic
-rather than evidence, which is why `phase_nmax` runs the full ladder. On seven MTP widths the line
-holds at r^2 = 0.9958 with five residual degrees of freedom.
+Depending on the arm, **76-80 % of requests had diverged from serial greedy decoding by output
+token 400**, deterministically and identically across passes. Every request hit the cap and none
+reached EOS, so the rest are right-censored rather than proven identical. Arms group by
+verification width rather than by drafter, but about a fifth of each group's agreement is two arms
+both failing to diverge inside the window, and the four-build intervention rules out warp count as
+the cause of the grouping.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_dispatch_boundary_dark.png">
-  <img alt="The cost of one verification step against verification width, from the n-max ladder. Widths 2 through 8 for draft-mtp and 3, 5 and 7 for draft-dflash rise on a straight line, with c equal to 0.2904 at r-squared 0.9958 and 0.2481 at 0.9947. A vertical line marks MMVQ_MAX_BATCH_SIZE at 8. Width 9 sits past it with an open marker, 26 percent below the line for draft-mtp and 7 percent below for draft-dflash." src="analysis/plot_dispatch_boundary.png">
-</picture>
+The matrix, the censoring accounting and the width partition:
+[`docs/GREEDY_DIVERGENCE.md`](docs/GREEDY_DIVERGENCE.md).
 
-The two fits stop at width 8 deliberately. `MMVQ_MAX_BATCH_SIZE` is 8, so a wider verification
-batch never reaches that kernel at all: at width 9 `k` sits **26 % below** what the MMVQ line
-predicts for MTP and 6.7 % below for DFlash2, and throughput jumps back from +9.1 % at width 8 to
-+39.1 % at width 9. Fitting one line across the boundary dragged the MTP coefficient from 0.2904
-to 0.2215 and the fit from 0.9958 to 0.8304. The same boundary shows up a third way: two unrelated
-drafters that share only the verification width agree on the fork position for 25 of 25 prompts at
-widths 3, 5 and 7. At width 9 they agree on only 8 of 25, and that is not the control failing: they
-never verified at the same width there. `n_max` is what was asked for, and the width verified is
-one plus what the drafter actually proposed. DFlash2 fills 87 % of its budget at `n_max` 8 and MTP
-99 %, so they run at 7.94 and 8.93 columns, one inside `MMVQ_MAX_BATCH_SIZE` and one past it. At
-widths 3, 5 and 7 the two match to 0.00 columns. `harness/width_groups.py` now computes effective
-width per arm and refuses to score a pair that differ by more than a quarter column.
+### Clock response
 
-**`c` agrees to within 15 %** between the target's own built-in nextn head and a structurally
-unrelated 1.1 GB block-diffusion drafter. `k` is the whole speculative cycle, though: target
-verification, the drafter's own forward passes, sampling, launch and synchronisation, output
-extraction and any per-step state management. Two methods that share everything except the drafter
-narrow the marginal cost to that shared machinery without identifying which part of it, so `c` is
-reported here as a total marginal cost per verified position and not as a target-verification
-cost. Separating the components needs per-context event timing, a replay that skips drafter
-compute, or a profiler decomposition; none of those is in this repo.
+With the SM clock pinned rather than power-capped, the baseline and the speculative arms respond
+to opposite clocks: memory-clock elasticity **0.79-0.81 against 0.13-0.18**, SM-clock elasticity
+**0.27 against 0.76-0.81**. The ordering also changes with the interval, 1.14x apart below
+1200 MHz and 2.85x above it, which is why elasticities are never pooled across that boundary.
+Nothing here counts bytes moved or arithmetic issued, so it locates neither workload against a
+hardware limit.
 
-One threat to `c` can be checked without any of them. Once an arm diverges from its baseline it is
-decoding a different token sequence, so what follows is not a comparison of two widths on one
-trajectory. Between a fifth and a quarter of these requests come out byte-identical, and those
-share the whole trajectory. Fitting on those alone gives **0.2898 against 0.2904 for `draft-mtp`
-and 0.2476 against 0.2481 for `draft-dflash`**, a gap of 0.2 % in both. Divergence does not move
-the coefficient here. `cost_model.py` prints this comparison on every run rather than leaving it
-as a one-off.
-
-`mean_len` saturates with depth while `k` grows linearly, so the ratio has an interior maximum in
-principle. `phase_nmax` now brackets it: width 2 gives **+44.96 % [+43.45, +46.54]** and width 3
-gives **+58.84 % [+55.90, +61.89]**, so the peak sits at width 3 with a tested and slower point on
-each side and non-overlapping intervals. **The best setting is n-max 2 for MTP and n-max 4 for
-DFlash2 on this card at this target quantisation**, and it is now a bracketed maximum rather than
-the smallest width that happened to be tried. It remains the best setting selected on the same
-data it was measured on; confirming it without that selection needs fresh prompts or fresh passes.
-
-<details>
-<summary>Why an RTX 5090 report recommends the opposite setting, and what would have to differ</summary>
-
-The PR thread disagrees. `lance0` reports on an RTX 5090 with a `UD-Q6_K_XL` target that n-max 7
-is right for DFlash2, since the drafter's `block_size` is 8 and lower values discard tokens the
-block already paid for. Here n-max 4 beats n-max 7 by a wide margin, 1.520x against 1.228x.
-
-The model says both can be true, and says what would have to differ. For width 8 to beat width 5
-on this measured acceptance curve, `c` would have to be below **0.0543**; it is 0.2784 here, 5.1
-times too large. Phase R2 shows what `c` responds to: over the tested GA102 clock ranges the baseline responds to
-core clock with an elasticity of 0.27 while the speculative arms sit at 0.76-0.81. That is
-consistent with `c` being dominated by compute, but clock elasticity is not a bottleneck
-measurement - it also moves with the voltage-frequency curve, power headroom, occupancy and launch
-amortisation - so calling the verify path compute-bound would need per-kernel counters this study
-does not have. Read as a sensitivity threshold rather than a hardware prediction: **holding this
-card's acceptance curve fixed**, width 8 overtakes width 5 once `c` drops below 0.0543, and
-measuring `c` on another card needs one baseline and three widths there. Whether a 5090's `c` is
-below it is not established here, and a different card can also move the acceptance curve, the
-kernel family and the dispatch boundary.
-
-One assumption is doing work there and is not verified: the calculation uses this card's
-`mean_len` curve, taken at `UD-Q4_K_XL`. A higher-precision target may accept more, which would
-raise `mean_len` at depth and make the required `c` less extreme. Phase Q walks the target
-quantisation ladder to separate the two.
-
-</details>
-
-<details>
-<summary>A missing "- 1" that produced plausible wrong numbers, and what it changed</summary>
-
-`mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)`. The `- 1` was missing at first and
-the numbers it produced looked fine. The first generated token comes out of the prompt-processing
-pass, not out of a decode forward, and leaving it in the count inflated the forward count by one.
-Checking the derivation against the server's own `mean len` log line on all 625 speculative
-requests is what found it.
-
-The correction moves `c` by 0.8 % and changes nothing claimed here, but it is why
-[`upstream/`](upstream/) carries a one-line patch to expose the verification-step count the
-server already holds: a derivation that reproduces plausible numbers and is quietly wrong by a
-percent is exactly what an exposed counter prevents. Around 30 % of requests need one further
-step removed, which is what truncation at the token cap looks like, and the API cannot say which,
-so the figures above are low by under 1 % and are reported as such.
-
-Across five prompt classes whose acceptance rates differ by nearly tenfold, the class means of
-`k` span **0.26 % to 0.94 %** of their own mean, depending on the arm. An earlier version of this
-section quoted 0.35-0.54 %, which was the dispersion of `k` over individual requests rather than
-over class means. The record-level figure is the smaller and better-looking of the two, and it is
-not the one this claim is about.
-
-</details>
-
-<details>
-<summary>What the cost model rules out: the overhead is not paid on rejection</summary>
-
-A state-rollback account charges the overhead to *rejection*: 48 of this model's 64 layers are
-Gated DeltaNet and cannot roll back by truncating a KV suffix. Writing that as
-`k = k_verify + r*n_max*(1 - acceptance)` makes `r` estimable from the slope of `k` against
-acceptance. Across an acceptance range of **0.096-0.918**, every arm returns **|r| <= 0.0028**
-decode-steps per rejected token, r^2 between 0.001 and 0.060.
-
-No relationship appears that is consistent with that specific proxy. What it bounds is the
-component of cost proportional to `n_max*(1 - acceptance)`, and that component is approximately
-none. It does not bound a fixed checkpoint paid every verification step, a fixed restore paid once
-per rejection, or a cost depending on where in the draft the first rejection lands: the first two
-are absorbed into `k_verify` and are invisible to a slope against acceptance. Separating them needs
-per-step drafted and accepted lengths, which the server does not yet report. The hypothesis was
-this repo's own, pre-registered, and is reported as unsupported in the form it was written.
-
-</details>
-
-### Losslessness
-
-Speculative arms are byte-identical to their baseline on only 25-30 of 125 prompt-passes:
-**76-80 % of requests diverge**, forking at a median 23 % into the text. Every arm is nonetheless
-**100/100 reproducible across passes**, so the divergence is deterministic rather than noise.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_width_partition_dark.png">
-  <img alt="Five-by-five matrix giving the share of 25 prompts on which two speculative arms fork from the baseline at the same character. Arms at verification widths 3 and 4 agree with each other on 100 percent; arms at widths 5, 6 and 8 agree with each other on 100 percent; across the two groups agreement falls to 44 percent. The 100 percent block spans both drafters." src="analysis/plot_width_partition.png">
-</picture>
-
-Fork positions partition the arms into exactly two groups by verification width, `{3,4}` against
-`{5,6,8}`, identically in all five passes. **The grouping crosses drafters**: width 5 and width 8
-are DFlash2 while width 6 is the built-in MTP head, and all three agree with each other on every
-prompt. So drafter identity does not predict the grouping and verification width does. That
-boundary co-occurs with the CUDA `calc_nwarps` table switching `ncols_dst` from four warps to two.
-
-Two things qualify that, and both were found by this repo looking for them.
-
-**The intervention does not support the warp count as the cause.** Three builds of the same
-revision, differing only in that table, were pre-registered with their outcomes written down
-first. The forced-up build passes every validity gate - the greedy baseline is byte-identical
-across builds on 25 of 25 prompts, the widths it did not touch are identical on 50 of 50, the
-widths it did touch differ on 60 of 75, and disassembly confirms the edit changed exactly the
-kernels it should and no others. But of the 18 prompts that can discriminate, the registered
-prediction that widths 5, 6 and 8 adopt the `{3,4}` fork positions held on **3**. The forced-down
-direction was void on its first attempt for a reason worth stating: its table row included width
-1, and a drafter decodes one token at a time, so it perturbed every arm through its drafter.
-
-That set has since been replaced by four builds from a single cmake configure, which is what the
-first attempt lacked: its control had been built under a different configure, and a reconfigure
-regenerates `flags.make` and recompiles every `ggml-base` source, which is enough to move a
-width-1 greedy baseline that shares byte-identical kernel machine code. The fourth build is a
-second stock one, and it is the control the first set never had. **control and control2 agree on
-0 of 6202 SASS kernels differing and on 150 of 150 outputs byte for byte**, so the build is
-deterministic and a difference from a forced build is the table.
-
-The result is a null, and a clean one. Disassembly shows the edit reached the machine code and
-only there: forced-up differs from control in 92 of 6202 kernels, all `mul_mat_vec_q`, at template
-widths 5 to 8; forced-down2 in 46, at 3 and 4. `ggml_cuda_should_use_mmvq` falls through to
-`ne11 <= MMVQ_MAX_BATCH_SIZE` on Ampere for every quantized type, so those kernels are the ones
-that run. `test-backend-ops perf` puts the effect on the kernel at **+13.6 % at width 5 and
-+26.7 % at width 8**, against a rebuild noise floor of 0.17 %. And the output does not move: **0
-of 75 records differ for forced-up, 0 of 50 for forced-down2**.
-
-So the warp count changes this kernel a great deal and changes no output byte. A fork position is
-a property of the text, and a mechanism that cannot change the text cannot change where two texts
-diverge. **The warp count is out as the cause**, on those grounds rather than on a measured
-absence, and the co-occurrence above is reported as co-occurrence. What else changes at that width
-is open.
-
-**Every agreement is censored, not some of them.** An earlier version of this paragraph measured
-the window in characters and reported 15 of 25 prompts censored, with the partition checked against
-the 10 that were not. The design fixes the window in tokens, and characters per token span 1.36 to
-6.17 across these prompts, so that split was an artefact of the wrong unit. Measured in tokens,
-`harness/truncation_audit.py` gives 490 of 750 Phase A records diverged, 260 right-censored, and
-**0 that reached EOS**. No record anywhere in this study stopped on its own, so no identity here is
-exact: every one means "did not diverge within 400 tokens". There is no clean subset, because the
-censoring is uniform, and the robustness check the earlier text claimed cannot be run on this data
-at all. Forks resolve between token 6 and token 334, the latest at 83 % of the window. What settles
-it is a larger budget, which is TODO.md item D2.
-
-This corroborates [llama.cpp #25618](https://github.com/ggml-org/llama.cpp/issues/25618) rather
-than discovering anything: that thread already establishes the phenomenon, its
-quantization-dependence, its drafter-independence, and a root cause on the Vulkan side. What is
-still open is the **CUDA** boundary, and a width-localised boundary is what this repo can add -
-now with the intervention result attached, which points away from the mechanism the thread
-proposes.
-[llama.cpp #26750](https://github.com/ggml-org/llama.cpp/issues/26750) asks the same question on
-Blackwell; this card is sm_86 and cannot answer it. See
-[`docs/UPSTREAM_CONTRIBUTIONS.md`](docs/UPSTREAM_CONTRIBUTIONS.md).
-
-### Resource response
-
-<details>
-<summary>The speculative arms boosted lower than their own baselines, so the speedups are understated</summary>
-
-Every speculative arm ran at a **lower SM clock than the baseline it is compared against** - 1.98 %
-lower for `dflash2-n7`, 4.17 % lower for `mtp-n5` - and 3 to 5 degrees hotter. Nothing was pinned;
-this is the card boosting less because a speculative arm draws more power for the same wall time.
-
-The direction matters. A treatment arm running *faster* than its control would inflate the effect;
-one running slower deflates it. Correcting with this study's own SM-clock elasticity for the
-interval those clocks sit in, 0.78 for the speculative arms:
-
-| arm | clock vs its baseline | measured | at matched clock |
-|---|---:|---:|---:|
-| `mtp-n2` | -3.87 % | +59.77 % | ~ +64.7 % |
-| `mtp-n3` | -4.01 % | +52.32 % | ~ +57.2 % |
-| `dflash2-n4` | -3.06 % | +51.94 % | ~ +55.7 % |
-| `mtp-n5` | -4.17 % | +32.10 % | ~ +36.5 % |
-| `dflash2-n7` | -1.98 % | +22.63 % | ~ +24.6 % |
-
-The measured column stays the headline, for two reasons. It is the conservative one, and it is
-what the card actually delivers to a user who has not pinned anything. The matched-clock column is
-an estimate from an elasticity measured in a different phase, not a measurement, and it is here so
-that the boost difference is not mistaken for something working in the study's favour.
-
-</details>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_bound_by_dark.png">
-  <img alt="Two panels. Top: bandwidth elasticity against compute elasticity at the top of the clock range. The baseline sits at 0.80 bandwidth and 0.27 compute; both speculative arms sit near 0.15 bandwidth and 0.78 compute, in the opposite corner. Bottom: compute elasticity by interval. From 600 to 1200 MHz all three are between 0.80 and 0.93; from 1200 to 1710 MHz the baseline falls to 0.27 while the speculative arms stay at 0.76 and 0.80." src="analysis/plot_bound_by.png">
-</picture>
-
-Phase R varied memory bandwidth and power budget independently, 1125 measurements, and confirmed
-the assumption the design rests on: lowering the power limit to 250 W and 175 W leaves the memory
-clock at 9501 MHz unchanged, so the two levers are separable on this card. Its own review then
-found that a power cap is a poor compute lever, because the clock it produces is an outcome rather
-than a setting. **Phase R2** re-ran the compute axis with the SM clock pinned at 600, 1200 and
-1710 MHz, 1575 measurements, 0 incidents, and it is the one quoted here.
-
-At the top of the clock range the two workloads sit in opposite corners:
-
-| | bandwidth elasticity | compute elasticity | bound by |
-|---|---:|---:|---|
-| baseline | **0.79-0.81** | **0.27** | memory bandwidth |
-| mtp-n3 | 0.13-0.15 | 0.76 | compute |
-| mtp-n7 | 0.17-0.18 | 0.81 | compute |
-
-The two elasticities very nearly swap. That is what speculation does to the workload: one target
-pass scores several positions at once, so the decode stops waiting on memory and starts waiting on
-arithmetic.
-
-The regime matters and the intervals show where it changes. From 600 to 1200 MHz everything is
-compute-starved and everything scales with clock: baseline 0.804, mtp-n3 0.913, mtp-n7 0.931.
-From 1200 to 1710 MHz the baseline hits its bandwidth ceiling and stops responding, 0.266, while
-the speculative arms keep scaling at 0.759 and 0.805. The ratio between them therefore is not one
-number: it is 1.14x in the low regime and 2.85x in the high one, which is why this repo reports
-elasticities per interval and never pools them across a regime change.
-
-Pinning tightened the intervals to the third decimal, and it binds at five of the seven
-conditions. It does not bind at the top two. A pin holds only while the power limit does not, and
-a speculative arm draws more at the same clock, so at `sm1700` the methods land on 1710, 1698 and
-1708 MHz against one request, and at `sm1700-bwhi` on 1710, 1689 and 1703. The elasticities in the
-table above cross `sm1700`, and `harness/elasticity.py` marks every interval that crosses an
-unmatched condition rather than leaving it to be noticed in the clock columns. The arithmetic is
-unaffected, since each elasticity divides by that arm's own log clock ratio, but the comparison
-between arms there spans slightly different ranges. Phase R, for contrast, was mismatched at 30.0 %
-and 35.8 %.
+Per-interval intervals and the pinning method: [`docs/RESOURCE_RESPONSE.md`](docs/RESOURCE_RESPONSE.md).
 
 ## Design
 
@@ -451,7 +231,7 @@ mixture.
    [`docs/GPU_AS_FOUND.md`](docs/GPU_AS_FOUND.md).
 2. **The completed run's process crashed** with a glibc `double free or corruption` after writing
    its last record. The cause was a harness bug (`preexec_fn` alongside a sampling thread, now
-   `start_new_session=True`). All 875 measurements survived; the final pass's derived comparisons
+   `start_new_session=True`). All 875 request records survived; the final pass's derived comparisons
    were recomputed from the recorded text. `PREREGISTRATION.md`, Correction 2.
 
 </details>
@@ -464,13 +244,13 @@ status column says which.
 
 | phase | question | status |
 |---|---|---|
-| **R2** | does the compute elasticity hold with the SM clock pinned rather than power-capped? | **complete**, 1575 measurements, 0 incidents |
+| **R2** | does the compute elasticity hold with the SM clock pinned rather than power-capped? | **complete**, 1575 request records, 0 incidents |
 | **KV** | does the width partition survive an f16 cache, or was it an artefact of q8_0? | complete |
-| **n-max** | the full width ladder, 2 to 9, for the CUDA boundary question | **complete**, 1050 measurements. The registered prediction held: widths partition as `{2,3,4}` and `{5,6,7,8}`, with 9 on its own past the MMVQ dispatch limit |
-| **C** | does drafter quantization change the answer, and does the predecessor's v3.0 need an erratum? | **complete**, 750 measurements, 0 incidents. It barely changes the answer and the highest precision is the slowest: q8 **+53.4 %**, q4k **+52.0 %**, bf16 **+48.5 %**, so a bf16 drafter costs about five points to run. The class effect is larger than the quantization effect: code +117 %, reason +90 %, zh +0.8 %. The three n-gram methods fail three different ways, and the counters separate them: `ngram-mod` has `t_draft_n = 0` on all 75 records and output byte-identical to baseline on all 75, so its flag was accepted and did nothing; `ngram-map-k` drafts on 6 of 75; `ngram-cache` drafts 9699 tokens and accepts **none**, which is where its -8.3 % comes from |
-| **L** | does the long-context decode collapse of [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) reproduce on sm_86, and does speculation survive it? | **running**, two of five rungs. Through 64 K there is no collapse and speculation neither amplifies nor masks the decline: retention against each method's own 8 K rung is 76.4 % for the baseline, 78.3 % for mtp-n2 and 78.0 % for dflash2-n4, and the speedups hold at +54 % and +47 %. The report puts the cliff past 80 K, which is the fourth rung, so the verdict is withheld until it runs6K |
-| **M** | does `draft-mtp` at small n-max escape the MoE penalty that `draft-simple` at n-max 8 suffers? | designed, anchored on reproducing the predecessor's -44.6 % |
-| **Q** | does the target quantization ladder move the marginal cost per verified position? | driver written, needs a 48 GB card above `UD-Q5_K_XL` |
+| **n-max** | the full width ladder, 2 to 9, for the CUDA boundary question | **complete**, 1050 request records. Within the 400-token window, widths 2-8 produce two stable first-fork and censoring signatures, `{2,3,4}` and `{5,6,7,8}`, with 9 on its own past the MMVQ dispatch limit. The registered partition matched, but the four-build intervention then falsified warp count as its cause, so this is an observational signature and not a mechanism |
+| **C** | does drafter quantization change the answer, and does the predecessor's v3.0 need an erratum? | **complete**, 750 request records, 0 incidents. It barely changes the answer and the highest precision is the slowest: q8 **+53.4 %**, q4k **+52.0 %**, bf16 **+48.5 %**, so a bf16 drafter costs about five points to run. The class effect dwarfs the quantization effect: across the three precisions code runs +111 % to +118 %, reason +86 % to +92 % and zh -2.3 % to +0.8 %, a spread of more than a hundred points between classes against five between precisions. The three n-gram methods fail three different ways, and the counters separate them: `ngram-mod` has `t_draft_n = 0` on all 75 records and output byte-identical to baseline on all 75, so its flag was accepted and did nothing; `ngram-map-k` drafts on 6 of 75; `ngram-cache` drafts 9699 tokens and accepts **none**, which is where its -8.3 % comes from |
+| **L** | does the long-context decode collapse of [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) reproduce on sm_86, and does speculation survive it? | **running**, four of five rungs complete: 8 K, 32 K, 64 K and 80 K, 180 records each. Through a realised 81 921 tokens there is no collapse: the baseline goes 39.7 -> 28.3 tok/s, a factor of 1.4 against the reported 25. Speculation neither amplifies nor masks the decline; retention against each method's own 8 K rung is 71.4 % for the baseline, 73.4 % for mtp-n2 and 79.8 % for dflash2-n4, and the speedups hold at +53.5 % and +61.1 % on overlapping intervals. The report's worked example is 1.4 tok/s at 91 K, which only the fifth rung reaches, so the verdict is withheld until 96 K completes |
+| **M** | does `draft-mtp` at small n-max escape the penalty that a 0.8B `draft-simple` at n-max 8 suffers, and does the architecture decide it? | designed, not run. 14 arms, 1050 records. Re-anchored and re-armed after an audit: the -44.6 % it was built to reproduce belongs to the predecessor's DFlash arm, not the 0.8B one it replicates, which was -21.5 % class-stratified, so the registered gate of "worse than -25 %" would have failed a correct replication. It also had no dense arm at all - every arm ran the MoE file - so it could only compare against numbers from another day. Three dense arms now run in the same session against their own baseline, and two widths were added so the draft-then-verify path has more than one point inside MMVQ. Phase C separately measured that configuration at -29.8 % on the dense target, which is why the phase is no longer described as identifying MoE routing. Corrections 9 and 10 |
+| **Q** | does the target quantization ladder move the marginal cost per verified position? | driver written, not run, and **not preregistered** until Correction 10 - unlike every other row here it had no entry in `PREREGISTRATION.md`. `cost_model.py` now puts a prompt-cluster interval on `c`, which it did not before, so a difference between rungs finally has something to be compared against. On this card only two of four rungs are reachable, about one bit of span against a 2.7 % run-to-run drift in `c`; `phase_qsmall` spans four times the range and is the better instrument here |
 | **V** | does the same comparison hold on vLLM rather than llama.cpp? | designed, [`docs/PHASE_V_DESIGN.md`](docs/PHASE_V_DESIGN.md) |
 
 ## Reproduce
@@ -481,18 +261,29 @@ sudo apt-get install -y cuda-toolkit-13-3 ninja-build ccache
 
 # two trees, identical flags: DFlash2 is an unmerged PR, so there is no prebuilt for it, and
 # mixing a prebuilt master with a self-built PR binary would reintroduce a build confound
+# The two trees these results were measured on. Both branches have moved since, so the
+# commits are pinned and verified: without this you build something else and get something else.
+LLAMA_MASTER_COMMIT=c060ca9
+DFLASH2_COMMIT=d1a522f
+
 git clone https://github.com/ggml-org/llama.cpp llamacpp-master
+git -C llamacpp-master checkout --detach $LLAMA_MASTER_COMMIT
 cp -r llamacpp-master llamacpp-dflash2
-cd llamacpp-dflash2 && git fetch origin pull/27342/head:pr-27342 && git checkout pr-27342 && cd ..
+git -C llamacpp-dflash2 fetch origin pull/27342/head
+git -C llamacpp-dflash2 checkout --detach $DFLASH2_COMMIT
+test "$(git -C llamacpp-master   rev-parse --short HEAD)" = "$LLAMA_MASTER_COMMIT" || exit 1
+test "$(git -C llamacpp-dflash2  rev-parse --short HEAD)" = "$DFLASH2_COMMIT"      || exit 1
+
 for t in llamacpp-master llamacpp-dflash2; do
   CUDACXX=/usr/local/cuda-13.3/bin/nvcc cmake -B $t/build -S $t -GNinja \
     -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86 -DGGML_CCACHE=ON -DCMAKE_BUILD_TYPE=Release
   cmake --build $t/build -j --target llama-server
 done
 
-# models
+# models, then check them against the hashes these runs loaded
 hf download unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-UD-Q4_K_XL.gguf --local-dir models/target
 hf download z-lab/Qwen3.8-27B-DFlash2-GGUF --local-dir models/dflash2
+sha256sum -c models/SHA256SUMS
 
 # the harness's own tests: one case per defect this study shipped and later found
 python3 harness/test_harness.py
@@ -523,6 +314,30 @@ the output file so they can never be mistaken for a full result.
   together with `--mmproj` ([#19712](https://github.com/ggml-org/llama.cpp/issues/19712)).
 - **Single-stream only** in Phase A. Speculative decoding is a single-stream optimisation and its
   advantage is reported by others to vanish by `--parallel 4`; measuring that is a later phase.
+- **Long-output workload.** Every primary prompt was written to reach the 400-token cap. Short
+  answers and natural EOS termination are not represented, so this does not transfer to ordinary
+  short chat traffic.
+- **Curated prompts, not traffic.** The five classes carry equal weight by design. A deployment
+  figure would have to reweight them by its own traffic mix, which has not been measured.
+- **Statistical scope.** The inferential unit is 25 prompts, not 875 records. The percentile
+  cluster bootstrap undercovers at that size (88.0-90.9 % against a nominal 95 %), so the printed
+  intervals are too narrow, and none of them carry uncertainty from changing host, card, build,
+  model or prompt population.
+- **Output agreement is right-censored.** Every primary request hit the token cap and none reached
+  EOS. A record counted as identical means no divergence was observed within 400 tokens; it is not
+  a statement about the whole answer.
+- **No semantic-quality benchmark.** The harness measures byte-level divergence and obvious
+  degeneration. Whether a diverged answer is better, worse or equivalent is not tested.
+- **Dual-tree interaction.** Same-tree baselines control the branch's no-speculation main effect.
+  They cannot identify a branch-by-DFlash2 interaction, because `draft-dflash` cannot be run on
+  the master tree at all.
+- **Energy magnitude is provisional.** Energy comes from sampled board-power telemetry and a
+  separately measured prefill calibration. The audits support the direction; the exact percentage
+  needs a hardware energy counter.
+- **Residual order effects.** Phase A rotates arm order, but 5 passes do not close a 7-arm
+  rotation, so each arm visits 5 of 7 positions, and prompt order is fixed in class blocks. The
+  harness has `--latin-arms` and `--shuffle-prompts` (`bench.py:217`), but the committed primary
+  matrix predates them and changing the design mid-study would have been worse.
 
 ## License
 

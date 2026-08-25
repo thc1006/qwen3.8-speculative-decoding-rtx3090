@@ -185,8 +185,15 @@ second-host addendum in `PREREGISTRATION.md`.
       rung 1 of 5 at 11.9 s/record. Rungs 8192, 32768 and 65536 sit below the reported ~80 K
       cliff, so the fourth rung is what decides whether the ladder takes four hours or thirteen.
       `.ladder_budget_s` holds a seconds count that stops it at a rung boundary.
-- [ ] **Phase M** - dense against MoE under one protocol, anchored on reproducing the
-      predecessor's -44.6 %.
+- [ ] **Phase M** - dense against MoE in one run, 14 arms, 1050 records, about 3 h. Anchored
+      on -21.5 % class-stratified, not the -44.6 % that belongs to the predecessor's DFlash arm.
+      Phase C already measured that configuration at -29.8 % on the DENSE target, so the phase is
+      not described as identifying MoE routing. Corrections 9 and 10.
+- [ ] **Phase Q-small** - `run_phase_qsmall.sh` is written and unrun. It is the better instrument
+      for the quantization question on this card: Q4_K_M to BF16 on Qwen3.5-9B-MTP is about four
+      times the bit span the 27B ladder can reach here, it supplies the bf16 anchor the 27B
+      ladder structurally cannot, and its Q4_K_M is the exact file llama.cpp #26750 reports on.
+      ~42 GB of downloads, staged and deleted one rung at a time against 29 GB of free disk.
 
       Audited before it runs, since the n-gram guard already showed one bad arm can stop a phase.
       Two risks checked, one cleared and one open.

@@ -15,7 +15,7 @@
 # BF16 is 52.2 GB and fits on neither; the bf16 anchor comes from phase_qsmall instead.
 #
 # Environment:
-#   GPU=1        nvidia-smi index of the card to use
+#   GPU=<n>      nvidia-smi index of the card to use (default 0)
 #   PASSES=3
 #   RUNGS="..."  subset of rungs, in order
 #   KEEP=1       never delete weights
@@ -48,6 +48,17 @@ N_PROMPTS=$(python3 -c "
 import sys; sys.path.insert(0,'harness'); import prompts as P; print(len(P.PROMPTS))")
 EXPECTED=$(( N_ARMS * N_PROMPTS * PASSES ))
 log "expecting ${N_ARMS} arms x ${N_PROMPTS} prompts x ${PASSES} passes = ${EXPECTED} records per rung"
+
+# A zero or empty count here makes every "got >= EXPECTED" test pass, which would report a rung
+# that measured nothing as complete and, in this script, delete its weights. The python above can
+# fail for reasons that have nothing to do with the run, so the value is checked before use.
+case "${EXPECTED}" in
+  ''|*[!0-9]*|0)
+    log "FATAL: expected record count came out as '${EXPECTED}' (N_PROMPTS='${N_PROMPTS}')."
+    log "  Refusing to continue: a zero here passes every completeness gate."
+    exit 1 ;;
+esac
+
 
 records_in() {   # $1 = json path -> record count, 0 if unreadable
   python3 -c "
@@ -103,6 +114,13 @@ for RUNG in $RUNGS; do
     HF_HUB_ENABLE_HF_TRANSFER=1 .venv/bin/hf download unsloth/Qwen3.8-27B-GGUF "$F" \
       --local-dir models/quant_ladder >> logs/phase_q_download.log 2>&1 || {
         log "download of $F FAILED - see logs/phase_q_download.log"; continue; }
+    # unsloth ships the larger quants split into `-00001-of-000NN` parts. The download above
+    # fetches only the single-file name, so a split rung would land with nothing to load.
+    if [ ! -f "models/quant_ladder/$F" ]; then
+      log "$F did not arrive as a single file; it is probably split into parts."
+      log "  check the repo's file list and pass the first part to llama-server instead."
+      continue
+    fi
     SRC="models/quant_ladder/$F"
     DOWNLOADED=1
   else

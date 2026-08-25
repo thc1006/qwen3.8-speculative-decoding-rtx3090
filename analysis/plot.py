@@ -79,7 +79,10 @@ PROVENANCE = ("Qwen3.8-27B UD-Q4_K_XL | RTX 3090 24 GB | llama.cpp c060ca9 | gre
               "--parallel 1, fresh server per arm-pass, thermal gate at arm entry | "
               "PREREGISTRATION.md | 2026-08-25")
 PHASE_A_N = "Phase A: 875 requests, 0 incidents, 0 excluded."
-CI_NOTE = "95 % paired cluster bootstrap over prompts within class, 10 000 resamples."
+CI_NOTE = ("Nominal 95 % paired cluster bootstrap over prompts within class, 10 000 "
+           "resamples. The inferential unit is the prompt, n = 25; the passes are repeated "
+           "measurements. Simulation in this repo puts the percentile interval's actual "
+           "coverage at 88.0-90.9 % at that size, so these widths are optimistic.")
 
 _MODE = "light"
 
@@ -164,8 +167,9 @@ def fig_headline(series, prompt_class):
     ax.set_ylim(-0.65, len(rows) - 0.35)
     ax.set_xlim(0, max(r[1].hi for r in rows) * 1.20)
     ax.set_xlabel("faster than the non-speculative baseline of the same tree  (%)")
-    ax.set_title("Every speculative arm is faster, and every 95 % interval clears zero\n"
-                 f"baseline {base_abs:.2f} tok/s  |  25 prompts x 5 passes per arm", pad=12)
+    ax.set_title("Every speculative arm is faster, and every interval clears zero\n"
+                 f"nominal 95 %  |  baseline {base_abs:.2f} tok/s  |  25 prompts x 5 passes per arm",
+                 pad=12)
     ax.grid(axis="x", alpha=0.5, zorder=0)
     _despine(ax, keep=("bottom",))
     ax.tick_params(axis="y", length=0)
@@ -237,7 +241,7 @@ def fig_cost_model(result):
             # both collide with the series label and draw a claim the data does not carry.
             gx = np.linspace(k_pts[0][0], k_pts[-1][0], 40)
             ax_k.plot(gx, k0 + c * (gx - 1), color=col, lw=1.1, ls="--", alpha=0.75, zorder=1)
-            c_labels.append((f"c = {c:.4f}   ({spec})", col))
+            c_labels.append((f"c = {c:.4f}   ({spec}, Phase A only)", col))
 
     ref = series_of("draft-mtp", "mean_len")
     if ref:
@@ -269,20 +273,24 @@ def fig_cost_model(result):
     ax_k.set_ylabel("cost of one target pass,\nin plain decode steps")
     ax_k.set_title("The cost is linear: each extra verified position costs a fixed c", pad=8)
 
-    ax_s.set_ylim(0.96, 1.78)   # headroom for the labels that sit above the best points
+    ax_s.set_ylim(0.96, 1.92)   # headroom for the labels that sit above the best points
     ax_s.axhline(1.0, color=C("mut"), ls=":", lw=1.1)
     ax_s.text(2.65, 1.005, "break-even", fontsize=9, color=C("mut"), va="bottom")
     ax_s.set_ylabel("speedup\n= tokens / cost")
     ax_s.set_title("Saturating benefit over linear cost: the best width is a small one", pad=8)
-    ax_s.set_xlabel("verification width  w = n-max + 1   (positions the target scores per pass)")
+    ax_s.set_xlabel("verification width  w = n-max + 1 as configured\n"
+                    "(a drafter that does not fill its budget verifies fewer columns than this)")
     # below and to the right of the best point, with a leader, so the text never crosses a curve
     for spec, (col, _) in STYLE.items():
         pts = series_of(spec, "speedup")
         if pts:
             bw, bv = max(pts, key=lambda p: p[1])
-            ax_s.annotate(f"best w = {bw}   {bv:.2f}x", (bw, bv), textcoords="offset points",
-                          xytext=(0, 13), ha="center", fontsize=10, color=col,
-                          fontweight="bold")
+            # anchor the leftmost label left, or it runs under the y-axis title
+            lha = "left" if bw <= 3 else "center"
+            ax_s.annotate(f"best tested here: w = {bw}   {bv:.2f}x", (bw, bv),
+                          textcoords="offset points",
+                          xytext=(-6 if lha == "left" else 0, 13), ha=lha, fontsize=10,
+                          color=col, fontweight="bold")
         ax_s.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
                       color=col, fontsize=10, va="center", fontweight="bold")
 
@@ -296,7 +304,11 @@ def fig_cost_model(result):
     _save(fig, "plot_cost_model", bottom=0.105,
           note=PHASE_A_N + " k is recovered per request as mean_len / speedup, then averaged over 125 requests "
                "per arm. draft-dflash has two widths here, so its dashed line is determined "
-               "rather than fitted.")
+               "rather than fitted. Phase A tests draft-dflash at w = 5 and 8 only, so its best "
+               "point here is the better of two. The completed n-max ladder supersedes both "
+               "coefficients and both optima: it fits c = 0.2904 for draft-mtp over widths 2-8 and "
+               "c = 0.2481 for draft-dflash over 3, 5 and 7, and puts the best width at 3 for both "
+               "methods. The dispatch-boundary figure shows that fit.")
 
 
 # ------------------------------------------------------------------ 4. the width partition
@@ -379,15 +391,24 @@ def fig_dispatch_boundary(result_nmax):
     _save(fig, "plot_dispatch_boundary", bottom=0.13,
           note="A width past the dispatch limit takes a different kernel family. Its marker is "
                "open, it is excluded from the fit, and the arrow is the distance from the line "
-               "the widths below define.")
+               "the widths below define. The two open markers are not the same measurement: at "
+               "n-max 8 draft-mtp fills 8.93 of its 9 columns and does leave the kernel, while "
+               "draft-dflash fills 7.94 and largely does not, which is most of why one sits -26 % "
+               "off the line and the other -7 %. At widths 3, 5 and 7 the two fill identically "
+               "(2.99, 4.98, 6.95) and agree on 25 of 25 prompts.")
 
 
 def fig_width_partition(result):
     fork = _forks(result)
     prompts = sorted(fork)
     n = len(SPEC_ARMS)
+    # Two arms that both reach the 400-token cap without diverging hold the same cell value, so
+    # counting equality alone scores "neither forked" as agreement. That is 18 % of all pairs here
+    # and about a fifth of every 100 % block, so both numbers are reported.
     agree = np.array([[100.0 * sum(fork[p][a] == fork[p][b] for p in prompts) / len(prompts)
                        for b in SPEC_ARMS] for a in SPEC_ARMS])
+    cens = np.array([[100.0 * sum(fork[p][a] == fork[p][b] == "SAME" for p in prompts) / len(prompts)
+                      for b in SPEC_ARMS] for a in SPEC_ARMS])
     lo = [a for a in SPEC_ARMS if WIDTH[a] <= 4]
     hi = [a for a in SPEC_ARMS if WIDTH[a] >= 5]
     cross = min(agree[SPEC_ARMS.index(a), SPEC_ARMS.index(b)] for a in lo for b in hi)
@@ -400,8 +421,13 @@ def fig_width_partition(result):
             if i == j:
                 ax.text(j, i, "-", ha="center", va="center", color="#8a8a8a", fontsize=14)
             else:
-                ax.text(j, i, f"{agree[i, j]:.0f}%", ha="center", va="center", fontsize=13,
-                        color="white" if agree[i, j] > 55 else "#111111")
+                col = "white" if agree[i, j] > 55 else "#111111"
+                ax.text(j, i - 0.08, f"{agree[i, j]:.0f}%", ha="center", va="center",
+                        fontsize=13, color=col)
+                if cens[i, j] > 0:
+                    ax.text(j, i + 0.28, f"of which\n{cens[i, j]:.0f} pt censored", ha="center",
+                            va="center", fontsize=7.4, color=col, alpha=0.85,
+                            linespacing=1.15)
     labels = [f"w={WIDTH[a]}\n{DRAFTER[a]}" for a in SPEC_ARMS]
     ax.set_xticks(range(n), labels, fontsize=10)
     ax.set_yticks(range(n), [f"{a}\nw={WIDTH[a]} | {DRAFTER[a]}" for a in SPEC_ARMS], fontsize=9.4)
@@ -409,17 +435,23 @@ def fig_width_partition(result):
     _despine(ax, keep=())
     ax.axhline(1.5, color=C("fg"), lw=3.0)
     ax.axvline(1.5, color=C("fg"), lw=3.0)
-    ax.set_title("Verification width decides where output forks - not the drafter\n"
-                 f"100 % agreement within each width group, {cross:.0f} % across them",
+    ax.set_title("Two signature groups, spanning both drafters, split at the width boundary\n"
+                 f"{cross:.0f} % agreement across the groups, and part of the within-group "
+                 f"agreement is censored",
                  fontsize=12, pad=12)
     fig.colorbar(im, ax=ax, fraction=0.030, pad=0.025).set_label(
-        f"share of the {len(prompts)} prompts on which\nboth arms fork at the same character (%)", fontsize=9)
+        f"share of the {len(prompts)} prompts on which both arms show\n"
+        f"the same first-divergence or censoring signature (%)", fontsize=9)
     fig.subplots_adjust(left=0.175, right=0.885, top=0.845)
     _save(fig, "plot_width_partition",
-          note=PHASE_A_N + f" The 100 % block spans both drafters, so drafter identity does not predict it "
-               f"while width does. The two groups fork elsewhere on {differ} of {len(prompts)} "
-               f"prompts. Pass 1; identical in all five. w is the CUDA kernel's ncols_dst and "
-               f"calc_nwarps switches between 4 and 5.")
+          note=PHASE_A_N + f" A cell counts a prompt when both arms show the same signature, "
+               f"which includes both reaching the 400-token cap without diverging; the second "
+               f"number is how much of the cell that is. Those pairs carry no fork position, so a "
+               f"block is weaker than 100 % agreement on where output forks. The groups differ on "
+               f"{differ} of {len(prompts)} prompts. The blocks span both drafters, so drafter "
+               f"identity does not predict the grouping while width does; the four-build "
+               f"intervention separately rules out warp count as the cause. Pass 1; identical in "
+               f"all five. w is the kernel's ncols_dst.")
 
 
 # ------------------------------------------------------------------ 5. what speculation is bound by
@@ -457,13 +489,15 @@ def fig_bound_by(res):
         ax1.annotate(f"{m}\n({bw:.2f}, {cp:.2f})", (bw, cp), textcoords="offset points",
                      xytext=(dx, dy), fontsize=9.6, color=col, va="center", ha=ha)
     ax1.plot([0, 1], [1, 0], color=C("mut"), ls=":", lw=1.0, zorder=1)
+    ax1.annotate("the two elasticities sum to 1", (0.62, 0.38), fontsize=8.4, color=C("mut"),
+                 rotation=-31, rotation_mode="anchor", ha="center", va="bottom")
     ax1.set_xlim(-0.03, 1.0); ax1.set_ylim(-0.03, 1.0)
-    ax1.set_xlabel("bandwidth elasticity   d(ln tok/s) / d(ln memory clock)\n"
-                   "further right = more bandwidth-bound")
-    ax1.set_ylabel("compute elasticity\nd(ln tok/s) / d(ln SM clock)\n"
-                   "higher = more compute-bound")
-    ax1.set_title("Speculation does not speed up a bandwidth-bound decode.\n"
-                  "It moves the workload into the other corner", pad=10)
+    ax1.set_xlabel("memory-clock elasticity   d(ln tok/s) / d(ln memory clock)\n"
+                   "further right = responds more to the memory clock")
+    ax1.set_ylabel("SM-clock elasticity\nd(ln tok/s) / d(ln SM clock)\n"
+                   "higher = responds more to the SM clock")
+    ax1.set_title("The baseline and the speculative arms respond to opposite clocks.\n"
+                  "A response measurement, not a roofline", pad=10)
     ax1.grid(alpha=0.5); _despine(ax1)
 
     # --- the same thing as a regime change: the baseline stops responding to clock, speculation
@@ -481,9 +515,9 @@ def fig_bound_by(res):
                      capsize=3, lw=1.2, zorder=3)
         for x, v in zip(xs + (i - 1) * width, vals):
             ax2.text(x, v + 0.025, f"{v:.2f}", ha="center", fontsize=9.2, color=C("fg"))
-    ax2.set_xticks(xs, ["600 -> 1200 MHz\nboth still compute-starved",
-                        "1200 -> 1710 MHz\nthe baseline hits its bandwidth ceiling"], fontsize=9.6)
-    ax2.set_ylabel("compute elasticity")
+    ax2.set_xticks(xs, ["600 -> 1200 MHz\nall three track the SM clock",
+                        "1200 -> 1710 MHz\nthe baseline stops tracking it"], fontsize=9.6)
+    ax2.set_ylabel("SM-clock elasticity")
     ax2.set_ylim(0, 1.14)
     ax2.set_title("Below 1200 MHz everything scales with clock. Above it, only\n"
                   "the speculative arms still do", pad=10)
@@ -492,7 +526,10 @@ def fig_bound_by(res):
 
     fig.subplots_adjust(left=0.185, right=0.975, top=0.935, hspace=0.62)
     _save(fig, "plot_bound_by", bottom=0.10,
-          note="Phase R2, 1575 requests, 0 incidents. The SM clock is pinned with nvidia-smi -lgc "
+          note="Phase R2, 1575 requests, 0 incidents. Elasticity is how throughput responds to a "
+               "clock that was set, so it places neither workload against a hardware limit: nothing "
+               "here counts bytes moved or arithmetic issued, and no claim is made about which "
+               "resource either one is bound by. The SM clock is pinned with nvidia-smi -lgc "
                "rather than produced by a power cap, so each elasticity has a setting in its "
                "denominator instead of an outcome. Intervals are a cluster bootstrap over prompts "
                "and over the measured clock, per interval, never pooled across a regime change.")

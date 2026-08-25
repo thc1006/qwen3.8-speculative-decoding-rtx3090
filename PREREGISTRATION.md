@@ -1290,3 +1290,105 @@ and the offset is written into the script so the next person does not have to fi
 Worth keeping the gate rather than loosening it out of embarrassment: it is what forced the
 comparison that produced the confirmation above. A gate that fires and turns out to be too strict
 still did its job, provided the response is to look rather than to lower it.
+
+## Correction 9, 2026-08-25 19:40, BEFORE Phase M runs: H6a is anchored on the wrong number
+
+H6a registers that Phase M's replication arm holds if `moe-draft08b-n8` "is worse than -25 %"
+against the MoE baseline, anchored on the predecessor's -44.6 %. Both halves are wrong, and the
+gate as registered would fail a correct replication.
+
+**The -44.6 % belongs to a different method.** It is the predecessor's `06_dflash_max8`, DFlash
+with a BF16 drafter. Phase M runs no DFlash arm. The arm it replicates is `draft-q35-08b-max8`,
+the 0.8B draft-then-verify one, published at 121.06 against 135.69 tok/s: **-10.8 %** raw. On the
+class-stratified estimand this repo uses throughout, `docs/METHODOLOGY_AUDIT.md` puts the same
+data at **-21.5 %**. A faithful replication should therefore land near -21.5 %, which is inside
+the region the registered gate calls a failure.
+
+The gate moves to a band of -12 % to -32 % around the stratified figure. `run_remaining.sh` is
+updated with it, and now writes `results/phase_m_anchor_ok` only when the band is met; the 22 GB
+MoE target is no longer deleted while the anchor is unresolved, since that is exactly when the
+model is needed.
+
+**The MoE premise is separately contradicted by this repo's own Phase C.** H6 and H6a are built on
+the predecessor's account that the loss comes from MoE expert loading. Phase C ran the same 0.8B
+drafter at the same n-max 8 against the DENSE 27B target, on this harness, this card and this
+build, and measured:
+
+```
+draft08b-n8    baseline@master   -29.81 [-33.09, -26.39]  SLOWER
+```
+
+Worse than the MoE arm, in a model with no experts, no routing and no union to load. Expert
+saturation cannot be the cause of a loss that reproduces at least as badly without any experts.
+This is a cross-study comparison of the MoE side, so it is not decisive on its own; it is decisive
+enough that Phase M must not be reported as identifying MoE routing.
+
+**And the "acceptance near 100 %" that motivated the account is a broken counter.** Every
+predecessor config has `total_draft == total_accept` exactly, because the log line divided
+accepted by accepted. The adjacent line gives 115 accepted of 214 drafted, 53.7 %. The current
+build prints a real ratio, so the two studies do not measure the same quantity.
+
+H6a is re-anchored as above. H6 stands as registered but is exploratory: it is a near-zero test,
+and at n = 25 prompts the interval half-widths in this repo run 3 to 6 points, so any true effect
+between -8 % and 0 is not resolvable. H4a's "isolating MoE routing" is withdrawn; the addendum at
+line 479 already conceded that model size is not controlled, and Phase C now removes the premise
+as well. Phase M keeps its value as a replication of the predecessor's arm on a controlled
+harness. It is not a dense-versus-MoE identification, and all nine of its arms are MoE.
+
+**Phase Q was never registered.** It has no entry anywhere above. The README's follow-up table is
+corrected to say so rather than letting the table's preregistered framing cover it. Phase Q also
+has no inferential machinery: `harness/cost_model.py` reports `c` as a bare point estimate with no
+interval, so a difference in `c` between quantization rungs currently has nothing to be compared
+against. Both are prerequisites before it runs.
+
+## Correction 10, 2026-08-25 21:10, BEFORE Phase M runs: the phase is given the arms its name claims
+
+Correction 9 recorded that Phase M could not identify MoE routing. It did not fix the reason. The
+matrix declared one model and every one of its nine arms ran it, because `Arm` had no `model`
+field and `bench.py` passed the matrix default to every server it started. A phase called "dense
+against MoE" therefore had no dense arm in it, and its dense side would have come from Phase A and
+Phase C, measured one and two days earlier on different builds of the harness.
+
+`Arm` now carries an optional `model`, `bench.py` uses `arm.model or model` when it starts a
+server, and because the harness already starts a fresh server for every arm-pass, changing the
+model between arms costs nothing beyond the load it was going to do anyway. Runs where no arm
+overrides record exactly what they recorded before: `arm_models` is empty and `env.model` is
+unchanged. Where an arm does override, every distinct file is hashed into `arm_models`, so a
+two-model run is auditable rather than being described by a single `env.model_sha256` that would
+have been true of only part of it.
+
+Three dense arms are added: `baseline-dense`, `dense-mtp-n2` and `dense-draft08b-n8`. A pair now
+differs in the model and nothing else: same harness, same card, same prompts, same build, same
+hour. `BASELINE_MAP` is rewritten to score each arm against the baseline that ran its own model;
+as first written it sent every arm to `baseline-moe`, which would have scored the dense arms
+against an MoE baseline and reported the difference between two models as a speculation effect.
+`test_every_arm_is_paired_with_a_baseline_on_its_own_model` now fails on that mapping.
+
+Two more arms are added to the draft-then-verify side, `moe-draft08b-n2` and `-n6`. Its existing
+n_max of 4, 8 and 16 are verification widths 5, 9 and 17, and only 5 is inside the MMVQ dispatch
+path, so a fit over that path had one point and could not produce a `c` at all. Widths 3 and 7
+make it fittable, which is what H6b needs.
+
+`--spec-draft-n-min 4` is added to every draft-then-verify arm. The predecessor's v1 passed
+`--draft-min 4`; this matrix passed nothing, and the current default is 0
+(`common/common.h:326`), so the replication arm differed from the thing it replicates in a
+parameter neither study had noticed.
+
+The matrix goes from 9 arms to 14 and from 675 records to 1050, about three hours rather than two.
+`expect_for` in `run_remaining.sh` derives the count from `len(ARMS)` and needs no change.
+
+None of this is registered as a new hypothesis. H6, H6a and H6b are unchanged in content; what
+changes is that the matrix can now address them. H6a keeps the -12 % to -32 % band from
+Correction 9.
+
+**Phase Q, same audit.** Its ladder is three unsloth UD dynamic quants and one uniform `Q8_0`, so
+bit width is confounded with quantization scheme; results are to be plotted against each file's
+measured effective bits per weight rather than its label. On a 24 GB card only the first two rungs
+are reachable, a span of about one bit, where H2' predicts roughly -8 % in `c` against the 2.7 %
+run-to-run drift already seen in `c` between `phase_a` and `phase_nmax` - three times the noise,
+from two points. `phase_qsmall` spans Q4_K_M to BF16, about four times the bit range, and is the
+better instrument on this hardware. H2' is also not stated in the same units as `c`: theirs is a
+per-extra-token throughput cost from `llama-batched-bench`, `c` is a slope in serial-decode-step
+equivalents, and no derivation relates them, so the ladder tests the direction of the claim and
+not its figures. The `UD-Q4_K_XL` rung repeats arms `phase_a` and `phase_nmax` already ran on the
+same file; it is kept as the same-session control and is not new evidence about Q4.

@@ -195,7 +195,11 @@ def main():
         # it printed "DOES NOT REPRODUCE ... #27623 is not architecture-independent" from two
         # depths that are both under the threshold. That is a conclusion about a depth this run
         # had not reached.
-        CLIFF_DEPTH = 80000
+        # The report says the collapse begins past about 80 K, but the number it actually
+        # publishes is 1.4 tok/s at 91 K against 33 at 68 K. A rung at 82 K clears the vaguer
+        # threshold and not the worked example, and the 25x claim is the example's. Gate on the
+        # example, so no verdict is issued from a depth that never reached the reported figure.
+        CLIFF_DEPTH = 91000
         deepest = max(d for d, _ in vals) if vals else 0
         used_incomplete = sorted(incomplete & {d for d, _ in vals})
         if len(vals) < 2:
@@ -207,8 +211,8 @@ def main():
             print("  0.2481 finished. Re-run this once the ladder is done.")
         elif deepest < CLIFF_DEPTH:
             print(f"  {b}: {vals[0][1]:.1f} tok/s at {vals[0][0]} -> {vals[-1][1]:.1f} tok/s at {deepest}")
-            print(f"  VERDICT WITHHELD. The report puts the collapse past about {CLIFF_DEPTH//1000} K and the")
-            print(f"  deepest rung here is {deepest}. Nothing below the threshold can reproduce or refute it;")
+            print(f"  VERDICT WITHHELD. The report's worked example is 1.4 tok/s at about")
+            print(f"  {CLIFF_DEPTH//1000} K and the deepest rung here is {deepest}, which is short of it;")
             print(f"  the ratio over these rungs is {max(v for _, v in vals)/min(v for _, v in vals):.1f}x and describes")
             print(f"  ordinary degradation, not the cliff.")
         else:

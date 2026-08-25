@@ -1,8 +1,18 @@
 """Phase M: dense-hybrid against MoE, same harness, same card, same prompts.
 
 The predecessor study concluded that no llama.cpp speculative-decoding configuration is a net win
-for Qwen3.6-35B-A3B on a consumer 3090, with the best draft-then-verify config landing at 77.0
-tok/s against a 138.9 tok/s baseline, a 44.6 % net loss. Its explanation was MoE expert loading:
+for Qwen3.6-35B-A3B on a consumer 3090. Its headline -44.6 % is DFlash with a BF16 drafter, which
+this phase does not run. The arm this phase actually replicates is `draft-q35-08b-max8`, the 0.8B
+draft-then-verify one, at -10.8 % raw and -21.5 % on the class-stratified estimand used here
+(docs/METHODOLOGY_AUDIT.md). Anchoring on -44.6 % would fail a correct replication.
+
+Two further things have to be said before this phase is read as being about MoE at all. Phase C
+ran the same 0.8B drafter at n-max 8 against the DENSE target and measured -29.8 %
+[-33.1, -26.4]: worse than the MoE arm, with no experts in the model. And the predecessor's
+"acceptance near 100 %" is a counter that divided accepted by accepted; the adjacent log line
+gives 115 of 214, or 53.7 %. Both remove load from the expert-saturation account below.
+
+The predecessor's explanation was MoE expert loading:
 a verification pass over K draft positions must load the union of those positions' expert sets,
 and at K well below the threshold where that union saturates, the pass pays for far more expert
 traffic than it saves in decode steps. Acceptance was near 100 % in every config, so the loss was
@@ -18,14 +28,22 @@ the penalty is the missing cell, and this phase fills it.
 
 What makes the contrast clean here is something the GGUF metadata settles rather than an
 assumption. Both models are hybrid attention with `full_attention_interval: 4`: the 27B has 64
-layers, the MoE 41. Both carry `nextn_predict_layers: 1` and real `blk.N.nextn.*` tensors, so
+blocks including its nextn one, the MoE 41 on the same counting. Both carry
+`nextn_predict_layers: 1` and real `blk.N.nextn.*` tensors, so
 both can run MTP. Both use the same 248320-token vocabulary and the same `qwen35` pre-tokenizer,
 which is also what makes one 0.8B drafter vocab-compatible with both. The models therefore differ
 in MoE routing and in size, not in attention design, and routing is what H4a is about.
 
-The K ladder is the point of the arm list. MTP covers n_max 1 through 7 and draft-then-verify
-covers 4, 8 and 16, so the two paths overlap between 4 and 7 rather than sitting in separate
-regimes. `draft08b-n8` reproduces the predecessor's losing configuration exactly, down to the
+The K ladder is the point of the arm list. MTP is sampled at n_max 1, 2, 3, 5 and 7, and
+draft-then-verify at 2, 4, 6, 8 and 16, so the two paths overlap between 4 and 7 rather than
+sitting in separate regimes. n_max 2 and 6 exist because widths 3 and 7 are inside the MMVQ
+dispatch path while 9 and 17 are not: without them the draft-then-verify side has one usable
+width and no `c` can be fitted for it at all.
+
+Three arms run the DENSE target in the same session, against their own baseline. Until they were
+added every arm here ran the MoE file, so the phase could only compare against a dense number
+measured on another day, and its name was wrong. With them a pair differs in the model and in
+nothing else: same harness, same card, same prompts, same build, same hour. `draft08b-n8` reproduces the predecessor's losing configuration exactly, down to the
 0.8B Q4_K_M drafter and `-ngld 99`. It is there as an anchor: if this harness cannot reproduce
 the loss the predecessor reported, nothing else measured here about the MoE should be believed,
 and that check runs before any claim about MTP.
@@ -58,6 +76,7 @@ TREES = {"master": REPO / "llamacpp-master"}
 BINARIES = {k: v / "build/bin/llama-server" for k, v in TREES.items()}
 
 MODEL = REPO / "models/moe/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"
+DENSE = REPO / "models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf"
 DRAFT_08B = REPO / "models/draft08b/Qwen3.5-0.8B-Q4_K_M.gguf"
 
 REQUIRES_VRAM_GB = 23.8
@@ -90,13 +109,42 @@ ARMS = [
                             "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True),
     Arm("moe-draft08b-n8", ["--spec-type", "draft-simple", "--spec-draft-n-max", "8",
-                            "-md", str(DRAFT_08B), "-ngld", "99"],
+                            "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True,
-        note="REPLICATION ANCHOR: the predecessor's -44.6 % configuration"),
+        note="REPLICATION ANCHOR: the predecessor's 0.8B draft-then-verify arm, -10.8 % raw "
+                    "and -21.5 % class-stratified. Not its -44.6 %, which is a different method"),
     Arm("moe-draft08b-n16", ["--spec-type", "draft-simple", "--spec-draft-n-max", "16",
                              "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True,
         note="the predecessor also tested 16; larger K, closer to expert-set saturation"),
+
+    # n4, n8 and n16 are verification widths 5, 9 and 17, and only 5 is inside MMVQ, so a fit
+    # over this path had exactly one usable point and no `c` at all. n2 and n6 add widths 3 and 7.
+    Arm("moe-draft08b-n2", ["--spec-type", "draft-simple", "--spec-draft-n-max", "2",
+                            "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+        tree="master", expects_drafter=True, note="width 3, on the MMVQ path"),
+    Arm("moe-draft08b-n6", ["--spec-type", "draft-simple", "--spec-draft-n-max", "6",
+                            "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+        tree="master", expects_drafter=True, note="width 7, on the MMVQ path"),
+
+    # The dense side, measured in this run rather than read out of a file from another day. Every
+    # arm above runs the MoE target; these three run the dense one, so the architecture is the
+    # only thing that differs between a pair. Without them this phase is a replication, not a
+    # comparison, whatever its name says.
+    Arm("baseline-dense", [], tree="master", model=DENSE,
+        note="Qwen3.8-27B dense-hybrid, no speculation; the matched control for baseline-moe"),
+    Arm("dense-mtp-n2", ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"],
+        tree="master", expects_drafter=True, model=DENSE,
+        note="matched against moe-mtp-n2"),
+    Arm("dense-draft08b-n8", ["--spec-type", "draft-simple", "--spec-draft-n-max", "8",
+                              "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+        tree="master", expects_drafter=True, model=DENSE,
+        note="matched against the replication anchor. Phase C measured this configuration at "
+             "-29.8 % on a separate day; this arm puts it in the same session as the MoE one"),
 ]
 
-BASELINE_MAP = {a.name: "baseline-moe" for a in ARMS if a.name != "baseline-moe"}
+# Each arm is scored against the baseline that ran the same model. Mapping everything to
+# baseline-moe would have compared the dense arms against an MoE baseline, which is not a
+# speculation effect at all: it is the difference between two models.
+BASELINE_MAP = {a.name: ("baseline-dense" if a.model else "baseline-moe")
+                for a in ARMS if not a.name.startswith("baseline")}

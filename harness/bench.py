@@ -55,6 +55,10 @@ class Arm:
     temperature: float = 0.0
     note: str = ""
     gpu_state: "G.GpuState | None" = None   # resource condition; None = leave the card alone
+    # A matrix that compares two models has to hold both. Without this every arm ran the one
+    # model the matrix declared, so Phase M could only ever be a single-architecture replication
+    # and its dense side had to come from a different result file measured on a different day.
+    model: "Path | None" = None
 
 
 def _atomic_write_json(path: Path, obj: dict) -> None:
@@ -186,6 +190,19 @@ def environment_snapshot(trees: dict[str, Path], model: Path) -> dict:
     }
 
 
+def arm_model_snapshot(arms) -> dict:
+    """{path -> sha256} for every model an arm overrides to, so a two-model run is auditable.
+
+    env.model records the matrix default only. Phase M compares a dense target with an MoE one in
+    a single run, and a hash per file is what makes that checkable after the fact.
+    """
+    out = {}
+    for a in arms:
+        if a.model and str(a.model) not in out:
+            out[str(a.model)] = _sha256(a.model)
+    return out
+
+
 # Set by main() when the matrix itself declares a reduced prompt set (Phase L), as opposed to
 # --prompts-per-class being passed on the command line to dry-run a matrix.
 PROMPT_SUBSET_IS_DELIBERATE = False
@@ -284,6 +301,8 @@ def run_matrix(
     result = {
         "schema": "qwen38-specdec/1",
         "env": environment_snapshot(trees, model),
+        # empty unless some arm overrides the matrix default; see arm_model_snapshot
+        "arm_models": arm_model_snapshot(arms),
         "gpu_state_declared": declared_state,
         "design": {
             "passes": passes,
@@ -325,6 +344,9 @@ def run_matrix(
         "arms": {a.name: {"extra_args": a.extra_args, "tree": a.tree,
                           "expects_drafter": a.expects_drafter,
                           "temperature": a.temperature, "note": a.note,
+                          # env.model names the matrix default. An arm that overrides it has to
+                          # say so here, or the record claims one model for a run that used two.
+                          "model": str(a.model) if a.model else None,
                           # Every field of the dataclass, not a hand-picked list. The picked
                           # list silently dropped `lock_sm_mhz` when Phase R2 added it, so the
                           # result recorded what the clock measured but not what was asked for.
@@ -450,8 +472,8 @@ def run_matrix(
                 print(f"  settled: {settle['start_temp_c']}C -> {settle['entry_temp_c']}C "
                       f"in {settle['waited_s']}s (clock {settle['entry_sm_clock_mhz']} MHz)",
                       flush=True)
-                h = S.start(binary, model, arm.extra_args, port=port, log_path=log_path,
-                            common_args=common_args, gpu_index=gpu_index)
+                h = S.start(binary, arm.model or model, arm.extra_args, port=port,
+                            log_path=log_path, common_args=common_args, gpu_index=gpu_index)
             except S.ServerError as e:
                 result["incidents"].append(
                     {"pass": p_idx, "arm": arm.name, "kind": "server_start_failed",

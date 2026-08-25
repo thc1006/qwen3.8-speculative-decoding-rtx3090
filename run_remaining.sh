@@ -174,21 +174,30 @@ for r in d["records"]:
     by.setdefault(r["arm"], []).append(r["decode_tok_s"])
 b = st.median(by.get("baseline-moe", [0]))
 a = st.median(by.get("moe-draft08b-n8", [0]))
-print("REPLICATION ANCHOR (predecessor reported 138.9 -> 77.0 tok/s, -44.6 %)")
+print("REPLICATION ANCHOR (0.8B draft-then-verify: -10.8 % raw, -21.5 % class-stratified)")
 print(f"  baseline-moe     {b:7.1f} tok/s")
 print(f"  moe-draft08b-n8  {a:7.1f} tok/s   net {(a - b) / b * 100:+.1f} %" if b else "  no baseline")
 if b and a:
     delta = (a - b) / b * 100
-    print("  anchor holds; the MoE penalty reproduces on this harness" if delta < -25 else
-          "  ANCHOR DOES NOT HOLD. The predecessor's loss did not reproduce here, so nothing "
-          "else in Phase M should be read as a statement about MoE until this is understood.")
+    # The gate was -25 %, calibrated against a -44.6 % that belongs to a different method. A
+    # correct replication of the 0.8B arm lands near -21.5 %, which the old gate would have failed.
+    if -32 < delta < -12:
+        print("  anchor holds; the penalty reproduces on this harness")
+        open("results/phase_m_anchor_ok", "w").write(f"{delta:+.2f}\n")
+    else:
+        print("  ANCHOR DOES NOT HOLD. The predecessor's comparable arm was -21.5 % "
+              "class-stratified and this is outside a -12 % to -32 % band, so nothing else in "
+              "Phase M should be read as a statement about the predecessor until this is "
+              "understood. The MoE target is kept so it can be chased.")
 PYEOF
 
 # Phase Q needs disk that Phase M's 22 GB MoE target is sitting on, so the deletion happens here
 # rather than inside run_phase_q.sh, and only against a Phase M result that is actually complete.
 if [ -f results/phase_m.json ]; then
   mrec=$(records_in results/phase_m.json); mwant=$(expect_for phase_m 3)
-  if [ "${mrec:-0}" -ge "${mwant:-1}" ] && [ -f models/moe/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf ]; then
+  # Deleting the target while the anchor is unresolved throws away the model needed to chase it.
+  if [ "${mrec:-0}" -ge "${mwant:-1}" ] && [ -f results/phase_m_anchor_ok ] \
+     && [ -f models/moe/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf ]; then
     log "Phase M complete (${mrec}/${mwant}); releasing the 22 GB MoE target"
     rm -f models/moe/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
     log "disk now: $(df -h / | tail -1 | awk '{print $4}') free"

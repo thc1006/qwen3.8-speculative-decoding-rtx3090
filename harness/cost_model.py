@@ -38,9 +38,12 @@ import os as _os
 import sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import completeness as _CO  # noqa: E402
+import random
 import statistics
-import speclen
 from collections import defaultdict
+
+import speclen  # noqa: E402
+import stats as ST  # noqa: E402
 
 # ggml/src/ggml-cuda/mmvq.cu: a wider batch is dispatched to a different kernel.
 MMVQ_MAX_BATCH_SIZE = 8
@@ -79,6 +82,127 @@ def _linfit(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     ss_res = sum((y - (a + b * x)) ** 2 for x, y in zip(xs, ys))
     r2 = 1 - ss_res / ss_tot if ss_tot else float("nan")
     return (a, b, r2)
+
+
+def _fit_prompts(g: list[dict], on_path: list[int]):
+    """{prompt -> {width -> [k]}} and {prompt -> class}, restricted to the fitted widths."""
+    by_prompt: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
+    prompt_class: dict[str, str] = {}
+    for r in g:
+        if r["width"] in on_path:
+            by_prompt[r["prompt"]][r["width"]].append(r["k"])
+            prompt_class[r["prompt"]] = r["class"]
+    return by_prompt, prompt_class
+
+
+def _fit_on(by_prompt, prompt_class, tags, on_path, xs):
+    """Refit k = k0 + c*(w-1) over one draw of prompts, class-stratified as everywhere else."""
+    per_class: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for t in tags:
+        for w, ks in by_prompt[t].items():
+            per_class[prompt_class[t]][w].extend(ks)
+    ys = []
+    for w in on_path:
+        means = [statistics.fmean(d[w]) for d in per_class.values() if d.get(w)]
+        if not means:
+            return None
+        ys.append(statistics.fmean(means))
+    return _linfit(xs, ys)
+
+
+def fit_ci(g: list[dict], on_path: list[int], *, n_boot: int = 4000, alpha: float = 0.05,
+           seed: int = 20260825):
+    """Percentile intervals on k0 and c, resampling whole prompts within class.
+
+    The fit runs over per-width means, so the widths are not the sample. Every prompt supplies a k
+    at every width and the widths share it, which is why a replicate redraws prompts rather than
+    rows. Same estimand and the same known undercoverage as the rest of this repo: 88.0-90.9 %
+    actual against a nominal 95 % at n = 25.
+
+    `c` was reported as a bare point estimate until now, which left H6b and the whole Phase Q
+    quantization question with no uncertainty to compare a difference against.
+    """
+    by_prompt, prompt_class = _fit_prompts(g, on_path)
+    if not prompt_class:
+        return None
+    classes: dict[str, list[str]] = defaultdict(list)
+    for tag, cls in prompt_class.items():
+        classes[cls].append(tag)
+    xs = [w - 1 for w in on_path]
+
+    point = _fit_on(by_prompt, prompt_class, sorted(prompt_class), on_path, xs)
+    if point is None:
+        return None
+
+    rng = random.Random(seed)
+    k0s, cs = [], []
+    for _ in range(n_boot):
+        draw = []
+        for tags in classes.values():
+            draw.extend(rng.choices(tags, k=len(tags)))
+        got = _fit_on(by_prompt, prompt_class, draw, on_path, xs)
+        if got:
+            k0s.append(got[0])
+            cs.append(got[1])
+    if len(cs) < n_boot // 2:
+        return None
+
+    def pct(v, q):
+        v = sorted(v)
+        return v[max(0, min(len(v) - 1, int(round(q * (len(v) - 1)))))]
+
+    singles = tuple(sorted(c for c, t in classes.items() if len(t) < 2))
+    return {
+        "k0": ST.Interval(point[0], pct(k0s, alpha / 2), pct(k0s, 1 - alpha / 2),
+                          len(prompt_class), singles),
+        "c": ST.Interval(point[1], pct(cs, alpha / 2), pct(cs, 1 - alpha / 2),
+                         len(prompt_class), singles),
+        "n_prompts": len(prompt_class),
+    }
+
+
+def delta_c_ci(ga: list[dict], on_a: list[int], gb: list[dict], on_b: list[int],
+               *, n_boot: int = 4000, alpha: float = 0.05, seed: int = 20260825):
+    """Interval on c(a) - c(b), redrawing the same prompts for both methods.
+
+    Two separate marginal intervals cannot answer whether the coefficients differ: both are
+    estimated on the same 25 prompts, so they move together. Pairing the draw removes that shared
+    movement, which is the comparison H6b and Phase Q actually need.
+    """
+    bpa, pca = _fit_prompts(ga, on_a)
+    bpb, pcb = _fit_prompts(gb, on_b)
+    shared = sorted(set(pca) & set(pcb))
+    if len(shared) < 2:
+        return None
+    classes: dict[str, list[str]] = defaultdict(list)
+    for tag in shared:
+        classes[pca[tag]].append(tag)
+    xa, xb = [w - 1 for w in on_a], [w - 1 for w in on_b]
+
+    fa = _fit_on(bpa, pca, shared, on_a, xa)
+    fb = _fit_on(bpb, pcb, shared, on_b, xb)
+    if fa is None or fb is None:
+        return None
+
+    rng = random.Random(seed)
+    diffs = []
+    for _ in range(n_boot):
+        draw = []
+        for tags in classes.values():
+            draw.extend(rng.choices(tags, k=len(tags)))
+        a = _fit_on(bpa, pca, draw, on_a, xa)
+        b = _fit_on(bpb, pcb, draw, on_b, xb)
+        if a and b:
+            diffs.append(a[1] - b[1])
+    if len(diffs) < n_boot // 2:
+        return None
+    diffs.sort()
+
+    def pct(q):
+        return diffs[max(0, min(len(diffs) - 1, int(round(q * (len(diffs) - 1)))))]
+
+    singles = tuple(sorted(c for c, t in classes.items() if len(t) < 2))
+    return ST.Interval(fa[1] - fb[1], pct(alpha / 2), pct(1 - alpha / 2), len(shared), singles)
 
 
 def _n_max(meta: dict) -> int | None:
@@ -313,6 +437,7 @@ def report(result: dict) -> None:
     by_method: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
         by_method[r["spec_type"]].append(r)
+    fits: dict[str, tuple] = {}
     for method, g in sorted(by_method.items()):
         pts: dict[int, list[float]] = defaultdict(list)
         for r in g:
@@ -334,6 +459,12 @@ def report(result: dict) -> None:
         ys = [statistics.fmean(pts[w]) for w in on_path]
         a, b, r2 = _linfit(xs, ys)
         print(f"  {method:14s} MMVQ widths {on_path}  ->  k0={a:.4f}  c={b:.4f}  r2={r2:.4f}")
+        ci = fit_ci(g, on_path)
+        fits[method] = (g, on_path)
+        if ci:
+            print(f"      {'':14s} k0 {ci['k0'].lo:.4f} to {ci['k0'].hi:.4f}   "
+                  f"c {ci['c'].lo:.4f} to {ci['c'].hi:.4f}   "
+                  f"nominal 95 %, {ci['n_prompts']} prompts resampled within class")
         for w in on_path:
             pred = a + b * (w - 1)
             print(f"      w={w:2d}  k={statistics.fmean(pts[w]):.4f}  fit={pred:.4f}  "
@@ -380,17 +511,33 @@ def report(result: dict) -> None:
         print(f"  {method:14s} c on all {n_all:4d} = {c_all:.4f}   c on the {n_same:3d} that "
               f"never diverged = {c_same:.4f}   {gap:+.1f} %{flag}")
 
-    ms = [m for m in by_method if len({r['width'] for r in by_method[m]}) >= 2]
-    if len(ms) >= 2:
-        print("\n  Two methods with independent drafters fitted separately. Agreement in `c` with")
-        print("  a difference in `k0` is consistent with the marginal cost sitting outside the")
-        print("  drafter, but it does not identify it. What `k` measures is the whole speculative")
-        print("  cycle: target verification, the drafter's own forwards, sampling, launch and")
-        print("  synchronisation, output extraction and any per-step state management. The two")
-        print("  methods share every one of those except the drafter, so a shared slope narrows")
-        print("  the cost to that shared machinery without saying which part of it. Separating")
-        print("  them needs per-context CUDA-event timing, a replay that skips drafter compute,")
-        print("  or a profiler decomposition - none of which this file has.")
+    # This used to assert that the two coefficients agree, whatever they were. On Phase A they
+    # did, 0.2829 against 0.2784, and the shared-slope reading followed. On the completed ladder
+    # they are 0.2904 against 0.2481, so the reading has to be decided by the interval instead.
+    if len(fits) == 2:
+        (ma, (ga, oa)), (mb, (gb, ob)) = sorted(fits.items())
+        d = delta_c_ci(ga, oa, gb, ob)
+        print("\n  Two methods with independent drafters, fitted separately. What `k` measures is")
+        print("  the whole speculative cycle: target verification, the drafter's own forwards,")
+        print("  sampling, launch and synchronisation, output extraction and any per-step state")
+        print("  management. The two methods share every one of those except the drafter.")
+        if d is None:
+            print("  The two fits do not share enough prompts to be compared.")
+        else:
+            print(f"\n  c({ma}) - c({mb}) = {d.point:+.4f}  [{d.lo:+.4f}, {d.hi:+.4f}]"
+                  f"   nominal 95 %, {d.n_clusters} shared prompts, paired on them")
+            if d.spans_zero:
+                print("  The difference does not clear zero. A shared slope would put the marginal")
+                print("  cost in the machinery both methods have in common, though it would still")
+                print("  not say which part of it.")
+            else:
+                print("  The difference clears zero, so the marginal cost is NOT shared: the two")
+                print("  methods pay different amounts per verified position. Whatever `c` is")
+                print("  charging for, part of it moves with the drafter, and the shared-machinery")
+                print("  reading that Phase A's two-point fit supported does not survive the")
+                print("  completed ladder.")
+        print("\n  Separating the components needs per-context CUDA-event timing, a replay that")
+        print("  skips drafter compute, or a profiler decomposition - none of which this file has.")
 
     print("\n--- implied optimum ---")
     print("    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k")

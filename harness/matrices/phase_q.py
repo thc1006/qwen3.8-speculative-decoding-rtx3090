@@ -10,9 +10,12 @@ settled on 24 GB with this model:
 2. The PR #27342 author's account of the n-max ceiling (recorded as H2' in PREREGISTRATION.md)
    is explicitly about quantization changing the compute/bandwidth ratio, measured by them as a
    per-extra-token cost of 6.7 % at BF16, 14.5 % at Q8_0 and 23.4 % at Q4_K_M. This study
-   measures the same thing directly as `c`, the marginal cost per verified position in the model
-   `k(w) = k0 + c*(w-1)`. Running the ladder measures `c` at each quantization, which tests
-   their claim on the coefficient rather than on throughput.
+   measures a related quantity as `c`, the marginal cost per verified position in the model
+   `k(w) = k0 + c*(w-1)`. The two are NOT the same number and no derivation relates them here:
+   theirs is a per-extra-token throughput cost from `llama-batched-bench`, and `c` is a slope in
+   serial-decode-step equivalents fitted over widths inside the MMVQ path. What the ladder can
+   test is whether `c` moves with quantization in the same DIRECTION and rough proportion, which
+   is an ordinal check on their account, not a reproduction of their figures.
 
 Capacity, at the context this matrix actually uses (8192, not 64K - an earlier version of this
 table assumed 64K and therefore overstated every rung by about 2 GB), with this model's measured
@@ -21,14 +24,24 @@ KV cost of ~34 KB/token at q8_0 and the ~1.9 GB compute buffer observed on this 
 | target        | file    | +8K KV  | +buffer | 24 GB    | 48 GB |
 |---------------|--------:|--------:|--------:|:--------:|:-----:|
 | UD-Q4_K_XL    | 17.56   | 17.84   | 19.74   | yes      | yes   |
-| UD-Q5_K_XL    | 20.88   | 21.16   | 23.06   | **marginal (96 %)** | yes |
+| UD-Q5_K_XL    | 20.88   | 21.16   | 23.06   | **marginal (89 %)** | yes |
 | UD-Q6_K_XL    | 25.30   | 25.58   | 27.48   | no       | yes   |
 | Q8_0          | 29.05   | 29.33   | 31.23   | no       | yes   |
 | BF16          | 49.99   | 50.27   | 52.17   | no       | **no** |
 
-The corrected arithmetic changes the plan: `UD-Q5_K_XL` sits at 96 % of a 24 GB card at 8K
-context, so it is worth *attempting* on the existing 3090 as a second rung, accepting that it may
-fail to allocate. Only Q6 and Q8 genuinely require the larger card.
+The corrected arithmetic changes the plan: `UD-Q5_K_XL` needs 23.06 decimal GB, which is 21.48
+GiB against the card's 24576 MiB, so about 89 % rather than the 96 % an earlier version of this
+table claimed by mixing decimal GB with the binary figure nvidia-smi reports. It is worth
+attempting on the existing 3090 as a second rung. Only Q6 and Q8 genuinely require the larger card.
+
+Two things the ladder cannot separate as written. The rungs are three unsloth UD dynamic quants
+and one uniform `Q8_0`, so bit width is confounded with quantization scheme; results should be
+plotted against each file's measured effective bits per weight, not against its label. And on a
+24 GB card only the first two rungs are reachable, a span of about one bit, where H2' predicts
+roughly -8 % in `c`. That is about three times the 2.7 % run-to-run drift this repo has already
+seen in `c` between phase_a and phase_nmax, from two points. `phase_qsmall` spans Q4_K_M to BF16
+on a small model, roughly four times the bit range, and is the better instrument for the question
+on this hardware.
 
 BF16 does not fit on 48 GB either. The bf16 control that #25618 rests on is therefore NOT
 obtainable for Qwen3.8-27B on any single card considered here; it is obtainable today on the
@@ -91,6 +104,9 @@ COMMON_ARGS = [
 
 # Widths chosen to bracket the divergence boundary seen on the 3090 ({3,4} vs {5,6,8}) and to
 # give three points for the k = k0 + c*(w-1) fit at every rung.
+# The UD-Q4_K_XL rung repeats the arms phase_a and phase_nmax already measured on the same file.
+# That is deliberate: it is the same-session control that makes the higher rungs comparable to
+# something, rather than to numbers from another day. It is not new evidence about Q4.
 ARMS = [Arm(f"baseline@{TARGET_RUNG}", [], tree="master",
             note=f"target {TARGET_RUNG}; divergence and speedup reference for this rung")]
 for _n in (2, 3, 5):

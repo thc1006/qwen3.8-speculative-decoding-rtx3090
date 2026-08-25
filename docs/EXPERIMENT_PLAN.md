@@ -9,7 +9,7 @@ phase sketch in `TODO.md`; hypotheses remain as committed in `PREREGISTRATION.md
 |---|---|
 | the card is **power**-capped, not thermally capped | `SW Power Cap: Active`, `HW Thermal Slowdown: Not Active`, 15.5 h of accumulated power capping |
 | it loses **9.3 % of SM clock** over one pass (1950 -> 1769 MHz) | per-request clock sampling across a 7-arm pass |
-| **baseline decode is memory-bandwidth-bound** | removing a +4.1 % memory overclock cost exactly 4.1 % throughput (43.40 -> 41.6 tok/s, matched prompts) |
+| **baseline throughput tracks the memory clock one for one** | removing a +4.1 % memory overclock cost exactly 4.1 % throughput (43.40 -> 41.6 tok/s, matched prompts), an elasticity of about 1.0 |
 | the two llama.cpp trees introduce no confound | baseline 43.69 vs 43.72 tok/s, and **byte-identical output on 5/5 prompts** |
 | MTP and DFlash2 both run on sm86 | MTP n3 88.90 tok/s @ 84 % accept, mean draft len 3.51; DFlash2 n7 91.92 tok/s @ 67 %, mean len 5.64 |
 | speculation **changes the emitted text** | 60-80 % of prompts fork from baseline at greedy; fork position is identical across different drafters and shifts with n-max, i.e. it tracks verification batch shape |
@@ -45,7 +45,7 @@ decisive where the p-min sweep alone is only suggestive. The PR #27342 author ad
 | **B** | drafted-token vs rejected-token cost (p-min x n-max) | 7 | 5 | ~2.3 h |
 | **C** | method breadth on one host: drafter-quant ladder, classic draft, ngram family, DSpark | ~10 | 3 | ~2 h |
 | **L** | does speculation survive the ~25x decode collapse past ~80 K ([#27623](https://github.com/ggml-org/llama.cpp/issues/27623))? | 4 x depths | 3 | ~2 h |
-| **M** | dense-hybrid vs A3B MoE under one protocol | 4 | 5 | ~2 h + 21 GB |
+| **M** | dense-hybrid vs A3B MoE under one protocol, both measured in the same run | 14 | 3 | ~3 h + 21 GB |
 | **V** | llama.cpp vs vLLM on the same single card | 4 | 3 | ~2 h + disk juggling |
 | **X** | thinking on/off x method, multimodal, concurrency | - | - | later |
 

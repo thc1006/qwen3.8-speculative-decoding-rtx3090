@@ -26,8 +26,9 @@ The predecessor repo's `BENCHMARK_ENV.md` documents its v2/v3 cards explicitly a
 
 So this host differs from the earlier work on a **third** axis beyond board and OS.
 Memory-bandwidth overclock in particular is not a neutral variable for this study:
-batch-1 decode is bandwidth-bound while speculative verification is comparatively
-compute-dense, so an undisclosed memory overclock shifts the two arms by different amounts.
+batch-1 decode responds strongly to the memory clock and speculative verification barely
+does, measured later as elasticities of 0.79-0.81 against 0.13-0.18, so an undisclosed memory
+overclock shifts the two arms by different amounts.
 
 ## Decision
 
