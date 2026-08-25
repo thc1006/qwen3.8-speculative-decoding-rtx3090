@@ -604,6 +604,39 @@ class TestAlgebraicInvariants(unittest.TestCase):
         self.assertEqual(DR._width(arms, "a"), 5)
         self.assertEqual(DR._family(arms, "a"), "draft-mtp")
         self.assertEqual(DR._width({}, "missing"), 1)
+    def test_cross_device_names_the_toolchain_before_blaming_the_cards(self):
+        """It had never been run. On its first pair both controls failed.
+
+        Acceptance differed by up to 0.095 and only 29 of 125 fork positions matched, and the
+        report said something other than the device is varying. The something was in the file:
+        different driver, different kernel, different machine. Two cards of one architecture
+        share CUDA kernels only when one toolchain built them, so those controls could not have
+        held and their failure says nothing about the cards. Worse, the bandwidth elasticity
+        below carried a caveat naming the power budget as the second variable and missed the
+        toolchain as a third.
+        """
+        import analyze_cross_device as X
+
+        self.assertTrue(callable(getattr(X, "_build_env", None)))
+        self.assertTrue(callable(getattr(X, "_env_diff", None)))
+
+        a = {"env": {"gpu": "NVIDIA GeForce RTX 3090, 24576 MiB, 580.173.02, 8.6",
+                     "kernel": "7.0.0-30-generic", "host": "3090"}}
+        b = {"env": {"gpu": "NVIDIA RTX A6000, 49140 MiB, 580.95.05, 8.6",
+                     "kernel": "6.1.0-39-amd64", "host": "mailer"}}
+        fields = {k for k, _, _ in X._env_diff(X._build_env(a), X._build_env(b))}
+        self.assertIn("driver", fields)
+        self.assertIn("kernel", fields)
+        self.assertIn("host", fields)
+        self.assertEqual(X._env_diff(X._build_env(a), X._build_env(a)), [],
+                         "two files from one installation must report no difference")
+
+        code = "\n".join(l for l in inspect.getsource(X).splitlines()
+                         if not l.strip().startswith("#"))
+        self.assertIn("THIS IS NOT A BANDWIDTH MEASUREMENT", code,
+                      "the elasticity must say so when the step carries the toolchain too")
+        self.assertIn("build environment, which decides whether the controls CAN hold", code,
+                      "the environment belongs before the controls, not after them")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

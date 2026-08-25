@@ -31,6 +31,43 @@ from pathlib import Path
 import cost_model
 
 
+def _build_env(result: dict) -> dict:
+    """What produced the binaries, as the file recorded it.
+
+    The controls below ask whether two cards of one architecture agree. When they do not, the
+    file usually already says why, and an analyser that prints "something other than the device
+    is varying" while holding a recorded driver difference is making the reader guess.
+    """
+    env = result.get("env", {}) or {}
+    des = result.get("design", {}) or {}
+    out = {"driver": None, "kernel": env.get("kernel"), "host": env.get("host"),
+           "cuda": env.get("cuda") or env.get("nvcc"), "commit": env.get("llama_cpp_commit")}
+    gpu = env.get("gpu") or ""
+    parts = [x.strip() for x in gpu.split(",")]
+    if len(parts) > 2:
+        out["driver"] = parts[2]
+    kf = des.get("kernel_facts") or {}
+    hashes = {}
+    for tree, info in kf.items():
+        for name, b in (info.get("binaries") or {}).items():
+            if "cuda" in name:
+                hashes[f"{tree}/{name}"] = b.get("sha256_16")
+    out["binaries"] = hashes or None
+    return out
+
+
+def _env_diff(a: dict, b: dict) -> list:
+    """-> [(field, a, b)] for every recorded build-environment field that differs."""
+    diffs = []
+    for k in ("driver", "cuda", "commit", "kernel", "host", "binaries"):
+        va, vb = a.get(k), b.get(k)
+        if va is None and vb is None:
+            continue
+        if va != vb:
+            diffs.append((k, va, vb))
+    return diffs
+
+
 def _device_of(result: dict) -> dict:
     """Device facts, from the structured field when present and from the env snapshot when not.
 
@@ -133,6 +170,21 @@ def report(paths: list[Path]) -> None:
               f"be evidence of a problem.")
 
     # ---------------------------------------------------------------- controls
+    # Named before the controls run, so a failure below is read against it rather than as a
+    # mystery. Two cards of one architecture share kernels only if the same toolchain built
+    # them; these files are from different machines and record different drivers.
+    envs = [_build_env(r) for _, r, _rows in runs]
+    env_diffs = _env_diff(envs[0], envs[1]) if len(envs) == 2 else []
+    print("\n--- build environment, which decides whether the controls CAN hold ---")
+    if not env_diffs:
+        print("    every recorded field matches, so a control failure below is about the devices")
+    else:
+        for k, va, vb in env_diffs:
+            print(f"    {k:9} {str(va)[:34]:<36} vs {str(vb)[:34]}")
+        print("    These binaries were not built by one toolchain. Identical kernels are what")
+        print("    makes acceptance and fork positions comparable at all, so the controls below")
+        print("    are not expected to hold and their failure is not evidence about the cards.")
+
     print("\n--- CONTROL 1: acceptance should be identical on identical weights + greedy ---")
     acc: dict[str, dict[tuple[str, str], float]] = {}
     for lab, _, rows in runs:
@@ -257,6 +309,12 @@ def report(paths: list[Path]) -> None:
                     print("       until the bus widths are confirmed equal.")
                 print("    A marginal cost that is compute-bound should barely move with memory")
                 print("    bandwidth; one that is memory-bound should move with it roughly 1:1.")
+                if env_diffs:
+                    print("    THIS IS NOT A BANDWIDTH MEASUREMENT. The two files differ in "
+                          + ", ".join(k for k, _, _ in env_diffs) + ",")
+                    print("    so the step from one to the other carries the toolchain as well as")
+                    print("    the bandwidth and the power budget. Read the number as a difference")
+                    print("    between two installations, not between two memory clocks.")
                 print("    CAVEAT: these two cards also differ in power budget (420 vs 300 W),")
                 print("    so this is a two-variable step, not a clean bandwidth-only lever.")
                 print("    Phase R varies each independently on ONE card and is the controlled")
