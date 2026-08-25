@@ -1675,3 +1675,38 @@ So the honest position is narrower than Correction 15 implied:
 The general lesson is the one this repo keeps relearning: a spread computed over one number per
 group is not the same quantity as the spread within groups, and reaching for the first because it
 was already on screen is how Correction 13 went wrong too.
+
+## Correction 17, 2026-08-26 02:10: the contamination hypothesis is retired -- that arm is noisy in a clean pass
+
+Corrections 15 and 16 suspected that a compiler running on this host between 01:40:47 and 01:51:01
+perturbed Phase M pass 2, and narrowed the case to a single arm-pass, `moe-mtp-n3` at pass 2, which
+was the largest deviation in the matrix on three measures.
+
+Comparing each arm-pass against the same prompts in its own other passes settles it:
+
+| arm-pass | mean vs its repeats | within-pass sd | worst prompt |
+|---|---|---|---|
+| `moe-mtp-n3` pass **2** | +5.00 % | **5.17 %** | 14.86 % |
+| `moe-mtp-n3` pass **1** | -4.55 % | **4.53 %** | 12.94 % |
+| median arm-pass | -- | 1.43 % | -- |
+
+**Pass 1 closed at 01:21, nineteen minutes before the first object file was written.** `moe-mtp-n3`
+was already the noisiest arm-pass in the matrix under conditions that are known clean, with
+essentially the mirror-image deviation. The mirroring of the means is mechanical -- with two passes
+each is measured against the other -- but the within-pass scatter is not, and it is high in both.
+
+So `moe-mtp-n3` is an intrinsically noisy arm and its pass-2 behaviour needs no external
+explanation. It was the only arm carrying the group-level signal in Correction 15, and removing it
+leaves nothing. **There is no remaining evidence that the build affected any measurement.**
+
+That is not the same as proving the build was harmless; it retires the specific concern rather than
+establishing a negative. The disposition in Correction 15 is lifted: no re-run is called for, and
+the overlapping arm-passes are not excluded from reported figures. What stands from that correction
+is the protocol point -- building on the measurement host during a run was a bad call, made without
+a way to check it, and it is now checkable.
+
+Why that arm is noisy is not answered here. `moe-mtp-n3` is MTP at n-max 3 on the MoE target,
+verification width 4, and nothing in the design predicts it. Left as an observation.
+
+Recorded as `harness/pass_stability.py`, which answers in one run what these three corrections took
+by hand.

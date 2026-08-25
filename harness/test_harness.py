@@ -2450,6 +2450,77 @@ class TestHostContentionIsRecorded(unittest.TestCase):
                         "rather than the conditions the arm actually ran under")
 
 
+class TestPassStabilityFindsTheNoisyArmPass(unittest.TestCase):
+    """The unit is the arm-pass against the same prompts in its own other passes.
+
+    Corrections 15, 16 and 17 are three readings of one question, done by hand, and the first two
+    were wrong. The first compared a spread computed over one number per arm; the second used the
+    per-prompt spread and found no group effect; the third compared each arm-pass against its own
+    repeats and found that the suspect arm was equally noisy in a pass that predates the event
+    entirely. Only the third measure could reach that.
+    """
+
+    @staticmethod
+    def _result(noisy_arm=None, host_load=None):
+        import math
+        recs = []
+        for arm in ("a", "b", "c"):
+            for p in (1, 2):
+                for i in range(12):
+                    base = 100.0 + 3.0 * math.sin(i)          # prompt-to-prompt, cancels when paired
+                    wob = 0.0
+                    if arm == noisy_arm and p == 2:
+                        wob = 9.0 * math.cos(i * 2.0)          # this arm-pass only
+                    recs.append({"arm": arm, "pass": p, "prompt": f"p{i}",
+                                 "class": "code" if i % 2 else "prose",
+                                 "decode_tok_s": base + wob, "predicted_n": 400, "hit_cap": True})
+        out = {"records": recs}
+        if host_load is not None:
+            out["arm_pass_host_load"] = host_load
+        return out
+
+    def _run(self, result):
+        import contextlib
+        import io
+        import pass_stability as PS
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            PS.report(result)
+        return buf.getvalue()
+
+    def test_a_quiet_matrix_flags_nothing(self):
+        out = self._run(self._result())
+        self.assertIn("No arm-pass exceeds the threshold", out,
+                      f"a matrix with no disturbed arm-pass produced a flag:\n{out}")
+
+    def test_the_disturbed_arm_pass_is_named(self):
+        out = self._run(self._result(noisy_arm="b"))
+        self.assertIn("OUTLIER", out, f"the disturbed arm-pass was not flagged:\n{out}")
+        line = [l for l in out.splitlines() if "OUTLIER" in l]
+        self.assertTrue(any(l.strip().startswith("b ") for l in line),
+                        f"the wrong arm-pass was flagged:\n{out}")
+
+    def test_a_recorded_contended_host_is_reported_as_a_cause(self):
+        out = self._run(self._result(noisy_arm="b", host_load={
+            "pass02_b": {"contended": True, "competing_pct": 310.0,
+                         "competing": [{"comm": "cc1plus", "pcpu": 290.0}]}}))
+        self.assertIn("host was contended", out)
+        self.assertIn("cc1plus", out, "the competing process is not named")
+        self.assertIn("recorded cause, not an inference", out)
+
+    def test_an_uncontended_host_says_the_scatter_is_the_arms_own(self):
+        out = self._run(self._result(noisy_arm="b", host_load={
+            "pass02_b": {"contended": False, "competing_pct": 0.0, "competing": []}}))
+        self.assertIn("the arm's own", out,
+                      "a flagged arm-pass on a quiet host was left ambiguous, which is the "
+                      "question Correction 17 had to answer by hand")
+
+    def test_a_file_without_the_field_says_so_rather_than_guessing(self):
+        out = self._run(self._result(noisy_arm="b"))
+        self.assertIn("predates arm_pass_host_load", out,
+                      "a result with no host record implied the cause was known")
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 
