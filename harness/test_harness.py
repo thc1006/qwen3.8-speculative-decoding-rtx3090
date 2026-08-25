@@ -975,6 +975,56 @@ class TestForkPositionUnits(unittest.TestCase):
                          "token column no longer describe the same records")
 
 
+class TestCostModelBaselinePerModel(unittest.TestCase):
+    """A speculative arm must be divided by its own model's baseline.
+
+    cost_model.py keyed its baseline lookup on (tree, pass, prompt). Phase M declares a dense
+    baseline and an MoE baseline and both carry tree "master", so the second overwrote the first
+    on every prompt. Every MoE arm would then have been divided by the dense baseline, 41.6
+    against 147.8 tok/s on the live run, inflating its speedup about 3.5x and shrinking the k that
+    H6b compares by the same factor. Nothing errors; the number just comes out wrong.
+    """
+
+    @staticmethod
+    def _rec(arm, prompt, tok_s, drafted=8, accepted=4):
+        return {"arm": arm, "pass": 1, "prompt": prompt, "class": "code",
+                "decode_tok_s": tok_s, "predicted_n": 400,
+                "timings": {"t_draft_n": drafted, "t_draft_n_accepted": accepted}}
+
+    def test_two_baselines_on_one_tree_do_not_collide(self):
+        import cost_model as CM
+        DENSE, MOE = "/m/dense.gguf", "/m/moe.gguf"
+        result = {
+            "env": {"model": MOE},
+            "arms": {
+                "baseline-moe":   {"extra_args": [], "tree": "master", "model": None},
+                "baseline-dense": {"extra_args": [], "tree": "master", "model": DENSE},
+                "moe-mtp-n2":     {"extra_args": ["--spec-type", "draft-mtp",
+                                                  "--spec-draft-n-max", "2"],
+                                   "tree": "master", "expects_drafter": True, "model": None},
+                "dense-mtp-n2":   {"extra_args": ["--spec-type", "draft-mtp",
+                                                  "--spec-draft-n-max", "2"],
+                                   "tree": "master", "expects_drafter": True, "model": DENSE},
+            },
+            "records": [
+                self._rec("baseline-moe",   "p1", 148.0),
+                self._rec("baseline-dense", "p1",  41.6),
+                self._rec("moe-mtp-n2",     "p1", 296.0),   # exactly 2x its own baseline
+                self._rec("dense-mtp-n2",   "p1",  83.2),   # exactly 2x its own baseline
+            ],
+        }
+        rows = {r["arm"]: r for r in CM.collect(result)}
+        self.assertEqual(set(rows), {"moe-mtp-n2", "dense-mtp-n2"},
+                         "both speculative arms should produce a row")
+        for arm in ("moe-mtp-n2", "dense-mtp-n2"):
+            self.assertAlmostEqual(
+                rows[arm]["speedup"], 2.0, places=6,
+                msg=f"{arm} was not divided by its own model's baseline; "
+                    f"speedup came out {rows[arm]['speedup']:.3f} instead of 2.0")
+        self.assertNotEqual(rows["moe-mtp-n2"]["model"], rows["dense-mtp-n2"]["model"],
+                            "the two arms were attributed to the same model")
+
+
 class TestCostModelSeparatesModels(unittest.TestCase):
     """Two targets in one result file must not be fitted as one line.
 
@@ -993,8 +1043,11 @@ class TestCostModelSeparatesModels(unittest.TestCase):
         if not src.exists():
             self.skipTest("no phase_nmax.json")
         d = json.loads(src.read_text())
+        # The baseline an arm is scored against has to move with it, or the fixed lookup finds
+        # no baseline for that model and the arm drops out entirely. mtp-* is scored against
+        # baseline@master, so both go; dflash keeps baseline@pr27342 on the original model.
         for name, meta in d.get("arms", {}).items():
-            if name.startswith("mtp-"):
+            if name.startswith("mtp-") or name == "baseline@master":
                 meta["model"] = "/fake/MODEL_B.gguf"
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
             json.dump(d, fh)

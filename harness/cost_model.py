@@ -264,11 +264,21 @@ def collect(result: dict) -> list[dict]:
     recs = result["records"]
     arms_meta = result.get("arms", {})
 
-    baselines: dict[tuple[str, int, str], float] = {}
+    # The model is part of the key. Phase M runs a dense baseline and an MoE baseline in one
+    # matrix and both declare tree "master", so keying on the tree alone made the second overwrite
+    # the first on all 25 prompts: every MoE arm would have been divided by the dense baseline,
+    # 41.6 against 147.8 tok/s, inflating its speedup about 3.5x and shrinking its k by the same
+    # factor. That k is what H6b compares. Nothing would have errored.
+    env_model = (result.get("env") or {}).get("model")
+
+    def _model_of(meta):
+        return meta.get("model") or env_model
+
+    baselines: dict[tuple, float] = {}
     for r in recs:
         m = arms_meta.get(r["arm"], {})
         if not m.get("extra_args") and not m.get("expects_drafter"):
-            baselines[(m.get("tree", "?"), r["pass"], r["prompt"])] = r["decode_tok_s"]
+            baselines[(_model_of(m), m.get("tree", "?"), r["pass"], r["prompt"])] = r["decode_tok_s"]
 
     rows: list[dict] = []
     for rec in recs:
@@ -280,7 +290,7 @@ def collect(result: dict) -> list[dict]:
         drafted = tm.get("t_draft_n") or 0
         accepted = tm.get("t_draft_n_accepted") or 0
         pn = rec.get("predicted_n") or 0
-        base = baselines.get((meta.get("tree", "?"), rec["pass"], rec["prompt"]))
+        base = baselines.get((_model_of(meta), meta.get("tree", "?"), rec["pass"], rec["prompt"]))
         # Derived in speclen.py, which is also where the docstring above now lives: this file
         # had a copy that never consulted draft_n_verif_steps, so it would have parted company
         # with analyze.py the moment llama.cpp #27676 landed and that counter began arriving.
@@ -295,7 +305,7 @@ def collect(result: dict) -> list[dict]:
             # Phase M runs two targets in one matrix, so the method alone no longer identifies a
             # fit. Without this, k values from two different models pool into one line and the
             # slope that comes out is not either model's.
-            "model": meta.get("model") or (result.get("env") or {}).get("model"),
+            "model": _model_of(meta),
             "n_max": nmax, "width": nmax + 1,
             "acceptance": accepted / drafted,
             "drafted": drafted, "accepted": accepted,
