@@ -694,6 +694,45 @@ class TestAlgebraicInvariants(unittest.TestCase):
         self.assertIn("[unmatched]", code,
                       "each row of an interval that crosses an unmatched condition must say so")
         self.assertIn("did not", code)
+    def test_a_text_that_merely_ended_is_not_a_fork(self):
+        """compare_outputs stopped its scan at min(len) and called that index the fork.
+
+        When one text is a prefix of the other the scan ends because a text ran out, not because
+        a character differed, and first_diff_char is that length. Five consumers read
+        `same if identical else first_diff_char`, which has no state for it, so it would have
+        plotted as a fork at a position where nothing disagrees. It has not happened here, 0 of
+        4673 records, and it can: every arm stops at a token cap and tokens are not a fixed
+        number of characters, so two runs of equal token count differ in length.
+        """
+        import quality as Q
+
+        self.assertFalse(Q.compare_outputs("abc", "abd").prefix_only)
+        self.assertEqual(Q.compare_outputs("abc", "abd").first_diff_char, 1 + 1)
+        self.assertTrue(Q.compare_outputs("abc", "abcdef").prefix_only)
+        self.assertTrue(Q.compare_outputs("abcdef", "abc").prefix_only)
+        self.assertFalse(Q.compare_outputs("abc", "abc").prefix_only)
+
+        # the position helper collapses every unusable case to None
+        self.assertEqual(Q.fork_position({"identical": False, "first_diff_char": 42,
+                                          "len_ref": 100, "len_arm": 120}), 42)
+        self.assertIsNone(Q.fork_position({"identical": True}))
+        self.assertIsNone(Q.fork_position(None))
+        self.assertIsNone(Q.fork_position({"identical": False, "first_diff_char": 100,
+                                           "len_ref": 100, "len_arm": 120}),
+                          "a record written before prefix_only existed is caught by its lengths")
+
+        # the table helper keeps them apart
+        self.assertEqual(Q.fork_cell({"identical": True}), "SAME")
+        self.assertEqual(Q.fork_cell(None), "-")
+        self.assertEqual(Q.fork_cell({"identical": False, "first_diff_char": 100,
+                                      "len_ref": 100, "len_arm": 120}), "PREFIX")
+        self.assertEqual(Q.fork_cell({"identical": False, "first_diff_char": 7,
+                                      "len_ref": 100, "len_arm": 120}), 7)
+
+        import analyze_cross_device, divergence_report, warp_intervention, width_groups
+        for mod in (divergence_report, warp_intervention, width_groups, analyze_cross_device):
+            self.assertIn("fork_cell", inspect.getsource(mod),
+                          f"{mod.__name__} still decides the three states itself")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

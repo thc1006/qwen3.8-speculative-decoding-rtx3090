@@ -44,6 +44,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "harness"))
 
 import analyze as A  # noqa: E402
+import quality  # noqa: E402
 import cost_model as CM  # noqa: E402
 import elasticity as EL  # noqa: E402
 import stats as ST  # noqa: E402
@@ -304,7 +305,7 @@ def _forks(result):
     for rec in result["records"]:
         d = rec.get("divergence")
         if rec["arm"] in WIDTH and rec["pass"] == 1 and d:
-            fork[rec["prompt"]][rec["arm"]] = "SAME" if d["identical"] else d["first_diff_char"]
+            fork[rec["prompt"]][rec["arm"]] = quality.fork_cell(d)
     return {p: v for p, v in fork.items() if len(v) == len(SPEC_ARMS)}
 
 

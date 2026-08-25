@@ -24,6 +24,7 @@ import os as _os
 import sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import completeness as _CO  # noqa: E402
+import quality  # noqa: E402
 import os
 import sys
 
@@ -128,7 +129,7 @@ def main() -> int:
             continue
         v = r["divergence"]
         cell[(w, spec_of(r["arm"], arms.get(r["arm"])))][r["prompt"]] = (
-            "same" if v["identical"] else v["first_diff_char"])
+            quality.fork_cell(v, same="same", prefix="prefix"))
     if not cell:
         print(f"no divergence records with a width in {path}")
         return 1

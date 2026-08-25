@@ -29,6 +29,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import cost_model
+import quality  # noqa: E402
 
 
 def _build_env(result: dict) -> dict:
@@ -216,7 +217,7 @@ def report(paths: list[Path]) -> None:
         for rec in r["records"]:
             d = rec.get("divergence")
             if d:
-                m[(rec["arm"], rec["prompt"])] = "SAME" if d["identical"] else d["first_diff_char"]
+                m[(rec["arm"], rec["prompt"])] = quality.fork_cell(d)
         forks[lab] = m
     if len(labs) >= 2:
         base = labs[0]

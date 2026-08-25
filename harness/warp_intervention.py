@@ -28,6 +28,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kernel_facts as KF  # noqa: E402
+import quality  # noqa: E402
 import truncation_audit as TA  # noqa: E402
 
 # arm name -> verification width. Width is n_max + 1; the greedy baseline runs at width 1.
@@ -125,7 +126,8 @@ def load(path):
         by_key[(rec["arm"], rec["prompt"], rec["pass"])] = rec
         if rec["arm"] in WIDTH and WIDTH[rec["arm"]] != 1 and rec.get("divergence"):
             div = rec["divergence"]
-            forks[rec["prompt"]][WIDTH[rec["arm"]]] = "same" if div["identical"] else div["first_diff_char"]
+            forks[rec["prompt"]][WIDTH[rec["arm"]]] = quality.fork_cell(
+                div, same="same", prefix="prefix")
     return by_key, forks, data
 
 

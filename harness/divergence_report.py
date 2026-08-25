@@ -25,6 +25,11 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import quality  # noqa: E402
+
 
 def load(path: Path) -> dict:
     return json.loads(Path(path).read_text())
@@ -210,7 +215,7 @@ def group_stability(result: dict) -> None:
         d = r.get("divergence")
         if d:
             fork[(r["arm"], r["prompt"], r["pass"])] = (
-                "SAME" if d["identical"] else d["first_diff_char"])
+                quality.fork_cell(d))
 
     arms = sorted({a for a, _, _ in fork})
     prompts = sorted({p for _, p, _ in fork})

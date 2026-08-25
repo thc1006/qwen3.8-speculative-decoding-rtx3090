@@ -96,6 +96,13 @@ class DivergenceReport:
     len_arm: int
     sha_ref: str
     sha_arm: str
+    # True when the shorter text is a prefix of the longer one. The scan then stops because a
+    # text ended, not because a character differed, and first_diff_char is that length rather
+    # than a fork. Every record in this repo so far, 0 of 4673, so this is a guard and not a
+    # correction: all arms stop at a token cap and tokens are not a fixed number of characters,
+    # so two runs of the same token count can differ in length with no disagreement in between.
+    # truncation_audit.py already tested for it; the consumers that plot fork positions did not.
+    prefix_only: bool = False
 
 
 def _sha(s: str) -> str:
@@ -118,12 +125,59 @@ def compare_outputs(reference: str, arm: str) -> DivergenceReport:
     return DivergenceReport(
         identical=False,
         first_diff_char=i,
+        prefix_only=(i >= limit),
         common_prefix_frac=(i / limit) if limit else 0.0,
         len_ref=len(reference),
         len_arm=len(arm),
         sha_ref=_sha(reference),
         sha_arm=_sha(arm),
     )
+
+
+def fork_position(div: dict | None):
+    """-> the character index where two greedy texts first disagree, or None.
+
+    None covers three different things, and every consumer of fork positions needs all three
+    treated the same way: no divergence record, the texts never disagreed within the window, and
+    the scan stopping because the shorter text ended rather than because a character differed.
+    The third is the one that reads as a fork if you only check `identical`. It has not happened
+    in this repo, 0 of 4673 records, and the arms all stop at a token cap while tokens are not a
+    fixed number of characters, so it can.
+
+    Records written before `prefix_only` existed are checked against their own lengths instead.
+    """
+    if not div or div.get("identical"):
+        return None
+    i = div.get("first_diff_char")
+    if i is None:
+        return None
+    if div.get("prefix_only"):
+        return None
+    limit = min(div.get("len_ref") or 0, div.get("len_arm") or 0)
+    if limit and i >= limit:
+        return None
+    return i
+
+
+def fork_cell(div: dict | None, same: str = "SAME", prefix: str = "PREFIX", missing: str = "-"):
+    """-> one of four values for a fork-position table, kept apart because they differ.
+
+    `same`    the two texts never disagreed inside the window
+    `prefix`  the scan ended because the shorter text ran out, with no disagreement before it
+    `missing` no divergence record at all
+    otherwise the character index where they first differ
+
+    Folding `prefix` into `same` would call two texts identical when one is a truncation of the
+    other, and folding it into a position would report a fork where no character differs. Five
+    call sites read this; they all wrote `same if identical else first_diff_char`, which has
+    neither state.
+    """
+    if not div:
+        return missing
+    if div.get("identical"):
+        return same
+    pos = fork_position(div)
+    return prefix if pos is None else pos
 
 
 @dataclass(frozen=True)
