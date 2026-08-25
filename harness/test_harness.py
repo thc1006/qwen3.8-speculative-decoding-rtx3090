@@ -2271,6 +2271,58 @@ class TestSlopesAreComparedOnSharedWidths(unittest.TestCase):
         self.assertIn("VERDICT: not resolved", out)
 
 
+class TestForwardsIsDerivedInOnePlace(unittest.TestCase):
+    """`predicted_n - accepted - 1` may appear in exactly one module.
+
+    speclen.py exists because this study shipped that derivation three times and the copies parted
+    company -- analyze.py's own comment records that the second attempt "landed in one file and
+    not the other, which left two different mean lengths in the same repo". A fourth copy went
+    into analysis/plot_phase_m.py during this session's own review, which is how this test came to
+    be written.
+
+    The copies are not merely redundant. `speclen.forwards` returns the EXACT
+    `draft_n_verif_steps` counter when a record carries one, and derives only as a fallback. A
+    private copy keeps guessing after the llama.cpp patch that exposes that counter lands, and
+    nothing errors: two numbers that used to agree quietly stop agreeing.
+    """
+
+    ROOT = Path(__file__).parent.parent
+
+    def test_no_module_outside_speclen_recomputes_it(self):
+        import ast
+        # This study's own code only, recursively. Globbing `*/*.py` from the repo root reached
+        # into llamacpp-master/, which holds llama.cpp's own convert scripts -- third-party source
+        # that this rule has no business policing -- and would have missed anything nested deeper
+        # than two levels in the directories it does own.
+        offenders = []
+        roots = [self.ROOT / d for d in ("harness", "analysis", "repro")]
+        for path in sorted(q for r in roots if r.is_dir() for q in r.rglob("*.py")):
+            if path.name in ("speclen.py", "test_harness.py") or ".venv" in path.parts:
+                continue
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            # Expressions only, so the identity written out in a docstring or a comment is fine.
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.BinOp) or not isinstance(node.op, ast.Sub):
+                    continue
+                try:
+                    src = ast.unparse(node)
+                except Exception:                                     # noqa: BLE001
+                    continue
+                low = src.lower()
+                if "accept" in low and ("predicted_n" in low or "pn" in low.split()) \
+                        and low.rstrip().endswith("- 1"):
+                    offenders.append(f"{path.relative_to(self.ROOT)}:{node.lineno}: {src}")
+        self.assertFalse(
+            offenders,
+            "the forward-pass count is derived outside speclen.py, which is how this repo "
+            "previously ended up with two different mean lengths, and which stops the exact "
+            "draft_n_verif_steps counter from being picked up when it arrives:\n  "
+            + "\n  ".join(offenders))
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 

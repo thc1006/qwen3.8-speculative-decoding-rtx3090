@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT / "harness"))
 import matplotlib.pyplot as plt  # noqa: E402
 import analyze as A  # noqa: E402
 import plot as P  # noqa: E402
+import speclen  # noqa: E402
 import stats as ST  # noqa: E402
 
 RESULT = ROOT / "results/phase_m.json"
@@ -97,12 +98,13 @@ def _effective_width(result):
     """
     tot = defaultdict(lambda: [0, 0])
     for rec in result["records"]:
-        tm = rec.get("timings") or {}
-        drafted = tm.get("t_draft_n") or 0
-        accepted = tm.get("t_draft_n_accepted") or 0
-        pn = rec.get("predicted_n") or 0
-        f = pn - accepted - 1
-        if drafted and f > 0:
+        drafted = (rec.get("timings") or {}).get("t_draft_n") or 0
+        # speclen.forwards, never a local copy of `predicted_n - accepted - 1`. That module exists
+        # because this study already shipped the derivation three times and they parted company;
+        # it also returns the EXACT `draft_n_verif_steps` counter when a record carries one, so a
+        # private copy would keep guessing after the llama.cpp patch that exposes it lands.
+        f = speclen.forwards(rec)
+        if drafted and f:
             tot[rec["arm"]][0] += drafted
             tot[rec["arm"]][1] += f
     return {a: d / f + 1 for a, (d, f) in tot.items() if f}
