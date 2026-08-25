@@ -1,0 +1,46 @@
+==============================================================================
+PHASE L - speculative decoding across context depth
+==============================================================================
+
+REALISED DEPTH (from the server's counters, not the request)
+     asked    filler    prompt    cached  evaluated  status
+      8192      8195      8299      8295          4  ok
+     32768     32772     32876     32872          4  ok
+
+DECODE THROUGHPUT (tok/s, median over prompts x passes)
+     depth          baseline            mtp-n2        dflash2-n4
+      8192        39.7              58.1              54.3      
+     32768        35.1              52.2              47.1      
+
+  retention, as a fraction of that method's own shallowest rung
+     depth          baseline            mtp-n2        dflash2-n4
+      8192     100.00%           100.00%           100.00%      
+     32768      88.60%            89.78%            86.70%      
+
+CLIFF TEST (llama.cpp #27623: ~25x collapse past ~80 K on sm_89)
+  baseline: 39.7 tok/s at 8192 -> 35.1 tok/s at 32768
+  VERDICT WITHHELD. The report puts the collapse past about 80 K and the
+  deepest rung here is 32768. Nothing below the threshold can reproduce or refute it;
+  the ratio over these rungs is 1.1x and describes
+  ordinary degradation, not the cliff.
+
+SPEEDUP vs the matching baseline, per depth (cluster bootstrap over prompts)
+
+  depth 8192
+    mtp-n2             +54.6%  [+52.2%, +57.1%]
+    dflash2-n4         +46.7%  [+40.7%, +52.7%]
+
+  depth 32768
+    mtp-n2             +53.9%  [+49.9%, +57.5%]
+    dflash2-n4         +46.6%  [+37.5%, +55.4%]
+
+ACCEPTANCE vs depth (mean accepted tokens per verification step)
+     depth            mtp-n2        dflash2-n4
+      8192       2.178             2.607      
+     32768       2.208             2.484      
+
+  A drafter that holds acceptance as depth grows is doing what DFlash2 claims.
+  Acceptance falling while throughput falls faster means the loss is in the target,
+  not the drafter, and speculation is inheriting the target's problem.
+
+INCIDENTS across the ladder: 0   (180 removed as raised against a condition never declared; see incidents_repaired)
