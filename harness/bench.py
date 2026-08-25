@@ -472,6 +472,17 @@ def run_matrix(
                 print(f"  settled: {settle['start_temp_c']}C -> {settle['entry_temp_c']}C "
                       f"in {settle['waited_s']}s (clock {settle['entry_sm_clock_mhz']} MHz)",
                       flush=True)
+                # The card was gated on temperature and clock; the host was gated on nothing. A
+                # compiler running on this machine during Phase M pass 2 could only be found
+                # afterwards by comparing object-file timestamps with server logs by hand.
+                load = T.host_load()
+                result.setdefault("arm_pass_host_load", {})[tag] = load
+                if load["contended"]:
+                    names = ", ".join(f"{c['comm']} {c['pcpu']:.0f}%" for c in load["competing"])
+                    result["incidents"].append({
+                        "pass": p_idx, "arm": arm.name, "kind": "host_contended",
+                        "detail": f"{load['competing_pct']:.0f}% of CPU is not this run: {names}"})
+                    print(f"  !! host contended at arm entry: {names}", flush=True)
                 h = S.start(binary, arm.model or model, arm.extra_args, port=port,
                             log_path=log_path, common_args=common_args, gpu_index=gpu_index)
             except S.ServerError as e:

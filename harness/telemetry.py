@@ -273,6 +273,49 @@ def assert_gpu_exclusive(index: int = 0, allow_pids: tuple[int, ...] = ()) -> No
             "Timing and energy would both be contaminated. Stop the other workload and retry.")
 
 
+def host_load(own_names=("llama-server", "python3", "python", "bench.py")):
+    """What else is competing for the CPU at arm entry.
+
+    The GPU is gated on temperature and clock; the host was not gated on anything. On 2026-08-26 a
+    compiler ran on this machine during Phase M pass 2 and the only way to find out afterwards was
+    to compare object-file timestamps against server-log timestamps by hand. Recording it per
+    arm-pass turns that into a field.
+
+    `own_names` are the processes the run itself is expected to have. Everything else above the
+    threshold is competition and is named, so a reader sees `cc1plus` rather than a bare number.
+    """
+    out = {"loadavg_1m": None, "competing_pct": 0.0, "competing": [], "contended": False}
+    try:
+        out["loadavg_1m"] = os.getloadavg()[0]
+    except OSError:
+        pass
+    try:
+        ps = subprocess.run(["ps", "-eo", "pcpu,comm", "--no-headers"],
+                            capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        out["note"] = "ps unavailable; contention not checked"
+        return out
+    for line in ps.stdout.splitlines():
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            continue
+        try:
+            pct = float(parts[0])
+        except ValueError:
+            continue
+        name = parts[1].strip()
+        if pct < 5.0 or any(o in name for o in own_names):
+            continue
+        out["competing_pct"] += pct
+        out["competing"].append({"comm": name, "pcpu": pct})
+    out["competing"].sort(key=lambda c: -c["pcpu"])
+    out["competing"] = out["competing"][:5]
+    # a quarter of one core. a build shows up as several hundred percent, so this is nowhere near
+    # the noise and does not need tuning.
+    out["contended"] = out["competing_pct"] >= 25.0
+    return out
+
+
 def settle_gpu(
     index: int = 0,
     *,

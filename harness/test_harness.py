@@ -2407,6 +2407,49 @@ class TestVerificationWidthIsBracketed(unittest.TestCase):
                       f"silently:\n{out[-1500:]}")
 
 
+class TestHostContentionIsRecorded(unittest.TestCase):
+    """The card was gated on temperature and clock; the host was gated on nothing.
+
+    On 2026-08-26 a compiler ran on this machine during Phase M pass 2. Finding out afterwards
+    meant comparing object-file timestamps against server-log timestamps by hand, and the answer
+    was still equivocal (PREREGISTRATION.md Corrections 15 and 16). A field recorded at arm entry
+    turns that into a lookup.
+    """
+
+    def test_own_processes_are_not_counted_as_competition(self):
+        import telemetry as T
+        load = T.host_load()
+        for c in load["competing"]:
+            self.assertNotIn("llama-server", c["comm"],
+                             "the run's own server is being counted against it")
+            self.assertFalse(c["comm"].startswith("python"),
+                             f"the run's own harness is being counted against it: {c}")
+
+    def test_a_busy_host_is_flagged(self):
+        import telemetry as T
+        # own_names is emptied, so the harness and server that ARE running count as competition.
+        # That is the only way to exercise the threshold without starting a load on a machine
+        # that may be mid-measurement.
+        load = T.host_load(own_names=())
+        if load.get("note"):
+            self.skipTest(load["note"])
+        self.assertGreater(load["competing_pct"], 0.0,
+                           "nothing at all was seen, so the probe cannot detect a busy host")
+        self.assertEqual(load["contended"], load["competing_pct"] >= 25.0)
+
+    def test_the_gate_is_wired_into_arm_entry(self):
+        # Shaped as a source check on purpose: the defect this guards against is the call being
+        # absent, which no unit test of host_load() can see.
+        src = (Path(__file__).parent / "bench.py").read_text(encoding="utf-8")
+        self.assertIn("T.host_load()", src, "arm entry does not sample host load")
+        self.assertIn("arm_pass_host_load", src, "the sample is not recorded per arm-pass")
+        self.assertIn("host_contended", src, "a contended host raises no incident")
+        settle = src.index("settle['entry_sm_clock_mhz']")
+        self.assertLess(settle, src.index("T.host_load()"),
+                        "host load is sampled before the thermal settle, so it measures the wait "
+                        "rather than the conditions the arm actually ran under")
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 
