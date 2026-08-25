@@ -1208,3 +1208,51 @@ If that comes back with only `mul_mat_vec_q` differing, and only at the widths t
 then no kernel's machine code carries the difference and the search moves to the host side: launch
 configuration, the order the scheduler assigns blocks, or something in the module that is not a
 kernel at all.
+
+## Correction 8, 2026-08-25 08:50: forced-down2's gate failures are a build-configuration artefact
+
+The thing with no name has one. It is not the table, not the drafter, not the card, not the
+session, and not run-to-run variation. It is that `forced_down2` was compiled under a different
+cmake configuration from the build it was compared against.
+
+The chain of tests that got there, each one narrowing rather than explaining:
+
+| test | result |
+|---|---|
+| same binary, separate invocation, four hours apart | **150 of 150 byte-identical** - execution is deterministic |
+| every kernel in `libggml-cuda.so`, control against forced_down2 | 6202 kernels, **46 differ, all `mul_mat_vec_q`**, only at `ncols_dst` 3 and 4 |
+| every shared library in the two build directories | **only `libggml-base.so` differs**, and it is not CUDA |
+| patch `mmvq.cu` and rebuild `libggml-base` | unchanged at `386e6470`; the table edit does not touch it |
+| what kind of difference | `.text` and `.rodata` both differ, 8813 bytes: machine code, not metadata |
+| six full rebuilds of the unchanged tree | **one distinct hash, `386e6470`**, matching control |
+| the build logs | `warp_build_forced_down2.log` **begins with a cmake configure**; the restore build after it does not, and the first chain's three builds took 6 to 72 seconds each, which is incremental |
+
+A cmake reconfigure regenerates `flags.make` for every target, so all eleven `ggml-base` sources
+recompiled and produced `64cae0a5`. control, forced-up and forced-down were built incrementally
+inside one session and all three carry `386e6470`.
+
+So the forced-down2 comparison is between two builds produced under different configure states,
+and "the only thing that differs is the table" is false for it. That is sufficient to explain a
+width-1 greedy baseline, which has no drafter and whose `mul_mat_vec_q` machine code is
+byte-identical, coming out different: the CPU-side library was not the same one.
+
+### What survives and what does not
+
+- **Forced-up stands.** It was built in the same session as the control with no reconfigure
+  between, all three of its registered gates pass, and its registered prediction held on 3 of 18
+  informative prompts. `calc_nwarps` remains unsupported as the cause of the fork grouping, on
+  both devices.
+- **Forced-down and forced_down2 are withdrawn**, on both hosts. Neither can be read.
+- **The registered design needs one more constraint**, which nothing wrote down because nobody
+  thought of it: every build in an intervention must come from one configure. Building them in
+  separate sessions makes the comparison a comparison of configure states.
+- **Nothing here touches the throughput results**, which are paired within a run and averaged over
+  passes.
+
+### Registered for the re-run, before it starts
+
+All four builds - control, forced-up, forced-down2 and a second control - produced back to back
+inside one configure, then run back to back. The second control is there so the next version of
+this question has an answer already in the file: two builds from one configure that differ in no
+source at all must produce byte-identical output, and if they do not, no comparison in the set
+means anything.
