@@ -40,13 +40,13 @@ second-host addendum in `PREREGISTRATION.md`.
 
 ## Running now
 
-- [ ] **Phase n-max** (host A) - MTP 1..8 and DFlash2 2,4,6,8. Delivers the H8/H8a verdicts and
+- [x] **Phase n-max** (host A) - complete, 1050 records. - MTP 1..8 and DFlash2 2,4,6,8. Delivers the H8/H8a verdicts and
       the `mtp-n1` arm Phase V needs.
-- [ ] **#27572 reproduction** (host A, then host B) - the extended sweep reaches the reported
+- [x] **#27572 reproduction** - complete on both hosts; host B's 21 result files are under `repro/hostB/`. - the extended sweep reaches the reported
       19 000-token prompts and an `-np` sweep beyond 4, which the first pass never covered.
 - [x] **RH2 cross-host replication** (host B) - done. `phase_a_hostB.json`, 175 records: partition
       clean 25/25, groups differ on 14, fork positions identical to host A on all 25 prompts.
-- [ ] **Forced-warp replication** (host B, until 09:35) - the same builds on the second 3090.
+- [x] **Forced-warp replication** (host B) - complete; it reproduced the A6000's pattern, including the failure now attributed to a cmake reconfigure. - the same builds on the second 3090.
       control done, forced-up running, then the original forced-down and then forced_down2. The
       A6000 result is one device and the two 3090s agree on fork positions where the A6000 does
       not, so this separates a property of the table from one of that card.
@@ -77,7 +77,7 @@ second-host addendum in `PREREGISTRATION.md`.
       The control is free: divergence is deterministic here, 150 of 150 arm-by-prompt cells agree
       across all five passes of phase_a, so every already-resolved fork must come back at the same
       character. One that does not means something other than the cap changed.
-- [ ] **Forced-warp intervention** (host C) - three builds of the same revision differing only in
+- [x] **Forced-warp intervention** (host C) - forced-up stands; forced-down withdrawn. See Correction 8. - three builds of the same revision differing only in
       the `calc_nwarps` GENERIC table. Registered before any of it ran, with the outcomes and the
       baseline identity control written down first.
 
@@ -136,10 +136,10 @@ the fix needs them.
       different tasks rather than translations.
 - [x] **A7** the warp section carries the intervention result: forced-up passes every gate and the
       registered prediction held on 3 of 18 discriminating prompts.
-- [ ] **A8** `prompts.py` docstring still says "3 x 5 = 15" for a 25-prompt suite and claims
+- [x] **A8** done - the docstring describes the design that exists, names the think-class collinearity and the language-task confound, and points at D5. It said "3 x 5 = 15" for a 25-prompt suite and claims
       `think` is crossed with class. Rewrite to describe the design that exists and name the
       collinearity as a limitation.
-- [ ] **A9** `elasticity.py:405` asserts "compute-bound verify" as a conclusion. Same downgrade.
+- [x] **A9** done - downgraded to a described observation that also says what it does not measure. It asserted "compute-bound verify" as a conclusion. Same downgrade.
 
 Two audit claims that did not hold: the README never says "compute-bound" (the phrase is in
 `elasticity.py` and, correctly, in the preregistration as the hypothesis under test), and it did
@@ -225,8 +225,21 @@ there was omission, not misstatement.
       every position exactly once. Also off by default, since it changes how many passes a matrix
       runs. With the ordinal now recorded, the other route - adjust for position in the model
       rather than balance it by design - is open too.
-- [ ] **C3** energy from the NVML total-energy counter rather than integrated `power.draw`.
-      `pynvml` is not installed here; the card supports the counter.
+- [x] **C3** done, by a different route than the audit proposed. There is no total-energy
+      counter reachable from here: `nvidia-smi` rejects `total_energy_consumption` on this driver
+      and neither `pynvml` nor any nvidia python package is installed, so the counter would mean a
+      new dependency in a harness that deliberately has none.
+
+      `power.draw.instant` does the job instead. Querying `power.draw` beside `power.draw.average`
+      returns the same number on every sample, which is the averaging the audit named; `instant`
+      differed on all 20 samples under load and carried 58 % more spread. Both are now sampled and
+      both integrated, so a file has the figure the earlier phases used and the sharper one, and
+      nothing becomes incomparable.
+
+      It also bounds what the averaging was worth: over a three-second window on a loaded card the
+      two integrals differ by **0.17 %**. The other half of the criticism - that the integral does
+      not cover the gap between the request starting and the first sample - is untouched by this
+      and remains open.
 - [x] **C4** `harness/kernel_facts.py` reads the dispatch facts out of the tree that is about to
       run - `MMVQ_MAX_BATCH_SIZE` from `mmvq.cuh`, the GENERIC arm of `calc_nwarps` parsed as a
       case table, and the sha256 of `libggml-cuda.so` rather than of the 17 KB launcher - and

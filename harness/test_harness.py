@@ -250,6 +250,24 @@ class TestAlgebraicInvariants(unittest.TestCase):
                       "seven arms over five passes leaves each arm visiting five of seven order "
                       "positions, and a different five; only len(arms) passes closes it")
 
+    def test_both_power_fields_are_sampled(self):
+        """power.draw is time-averaged on Ampere; power.draw.instant is not.
+
+        Querying power.draw beside power.draw.average returns the same number on every sample, so
+        integrating power.draw alone smears a request over the second around it. Both are sampled
+        so a file carries the figure the earlier phases used and the sharper one, and neither set
+        of results becomes incomparable.
+        """
+        import telemetry as T
+        self.assertIn("power.draw.instant", T._NVSMI_FIELDS)
+        self.assertIn("power.draw", T._NVSMI_FIELDS)
+        src = inspect.getsource(T.PowerSampler)
+        self.assertIn("energy_j_instant", src)
+        self.assertIn("energy_instant_vs_average_pct", src,
+                      "the gap between the two integrals is the quantity that says how much the "
+                      "averaging mattered, so it belongs in the record rather than being "
+                      "recomputable in principle")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

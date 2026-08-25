@@ -84,7 +84,13 @@ def assert_port_owned_by(port: int, pid: int) -> None:
 # --------------------------------------------------------------------------- GPU sampling
 
 _NVSMI_FIELDS = (
-    "power.draw", "temperature.gpu",
+    # power.draw is a time-averaged field on Ampere - querying it beside power.draw.average
+    # returns the same number on every sample - so integrating it smears a request's power over
+    # the second around it. power.draw.instant is a separate, less-smoothed reading: over 20
+    # samples under load the two were never equal and instant had 58 % more spread. Both are
+    # sampled and both are integrated, so a file carries the averaged figure the earlier phases
+    # used as well as the sharper one, and neither becomes incomparable.
+    "power.draw", "power.draw.instant", "temperature.gpu",
     "clocks.current.graphics", "clocks.current.memory",
     "memory.used", "utilization.gpu",
 )
@@ -119,7 +125,8 @@ class PowerSampler:
     index: int = 0
     interval_s: float = 0.10
 
-    _samples: list[tuple[float, float]] = field(default_factory=list)  # (t, watts)
+    _samples: list[tuple[float, float]] = field(default_factory=list)  # (t, watts), averaged
+    _samples_instant: list[tuple[float, float]] = field(default_factory=list)  # (t, watts)
     _temps: list[float] = field(default_factory=list)
     _sm_clocks: list[float] = field(default_factory=list)
     _mem_clocks: list[float] = field(default_factory=list)
@@ -127,7 +134,8 @@ class PowerSampler:
     _stop: threading.Event = field(default_factory=threading.Event)
 
     def __enter__(self) -> "PowerSampler":
-        self._samples.clear(); self._temps.clear(); self._sm_clocks.clear()
+        self._samples.clear(); self._samples_instant.clear()
+        self._temps.clear(); self._sm_clocks.clear()
         self._mem_clocks.clear()
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -145,6 +153,8 @@ class PowerSampler:
             now = time.perf_counter()
             if "power.draw" in snap:
                 self._samples.append((now, snap["power.draw"]))
+            if "power.draw.instant" in snap:
+                self._samples_instant.append((now, snap["power.draw.instant"]))
             if "temperature.gpu" in snap:
                 self._temps.append(snap["temperature.gpu"])
             if "clocks.current.graphics" in snap:
@@ -158,18 +168,31 @@ class PowerSampler:
     def n_samples(self) -> int:
         return len(self._samples)
 
-    def energy_j(self) -> float | None:
-        if len(self._samples) < 2:
+    @staticmethod
+    def _integrate(samples) -> float | None:
+        if len(samples) < 2:
             return None
         total = 0.0
-        for (t0, w0), (t1, w1) in zip(self._samples, self._samples[1:]):
+        for (t0, w0), (t1, w1) in zip(samples, samples[1:]):
             total += (w0 + w1) / 2.0 * (t1 - t0)
         return total
 
+    def energy_j(self) -> float | None:
+        return self._integrate(self._samples)
+
+    def energy_j_instant(self) -> float | None:
+        """The same trapezoid over power.draw.instant rather than the averaged field."""
+        return self._integrate(self._samples_instant)
+
     def summary(self) -> dict[str, float | int | None]:
         watts = [w for _, w in self._samples]
+        ei = self.energy_j_instant()
+        e = self.energy_j()
         return {
-            "energy_j": self.energy_j(),
+            "energy_j": e,
+            "energy_j_instant": ei,
+            "energy_instant_vs_average_pct": (100.0 * (ei - e) / e) if (e and ei) else None,
+            "n_power_samples_instant": len(self._samples_instant),
             "power_mean_w": statistics.fmean(watts) if watts else None,
             "power_max_w": max(watts) if watts else None,
             "temp_max_c": max(self._temps) if self._temps else None,
