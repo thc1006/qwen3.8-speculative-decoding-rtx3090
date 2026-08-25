@@ -1300,6 +1300,30 @@ class TestRungDriverGates(unittest.TestCase):
             self.skipTest("no rung driver present")
 
 
+    def test_a_rung_checks_free_disk_before_downloading_it(self):
+        """Free disk was logged AFTER staging, which is too late to act on.
+
+        The four rungs total about 93 GB and are staged one at a time. On the measurement host
+        this would have attempted a 23 GB download into 28 GB of free space, because the 22 GB MoE
+        target is held whenever the Phase M anchor does not clear. Filling the root filesystem
+        does not merely fail the download: the harness is writing results and server logs to the
+        same disk, and _atomic_write_json would fail mid-run.
+        """
+        for name in ("run_phase_q.sh", "run_phase_qsmall.sh"):
+            path = self.ROOT / name
+            if not path.exists():
+                continue
+            src = path.read_text(encoding="utf-8")
+            if "hf download" not in src:
+                continue
+            self.assertIn("--output=avail", src,
+                          f"{name} downloads a rung without checking free disk first")
+            dl = src.index("hf download")
+            guard = src.index("--output=avail")
+            self.assertLess(guard, dl,
+                            f"{name} checks free disk after the download rather than before it")
+
+
 class TestMatrixBaselinePairing(unittest.TestCase):
     """An arm has to be scored against a baseline that ran the same model.
 

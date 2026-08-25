@@ -110,7 +110,19 @@ for RUNG in $RUNGS; do
     [ -f "$cand" ] && { SRC="$cand"; break; }
   done
   if [ -z "$SRC" ]; then
-    log "downloading $F"
+    # Free disk was logged AFTER staging, which is too late to act on. A rung is roughly its VRAM
+    # figure in GB on disk, and the margin covers results, server logs and the partial file the
+    # downloader writes alongside. Filling the root filesystem here would break the harness
+    # mid-write, not merely fail the download.
+    free_gb=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+    need_gb=$(python3 -c "print(int(${NEED_GB[$RUNG]} + 10))")
+    if [ "${free_gb:-0}" -lt "$need_gb" ]; then
+      log "SKIPPING $RUNG: needs about ${need_gb} GB free to stage and only ${free_gb} GB is."
+      log "  the 22 GB MoE target is still held because the Phase M anchor did not clear;"
+      log "  release it or free space by hand, then re-run this rung."
+      continue
+    fi
+    log "downloading $F (${free_gb} GB free, needs about ${need_gb} GB)"
     HF_HUB_ENABLE_HF_TRANSFER=1 .venv/bin/hf download unsloth/Qwen3.8-27B-GGUF "$F" \
       --local-dir models/quant_ladder >> logs/phase_q_download.log 2>&1 || {
         log "download of $F FAILED - see logs/phase_q_download.log"; continue; }
