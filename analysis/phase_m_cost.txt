@@ -1,0 +1,229 @@
+====================================================================================================
+VERIFICATION-STEP COST MODEL     speedup = mean_len / k
+  mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)   [derived; the API has
+            no verification-step count, and this is low by <1 %. See the docstring.]
+====================================================================================================
+[integrity] derived mean_len vs the server's printed mean len: 1425 requests, mean gap -0.3494, worst 2.9054
+            the gap is systematic, not rounding. The derivation is wrong, not the counters. See collect()'s docstring.
+
+[integrity] API counters vs llama.cpp log lines: 1425 requests compared, 0 mismatched  -- two independent sources agree to the token
+
+--- k by arm (pooled over classes and passes) ---
+arm              spec             w    n   k mean    k sd         k range
+moe-mtp-n1       draft-mtp        2   75   1.4315  0.0417   1.363-1.557
+dense-mtp-n1     draft-mtp        2   75   1.2330  0.0158   1.212-1.275
+moe-mtp-n2       draft-mtp        3   75   1.8086  0.0381   1.747-1.966
+dense-mtp-n2     draft-mtp        3   75   1.4576  0.0179   1.428-1.520
+moe-draft08b-n2  draft-simple     3   75   4.3140  0.1368   3.989-4.611
+dense-draft08b-n2 draft-simple     3   75   2.3678  0.0447   2.280-2.540
+moe-mtp-n3       draft-mtp        4   75   2.1774  0.0963   2.054-2.468
+dense-mtp-n3     draft-mtp        4   75   1.7569  0.0176   1.724-1.805
+moe-draft08b-n4  draft-simple     5   75   4.9953  0.1978   4.647-5.436
+dense-draft08b-n4 draft-simple     5   75   2.6968  0.1115   2.573-3.325
+moe-mtp-n5       draft-mtp        6   75   2.7157  0.0655   2.564-2.871
+dense-mtp-n5     draft-mtp        6   75   2.3080  0.0220   2.269-2.367
+moe-draft08b-n6  draft-simple     7   75   5.5135  0.2696   5.158-6.087
+dense-draft08b-n6 draft-simple     7   75   3.0647  0.1022   2.917-3.304
+moe-mtp-n7       draft-mtp        8   75   3.2102  0.0897   3.059-3.465
+dense-mtp-n7     draft-mtp        8   75   2.9740  0.0323   2.925-3.054
+moe-draft08b-n8  draft-simple     9   75   6.3044  0.3378   5.869-7.065
+dense-draft08b-n8 draft-simple     9   75   3.0312  0.0903   2.898-3.270
+moe-draft08b-n16 draft-simple    17   75   7.9865  0.3684   7.424-8.812
+
+--- TEST 1: is the overhead charged to REJECTION? ---
+    Model a rejection-proportional cost r (decode-steps per rejected draft token):
+        k = k_verify + r * w * (1 - acceptance),  w = realised draft len / forward
+        => dk/d(acceptance) = -r * w,   so  r = -slope / w
+    A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+    The model holds w constant within an arm. Where the server reuses a surviving
+    draft tail instead of re-drafting, w moves WITH acceptance and the slope picks
+    that up rather than any rejection cost - biased positive, which reads as r < 0,
+    which is this test's own conclusion. Arms whose w varies are fitted and shown,
+    and excluded from the bound.
+
+arm                 n    accept range      w  w cv%     r2                   r [95 %]  reading
+moe-mtp-n1          1  0.537-0.961   1.00   0.22  0.077       -0.10 [-0.13, -0.05]  k FALLS with rejection - not a rollback account
+dense-mtp-n1        1  0.622-0.980   1.00   0.23  0.099       +0.04 [+0.02, +0.07]  clears zero by only 0.62 half-widths - inside the known undercoverage; would be +0.7% of k
+moe-mtp-n2          2  0.396-0.921   1.99   0.25  0.211       -0.06 [-0.07, -0.04]  k FALLS with rejection - not a rollback account
+dense-mtp-n2        2  0.418-0.918   1.99   0.28  0.003       +0.00 [-0.01, +0.01]  no rejection cost detected (interval contains zero)
+moe-draft08b-n2     2  0.304-0.850   1.31  14.72  0.398       -0.36 [-0.42, -0.30]  CONFOUNDED: draft/fwd varies 14.7% and tracks acceptance at r=+0.99; the regressor is inside the response
+dense-draft08b-n2   2  0.343-0.851   1.28  14.40  0.042       -0.04 [-0.09, +0.00]  CONFOUNDED: draft/fwd varies 14.4% and tracks acceptance at r=+0.99; the regressor is inside the response
+moe-mtp-n3          3  0.322-0.838   2.99   0.45  0.043       -0.04 [-0.05, -0.02]  clears zero by only 1.24 half-widths - inside the known undercoverage; would be -2.3% of k
+dense-mtp-n3        3  0.325-0.857   2.99   0.34  0.001       +0.00 [-0.01, +0.01]  no rejection cost detected (interval contains zero)
+moe-draft08b-n4     4  0.180-0.745   2.32  13.68  0.837       -0.39 [-0.42, -0.37]  CONFOUNDED: draft/fwd varies 13.7% and tracks acceptance at r=+0.98; the regressor is inside the response
+dense-draft08b-n4   4  0.192-0.735   2.26  12.88  0.418       -0.18 [-0.23, -0.14]  CONFOUNDED: draft/fwd varies 12.9% and tracks acceptance at r=+0.99; the regressor is inside the response
+moe-mtp-n5          5  0.199-0.812   4.97   0.65  0.546       -0.05 [-0.06, -0.04]  k FALLS with rejection - not a rollback account
+dense-mtp-n5        5  0.173-0.720   4.96   0.47  0.014       +0.00 [-0.00, +0.01]  no rejection cost detected (interval contains zero)
+moe-draft08b-n6     6  0.149-0.700   3.30  10.84  0.806       -0.40 [-0.44, -0.36]  CONFOUNDED: draft/fwd varies 10.8% and tracks acceptance at r=+0.98; the regressor is inside the response
+dense-draft08b-n6   6  0.135-0.649   3.23   9.94  0.884       -0.17 [-0.18, -0.16]  CONFOUNDED: draft/fwd varies 9.9% and tracks acceptance at r=+0.98; the regressor is inside the response
+moe-mtp-n7          7  0.144-0.688   6.94   0.89  0.471       -0.05 [-0.07, -0.04]  k FALLS with rejection - not a rollback account
+dense-mtp-n7        7  0.125-0.644   6.93   0.59  0.011       -0.00 [-0.01, +0.01]  no rejection cost detected (interval contains zero)
+moe-draft08b-n8     8  0.090-0.575   4.20   8.23  0.635       -0.38 [-0.45, -0.31]  CONFOUNDED: draft/fwd varies 8.2% and tracks acceptance at r=+0.94; the regressor is inside the response
+dense-draft08b-n8   8  0.106-0.610   4.16   8.07  0.496       -0.09 [-0.11, -0.07]  CONFOUNDED: draft/fwd varies 8.1% and tracks acceptance at r=+0.97; the regressor is inside the response
+moe-draft08b-n16   16  0.049-0.413   8.06   4.23  0.772       -0.33 [-0.36, -0.29]  CONFOUNDED: draft/fwd varies 4.2% and tracks acceptance at r=+0.89; the regressor is inside the response
+
+  Largest upper 95 % limit on r, over the 10 arm(s) where the model applies: +0.06581
+  decode-steps per rejected draft token (dense-mtp-n1). The bound is an upper confidence
+  limit, not the largest point estimate: the maximum of several noisy points is
+  biased upward and is not a bound on anything.
+  At that limit the rejection term accounts for at most +1.19 % of the cycle cost (dense-mtp-n5),
+  which is the comparable figure: r is per rejected draft token, so arms at different widths
+  carry the same total cost at different r.
+  Acceptance spans roughly 0.049-0.980 in this data - nearly a ten-fold range -
+  so a rejection-driven overhead of any consequence would have shown up here.
+  Reading: the verification overhead is paid per position VERIFIED, not per
+  draft REJECTED. This does not say rollback is free; it bounds how much of
+  the observed cost rollback can account for.
+  moe-mtp-n1, moe-mtp-n2, moe-mtp-n3, moe-mtp-n5, moe-mtp-n7: r is significantly NEGATIVE, the opposite of a rollback account. k rises with acceptance at constant
+  draft width, which is what a cost paid per position verified looks like near saturation: mean_len climbs toward w+1 while the cycle cost does not.
+  Not established, and not treated as overturning the reading: dense-mtp-n1 (0.62 half-widths)
+  Excluded from the bound as confounded: moe-draft08b-n2, dense-draft08b-n2, moe-draft08b-n4, dense-draft08b-n4, moe-draft08b-n6, dense-draft08b-n6, moe-draft08b-n8, dense-draft08b-n8, moe-draft08b-n16.
+
+--- TEST 2: k vs verification width, per method ---
+    MMVQ dispatch limit 8, read from this run's own record
+    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified
+    position in serial-decode-step equivalents, over the whole cycle rather than
+    attributed to any one component; see the note under the fits.
+  draft-mtp @ Qwen3.6-35B-A3B-UD-Q4_ MMVQ widths [2, 3, 4, 6, 8]  ->  k0=1.2143  c=0.2929  r2=0.9914
+                     k0 1.2089 to 1.2198   c 0.2905 to 0.2953   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 1.2143, above the floor of 1.0 that a zero-depth cycle must cost. Consistent; the excess is an upper bound on a fixed per-cycle cost, not a measurement of one.
+                     lack of fit across widths: residual se on the slope 0.0157 (5 widths, 3 dof), against the prompt bootstrap's half-width 0.0024
+                     the line is a 6.6x poorer description of these widths than prompt-to-prompt scatter alone would suggest, so `c` is a chord over the widths fitted and not a constant marginal cost.
+                     baseline   143.1 tok/s -> one decode step 6.986 ms; k0 = 8.484 ms, c = 2.046 ms per extra position  [2.030, 2.063]
+      w= 2  k=1.4315  fit=1.5072  resid=-0.0757
+      w= 3  k=1.8086  fit=1.8001  resid=+0.0085
+      w= 4  k=2.1774  fit=2.0930  resid=+0.0844
+      w= 6  k=2.7157  fit=2.6787  resid=+0.0370
+      w= 8  k=3.2102  fit=3.2644  resid=-0.0542
+  draft-mtp @ Qwen3.8-27B-UD-Q4_K_XL MMVQ widths [2, 3, 4, 6, 8]  ->  k0=0.8983  c=0.2910  r2=0.9969
+                     k0 0.8955 to 0.9014   c 0.2898 to 0.2922   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 0.8983, BELOW the floor of 1.0: the line implies a cycle cheaper than a plain decode step at zero draft depth, which no configuration can be.
+                     so k(w) is concave here and the FIRST extra position costs more than c. Refit with k(1) pinned at the floor: k0=0.9422  c=0.2820  r2=0.9956  (3.1 % change in c)
+                     under 5 % and r2 still above 0.97, so the line describes the measured widths well. What it does not support is reading k0 as a fixed overhead, on this method or any other.
+                     lack of fit across widths: residual se on the slope 0.0094 (5 widths, 3 dof), against the prompt bootstrap's half-width 0.0012
+                     the line is a 7.8x poorer description of these widths than prompt-to-prompt scatter alone would suggest, so `c` is a chord over the widths fitted and not a constant marginal cost.
+                     baseline    41.3 tok/s -> one decode step 24.199 ms; k0 = 21.739 ms, c = 7.042 ms per extra position  [7.013, 7.072]
+      w= 2  k=1.2330  fit=1.1893  resid=+0.0436
+      w= 3  k=1.4576  fit=1.4803  resid=-0.0228
+      w= 4  k=1.7569  fit=1.7713  resid=-0.0144
+      w= 6  k=2.3080  fit=2.3533  resid=-0.0453
+      w= 8  k=2.9740  fit=2.9353  resid=+0.0388
+  draft-simple @ Qwen3.6-35B-A3B-UD-Q4_ MMVQ widths [3, 5, 7]  ->  k0=3.7414  c=0.2999  r2=0.9939
+                     the widths above are what the FLAGS asked for and are an upper bound; per token-emitting forward the drafter delivered 2.31, 3.32, 4.30 (39 % short at the widest).
+                     refitting on that lower bound: k0=3.5487  c=0.6034  r2=0.9956. `c` is bracketed [0.2999, 0.6034], not known to the four decimals above.
+                     The counters cannot close it: the drafter may stop short, and on partial acceptance the server replays the accepted prefix instead of drafting. llama.cpp counts verification steps exactly and does not return the number; the patch is in upstream/.
+                     width(s) [9] bracket ACROSS the MMVQ limit of 8 (w=9 spans [5.20, 9.00]), so which kernel they took is not decided by this data. They are treated as off-path here, which is the assumption the fit has always made.
+                     k0 3.7143 to 3.7699   c 0.2886 to 0.3104   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 3.7414, above the floor of 1.0 that a zero-depth cycle must cost. Consistent; the excess is an upper bound on a fixed per-cycle cost, not a measurement of one.
+                     lack of fit across widths: residual se on the slope 0.0235 (3 widths, 1 dof), against the prompt bootstrap's half-width 0.0109
+                     the line is a 2.2x poorer description of these widths than prompt-to-prompt scatter alone would suggest, so `c` is a chord over the widths fitted and not a constant marginal cost.
+                     baseline   143.1 tok/s -> one decode step 6.986 ms; k0 = 26.139 ms, c = 2.095 ms per extra position  [2.016, 2.168]
+      w= 3  k=4.3140  fit=4.3411  resid=-0.0272
+      w= 5  k=4.9953  fit=4.9409  resid=+0.0543
+      w= 7  k=5.5135  fit=5.5407  resid=-0.0272
+      w= 9  k=6.3044  OFF THE MMVQ PATH (> 8); the MMVQ line would predict 6.1405, so it sits +2.7 %
+            excluded from the fit: it is a different kernel, not a residual
+      w=17  k=7.9865  OFF THE MMVQ PATH (> 8); the MMVQ line would predict 8.5396, so it sits -6.5 %
+            excluded from the fit: it is a different kernel, not a residual
+  draft-simple @ Qwen3.8-27B-UD-Q4_K_XL MMVQ widths [3, 5, 7]  ->  k0=2.0128  c=0.1742  r2=0.9990
+                     the widths above are what the FLAGS asked for and are an upper bound; per token-emitting forward the drafter delivered 2.28, 3.26, 4.23 (40 % short at the widest).
+                     refitting on that lower bound: k0=1.9030  c=0.3579  r2=0.9988. `c` is bracketed [0.1742, 0.3579], not known to the four decimals above.
+                     The counters cannot close it: the drafter may stop short, and on partial acceptance the server replays the accepted prefix instead of drafting. llama.cpp counts verification steps exactly and does not return the number; the patch is in upstream/.
+                     width(s) [9] bracket ACROSS the MMVQ limit of 8 (w=9 spans [5.16, 9.00]), so which kernel they took is not decided by this data. They are treated as off-path here, which is the assumption the fit has always made.
+                     k0 2.0017 to 2.0243   c 0.1709 to 0.1775   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 2.0128, above the floor of 1.0 that a zero-depth cycle must cost. Consistent; the excess is an upper bound on a fixed per-cycle cost, not a measurement of one.
+                     lack of fit across widths: residual se on the slope 0.0056 (3 widths, 1 dof), against the prompt bootstrap's half-width 0.0033
+                     the line is a 1.7x poorer description of these widths than prompt-to-prompt scatter alone would suggest, so `c` is a chord over the widths fitted and not a constant marginal cost.
+                     baseline    41.3 tok/s -> one decode step 24.199 ms; k0 = 48.709 ms, c = 4.216 ms per extra position  [4.136, 4.295]
+      w= 3  k=2.3678  fit=2.3613  resid=+0.0065
+      w= 5  k=2.6968  fit=2.7098  resid=-0.0129
+      w= 7  k=3.0647  fit=3.0582  resid=+0.0065
+      w= 9  k=3.0312  OFF THE MMVQ PATH (> 8); the MMVQ line would predict 3.4067, so it sits -11.0 %
+            excluded from the fit: it is a different kernel, not a residual
+
+--- the same fit on requests that never diverged from their baseline ---
+  draft-mtp @ Qwen3.6-35B-A3B-UD-Q4_ only 0 widths keep two or more non-diverging records; not fitted
+  draft-mtp @ Qwen3.8-27B-UD-Q4_K_XL c on all  375 = 0.2910   c on the  84 that never diverged = 0.2891   -0.6 %
+  draft-simple @ Qwen3.6-35B-A3B-UD-Q4_ only 2 widths keep two or more non-diverging records; not fitted
+  draft-simple @ Qwen3.8-27B-UD-Q4_K_XL c on all  225 = 0.1742   c on the  45 that never diverged = 0.1777   +2.0 %
+
+  One method on two targets, fitted separately. Everything about the cycle is
+  held except the model, so a difference in the slope is a difference in what a
+  verified position costs on the two architectures. That is H6b.
+
+  c(draft-mtp @ Qwen3.6-35B-A3B-UD-Q4_) - c(draft-mtp @ Qwen3.8-27B-UD-Q4_K_XL) = +0.0019  [-0.0010, +0.0047]   nominal 95 %, 25 shared prompts, paired on them, both fitted on the shared widths [2, 3, 4, 6, 8]
+  Shape check on the DIFFERENCE across widths [2, 3, 4, 6, 8]: residuals -0.11932 +0.03122 +0.09879 +0.08231 -0.09301, se(slope) 0.02409 on 3 dof.
+  The difference is not itself linear across these widths, so the curvature does NOT cancel. Its slope is 0.08 se against a 95 % point of 3.18, which bounds the comparison at +/-0.0767 -- wider than the interval above, and binding.
+  VERDICT: not resolved. The point estimate is +0.0019 against a shape-based bound of 0.0767.
+  The reason is not a shortage of prompts. The two k(w) curves are not parallel over these widths, so one number for the difference in slope is not a summary of them: whatever separates the two configurations is itself width-dependent. More prompts would narrow the interval above and change nothing here.
+
+  Separating the components needs per-context CUDA-event timing, a replay that
+  skips drafter compute, or a profiler decomposition - none of which this file has.
+
+  One method on two targets, fitted separately. Everything about the cycle is
+  held except the model, so a difference in the slope is a difference in what a
+  verified position costs on the two architectures. That is H6b.
+
+  c(draft-simple @ Qwen3.6-35B-A3B-UD-Q4_) - c(draft-simple @ Qwen3.8-27B-UD-Q4_K_XL) = +0.1257  [+0.1154, +0.1361]   nominal 95 %, 25 shared prompts, paired on them, both fitted on the shared widths [3, 5, 7]
+  Shape check on the DIFFERENCE across widths [3, 5, 7]: residuals -0.03363 +0.06726 -0.03363, se(slope) 0.02912 on 1 dof.
+  The difference is not itself linear across these widths, so the curvature does NOT cancel. Its slope is 4.31 se against a 95 % point of 12.71, which bounds the comparison at +/-0.3700 -- wider than the interval above, and binding.
+  VERDICT: not resolved. The point estimate is +0.1257 against a shape-based bound of 0.3700.
+  The reason is not a shortage of prompts. The two k(w) curves are not parallel over these widths, so one number for the difference in slope is not a summary of them: whatever separates the two configurations is itself width-dependent. More prompts would narrow the interval above and change nothing here.
+
+  Separating the components needs per-context CUDA-event timing, a replay that
+  skips drafter compute, or a profiler decomposition - none of which this file has.
+
+--- matched acceptance: is it draft quality, or the cost of drafting? ---
+    Two methods on the SAME target whose acceptance agrees to within 2 points.
+    Acceptance is what draft quality buys, so a pair that matches on it and
+    separates on throughput separates on something else - and what the two
+    methods do not share is the drafter's own forward passes.
+    A pair sits at ONE width, so it speaks to the total cost of a cycle there and
+    not to the slope: it cannot say whether the difference is in k0 or in c.
+  Qwen3.6-35B-A3B-UD-Q4_  moe-draft08b-n2 (draft-simple, n-max 2) acceptance 53.7 %  ->  0.404x
+                          moe-mtp-n3 (draft-mtp, n-max 3) acceptance 53.5 %  ->  1.234x
+                          acceptance differs by 0.2 points, throughput by 83 points of baseline.
+                          effective width 2.31 against 3.99 columns  -- CONFOUNDED: more than a quarter column apart, so this pair separates on verification shape as well as on the drafter.
+                          The confound runs AGAINST the gap: the faster arm is also the one verifying 1.68 more columns -- about 0.50 decode-steps per cycle at the fitted c. Correcting for it widens the gap; it cannot explain it.
+  Qwen3.6-35B-A3B-UD-Q4_  moe-draft08b-n4 (draft-simple, n-max 4) acceptance 38.7 %  ->  0.402x
+                          moe-mtp-n5 (draft-mtp, n-max 5) acceptance 38.6 %  ->  1.157x
+                          acceptance differs by 0.1 points, throughput by 76 points of baseline.
+                          effective width 3.32 against 5.97 columns  -- CONFOUNDED: more than a quarter column apart, so this pair separates on verification shape as well as on the drafter.
+                          The confound runs AGAINST the gap: the faster arm is also the one verifying 2.64 more columns -- about 0.78 decode-steps per cycle at the fitted c. Correcting for it widens the gap; it cannot explain it.
+  Qwen3.6-35B-A3B-UD-Q4_  moe-draft08b-n6 (draft-simple, n-max 6) acceptance 29.4 %  ->  0.386x
+                          moe-mtp-n7 (draft-mtp, n-max 7) acceptance 29.3 %  ->  1.042x
+                          acceptance differs by 0.2 points, throughput by 66 points of baseline.
+                          effective width 4.30 against 7.94 columns  -- CONFOUNDED: more than a quarter column apart, so this pair separates on verification shape as well as on the drafter.
+                          The confound runs AGAINST the gap: the faster arm is also the one verifying 3.64 more columns -- about 1.08 decode-steps per cycle at the fitted c. Correcting for it widens the gap; it cannot explain it.
+  Qwen3.8-27B-UD-Q4_K_XL  dense-draft08b-n4 (draft-simple, n-max 4) acceptance 35.2 %  ->  0.700x
+                          dense-mtp-n5 (draft-mtp, n-max 5) acceptance 36.7 %  ->  1.321x
+                          acceptance differs by 1.5 points, throughput by 62 points of baseline.
+                          effective width 3.26 against 5.96 columns  -- CONFOUNDED: more than a quarter column apart, so this pair separates on verification shape as well as on the drafter.
+                          The confound runs AGAINST the gap: the faster arm is also the one verifying 2.70 more columns -- about 0.63 decode-steps per cycle at the fitted c. Correcting for it widens the gap; it cannot explain it.
+  Qwen3.8-27B-UD-Q4_K_XL  dense-draft08b-n6 (draft-simple, n-max 6) acceptance 26.3 %  ->  0.651x
+                          dense-mtp-n7 (draft-mtp, n-max 7) acceptance 27.6 %  ->  1.090x
+                          acceptance differs by 1.4 points, throughput by 44 points of baseline.
+                          effective width 4.23 against 7.93 columns  -- CONFOUNDED: more than a quarter column apart, so this pair separates on verification shape as well as on the drafter.
+                          The confound runs AGAINST the gap: the faster arm is also the one verifying 3.70 more columns -- about 0.86 decode-steps per cycle at the fitted c. Correcting for it widens the gap; it cannot explain it.
+
+--- implied optimum ---
+    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k has
+    an interior maximum in principle. Whether the measured ladder shows one is read
+    off the data below rather than asserted. An earlier version of this line stated
+    that the ladder falls monotonically over every width measured. That was true of
+    the dense phases it was written against and false the moment Phase M ran an MTP
+    ladder that peaks at n-max 2 on both targets, and nothing would have caught it.
+    These are best TESTED points. Whether a peak clears noise is analyze.py's paired
+    intervals, not this table.
+  draft-mtp @ Qwen3.6-35B-A3B-UD-Q4_ n1=1.246x  n2=1.291x  n3=1.234x  n5=1.157x  n7=1.042x
+                 -> best tested n-max = 2   (interior maximum at n-max 2)
+                 -> smoothing k through the fit over MMVQ widths [2, 3, 4, 6, 8] puts the peak at n-max 2 (preserves it; same mean_len, so not independent evidence)
+  draft-mtp @ Qwen3.8-27B-UD-Q4_K_XL n1=1.447x  n2=1.595x  n3=1.517x  n5=1.321x  n7=1.090x
+                 -> best tested n-max = 2   (interior maximum at n-max 2)
+                 -> smoothing k through the fit over MMVQ widths [2, 3, 4, 6, 8] puts the peak at n-max 2 (preserves it; same mean_len, so not independent evidence)
+  draft-simple @ Qwen3.6-35B-A3B-UD-Q4_ n2=0.404x  n4=0.402x  n6=0.386x  n8=0.343x  n16=0.291x
+                 -> best tested n-max = 2   (falls monotonically)
+                 -> smoothing k through the fit over MMVQ widths [3, 5, 7] puts the peak at n-max 4 (DISAGREES with the tested argmax (2); same mean_len, so not independent evidence)
+  draft-simple @ Qwen3.8-27B-UD-Q4_K_XL n2=0.712x  n4=0.700x  n6=0.651x  n8=0.683x
+                 -> best tested n-max = 2   (not monotone, and the best point is an endpoint)
+                 -> smoothing k through the fit over MMVQ widths [3, 5, 7] puts the peak at n-max 2 (preserves it; same mean_len, so not independent evidence)
