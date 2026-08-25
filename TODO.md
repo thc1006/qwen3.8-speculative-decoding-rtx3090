@@ -70,11 +70,51 @@ second-host addendum in `PREREGISTRATION.md`.
       sits inside the control-vs-control2 band, which is +/-1 %. The warp count is not what puts
       the verification widths into two groups.
 
-      This does not support an upstream claim. The measurement is end-to-end decode, and at
-      n_max 7 the drafter runs seven times at ncols_dst 1 for one verification at width 8, so a
-      kernel-level effect can be real and still sit under the noise. `test-backend-ops` perf mode
-      on MUL_MAT would separate the two; until it is run, "the warp count does not matter" and
-      "this kernel is not where the time goes" are both consistent with the data.
+      The microbenchmark settled which of those it was, and it was the second. Correction: the
+      earlier reading here, that the warp count does not matter for this workload, was wrong.
+
+      `test-backend-ops perf -o MUL_MAT` on the A6000, the same four binaries swapped by
+      directory, 184 timed cases each. Its MUL_MAT sweep varies `n`, which is ncols_dst, over
+      1, 2, 3, 4, 5, 8 and 512, so the controls come with the design: 1 and 2 are untouched by
+      both builds and 512 leaves MMVQ. us/run relative to control, median over quant types:
+
+          ncols_dst   control2   forced_up   forced_down2   edited by
+                  1     +0.10 %     +0.01 %       +0.00 %   neither
+                  2     +0.05 %     -0.10 %       +0.08 %   neither
+                  3     -0.02 %     +0.03 %       -0.57 %   forced_down2
+                  4     -0.05 %     -0.25 %       -1.52 %   forced_down2
+                  5     +0.11 %    +13.62 %       -0.08 %   forced_up
+                  8     -0.01 %    +26.68 %       +0.00 %   forced_up
+                512     -0.10 %     -0.04 %       -0.09 %   not MMVQ
+
+      control2 sets the floor at 0.17 % median absolute deviation, 0.97 % at the 95th percentile,
+      which is about six times tighter than the end-to-end run. Each forced build moves only the
+      widths it edited and nothing else.
+
+      So the warp count changes this kernel a great deal, and changes the output not at all. That
+      is a stronger statement than the one it replaces. Fork positions are a property of the text,
+      and a build that runs 26.68 % slower at width 8 emitted the same bytes on all 150 records,
+      so MMVQ's accumulation does not depend on how the reduction is split across warps. A
+      mechanism that cannot change the output cannot change where two outputs diverge, and the
+      warp count is out as an explanation of the width grouping on those grounds rather than on a
+      measured absence.
+
+      It also bounds what the end-to-end null was measuring. A 26.68 % change in the width-8
+      kernel moved decode by less than the rebuild noise, so that kernel is at most about 4 % of
+      decode time, which fits: at n_max 7 the drafter runs seven times at ncols_dst 1 for one
+      verification at width 8, and every pass carries attention and the rest besides.
+
+      Still no upstream PR. What the data says about the table is that its choice of two warps at
+      widths 5 to 8 is right on Ampere, since four costs 13.6 % at width 5 and 26.7 % at width 8,
+      and that two warps at width 4 is 1.5 % faster than the stock four. A 1.5 % micro-tuning on
+      one shape and one GPU is far under the bar in AGENTS.md, which asks that every merged line
+      be maintained across a large matrix of platforms and backends.
+
+      A method note worth keeping: `ggml_cuda_should_use_mmvq` carves out per-type thresholds for
+      Ada, Blackwell, DGX Spark and CDNA, and Ampere falls through to `ne11 <= MMVQ_MAX_BATCH_SIZE`
+      for every quantized type. On an Ada card Q4_K stops using MMVQ above ne11 7, so the same
+      forced_up edit would not execute at width 8 there and the intervention would fail silently.
+      The card this ran on is part of what the result means.
 
 - [ ] **forced_down2** (host C now, host B after its chain) - forced-down was void because its
       1-4 row includes width 1, and a drafter decodes one token at a time, so it perturbed every
