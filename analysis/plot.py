@@ -105,12 +105,16 @@ def theme(mode):
     _MODE = "light"
 
 
-def _save(fig, stem, note="", bottom=0.13):
+def _save(fig, stem, note="", bottom=0.13, provenance=None):
     # Footer spacing is computed in inches, not in figure fractions. A fixed fraction is a
     # different number of pixels on every figure height, and on the 4.5-inch panels it put the
     # footer lines on top of each other and on the x-label.
     w_in, h_in = fig.get_size_inches()
-    lines = textwrap.wrap(" ".join(x for x in (note, PROVENANCE) if x), width=int(w_in * 15.5))
+    # `provenance` is overridable because the Phase M figures cover two targets and the
+    # module-level line names one. A figure that carries the wrong target in its footer is worse
+    # than one with no footer.
+    lines = textwrap.wrap(" ".join(x for x in (note, provenance or PROVENANCE) if x),
+                          width=int(w_in * 15.5))
     line_h, pad = 0.155 / h_in, 0.05 / h_in
     # 0.62 in below the axes for the tick labels and the x-label, then the footer block under it.
     fig.subplots_adjust(bottom=max(bottom, pad + line_h * len(lines) + 0.62 / h_in))
