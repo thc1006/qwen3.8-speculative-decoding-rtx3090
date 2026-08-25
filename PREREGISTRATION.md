@@ -1629,3 +1629,49 @@ Disposition: no further building on this host until the chain finishes. Phase M 
 re-run for the overlapping arm-passes once it does, and the third pass gives an independent check --
 if pass 3 tracks pass 1 more closely than pass 2 does, that confirms the contamination rather than
 ordinary variation. Nothing from pass 2's overlapping arms enters a reported figure before that.
+
+## Correction 16, 2026-08-26 02:00: Correction 15 overstated its own evidence
+
+Correction 15 was written five minutes earlier from the spread of per-arm *mean* deltas, four clean
+arms against five overlapping ones, and said the dispersion was about twice as wide in the
+overlapping set. A better measure contradicts the reading it invited.
+
+Taking the standard deviation of the **per-prompt** pass-2-against-pass-1 delta within each
+arm-pass -- 25 paired prompts each, rather than one number per arm:
+
+| arm-pass | window | mean delta | sd of per-prompt delta | largest single prompt |
+|---|---|---|---|---|
+| `moe-mtp-n3` | overlap | +5.00 % | 5.17 | 14.86 % |
+| `moe-draft08b-n8` | clean | +0.03 % | 3.57 | 12.71 % |
+| `moe-mtp-n2` | overlap | -0.70 % | 2.72 | 6.68 % |
+| `dense-draft08b-n8` | clean | +2.28 % | 2.66 | 9.16 % |
+| `dense-mtp-n2` | overlap | +1.95 % | 1.52 | 5.20 % |
+| `moe-mtp-n1` | overlap | +2.70 % | 1.50 | 6.64 % |
+| `dense-mtp-n3` | clean | +0.77 % | 1.11 | 4.16 % |
+| `baseline-dense` | clean | +0.49 % | 1.00 | 2.30 % |
+| `dense-mtp-n1` | overlap | -0.95 % | 0.94 | 3.23 % |
+
+Mean per-prompt sd: **clean 2.09, overlapping 2.37**. Indistinguishable at these sample sizes, and
+the second-noisiest arm-pass in the whole matrix is a clean one. There is no group-level effect.
+
+What the wider spread of *mean* deltas in Correction 15 was measuring is one arm. Drop `moe-mtp-n3`
+and the overlapping means are -0.95, -0.70, +1.95, +2.70, whose spread is not separable from the
+clean set on four points each.
+
+So the honest position is narrower than Correction 15 implied:
+
+* **One arm-pass is anomalous on three independent measures.** `moe-mtp-n3` has the largest mean
+  deviation, the largest per-prompt scatter and the largest single-prompt deviation anywhere in the
+  matrix. It began 01:50:24, thirty-seven seconds before the build window closed at 01:51:01.
+* **Thirty-seven seconds of a five-minute arm-pass is a thin causal story** for an effect that size,
+  and it is not supported by any group-level signal. The arm may simply be noisy.
+* Correction 15's disposition still stands as caution, not as a finding: nothing from the
+  overlapping arm-passes enters a reported figure until pass 3 settles it. Pass 3 runs with no
+  building, so `moe-mtp-n3` at pass 3 against pass 1 is the test. Tight there means pass 2 was
+  perturbed; noisy there means the arm is.
+* Its pair partner `dense-mtp-n3` ran entirely after the window and is tight (+0.77 %, sd 1.11), so
+  the pair is split by measurement quality regardless of the cause, and pass 2 cannot supply it.
+
+The general lesson is the one this repo keeps relearning: a spread computed over one number per
+group is not the same quantity as the spread within groups, and reaching for the first because it
+was already on screen is how Correction 13 went wrong too.
