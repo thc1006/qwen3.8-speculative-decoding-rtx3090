@@ -293,6 +293,36 @@ class TestAlgebraicInvariants(unittest.TestCase):
                           f"{mod.__name__} can be pointed at a half-written file and would say "
                           f"nothing about it")
 
+    def test_the_cache_check_tests_what_the_matrix_declared(self):
+        """The detector asserted one invariant and reported it as the other.
+
+        It fired on any t_cache_n > 0 with "despite cache_prompt=False" written into the
+        message. phase_l sets CACHE_PROMPT = True on purpose, because every request in an arm
+        shares one filler of up to 96 K tokens and re-prefilling it per request would cost more
+        than the decode being measured. So every phase_l request was an incident against a
+        condition phase_l never claimed: 30 records, 30 incidents, on course for 900 over the
+        ladder, which would bury a real one.
+        """
+        import bench
+        src = inspect.getsource(bench)
+        self.assertIn("if not cache_prompt and cache_n > 0:", src,
+                      "the hit check must be conditional on caching having been asked to be off")
+        self.assertIn("elif cache_prompt and cache_n == 0:", src,
+                      "with caching on, the failure is a miss: the shared prefix was re-prefilled "
+                      "rather than reused, which at 96 K is most of the request")
+        self.assertIn("prompt_cache_miss", src)
+
+        import importlib
+        import os
+        import sys
+        mdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "matrices")
+        if mdir not in sys.path:
+            sys.path.insert(0, mdir)
+        m = importlib.import_module("phase_l")
+        self.assertTrue(getattr(m, "CACHE_PROMPT", False),
+                        "this test is anchored to phase_l actually declaring CACHE_PROMPT; if that "
+                        "changes the detector's two branches need revisiting rather than this "
+                        "assertion being deleted")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

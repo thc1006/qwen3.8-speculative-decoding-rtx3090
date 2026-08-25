@@ -583,18 +583,38 @@ def run_matrix(
                         # divided a decode-only denominator by an all-tokens numerator.
                         tok_per_j_decode = max(predicted_n - 1, 0) / decode_energy
 
-                    # Direct verification that prompt caching is really off, rather than
-                    # trusting that the request field was honoured: llama.cpp reports how many
-                    # prompt tokens it served from cache. Anything above zero means a later
-                    # prompt was partly free, which would show up as speed and be attributed
-                    # to the arm.
+                    # Check the invariant this matrix declared, not one of them twice. llama.cpp
+                    # reports how many prompt tokens it served from cache, so both directions are
+                    # verifiable and each phase has one that matters:
+                    #
+                    #   cache off, cache_n > 0    a later prompt was partly free, and that speed is
+                    #                             attributed to the arm
+                    #   cache on,  cache_n == 0   the shared prefix was re-prefilled, so this request
+                    #                             paid a cost the rest of the arm did not, and at 96 K
+                    #                             that is most of its wall time
+                    #
+                    # The second is the one a depth ladder needs. A prefill calibration precedes every
+                    # measured request and warms the cache, so a miss means eviction rather than a cold
+                    # start, which is a real risk at the rungs that sit near the capacity of the card.
+                    #
+                    # This tested only the first case and hard-coded "despite cache_prompt=False" into
+                    # the message. phase_l sets CACHE_PROMPT = True deliberately, to avoid re-prefilling
+                    # its filler once per request, so every one of its requests was reported as an
+                    # incident against a condition it never claimed.
                     cache_n = int(r.get("t_cache_n") or 0)
-                    if cache_n > 0:
+                    if not cache_prompt and cache_n > 0:
                         result["incidents"].append({
                             "pass": p_idx, "arm": arm.name, "prompt": pr.tag,
                             "kind": "prompt_cache_hit",
                             "detail": f"t_cache_n={cache_n} despite cache_prompt=False; "
                                       f"this request was partly served from cache"})
+                    elif cache_prompt and cache_n == 0:
+                        result["incidents"].append({
+                            "pass": p_idx, "arm": arm.name, "prompt": pr.tag,
+                            "kind": "prompt_cache_miss",
+                            "detail": f"t_cache_n=0 with cache_prompt=True on "
+                                      f"{r.get('prompt_tokens')} prompt tokens; the shared prefix "
+                                      f"was re-prefilled rather than reused"})
 
                     deg = quality.assess_degeneracy(text)
                     rec = {
