@@ -28,9 +28,14 @@ What differs is the resource mix: more memory, less bandwidth, less power.
    PR #27342 author's account of the n-max ceiling as a quantization x arithmetic-intensity
    effect (recorded as H2'). Measuring `c`, the marginal cost per verified position, at each
    rung tests H2' on the coefficient not on throughput.
-2. **Long context without a KV-quantization confound.** At 48 GB, `UD-Q4_K_XL` plus a 262 K
-   f16 KV cache fits, so the decode cliff reported in #27623 can be crossed without also
-   changing KV precision to make room.
+2. **Long context without a KV-quantization confound.** The 262 K figure first written here was
+   wrong. The 27B has 64 KV layers, 4 KV heads and 256 wide keys and values, so an f16 cache is
+   `64 x ctx x 4 x 512 x 2` bytes: 64 GiB at 262 144, against 48 on the card. What does fit is
+   about 102 400, which is the arithmetic that matters, because Phase L's deepest rung is 98 304.
+   At that depth the weights are 16.35 GiB, the f16 cache 25.00 and the compute buffer about 2,
+   for 43.35 of 48. So the decode cliff reported in #27623 can be crossed at f16 across the whole
+   of this study's depth ladder, without changing KV precision to make room, and the q8_0 rungs
+   the 24 GB card runs become the comparison rather than the only evidence.
 3. **A physical bandwidth step.** Phase R varies memory clock by +/-4 % with software offsets;
    the A6000 is a -18 % step at nearly the same core count. That is a four-times-larger lever on
    the same axis, but it moves power at the same time, so it is a **cross-check on Phase R, not
