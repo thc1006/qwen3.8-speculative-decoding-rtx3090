@@ -163,7 +163,25 @@ second-host addendum in `PREREGISTRATION.md`.
       on 63 of 75, 9699 tokens, and accepts none of them, so its -8.3 % is drafting cost with no
       return. For contrast DFlash2 accepts 41.1 % and draft08b-n8 21.0 %, the latter below n4's
       35.2 % and slower for it. That `ngram-mod` is silently inert is worth an upstream issue.
-- [ ] **Phase L** - the context-depth ladder to 96 K, against llama.cpp #27623. Started 10:43:24;
+- [ ] **Phase L** - the context-depth ladder to 96 K, against llama.cpp #27623. Three rungs
+      complete, the fourth at 60 of 180 and provisional.
+
+      The collapse does not appear. The baseline runs 39.7, 35.1, 30.3 and 28.3 tok/s at realised
+      depths of 8195, 32772, 65538 and 81921 filler tokens, a smooth 1.40x over the whole ladder
+      where the report describes 25x. The two trees agree at the deepest rung to 0.10 %, 28.31
+      against 28.34, so it is not one build. Part of that decline is not depth: the SM clock
+      drifts 1.87 % across the ladder as deeper rungs take power from the core, worth 0.50 % of
+      throughput at the compute elasticity Phase R2 measured.
+
+      Speculation survives it, and improves. mtp-n2 is +46.6 %, +48.6 %, +50.2 % and +50.7 % as
+      depth grows, with accepted tokens per verification step at 2.178, 2.208, 2.239 and 2.239.
+      The drafter holds while the baseline slows, so the same absolute advantage is a larger
+      relative one. That is the opposite of what the phase was designed to catch.
+
+      The verdict stays withheld. The report puts the collapse past about 80 K but its worked
+      example measures it at 91 K, and the deepest rung here is 81 921. Rung 5 at 98 304 clears
+      that, and `harness/analyze_depth.py` refuses the verdict until a rung above the threshold
+      has finished. Started 10:43:24;
       rung 1 of 5 at 11.9 s/record. Rungs 8192, 32768 and 65536 sit below the reported ~80 K
       cliff, so the fourth rung is what decides whether the ladder takes four hours or thirteen.
       `.ladder_budget_s` holds a seconds count that stops it at a rung boundary.
