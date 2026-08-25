@@ -1170,3 +1170,41 @@ each of them means:
 
 Under either outcome the throughput results are untouched: they are paired within a run and
 averaged over passes, which is what that design is for.
+
+## Correction 7, resolved 2026-08-25 08:13: the build is deterministic, so the effect is real
+
+The control came back **150 of 150 byte-identical**. The same binary, the same card, the same
+prompts, at greedy, run again as a separate invocation almost four hours after the first:
+
+| width | arm | identical between the two runs |
+|---|---|---|
+| 1 | baseline | 25 / 25 |
+| 3 | mtp-n2 | 25 / 25 |
+| 4 | mtp-n3 | 25 / 25 |
+| 5 | mtp-n4 | 25 / 25 |
+| 6 | mtp-n5 | 25 / 25 |
+| 8 | mtp-n7 | 25 / 25 |
+
+That is the first registered outcome, and it **refutes the session confound registered in 7a two
+hours earlier**. A separate invocation reproduces perfectly, so forced_down2 running in its own
+session is not what made its gates fail. Every difference measured between builds is a build
+difference.
+
+Which leaves the thing that has no name yet, now with nowhere left to hide:
+
+- forced_down2 leaves the width-1 row of the GENERIC table alone.
+- Its 294 `mul_mat_vec_q` instantiations at `ncols_dst` 1 are byte-identical SASS to the
+  control's, 110 of 110, and at 5 through 8 as well.
+- Its width-1 greedy baseline, which has no drafter at all, differs from the control's on 23 of
+  25 prompts on the A6000 and 18 of 25 on the 3090.
+- The build reproduces itself exactly.
+
+So a width-1 request runs byte-identical `mul_mat_vec_q` code in two builds that each reproduce
+themselves, and produces different text. The carrier is outside the symbols that were hashed.
+Hashing every kernel in `libggml-cuda.so` rather than only `mul_mat_vec_q` is the next test and is
+running.
+
+If that comes back with only `mul_mat_vec_q` differing, and only at the widths the edit names,
+then no kernel's machine code carries the difference and the search moves to the host side: launch
+configuration, the order the scheduler assigns blocks, or something in the module that is not a
+kernel at all.
