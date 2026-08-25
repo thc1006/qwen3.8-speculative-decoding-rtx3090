@@ -18,6 +18,7 @@ import os as _os
 import sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import completeness as _CO  # noqa: E402
+import speclen  # noqa: E402
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -264,22 +265,13 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         dn, da = tm.get("t_draft_n") or 0, tm.get("t_draft_n_accepted") or 0
         if dn:
             a_by[rec["arm"]].append(da / dn)
-            n = rec.get("predicted_n") or 0
-            # Tokens emitted per target forward pass. The first token comes out of the prompt
-            # pass, not a decode forward, so it is in neither the numerator nor the denominator;
-            # cost_model.py was corrected for this and this copy was not, which left two
-            # different mean lengths in the same repo.
-            #
-            #   mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)
-            #
-            # Once llama.cpp #27676 lands, draft_n_verif_steps makes this exact rather than
-            # derived: mean_len = 1 + draft_n_accepted / draft_n_verif_steps.
-            steps = n - da - 1
-            vs = (rec.get("timings") or {}).get("draft_n_verif_steps")
-            if vs:
-                l_by[rec["arm"]].append(1.0 + da / vs)
-            elif steps > 0:
-                l_by[rec["arm"]].append((n - 1) / steps)
+            # Tokens emitted per target forward pass. The derivation, and why the first
+            # generated token belongs to neither side of the ratio, is in speclen.py. It lives
+            # there because this comment used to record that the correction had reached
+            # cost_model.py and not this file.
+            ml = speclen.mean_len(rec)
+            if ml is not None:
+                l_by[rec["arm"]].append(ml)
     ref_e = statistics.fmean(e_by[default_baseline]) if e_by.get(default_baseline) else None
     ref_j = statistics.fmean(j_by[default_baseline]) if j_by.get(default_baseline) else None
     for a in present:

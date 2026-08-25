@@ -95,7 +95,14 @@ class TestMeanLengthFormula(unittest.TestCase):
         lines = [l.strip() for l in inspect.getsource(CM.collect).splitlines()
                  if l.strip().startswith("mean_len =")]
         self.assertEqual(len(lines), 1, f"expected one mean_len assignment, got {lines}")
-        self.assertEqual(lines[0], "mean_len = (pn - 1) / forwards", lines[0])
+        self.assertEqual(lines[0], "mean_len = speclen.mean_len(rec)", lines[0])
+        # The formula moved rather than went away, so pin it where it now lives, still against
+        # the assignment rather than the block for the reason in this docstring.
+        import speclen
+        body = [l.strip() for l in inspect.getsource(speclen.mean_len).splitlines()
+                if l.strip() and not l.strip().startswith("#")]
+        self.assertIn("return 1.0 + accepted / f", body,
+                      f"speclen no longer derives it the corrected way: {body}")
 
 
 class TestSettleFloorIsPassedThrough(unittest.TestCase):
@@ -129,20 +136,28 @@ class TestAlgebraicInvariants(unittest.TestCase):
     Each of these was wrong in the repo at some point and each looked plausible while it was.
     """
 
-    def test_analyze_mean_len_excludes_the_prompt_pass_token(self):
-        import analyze as A
-        src = inspect.getsource(A.report)
-        self.assertIn("steps = n - da - 1", src,
-                      "analyze.py is back to steps = n - da, which counts the prompt-pass token "
-                      "as a decode forward")
-        self.assertIn("(n - 1) / steps", src)
+    def test_mean_len_excludes_the_prompt_pass_token(self):
+        """Checked on the value now, not on the source: the formula moved into speclen.py.
 
-    def test_analyze_prefers_the_exact_verification_step_counter(self):
-        import analyze as A
-        src = inspect.getsource(A.report)
-        self.assertIn("draft_n_verif_steps", src,
-                      "mean_len should use the server's own counter when the response carries it, "
-                      "rather than deriving it; llama.cpp #27676 adds that field")
+        A source assertion could only ever say the right characters are present somewhere. This
+        says the number is right, which is what the earlier `steps = n - da` bug got wrong.
+        """
+        import speclen
+        rec = {"predicted_n": 400, "timings": {"t_draft_n_accepted": 305}}
+        self.assertEqual(speclen.forwards(rec), 94,
+                         "counting the prompt-pass token as a decode forward gives 95")
+        self.assertAlmostEqual(speclen.mean_len(rec), 399 / 94)
+
+    def test_mean_len_prefers_the_exact_verification_step_counter(self):
+        """llama.cpp #27676 adds draft_n_verif_steps; when it arrives it must win."""
+        import speclen
+        # a record whose counter disagrees with the derivation, so which one is used is visible
+        rec = {"predicted_n": 400,
+               "timings": {"t_draft_n_accepted": 305, "draft_n_verif_steps": 93}}
+        self.assertEqual(speclen.forwards(rec), 93,
+                         "the derivation would say 94; the server's own count must win")
+        self.assertAlmostEqual(speclen.mean_len(rec), 1.0 + 305 / 93)
+        self.assertTrue(speclen.is_exact(rec))
 
     def test_decode_tok_per_joule_numerator_matches_the_decode_denominator(self):
         import bench as B
@@ -323,6 +338,78 @@ class TestAlgebraicInvariants(unittest.TestCase):
                         "this test is anchored to phase_l actually declaring CACHE_PROMPT; if that "
                         "changes the detector's two branches need revisiting rather than this "
                         "assertion being deleted")
+    def test_the_depth_analyser_reads_fields_that_exist(self):
+        """analyze_depth.py looked up three record fields by names the records do not use.
+
+        `prompt_tag` raised KeyError right before the bootstrap, so the ladder's primary result -
+        speedup against the matching baseline per depth - never printed. `prompt_class` would have
+        put every prompt in class "?" and silently discarded the stratification. `mean_len` is not
+        a record field at all, so the acceptance-vs-depth table printed "-" in every cell instead
+        of saying it could not compute anything. Two of the three fail without a traceback.
+        """
+        import json
+        import os
+        import analyze_depth  # noqa: F401
+        import speclen
+
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # Comments stripped first. The note explaining this fix quotes the dead lookups, and
+        # scanning the raw source matched that note rather than any code - the same way
+        # test_collect_uses_the_corrected_form once passed on a docstring while the code under
+        # it was wrong.
+        code = "\n".join(l for l in inspect.getsource(analyze_depth).splitlines()
+                         if not l.strip().startswith("#"))
+        for dead in ('r["prompt_tag"]', '"prompt_class"', 'r.get("mean_len")'):
+            self.assertNotIn(dead, code, f"{dead} is not a field any record carries")
+
+        # anchored to a real file when one exists, so a rename of the real fields fails here too
+        path = os.path.join(here, "results", "phase_c.json")
+        if os.path.exists(path):
+            with open(path) as fh:
+                rec = json.load(fh)["records"][0]
+            for live in ("prompt", "class", "predicted_n", "timings"):
+                self.assertIn(live, rec, f"records no longer carry {live}")
+            self.assertNotIn("mean_len", rec,
+                             "if records start carrying mean_len, speclen is no longer the only "
+                             "definition and this test should be revisited rather than deleted")
+
+    def test_one_definition_of_mean_length(self):
+        """Three files derived it and two had already drifted apart.
+
+        analyze.py's own comment recorded that the first-token correction reached cost_model.py
+        and not itself. cost_model.py then never consulted draft_n_verif_steps, so the two would
+        have parted company again as soon as llama.cpp #27676 landed and that counter began to
+        arrive. The identity below is what keeps the derived and exact paths the same quantity:
+        each verification step emits one token of its own plus the drafts it accepted.
+        """
+        import analyze
+        import analyze_depth
+        import cost_model
+        import speclen
+
+        for mod in (analyze, cost_model, analyze_depth):
+            self.assertIn("speclen.", inspect.getsource(mod),
+                          f"{mod.__name__} derives mean length itself instead of calling speclen")
+
+        derived = {"predicted_n": 400, "timings": {"t_draft_n": 900, "t_draft_n_accepted": 305}}
+        self.assertEqual(speclen.forwards(derived), 400 - 305 - 1)
+        self.assertAlmostEqual(speclen.mean_len(derived), 399 / 94)
+        self.assertFalse(speclen.is_exact(derived))
+
+        # with the counter present the answer comes from it, and on a consistent record the two
+        # paths must agree rather than merely both being plausible
+        exact = {"predicted_n": 400,
+                 "timings": {"t_draft_n": 900, "t_draft_n_accepted": 305,
+                             "draft_n_verif_steps": 94}}
+        self.assertEqual(speclen.forwards(exact), 94)
+        self.assertAlmostEqual(speclen.mean_len(exact), speclen.mean_len(derived))
+        self.assertTrue(speclen.is_exact(exact))
+
+        # a record that never drafted emits one token per forward, which is the figure the
+        # speculative arms are measured against, not a missing value
+        self.assertAlmostEqual(
+            speclen.mean_len({"predicted_n": 400, "timings": {"t_draft_n_accepted": 0}}), 1.0)
+        self.assertIsNone(speclen.mean_len({"predicted_n": 1, "timings": {}}))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

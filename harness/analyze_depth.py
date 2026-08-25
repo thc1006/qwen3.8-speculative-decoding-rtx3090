@@ -20,6 +20,7 @@ import glob
 import json
 import re
 import statistics as st
+import speclen
 import sys
 from pathlib import Path
 
@@ -168,7 +169,7 @@ def main():
             def by_tag(xs):
                 out = {}
                 for r in xs:
-                    out.setdefault(r["prompt_tag"], []).append(r["decode_tok_s"])
+                    out.setdefault(r["prompt"], []).append(r["decode_tok_s"])
                 return out
 
             kb, ka = by_tag(brs), by_tag(rs)
@@ -181,7 +182,10 @@ def main():
             dropped = (set(kb) | set(ka)) - shared
             kb = {k: v for k, v in kb.items() if k in shared}
             ka = {k: v for k, v in ka.items() if k in shared}
-            cls = {r["prompt_tag"]: r.get("prompt_class", "?") for r in rs + brs}
+            # The record fields are `prompt` and `class`. `prompt_tag`/`prompt_class` were
+            # neither, so this raised KeyError before the bootstrap and, had it not, would have
+            # put every prompt in class "?" and thrown away the stratification.
+            cls = {r["prompt"]: r.get("class", "?") for r in rs + brs}
             # (baseline, arm) - this order sets the sign of every number below.
             iv = S.paired_cluster_bootstrap(
                 kb, ka, {k: cls.get(k, "?") for k in shared}, relative=True)
@@ -201,21 +205,40 @@ def main():
         for depth in sorted(rungs):
             row = f"  {depth:8d}"
             for m in spec:
-                rs = [r for r in by.get((depth, m), []) if r.get("mean_len")]
-                row += (f"{st.median(r['mean_len'] for r in rs):>12.3f}{'':>6}"
-                        if rs else f"{'-':>18}")
+                # `mean_len` is not a record field; it is derived from the counters, and
+                # `r.get("mean_len")` was None for every record, so this whole table printed "-"
+                # in every cell rather than reporting that it could not compute anything.
+                mls = [v for r in by.get((depth, m), [])
+                       if (v := speclen.mean_len(r)) is not None]
+                row += (f"{st.median(mls):>12.3f}{'':>6}" if mls else f"{'-':>18}")
             print(row)
         print("\n  A drafter that holds acceptance as depth grows is doing what DFlash2 claims.")
         print("  Acceptance falling while throughput falls faster means the loss is in the target,")
         print("  not the drafter, and speculation is inheriting the target's problem.")
 
     # ---------------------------------------------------------------- incidents
+    # Grouped, not enumerated. One incident per request is a real shape here - the cache check
+    # raised 180 a rung before it was made conditional on the declared mode - and printing them
+    # one by one buries whatever else the ladder found under a page of the same line.
     total_inc = sum(len(d.get("incidents") or []) for _, d in rungs.values())
-    print(f"\nINCIDENTS across the ladder: {total_inc}")
+    repaired = sum(sum(e.get("removed", 0) for e in (d.get("incidents_repaired") or []))
+                   for _, d in rungs.values())
+    print(f"\nINCIDENTS across the ladder: {total_inc}"
+          + (f"   ({repaired} removed as raised against a condition never declared; "
+             f"see incidents_repaired)" if repaired else ""))
     for depth in sorted(rungs):
         _, d = rungs[depth]
-        for inc in (d.get("incidents") or []):
-            print(f"  {depth}: {inc.get('kind')}: {str(inc.get('detail'))[:100]}")
+        incs = d.get("incidents") or []
+        if not incs:
+            continue
+        kinds = {}
+        for inc in incs:
+            kinds.setdefault(inc.get("kind"), []).append(inc)
+        for kind, group in sorted(kinds.items()):
+            arms = sorted({i.get("arm") for i in group if i.get("arm")})
+            print(f"  {depth}: {kind} x{len(group)}"
+                  + (f" on {', '.join(arms[:4])}{' ...' if len(arms) > 4 else ''}" if arms else ""))
+            print(f"      e.g. {str(group[0].get('detail'))[:120]}")
     return 0
 
 

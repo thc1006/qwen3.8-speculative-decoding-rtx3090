@@ -39,6 +39,7 @@ import sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import completeness as _CO  # noqa: E402
 import statistics
+import speclen
 from collections import defaultdict
 
 # ggml/src/ggml-cuda/mmvq.cu: a wider batch is dispatched to a different kernel.
@@ -156,13 +157,14 @@ def collect(result: dict) -> list[dict]:
         accepted = tm.get("t_draft_n_accepted") or 0
         pn = rec.get("predicted_n") or 0
         base = baselines.get((meta.get("tree", "?"), rec["pass"], rec["prompt"]))
-        # predicted_n - accepted - 1: the first generated token comes from the prompt pass, not
-        # from a decode forward. See the docstring for why this is still approximate.
-        forwards = pn - accepted - 1
-        if not (drafted and pn and base and forwards > 0 and rec.get("decode_tok_s")):
+        # Derived in speclen.py, which is also where the docstring above now lives: this file
+        # had a copy that never consulted draft_n_verif_steps, so it would have parted company
+        # with analyze.py the moment llama.cpp #27676 landed and that counter began arriving.
+        forwards = speclen.forwards(rec)
+        mean_len = speclen.mean_len(rec)
+        if not (drafted and pn and base and forwards and mean_len and rec.get("decode_tok_s")):
             continue
         speedup = rec["decode_tok_s"] / base
-        mean_len = (pn - 1) / forwards
         rows.append({
             "arm": rec["arm"], "pass": rec["pass"], "prompt": rec["prompt"],
             "class": rec["class"], "spec_type": _spec_type(meta),
