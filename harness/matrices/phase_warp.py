@@ -23,8 +23,12 @@ from bench import Arm  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent.parent
 BUILD = os.environ.get("QWEN_WARP_BUILD", "control")
-TREES = {"warp": REPO / "warp" / BUILD}
-BINARIES = {"warp": REPO / "warp" / BUILD / "llama-server"}
+# QWEN_WARP_DIR lets a second attempt keep its builds beside the first rather than overwriting
+# them. The first attempt's forced-down direction was withdrawn because its builds did not share
+# a cmake configure, and keeping both sets is what makes that comparable rather than lost.
+WARP_DIR = os.environ.get("QWEN_WARP_DIR", "warp")
+TREES = {"warp": REPO / WARP_DIR / BUILD}
+BINARIES = {"warp": REPO / WARP_DIR / BUILD / "llama-server"}
 MODEL = REPO / "models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf"
 
 COMMON_ARGS = [

@@ -237,7 +237,17 @@ there was omission, not misstatement.
 
 ### D. Re-runs, in dependency order
 
-- [ ] **D1** `forced_down2` - running on host C, queued on host B behind its chain.
+- [x] **D1** `forced_down2` ran on both hosts and both are **withdrawn**. Its gates failed at
+      widths whose CUDA machine code is byte-identical to the control's, and the cause is now
+      known: its build log begins with a cmake configure and the control's does not. A reconfigure
+      regenerates `flags.make` for every target, all eleven `ggml-base` sources recompiled, and
+      `libggml-base.so` came out different - `.text` and `.rodata`, 8813 bytes, not metadata.
+      Six full rebuilds of the unchanged tree give one hash, the control's. See Correction 8.
+- [ ] **D1b** the intervention re-run with all four builds from one configure, running on host C.
+      control, forced-up, forced_down2 and a second control, built back to back and run back to
+      back. Three build gates stop it before it can produce numbers: no build may reconfigure,
+      `libggml-base.so` must be identical across all four, and the two controls must be
+      byte-identical in `libggml-cuda.so` while both forced builds must differ from them.
 - [ ] **D2** extended cap. Design verified, no code change: `--max-tokens 1600` on the host that
       produced the file. 1600 because the densest prompt is 1.37 chars/token against a
       1537-character threshold. The control is free: divergence is deterministic, 150 of 150.

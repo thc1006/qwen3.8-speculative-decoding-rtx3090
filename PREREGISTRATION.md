@@ -1256,3 +1256,37 @@ inside one configure, then run back to back. The second control is there so the 
 this question has an answer already in the file: two builds from one configure that differ in no
 source at all must produce byte-identical output, and if they do not, no comparison in the set
 means anything.
+
+## Correction 8a, 2026-08-25 09:05: two confirmations, one of them of my own mistake
+
+**The reconfigure account is confirmed independently.** Stripped of symbols and build id, the
+`libggml-base.so` code hashes are:
+
+| build | how it was built | stripped code |
+|---|---|---|
+| control, forced-up, forced-down | incrementally, inside the 03:11 session | `2d4c5212` |
+| forced_down2 | after a cmake configure | `67f70901` |
+| the new v2 control | after a cmake configure | **`67f70901`** |
+
+A fresh configure produces a different `libggml-base.so` than an incremental build of the same
+tree, and it produces the *same* different one twice. That is Correction 8's claim, arrived at a
+second time from the other direction.
+
+**The first attempt at the re-run stopped on a gate that was wrong.** It compared whole-file
+sha256 and found control and control2 differing in `libggml-cuda.so` despite identical source
+under one configure. Before reporting that the CUDA build is not reproducible - which would also
+have turned the earlier finding that 6156 of 6202 kernels are identical into noise - the two files
+were compared directly:
+
+    sizes equal, four bytes differ, at offset 56408893
+    control  "1586"      control2  "37ec"
+    build ids identical
+    stripped content byte-identical
+
+Four hex characters deep inside the file, from an identifier nvcc derives from its temporary
+filenames. The code is reproducible; the identifier is not. The gate now hashes stripped content
+and the offset is written into the script so the next person does not have to find it again.
+
+Worth keeping the gate rather than loosening it out of embarrassment: it is what forced the
+comparison that produced the confirmation above. A gate that fires and turns out to be too strict
+still did its job, provided the response is to look rather than to lower it.
