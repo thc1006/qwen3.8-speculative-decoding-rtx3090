@@ -1059,7 +1059,10 @@ class TestCostModelSeparatesModels(unittest.TestCase):
         finally:
             Path(tmp).unlink(missing_ok=True)
 
-        fits = [ln for ln in out.splitlines() if "MMVQ widths" in ln and "->" in ln]
+        # `k0=` rather than `MMVQ widths`: the implied-optimum section also names the widths a
+        # fit was made over, and it is a reading of the fit rather than a fit, so it carries no
+        # model label of its own and would fail the assertion below for the wrong reason.
+        fits = [ln for ln in out.splitlines() if "k0=" in ln and "->" in ln]
         self.assertGreaterEqual(len(fits), 2, f"expected a fit per model, got:\n{out[-800:]}")
         self.assertTrue(any("MODEL_B" in ln for ln in fits),
                         "the relabelled arms were not fitted as their own group")
@@ -1744,6 +1747,73 @@ class TestRejectionBoundTableMatchesArtifacts(unittest.TestCase):
         self.assertLess(max(shares), float(claim.group(1)),
                         f"the prose claims nothing reaches {claim.group(1)} % but the table "
                         f"holds {max(shares)} %")
+
+
+class TestImpliedOptimumReadsTheLadder(unittest.TestCase):
+    """The shape of the n-max ladder must come from the data, not from a sentence.
+
+    The section asserted "over the widths measured here it falls monotonically". That was true of
+    the dense phases it was written against. Phase M's MTP ladder peaks at n-max 2 on both targets
+    -- 1.206x, 1.276x, 1.181x, 1.153x on the MoE -- and the sentence would have gone on being
+    printed underneath the numbers contradicting it, in the report the README quotes.
+    """
+
+    @staticmethod
+    def _result(speedups):
+        """A file whose draft-mtp ladder has the given speedup at each n-max."""
+        recs, arms = [], {"baseline": {"extra_args": [], "tree": "master", "model": None}}
+        for i in range(8):
+            recs.append({"arm": "baseline", "pass": 1, "prompt": f"p{i}",
+                         "class": "code" if i % 2 else "prose", "decode_tok_s": 100.0,
+                         "predicted_n": 400, "hit_cap": True,
+                         "timings": {"t_draft_n": 0, "t_draft_n_accepted": 0}})
+        for n, sp in sorted(speedups.items()):
+            arms[f"mtp-n{n}"] = {"extra_args": ["--spec-type", "draft-mtp",
+                                                "--spec-draft-n-max", str(n)],
+                                 "tree": "master", "expects_drafter": True, "model": None}
+            for i in range(8):
+                # accepted chosen so the arm drafts exactly n per forward pass
+                f = 200 - 6 * i
+                recs.append({"arm": f"mtp-n{n}", "pass": 1, "prompt": f"p{i}",
+                             "class": "code" if i % 2 else "prose",
+                             "decode_tok_s": 100.0 * sp, "predicted_n": 400, "hit_cap": True,
+                             "timings": {"t_draft_n": n * f, "t_draft_n_accepted": 399 - f}})
+        return {"env": {"model": "/m/x.gguf"}, "arms": arms, "records": recs}
+
+    def _run(self, speedups):
+        import contextlib
+        import cost_model as CM
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            CM.report(self._result(speedups))
+        section = buf.getvalue().split("--- implied optimum ---")[-1]
+        # Only the verdict lines. The paragraph above them legitimately contains both "interior
+        # maximum" and "falls monotonically" while explaining why the shape is computed, so a
+        # substring check against the whole section can neither fail nor pass for the right reason.
+        return "\n".join(ln for ln in section.splitlines() if "-> best tested" in ln)
+
+    def test_a_peaked_ladder_is_called_a_peak(self):
+        out = self._run({1: 1.20, 2: 1.28, 3: 1.18, 5: 1.15})
+        self.assertIn("interior maximum at n-max 2", out,
+                      f"a ladder that rises then falls was not reported as peaked:\n{out}")
+        self.assertNotIn("falls monotonically", out)
+
+    def test_a_falling_ladder_is_still_called_falling(self):
+        out = self._run({1: 1.50, 2: 1.40, 3: 1.20, 5: 1.05})
+        self.assertIn("falls monotonically", out,
+                      f"a monotone ladder was misreported:\n{out}")
+        self.assertNotIn("interior maximum", out)
+
+    def test_the_claim_is_never_printed_without_being_checked(self):
+        src = (Path(__file__).parent / "cost_model.py").read_text(encoding="utf-8")
+        head, _, tail = src.partition("--- implied optimum ---")
+        self.assertTrue(tail, "the implied-optimum section is gone")
+        # The words may appear inside the explanatory paragraph, which is allowed. What is not
+        # allowed is a verdict string that no comparison produced, so require the shapes to be
+        # assigned from a comparison over the measured sequence.
+        self.assertIn("zip(seq, seq[1:])", tail,
+                      "the ladder's shape is no longer derived from the measured sequence")
 
 
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):

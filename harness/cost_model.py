@@ -644,7 +644,7 @@ def report(result: dict) -> None:
         a, b, r2 = _linfit(xs, ys)
         print(f"  {method:14s} MMVQ widths {on_path}  ->  k0={a:.4f}  c={b:.4f}  r2={r2:.4f}")
         ci = fit_ci(g, on_path)
-        fits[key] = (g, on_path)
+        fits[key] = (g, on_path, a, b)
         if ci:
             print(f"      {'':14s} k0 {ci['k0'].lo:.4f} to {ci['k0'].hi:.4f}   "
                   f"c {ci['c'].lo:.4f} to {ci['c'].hi:.4f}   "
@@ -715,7 +715,7 @@ def report(result: dict) -> None:
     else:
         cmps = []
 
-    for ma, (ga, oa), mb, (gb, ob) in cmps:
+    for ma, (ga, oa, *_), mb, (gb, ob, *_) in cmps:
         d = delta_c_ci(ga, oa, gb, ob)
         same_method = ma.split(" @ ")[0] == mb.split(" @ ")[0]
         if same_method:
@@ -746,21 +746,56 @@ def report(result: dict) -> None:
         print("  skips drafter compute, or a profiler decomposition - none of which this file has.")
 
     print("\n--- implied optimum ---")
-    print("    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k")
-    print("    has an interior maximum in principle. Over the widths measured here it falls")
-    print("    monotonically, so what follows is the best TESTED point, not a fitted optimum:")
+    print("    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k has")
+    print("    an interior maximum in principle. Whether the measured ladder shows one is read")
+    print("    off the data below rather than asserted. An earlier version of this line stated")
+    print("    that the ladder falls monotonically over every width measured. That was true of")
+    print("    the dense phases it was written against and false the moment Phase M ran an MTP")
+    print("    ladder that peaks at n-max 2 on both targets, and nothing would have caught it.")
+    print("    These are best TESTED points. Whether a peak clears noise is analyze.py's paired")
+    print("    intervals, not this table.")
     for key, g in sorted(by_method.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
         method = _label(key)
-        best: dict[int, float] = defaultdict(float)
         cnt: dict[int, list[float]] = defaultdict(list)
         for r in g:
             cnt[r["n_max"]].append(r["speedup"])
-        for n, v in cnt.items():
-            best[n] = statistics.fmean(v)
-        if best:
-            bn = max(best, key=lambda n: best[n])
-            listing = "  ".join(f"n{n}={best[n]:.3f}x" for n in sorted(best))
-            print(f"  {method:14s} {listing}   -> best n-max = {bn}")
+        best = {n: statistics.fmean(v) for n, v in cnt.items()}
+        if not best:
+            continue
+        ns = sorted(best)
+        seq = [best[n] for n in ns]
+        bn = max(best, key=lambda n: best[n])
+        if len(ns) < 2:
+            shape = "one width only"
+        elif all(x >= y for x, y in zip(seq, seq[1:])):
+            shape = "falls monotonically"
+        elif all(x <= y for x, y in zip(seq, seq[1:])):
+            shape = "rises monotonically; the peak may be beyond the widest tested"
+        elif bn not in (ns[0], ns[-1]):
+            shape = f"interior maximum at n-max {bn}"
+        else:
+            shape = "not monotone, and the best point is an endpoint"
+        listing = "  ".join(f"n{n}={best[n]:.3f}x" for n in ns)
+        print(f"  {method:14s} {listing}")
+        print(f"  {'':14s} -> best tested n-max = {bn}   ({shape})")
+        # The fitted line is an independent smoother of k, so the optimum it implies is not the
+        # same statement as the argmax of the raw ladder. It only covers the MMVQ widths the fit
+        # was made on, and it uses each width's OWN measured mean_len, so it tests the k model
+        # rather than any acceptance model.
+        f = fits.get(key)
+        if not f:
+            continue
+        _g, on_path, k0, c = f
+        ml: dict[int, list[float]] = defaultdict(list)
+        for r in _g:
+            if r["width"] in on_path:
+                ml[r["width"]].append(r["mean_len"])
+        pred = {w - 1: statistics.fmean(ml[w]) / (k0 + c * (w - 1)) for w in on_path if ml.get(w)}
+        if len(pred) < 2:
+            continue
+        pn = max(pred, key=lambda n: pred[n])
+        agree = "agrees" if pn == bn else f"DISAGREES with the tested argmax ({bn})"
+        print(f"  {'':14s} -> from the fitted k over MMVQ widths {on_path}: n-max {pn}  ({agree})")
 
 
 def main() -> None:
