@@ -216,12 +216,15 @@ there was omission, not misstatement.
 
 ### C. Harness design, requires a full re-run
 
-- [ ] **C1** prompt order is fixed and blocked by class: code, code, code, prose, prose, prose,
-      reason, ... so class is confounded with session age. Seeded permutation per pass, identical
-      across arms within a pass, different between passes, ordinal position kept in the record.
-- [ ] **C2** seven arms over five passes means each arm visits five of seven order positions and a
-      different five. Run the full Latin rotation, or randomise and carry order position into the
-      model.
+- [x] **C1** `--shuffle-prompts`: a seeded permutation per pass, identical across arms within
+      it, different between passes, with `prompt_order_by_pass` and a per-record `ordinal` in the
+      result. **Off by default and it has to be**: phase_a, phase_r, phase_r2, phase_kv and
+      phase_nmax all ran under the fixed order, so a default that permuted would make phase_l
+      onwards a different experiment from the phases it is compared against. It is for D4.
+- [x] **C2** `--latin-arms` runs `len(arms)` passes so the rotation closes and every arm visits
+      every position exactly once. Also off by default, since it changes how many passes a matrix
+      runs. With the ordinal now recorded, the other route - adjust for position in the model
+      rather than balance it by design - is open too.
 - [ ] **C3** energy from the NVML total-energy counter rather than integrated `power.draw`.
       `pynvml` is not installed here; the card supports the counter.
 - [x] **C4** `harness/kernel_facts.py` reads the dispatch facts out of the tree that is about to

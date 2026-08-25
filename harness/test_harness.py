@@ -224,6 +224,32 @@ class TestAlgebraicInvariants(unittest.TestCase):
                       "integrity check off without saying so")
         self.assertIn("SKIPPED", src)
 
+    def test_the_ordering_fixes_are_opt_in(self):
+        """Both change the design, so neither may switch itself on mid-study.
+
+        phase_a, phase_r, phase_r2, phase_kv and phase_nmax all ran under the fixed order. A
+        default that silently permuted would make phase_l onwards a different experiment from the
+        phases it is compared against.
+        """
+        import bench as B
+        sig = inspect.signature(B.run_matrix)
+        self.assertIs(sig.parameters["shuffle_prompts"].default, False)
+        self.assertIs(sig.parameters["latin_arms"].default, False)
+        src = inspect.getsource(B.run_matrix)
+        self.assertIn("prompt_order_by_pass", src,
+                      "the order actually used has to be in the result, or a later reader cannot "
+                      "tell which of the two designs produced a file")
+        self.assertIn('"ordinal": _ord', src,
+                      "position within the arm-pass has to be recorded, or it cannot be adjusted "
+                      "for later")
+
+    def test_latin_arms_closes_the_rotation(self):
+        import bench as B
+        src = inspect.getsource(B.run_matrix)
+        self.assertIn("passes = len(arms)", src,
+                      "seven arms over five passes leaves each arm visiting five of seven order "
+                      "positions, and a different five; only len(arms) passes closes it")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import platform
 import subprocess
 import time
@@ -213,6 +214,9 @@ def run_matrix(
     cache_prompt: bool = False,
     settle_max_wait_s: float = 240.0,
     allow_non_stock: bool = False,
+    latin_arms: bool = False,
+    shuffle_prompts: bool = False,
+    prompt_seed: int = 20260825,
 ) -> dict:
     if required_vram_gb:
         DEV.assert_capacity(DEV.get_device(gpu_index), required_vram_gb,
@@ -353,14 +357,38 @@ def run_matrix(
             _bmap[a.name] = same_tree[0].name
     result["divergence_baseline_map"] = _bmap
 
+    if latin_arms and passes != len(arms):
+        print(f"--latin-arms: running {len(arms)} passes instead of {passes} so the arm rotation "
+              f"closes and every arm visits every order position exactly once", flush=True)
+        passes = len(arms)
     for p_idx in range(1, passes + 1):
         # Rotate arm order every pass. Interleaving alone still leaves a fixed position effect:
         # whichever arm always runs first meets a cooler card and an emptier page cache than
         # whichever always runs last. Rotation spreads that position effect across arms instead
         # of assigning it to one.
+        # Arm order. Rotating by pass covers len(arms) positions only if there are at least that
+        # many passes; with 7 arms over 5 passes each arm visits 5 of 7, and a different 5, so the
+        # residual position effect is unbalanced rather than absent. --latin-arms runs
+        # len(arms) passes so the rotation closes, which is the only way to balance it exactly.
+        # Off by default: it changes how many passes a matrix runs, which is not a decision this
+        # function should make for a study already under way.
         rot = (p_idx - 1) % len(arms)
         pass_arms = arms[rot:] + arms[:rot]
         result.setdefault("arm_order_by_pass", {})[str(p_idx)] = [a.name for a in pass_arms]
+
+        # Prompt order. The fixed order runs the classes in blocks - code, code, code, prose,
+        # prose, ... - so a class always meets the server at the same age, and any arm-by-position
+        # interaction lands on whichever classes sit late. Every arm in a pass uses the same
+        # permutation, so a prompt is still compared against its own baseline under the same
+        # conditions; the permutation changes between passes so the position effect is spread
+        # rather than assigned. Off by default because turning it on mid-study would change the
+        # design between phases; `--shuffle-prompts` is for the re-run that adopts it.
+        if shuffle_prompts:
+            pass_prompts = list(P.PROMPTS)
+            random.Random(prompt_seed + p_idx).shuffle(pass_prompts)
+        else:
+            pass_prompts = list(P.PROMPTS)
+        result.setdefault("prompt_order_by_pass", {})[str(p_idx)] = [pr.tag for pr in pass_prompts]
         for arm in pass_arms:
             tag = f"pass{p_idx:02d}_{arm.name}"
             print(f"\n=== {tag} ===", flush=True)
@@ -479,7 +507,7 @@ def run_matrix(
                           flush=True)
                     print(f"  drafting confirmed: t_draft_n={n_drafted} on warmup", flush=True)
 
-                for pr in P.PROMPTS:
+                for _ord, pr in enumerate(pass_prompts):
                     # Prefill calibration: same prompt, one token out, REPEATED so the window
                     # is long enough to integrate. The power sampler cannot see where prefill
                     # ends inside a non-streaming request, so prefill energy is measured
@@ -593,6 +621,10 @@ def run_matrix(
                         "tok_per_joule_decode": tok_per_j_decode,
                         "degeneracy": asdict(deg),
                         "text_len": len(text),
+                        # where in this arm-pass the request ran. Fixed order makes this a
+                        # constant per prompt and therefore useless; under a permutation it is
+                        # what lets position be adjusted for rather than assumed away.
+                        "ordinal": _ord,
                         "text": text,
                     }
 
@@ -716,6 +748,15 @@ def main() -> None:
     ap.add_argument("--allow-non-stock", action="store_true",
                     help="permit running on an overclocked card; only for the deliberate "
                          "overclock phase, and the state is recorded either way")
+    ap.add_argument("--latin-arms", action="store_true",
+                    help="run len(arms) passes so the arm rotation closes and every arm visits "
+                         "every order position exactly once. Overrides --passes.")
+    ap.add_argument("--shuffle-prompts", action="store_true",
+                    help="permute the prompt order per pass, identically across arms within a "
+                         "pass. Off by default: the fixed order runs classes in blocks, which "
+                         "confounds class with server age, but changing it mid-study would change "
+                         "the design between phases.")
+    ap.add_argument("--prompt-seed", type=int, default=20260825)
     ap.add_argument("--prompts-per-class", type=int, default=0,
                     help="dry-run aid: keep only the first N prompts of each class. "
                          "0 = use the full frozen set. Any value other than 0 is recorded in "
@@ -766,6 +807,9 @@ def main() -> None:
         gpu_index=args.gpu,
         max_tokens=max_tokens,
         allow_non_stock=args.allow_non_stock,
+        shuffle_prompts=args.shuffle_prompts,
+        prompt_seed=args.prompt_seed,
+        latin_arms=args.latin_arms,
         baseline_map=getattr(mod, "BASELINE_MAP", None),
         required_vram_gb=getattr(mod, "REQUIRES_VRAM_GB", 0.0),
         context_filler_tokens=getattr(mod, "CONTEXT_FILLER_TOKENS", 0),
