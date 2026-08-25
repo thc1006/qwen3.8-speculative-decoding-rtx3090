@@ -975,6 +975,52 @@ class TestForkPositionUnits(unittest.TestCase):
                          "token column no longer describe the same records")
 
 
+class TestMatchedPairsRunTogether(unittest.TestCase):
+    """A matched pair has to meet the card in the same state, in every pass.
+
+    The dense arms were appended to the end of Phase M's list. bench.py rotates arm order by one
+    position per pass, so with 21 arms and 3 passes the dense side sat at positions 11-20, 10-19
+    and 9-18 and never ran early. Temperature, clock drift and page cache would then have varied
+    with the model, which is the axis the phase compares, and this matrix's invocation carries no
+    thermal gate to absorb it.
+    """
+
+    ROOT = Path(__file__).parent
+
+    def test_a_pair_never_runs_far_apart(self):
+        import importlib
+        d = self.ROOT / "matrices"
+        if not d.exists():
+            self.skipTest("no matrices directory")
+        sys.path.insert(0, str(d))
+        checked = 0
+        for f in sorted(d.glob("phase_*.py")):
+            try:
+                mod = importlib.import_module(f.stem)
+            except Exception:
+                continue
+            arms = [a for a in getattr(mod, "ARMS", None) or [] if hasattr(a, "extra_args")]
+            names = {a.name for a in arms}
+            pairs = [(a.name, "dense-" + a.name[len("moe-"):]) for a in arms
+                     if a.name.startswith("moe-") and "dense-" + a.name[len("moe-"):] in names]
+            if not pairs:
+                continue
+            n = len(arms)
+            for p in range(1, 4):          # bench.py: rot = (p_idx - 1) % len(arms)
+                rot = (p - 1) % n
+                order = [a.name for a in arms[rot:] + arms[:rot]]
+                at = {nm: i for i, nm in enumerate(order)}
+                for m, dn in pairs:
+                    self.assertLessEqual(
+                        abs(at[m] - at[dn]), 1,
+                        f"{f.stem}: on pass {p}, {m} runs at position {at[m]} and {dn} at "
+                        f"{at[dn]}. A pair separated in the run order differs in more than "
+                        f"the model.")
+                    checked += 1
+        if checked == 0:
+            self.skipTest("no matched pairs")
+
+
 class TestSpecDraftBounds(unittest.TestCase):
     """An arm whose n_min exceeds its n_max never speculates, and nothing says so.
 

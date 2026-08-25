@@ -175,6 +175,35 @@ ARMS = [
         note="width 7, matched against moe-draft08b-n6"),
 ]
 
+# Interleave the pairs. Appending the dense arms put every one of them in the back half of every
+# pass: with 21 arms and 3 passes the rotation moves an arm by one position per pass, so the dense
+# side sat at positions 11-20, 10-19 and 9-18 and never met the card in the state the MoE side met
+# it in. This matrix has no thermal gate on its invocation, so that difference is not absorbed
+# anywhere, and it lands on exactly the axis the phase is comparing. Ordering a pair adjacently
+# does not remove the position effect; it makes both halves of a pair meet the same one.
+def _paired(arms):
+    by_name = {a.name: a for a in arms}
+    out, placed = [], set()
+    for a in arms:
+        if a.name in placed:
+            continue
+        out.append(a)
+        placed.add(a.name)
+        twin = by_name.get("dense-" + a.name[len("moe-"):]) if a.name.startswith("moe-") else None
+        if twin is not None and twin.name not in placed:
+            out.append(twin)
+            placed.add(twin.name)
+    return out
+
+
+# The anchor pair leads, after the two baselines. It is the tightest configuration in the matrix,
+# the MoE target plus a drafter, so if the card cannot hold it that is known in minutes rather
+# than an hour, and H6a gates every other reading anyway.
+_LEAD = ["baseline-moe", "baseline-dense", "moe-draft08b-n8", "dense-draft08b-n8"]
+_by = {a.name: a for a in ARMS}
+ARMS = [_by[n] for n in _LEAD if n in _by] + \
+       _paired([a for a in ARMS if a.name not in _LEAD])
+
 # Each arm is scored against the baseline that ran the same model. Mapping everything to
 # baseline-moe would have compared the dense arms against an MoE baseline, which is not a
 # speculation effect at all: it is the difference between two models.

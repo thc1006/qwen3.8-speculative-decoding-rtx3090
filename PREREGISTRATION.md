@@ -1429,3 +1429,33 @@ now address the ones already registered.
 
 `test_every_method_on_both_models_has_matched_fittable_widths` fails on the Correction 10 shape,
 naming the unmatched widths.
+
+## Correction 12, 2026-08-25 22:05, BEFORE Phase M runs: run order was confounded with the model
+
+Corrections 10 and 11 built Phase M's dense side by appending arms to the end of the list. That
+put the model on the same axis as the run order.
+
+`bench.py` rotates arm order by one position per pass, `rot = (p_idx - 1) % len(arms)`. With 21
+arms and 3 passes the dense arms sat at positions 11-20, 10-19 and 9-18 and never once ran in the
+first nine. Whatever varies with position in a four-hour session - card temperature, the clock
+drift this repo has measured at 1.8 % across a ladder, page cache - would have varied with the
+model, which is the one thing the phase is comparing. The invocation in `run_remaining.sh` passes
+no `--settle-floor`, so there is no thermal gate absorbing it either, and that script cannot be
+edited while the chain is reading it.
+
+The arm list is reordered so each matched pair is adjacent. Adjacency does not remove the position
+effect; it makes both halves of a pair meet the same one, which is what a paired comparison needs.
+Measured over the three rotations, every pair is one position apart and the median position is 10,
+11, 12 for the MoE side against 11, 10, 9 for the dense side, where before it was 0-10 against
+11-20.
+
+The two baselines lead, then the anchor pair. The anchor is the tightest configuration in the
+matrix, the 21.3 GiB MoE target plus a 0.5 GiB drafter against a 24 GiB card, so if it does not
+allocate that is known about ten minutes in rather than an hour, and H6a gates every other reading
+in the phase anyway.
+
+`moe-draft08b-n16` keeps no dense twin. It is a replication point for the predecessor's second
+depth, not a comparison point.
+
+No hypothesis changes and no arm is added or removed. `test_a_pair_never_runs_far_apart` fails on
+the previous order, naming the pair and the two positions.
