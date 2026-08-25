@@ -1577,3 +1577,55 @@ decode-steps priced at the fitted `c`, is the one that is 76 points of baseline 
 confound runs against the gap and cannot explain it.
 
 No hypothesis changes.
+
+## Correction 15, 2026-08-26 01:55: I contaminated part of Phase M pass 2 by building during the measurement window
+
+This is a protocol violation, self-inflicted, and recorded here because the affected records are
+still on disk and a reader has to know which they are.
+
+To verify a llama.cpp patch I compiled and ran a test suite on the measurement host while Phase M
+was running. The build window, taken from object-file timestamps, is **01:40:47 to 01:51:01**. It
+used `nice -19 -j3` on 8 cores with 6 idle, which is why I judged it safe. That judgement was
+wrong, and the first check I made of it was too small to see the problem.
+
+Phase M pass-2 arm-passes against that window, from the server-log start times:
+
+| arm-pass | started | overlaps the build |
+|---|---|---|
+| `baseline-dense` | 01:21:21 | no |
+| `moe-draft08b-n8` | 01:26:40 | no |
+| `dense-draft08b-n8` | 01:34:37 | no |
+| `moe-mtp-n1` | 01:36:59 | **partly** -- an arm-pass runs about five minutes |
+| `dense-mtp-n1` | 01:41:26 | **yes** |
+| `moe-mtp-n2` | 01:43:49 | **yes** |
+| `dense-mtp-n2` | 01:47:59 | **yes** |
+| `moe-mtp-n3` | 01:50:24 | **partly** |
+| `dense-mtp-n3` | 01:52:59 | no |
+
+Pass-2-against-pass-1 deviation, split by that boundary: clean arms +0.03 %, +0.49 %, +2.28 %;
+overlapping arms -0.95 %, -0.70 %, +1.95 %, +2.70 %, +5.00 %. The means are close, near +1.3 % in
+both, and the dispersion is about twice as wide in the overlapping set. Increased variance with no
+mean shift is what intermittent CPU contention looks like, and the +5.00 % on `moe-mtp-n3` is the
+largest single deviation anywhere in the matrix.
+
+**The specific damage is to a matched pair.** `moe-mtp-n3` started inside the window and
+`dense-mtp-n3` started after it closed, so that pair straddles a change in machine state. Correction
+12 reordered this matrix so matched pairs run adjacently for exactly this reason -- to make both
+halves of a pair meet the same conditions -- and this build defeated it for one pair.
+
+I also stated to the operator, before checking carefully enough, that the largest deviation predated
+the build. It did not: `moe-mtp-n1` at 01:36:59 ran into the window, and `moe-mtp-n3` is inside it.
+That claim rested on three arms and on treating a start time as if it were the whole arm-pass.
+
+Consequences and what is not affected:
+
+* No pass-1 record is affected. The build began after pass 1 closed at 01:21.
+* Arms compared *within* the overlapping window still met the same conditions as each other; the
+  `mtp-n1` and `mtp-n2` pairs are both wholly inside it.
+* The `mtp-n3` pair is not usable from pass 2 and neither is any single-pass reading of the arms
+  that only partly overlap.
+
+Disposition: no further building on this host until the chain finishes. Phase M pass 2 is to be
+re-run for the overlapping arm-passes once it does, and the third pass gives an independent check --
+if pass 3 tracks pass 1 more closely than pass 2 does, that confirms the contamination rather than
+ordinary variation. Nothing from pass 2's overlapping arms enters a reported figure before that.
