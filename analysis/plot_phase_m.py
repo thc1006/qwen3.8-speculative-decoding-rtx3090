@@ -47,9 +47,10 @@ PROVENANCE = ("Phase M | Qwen3.6-35B-A3B and Qwen3.8-27B, both UD-Q4_K_XL | RTX 
 
 
 def _ladder(series, prompt_class, result, prefix, baseline):
-    """-> [(n_max, Interval, acceptance, is_mtp)] for one target, ordered by n_max."""
+    """-> [(n_max, Interval, acceptance, is_mtp, width_eff)] for one target, ordered by n_max."""
     arms = result.get("arms", {})
     acc = _acceptance(result)
+    weff = _effective_width(result)
     out = []
     for arm, meta in arms.items():
         if not arm.startswith(prefix + "-") or not meta.get("expects_drafter"):
@@ -66,8 +67,12 @@ def _ladder(series, prompt_class, result, prefix, baseline):
             continue
         # (baseline, arm). Reversed, every effect in this figure changes sign.
         iv = ST.paired_cluster_bootstrap(base_s, arm_s, prompt_class, relative=True)
-        out.append((n, iv, acc.get(arm), is_mtp))
-    return sorted(out)
+        out.append((n, iv, acc.get(arm), is_mtp, weff.get(arm)))
+    # Sort on the plain fields only. `sorted(out)` compared whole tuples, and the moment two arms
+    # of different methods shared an n-max -- moe-mtp-n2 and moe-draft08b-n2, once the
+    # draft-simple ladder reached depth 2 -- the tie fell through to comparing two Intervals,
+    # which raises. It worked until the data changed shape.
+    return sorted(out, key=lambda t: (t[0], not t[3]))
 
 
 def _acceptance(result):
@@ -78,6 +83,29 @@ def _acceptance(result):
         tot[rec["arm"]][0] += tm.get("t_draft_n") or 0
         tot[rec["arm"]][1] += tm.get("t_draft_n_accepted") or 0
     return {a: acc / d for a, (d, acc) in tot.items() if d}
+
+
+def _effective_width(result):
+    """-> {arm: mean verified columns per target forward pass}.
+
+    `n-max` is what the flag asked for. The drafter can stop earlier, and the server reuses a
+    surviving draft tail instead of re-drafting, so what the target actually verifies is one plus
+    the drafts it had. On Phase M the MTP arms sit on `n_max` to two decimals and the 0.8B
+    `draft-simple` arms sit far below it -- n-max 8 verifies about 5.2 columns, n-max 4 about 3.3
+    -- which is why an axis labelled `n-max` alone would put those points to the right of the
+    depth they actually ran.
+    """
+    tot = defaultdict(lambda: [0, 0])
+    for rec in result["records"]:
+        tm = rec.get("timings") or {}
+        drafted = tm.get("t_draft_n") or 0
+        accepted = tm.get("t_draft_n_accepted") or 0
+        pn = rec.get("predicted_n") or 0
+        f = pn - accepted - 1
+        if drafted and f > 0:
+            tot[rec["arm"]][0] += drafted
+            tot[rec["arm"]][1] += f
+    return {a: d / f + 1 for a, (d, f) in tot.items() if f}
 
 
 def _baseline_rate(series, prompt_class, arm):
@@ -98,6 +126,10 @@ def fig_phase_m(result, series, prompt_class):
         axes = [axes]
 
     xs_all = sorted({n for _, _, _, lad in rows for n, *_ in lad})
+    # Categorical positions, not the value of n-max. The ladder runs 1, 2, 3, 4, 5, 7, 8, 16, and
+    # on a linear axis the single n-max 16 point stretches everything else into the left third.
+    # Nothing here is read off the x distance; the ticks carry the depth.
+    pos = {n: i for i, n in enumerate(xs_all)}
     lo = min(iv.lo for _, _, _, lad in rows for _, iv, *_ in lad)
     hi = max(iv.hi for _, _, _, lad in rows for _, iv, *_ in lad)
     pad = (hi - lo) * 0.16
@@ -106,36 +138,47 @@ def fig_phase_m(result, series, prompt_class):
 
     for ax, (key, title, base, lad) in zip(axes, rows):
         ax.axhline(0, color=P.C("neutral"), lw=1.0, zorder=1)
-        mtp = [(n, iv, a) for n, iv, a, is_m in lad if is_m]
-        sim = [(n, iv, a) for n, iv, a, is_m in lad if not is_m]
+        mtp = [(n, iv, a, w) for n, iv, a, is_m, w in lad if is_m]
+        sim = [(n, iv, a, w) for n, iv, a, is_m, w in lad if not is_m]
         if mtp:
-            ax.plot([n for n, *_ in mtp], [iv.point for _, iv, _ in mtp],
+            ax.plot([pos[n] for n, *_ in mtp], [iv.point for _, iv, *_ in mtp],
                     color=mtp_c, lw=1.4, zorder=2)
         for group, colour, marker, label in ((mtp, mtp_c, mtp_m, "draft-mtp (built-in head)"),
                                              (sim, simple_c, "D",
                                               "draft-simple, 0.8B drafter")):
             if not group:
                 continue
-            ax.errorbar([n for n, *_ in group], [iv.point for _, iv, _ in group],
-                        yerr=[[iv.point - iv.lo for _, iv, _ in group],
-                              [iv.hi - iv.point for _, iv, _ in group]],
+            ax.errorbar([pos[n] for n, *_ in group], [iv.point for _, iv, *_ in group],
+                        yerr=[[iv.point - iv.lo for _, iv, *_ in group],
+                              [iv.hi - iv.point for _, iv, *_ in group]],
                         fmt=marker, color=colour, ecolor=colour, elinewidth=1.3,
                         capsize=3.2, ms=6.4, lw=0, zorder=3, label=label)
         # The peak, named on the figure rather than left to be read off the line.
         if len(mtp) > 1:
-            bn, biv, _ = max(mtp, key=lambda t: t[1].point)
+            bn, biv = max(mtp, key=lambda t: t[1].point)[:2]
             if bn not in (mtp[0][0], mtp[-1][0]):
-                ax.annotate(f"peak  n-max {bn}", (bn, biv.hi),
+                ax.annotate(f"peak  n-max {bn}", (pos[bn], biv.hi),
                             textcoords="offset points", xytext=(0, 9), ha="center",
                             fontsize=8.8, color=P.C("mut"))
-        for n, iv, a in mtp + sim:
+        for n, iv, a, w in mtp + sim:
+            bits = []
             if a is not None:
-                ax.annotate(f"{100 * a:.0f} %", (n, iv.lo), textcoords="offset points",
-                            xytext=(0, -13), ha="center", fontsize=8.2, color=P.C("mut"))
+                bits.append(f"{100 * a:.0f} %")
+            # Only where the drafter did not fill its budget. Printing "w 6.0" beside n-max 5 on
+            # every MTP point would be noise; printing nothing beside a draft-simple point that
+            # asked for 8 and verified 5.2 would put it at the wrong depth without saying so.
+            if w is not None and abs(w - (n + 1)) > 0.25:
+                bits.append(f"w {w:.1f}")
+            if bits:
+                ax.annotate("\n".join(bits), (pos[n], iv.lo), textcoords="offset points",
+                            xytext=(0, -13), ha="center", va="top", fontsize=8.2,
+                            color=P.C("mut"), linespacing=1.15)
         rate = _baseline_rate(series, prompt_class, base)
         ax.set_title(f"{title}     baseline {rate:.0f} tok/s", loc="left", pad=8)
         ax.set_ylabel("net effect vs own baseline (%)")
-        ax.set_ylim(lo - pad * 1.5, hi + pad)
+        # Extra room below: the annotations hang under the lowest point and the deepest
+        # draft-simple arm sits near the floor.
+        ax.set_ylim(lo - pad * 2.6, hi + pad)
         ax.grid(axis="y", lw=0.6, alpha=0.55)
         ax.set_axisbelow(True)
         P._despine(ax)
@@ -143,15 +186,21 @@ def fig_phase_m(result, series, prompt_class):
     # at the same height as the MoE draft-simple point, where it reads as another datum.
     axes[0].legend(loc="upper right", frameon=False, ncols=1, handletextpad=0.5,
                    borderaxespad=0.2)
-    axes[-1].set_xlabel("n-max (draft depth); the annotation under each point is draft acceptance")
-    axes[-1].set_xticks(xs_all)
-    axes[-1].set_xlim(min(xs_all) - 0.6, max(xs_all) + 0.6)
+    axes[-1].set_xlabel("n-max, the depth requested; annotations are draft acceptance, and the "
+                        "columns actually verified where those differ")
+    axes[-1].set_xticks(list(pos.values()))
+    axes[-1].set_xticklabels([str(n) for n in xs_all])
+    axes[-1].set_xlim(-0.6, len(xs_all) - 0.4)
     fig.suptitle("Same session, same prompts: the sign belongs to the drafter, not the "
                  "architecture", y=0.995, fontsize=12.5, ha="center")
     fig.subplots_adjust(top=0.90, hspace=0.30)
     n_rec = len(result["records"])
     P._save(fig, "plot_phase_m", bottom=0.16, provenance=PROVENANCE,
-            note=f"Phase M, {n_rec} requests. " + P.CI_NOTE)
+            note=f"Phase M, {n_rec} requests. n-max is what the flag asked for; the 0.8B "
+                 f"draft-simple arms stop short of it, so they verify fewer columns than their "
+                 f"position on the axis suggests and the difference is annotated. That runs "
+                 f"against the gap shown, not with it: the arm verifying more columns is the "
+                 f"faster one. " + P.CI_NOTE)
 
 
 def main():

@@ -901,10 +901,20 @@ def report(result: dict) -> None:
                 shape_ok = t >= tcrit
                 bound = None if shape_ok else tcrit * sed
                 if shape_ok:
-                    print(f"  The two k(w) curves differ by a straight line to within {worst:.5f}, "
-                          f"so whatever curvature they carry is shared and cancels. The slope of "
-                          f"the difference is {t:.0f} standard errors from zero against a 95 % "
-                          f"point of {tcrit:.2f}.")
+                    # A residual at the floating-point floor makes t astronomically large and
+                    # printing it as a number ("3602879701896390 standard errors") is noise, not
+                    # evidence. Say what the number means instead.
+                    scale = statistics.fmean([abs(y) for y in yd]) or 1.0
+                    how = ("to numerical precision" if worst < 1e-9 * scale
+                           else f"to within {worst:.5f}")
+                    strength = ("exactly" if worst < 1e-9 * scale
+                                else f"{t:,.0f} standard errors from zero, against a 95 % point "
+                                     f"of {tcrit:.2f},")
+                    print(f"  The two k(w) curves differ by a straight line {how}, so whatever "
+                          f"curvature they carry is shared and cancels. The slope of that "
+                          f"difference is {strength} "
+                          + ("so the shape check imposes no penalty and the interval above "
+                             "decides." if worst < 1e-9 * scale else "so it is not curvature."))
                 else:
                     print(f"  The difference is not itself linear across these widths, so the "
                           f"curvature does NOT cancel. Its slope is {t:.2f} se against a 95 % "

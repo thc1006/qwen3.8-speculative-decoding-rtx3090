@@ -1539,21 +1539,30 @@ class TestAnchorEstimatorMatchesBand(unittest.TestCase):
     """
 
     @staticmethod
-    def _result(arm_by_class, base_rate=100.0, n_by_class=(("code", 9), ("prose", 1))):
+    def _result(arm_by_class, base_rate=100.0, n_by_class=(("code", 9), ("prose", 3))):
         """A synthetic Phase M shaped so pooled and stratified disagree.
 
-        One class carries most of the prompts and a small penalty; the other carries one prompt
-        and a large one. The pooled median is drawn from the crowded class and reports its
-        penalty; the stratified mean weights the two classes equally.
+        One class carries most of the prompts and a small penalty; the other carries few and a
+        large one. The pooled median is drawn from the crowded class and reports its penalty; the
+        stratified mean weights the two classes equally.
+
+        Each prompt is jittered around its class effect. Without that every prompt returns the
+        same ratio, the cluster bootstrap finds nothing to resample, and the interval collapses to
+        zero width -- which anchor_verdict correctly refuses to call a replication, for a reason
+        that has nothing to do with the estimator this fixture exists to test.
         """
         recs = []
         for cls, n in n_by_class:
             for i in range(n):
                 tag = f"{cls}_{i}"
+                # Symmetric about zero for any n, so each class mean is exactly its target and
+                # the assertions below stay exact while the bootstrap still has something to
+                # resample.
+                eff = arm_by_class[cls] + (i - (n - 1) / 2) * 0.004
                 recs.append({"arm": "baseline-moe", "pass": 1, "prompt": tag, "class": cls,
                              "decode_tok_s": base_rate, "predicted_n": 400, "hit_cap": True})
                 recs.append({"arm": "moe-draft08b-n8", "pass": 1, "prompt": tag, "class": cls,
-                             "decode_tok_s": base_rate * (1 + arm_by_class[cls]),
+                             "decode_tok_s": base_rate * (1 + eff),
                              "predicted_n": 400, "hit_cap": True})
         return {"records": recs}
 
@@ -1562,11 +1571,17 @@ class TestAnchorEstimatorMatchesBand(unittest.TestCase):
         # code -5 %, prose -35 %  ->  stratified -20 % (inside the -12/-32 band),
         # pooled median -5 % (outside it). The two verdicts are opposite.
         v = AV.verdict(self._result({"code": -0.05, "prose": -0.35}))
+        lo, hi = v["band"]
         self.assertAlmostEqual(v["point"], -20.0, places=6,
                                msg="the primary is not the class-stratified mean")
-        self.assertAlmostEqual(v["pooled_median"], -5.0, places=6,
-                               msg="the synthetic case no longer separates the estimators; "
-                                   "it cannot catch the defect it was written for")
+        # The exact pooled median depends on how the two classes interleave, so assert the
+        # property the case exists to create: the two estimators fall on opposite sides of the
+        # band, and only then can this test tell which one the verdict used.
+        self.assertTrue(lo < v["point"] < hi, "the stratified estimate left the band")
+        self.assertFalse(lo < v["pooled_median"] < hi,
+                         f"the pooled median ({v['pooled_median']:+.1f} %) is inside the band "
+                         f"too, so this case no longer separates the estimators and cannot "
+                         f"catch the defect it was written for")
         self.assertTrue(v["holds"],
                         f"the anchor was judged on the pooled estimator: {v['reason']}")
 
@@ -1574,8 +1589,12 @@ class TestAnchorEstimatorMatchesBand(unittest.TestCase):
         import anchor_verdict as AV
         # The mirror image: pooled median -20 % (inside the band), stratified -40 % (outside).
         v = AV.verdict(self._result({"code": -0.20, "prose": -0.60}))
-        self.assertAlmostEqual(v["pooled_median"], -20.0, places=6)
+        lo, hi = v["band"]
         self.assertAlmostEqual(v["point"], -40.0, places=6)
+        self.assertTrue(lo < v["pooled_median"] < hi,
+                        f"the pooled median ({v['pooled_median']:+.1f} %) is outside the band "
+                        f"too, so this case no longer separates the estimators")
+        self.assertFalse(lo < v["point"] < hi, "the stratified estimate entered the band")
         self.assertFalse(v["holds"],
                          "an arm outside the band on the registered estimator was passed "
                          "because a pooled estimator happened to land inside it")
@@ -1621,6 +1640,33 @@ class TestAnchorEstimatorMatchesBand(unittest.TestCase):
                          "rewriting, because the estimator would no longer be load-bearing")
 
     ROOT = Path(__file__).parent
+
+    def test_a_wide_interval_inside_the_band_does_not_count_as_a_replication(self):
+        import anchor_verdict as AV
+        # Per-prompt effects averaging -20 %, inside the band, with an interval that excludes zero
+        # only just. Without a precision rule this "holds" while the data cannot tell a 1 %
+        # penalty from a 60 % one.
+        effects = [-0.60, -0.55, -0.50, -0.02, -0.01, -0.02]      # mean -0.2833 -> in band
+        recs = []
+        for cls in ("code", "prose"):
+            for i, eff in enumerate(effects):
+                tag = f"{cls}_{i}"
+                recs.append({"arm": "baseline-moe", "pass": 1, "prompt": tag, "class": cls,
+                             "decode_tok_s": 100.0, "predicted_n": 400, "hit_cap": True})
+                recs.append({"arm": "moe-draft08b-n8", "pass": 1, "prompt": tag, "class": cls,
+                             "decode_tok_s": 100.0 * (1 + eff),
+                             "predicted_n": 400, "hit_cap": True})
+        v = AV.verdict({"records": recs})
+        lo, hi = v["band"]
+        self.assertTrue(lo < v["point"] < hi, "the fixture no longer lands inside the band")
+        self.assertFalse(v["spans_zero"], "the fixture no longer excludes zero; rewrite it")
+        self.assertTrue(v["near_zero"],
+                        f"the fixture is no longer imprecise enough to test the rule "
+                        f"(margin {v['margin_half_widths']:.2f} half-widths)")
+        self.assertFalse(v["holds"],
+                         "an effect the data cannot pin down was reported as a reproduction of "
+                         "the registered penalty")
+        self.assertIn("half-widths", v["reason"])
 
     def test_a_stale_marker_cannot_gate_a_later_run(self):
         import subprocess

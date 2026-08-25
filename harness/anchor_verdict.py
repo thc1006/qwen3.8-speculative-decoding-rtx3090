@@ -122,6 +122,22 @@ def verdict(result: dict, anchor: dict = ANCHOR) -> dict:
     if iv.spans_zero:
         out["reason"] = ("the interval contains zero, so this arm does not show a penalty at "
                          "all, whatever the point estimate lands on")
+    elif iv.hi - iv.lo <= 0:
+        # Every prompt returned the same ratio, so the resampling found nothing to vary and the
+        # interval collapsed onto the point. That prints as perfect precision and means precision
+        # was not estimated at all -- the opposite of what it looks like.
+        out["reason"] = ("the interval has zero width: every prompt returned the same ratio, so "
+                         "no precision was estimated. A collapsed interval is not a tight one")
+    elif iv.near_zero:
+        # An interval that clears zero by a fraction of a half-width is inside the undercoverage
+        # this repo measured at n = 25 (88.0-90.9 % actual against a nominal 95 %). Without this
+        # branch an arm at -20 % with an interval of [-80, -1] would have "held": the point sits
+        # in the band and the interval technically excludes zero, while the data cannot tell a
+        # 1 % penalty from an 80 % one. The same rule analyze.py applies to every other verdict.
+        out["reason"] = (f"the interval clears zero by only {iv.margin_half_widths:.2f} "
+                         f"half-widths, which is inside the undercoverage measured at this "
+                         f"sample size; the penalty is not established well enough to call a "
+                         f"replication")
     elif not (lo < point < hi):
         out["reason"] = (f"the class-stratified effect is {point:+.1f} %, outside the registered "
                          f"{lo:+.0f} % to {hi:+.0f} % band")
