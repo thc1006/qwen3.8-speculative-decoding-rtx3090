@@ -185,7 +185,8 @@ second-host addendum in `PREREGISTRATION.md`.
       rung 1 of 5 at 11.9 s/record. Rungs 8192, 32768 and 65536 sit below the reported ~80 K
       cliff, so the fourth rung is what decides whether the ladder takes four hours or thirteen.
       `.ladder_budget_s` holds a seconds count that stops it at a rung boundary.
-- [ ] **Phase M** - dense against MoE in one run, 14 arms, 1050 records, about 3 h. Anchored
+- [ ] **Phase M** - dense against MoE in one run, 21 arms, 1575 records, about 4.8 h, with
+      matched width ladders on both models so `c` can be compared and not just the levels. Anchored
       on -21.5 % class-stratified, not the -44.6 % that belongs to the predecessor's DFlash arm.
       Phase C already measured that configuration at -29.8 % on the DENSE target, so the phase is
       not described as identifying MoE routing. Corrections 9 and 10.

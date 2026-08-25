@@ -133,14 +133,46 @@ ARMS = [
     # comparison, whatever its name says.
     Arm("baseline-dense", [], tree="master", model=DENSE,
         note="Qwen3.8-27B dense-hybrid, no speculation; the matched control for baseline-moe"),
+    # H6b compares the marginal cost per verified position between the two models, so the dense
+    # side needs the same width ladder the MoE side has, not one point. With a single width the
+    # slope has nothing to fit and c_dense would have to be borrowed from phase_nmax, measured in
+    # another session, which is the comparison these arms exist to avoid.
+    Arm("dense-mtp-n1", ["--spec-type", "draft-mtp", "--spec-draft-n-max", "1"],
+        tree="master", expects_drafter=True, model=DENSE,
+        note="matched against moe-mtp-n1"),
     Arm("dense-mtp-n2", ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"],
         tree="master", expects_drafter=True, model=DENSE,
         note="matched against moe-mtp-n2"),
+    Arm("dense-mtp-n3", ["--spec-type", "draft-mtp", "--spec-draft-n-max", "3"],
+        tree="master", expects_drafter=True, model=DENSE,
+        note="matched against moe-mtp-n3"),
+    Arm("dense-mtp-n5", ["--spec-type", "draft-mtp", "--spec-draft-n-max", "5"],
+        tree="master", expects_drafter=True, model=DENSE,
+        note="matched against moe-mtp-n5"),
+    Arm("dense-mtp-n7", ["--spec-type", "draft-mtp", "--spec-draft-n-max", "7"],
+        tree="master", expects_drafter=True, model=DENSE,
+        note="matched against moe-mtp-n7"),
     Arm("dense-draft08b-n8", ["--spec-type", "draft-simple", "--spec-draft-n-max", "8",
                               "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True, model=DENSE,
         note="matched against the replication anchor. Phase C measured this configuration at "
              "-29.8 % on a separate day; this arm puts it in the same session as the MoE one"),
+
+    # Width 9 is off the MMVQ path, so the anchor arm above cannot carry a slope. The
+    # predecessor's loss lives on this path, which makes it the one where a difference in c
+    # between the two models would say the most, so it gets the same 3, 5, 7 the MoE side has.
+    Arm("dense-draft08b-n2", ["--spec-type", "draft-simple", "--spec-draft-n-max", "2",
+                              "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+        tree="master", expects_drafter=True, model=DENSE,
+        note="width 3, matched against moe-draft08b-n2"),
+    Arm("dense-draft08b-n4", ["--spec-type", "draft-simple", "--spec-draft-n-max", "4",
+                              "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+        tree="master", expects_drafter=True, model=DENSE,
+        note="width 5, matched against moe-draft08b-n4"),
+    Arm("dense-draft08b-n6", ["--spec-type", "draft-simple", "--spec-draft-n-max", "6",
+                              "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+        tree="master", expects_drafter=True, model=DENSE,
+        note="width 7, matched against moe-draft08b-n6"),
 ]
 
 # Each arm is scored against the baseline that ran the same model. Mapping everything to

@@ -1392,3 +1392,40 @@ per-extra-token throughput cost from `llama-batched-bench`, `c` is a slope in se
 equivalents, and no derivation relates them, so the ladder tests the direction of the claim and
 not its figures. The `UD-Q4_K_XL` rung repeats arms `phase_a` and `phase_nmax` already ran on the
 same file; it is kept as the same-session control and is not new evidence about Q4.
+
+## Correction 11, 2026-08-25 21:35, BEFORE Phase M runs: the dense side needed a ladder, not a point
+
+Correction 10 gave Phase M a dense side so the comparison would happen in one session. It gave it
+three arms: a baseline, one MTP depth and the anchor depth. That is enough to compare LEVELS and
+not enough to compare SLOPES, and H6b is about a slope.
+
+H6b registers that fitting `k(w) = k0 + c(w-1)` on the MoE gives a marginal cost per verified
+position exceeding the dense model's. Measured on the matrix as Correction 10 left it:
+
+```
+MoE   draft-mtp     on-MMVQ widths [2,3,4,6,8]   c fittable
+MoE   draft-simple  on-MMVQ widths [3,5,7]       c fittable
+DENSE draft-mtp     on-MMVQ widths [3]           c CANNOT be fitted
+DENSE draft-simple  on-MMVQ widths []            c CANNOT be fitted
+```
+
+Correction 10 added widths to the MoE side, because that was the defect the audit named, and left
+the dense side at one point. A run would have produced 1350 records answering H6 and H6a and not
+H6b, and c_dense would have had to be borrowed from `phase_nmax`, measured in another session on
+another day, which is the comparison these arms exist to remove. The fix would then have been
+another full run.
+
+The dense side now carries the same ladder as the MoE side on both paths: `draft-mtp` at n_max 1,
+2, 3, 5 and 7, and `draft-simple` at n_max 2, 4 and 6. The anchor arm stays at n_max 8, which is
+width 9 and off the MMVQ path, so it contributes a level and not a slope. Both paths are matched
+on both models, which is what a paired comparison of `c` needs.
+
+The draft-then-verify ladder is included on the dense side rather than only MTP because that is
+the path the predecessor's loss lives on. A difference in `c` there says more about where the loss
+comes from than the same difference on a path the predecessor never ran.
+
+Phase M is now 21 arms and 1575 records, about 4.8 hours. No hypothesis changes; the matrix can
+now address the ones already registered.
+
+`test_every_method_on_both_models_has_matched_fittable_widths` fails on the Correction 10 shape,
+naming the unmatched widths.

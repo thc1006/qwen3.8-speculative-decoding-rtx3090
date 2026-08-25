@@ -975,6 +975,67 @@ class TestForkPositionUnits(unittest.TestCase):
                          "token column no longer describe the same records")
 
 
+class TestCrossModelMatricesCanFitBothSlopes(unittest.TestCase):
+    """A matrix that compares two models has to compare their slopes, not just their levels.
+
+    Phase M was given a dense side and, on the first attempt, a single dense width. H6b compares
+    the marginal cost per verified position between the two models; with one point there is no
+    slope to fit and c_dense would have had to come from another session, which is the comparison
+    the dense arms were added to remove. 1575 records would have answered every hypothesis but
+    that one, and the fix is another full run.
+    """
+
+    ROOT = Path(__file__).parent
+    MMVQ_MAX = 8   # ggml/src/ggml-cuda/mmvq.cu; a wider batch takes a different kernel
+
+    @staticmethod
+    def _width(arm):
+        ea = arm.extra_args
+        for i, t in enumerate(ea):
+            if t == "--spec-draft-n-max" and i + 1 < len(ea):
+                try:
+                    return int(ea[i + 1]) + 1
+                except ValueError:
+                    return None
+        return None
+
+    def test_every_method_on_both_models_has_matched_fittable_widths(self):
+        import importlib
+        d = self.ROOT / "matrices"
+        if not d.exists():
+            self.skipTest("no matrices directory")
+        sys.path.insert(0, str(d))
+        checked = 0
+        for f in sorted(d.glob("phase_*.py")):
+            try:
+                mod = importlib.import_module(f.stem)
+            except Exception:
+                continue
+            arms = getattr(mod, "ARMS", None) or []
+            if not any(getattr(a, "model", None) for a in arms):
+                continue  # single-model matrix; nothing to match
+            for method in ("draft-mtp", "draft-simple", "draft-dflash"):
+                sides = {}
+                for label, pick in (("override", lambda a: getattr(a, "model", None)),
+                                    ("default", lambda a: not getattr(a, "model", None))):
+                    ws = sorted({w for a in arms if pick(a) and method in a.extra_args
+                                 for w in [self._width(a)] if w and w <= self.MMVQ_MAX})
+                    sides[label] = ws
+                if not sides["override"] and not sides["default"]:
+                    continue
+                self.assertEqual(
+                    sides["override"], sides["default"],
+                    f"{f.stem}: {method} runs on both models with unmatched widths "
+                    f"{sides}. A slope fitted on one side has nothing to be compared with.")
+                self.assertGreaterEqual(
+                    len(sides["default"]), 2,
+                    f"{f.stem}: {method} has {sides['default']} inside the MMVQ path, which "
+                    f"cannot carry a fit")
+                checked += 1
+        if checked == 0:
+            self.skipTest("no cross-model matrix")
+
+
 class TestRungDriverGates(unittest.TestCase):
     """A completeness gate that passes on zero records is worse than no gate.
 

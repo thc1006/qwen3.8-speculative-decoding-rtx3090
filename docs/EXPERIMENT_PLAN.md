@@ -45,7 +45,7 @@ decisive where the p-min sweep alone is only suggestive. The PR #27342 author ad
 | **B** | drafted-token vs rejected-token cost (p-min x n-max) | 7 | 5 | ~2.3 h |
 | **C** | method breadth on one host: drafter-quant ladder, classic draft, ngram family, DSpark | ~10 | 3 | ~2 h |
 | **L** | does speculation survive the ~25x decode collapse past ~80 K ([#27623](https://github.com/ggml-org/llama.cpp/issues/27623))? | 4 x depths | 3 | ~2 h |
-| **M** | dense-hybrid vs A3B MoE under one protocol, both measured in the same run | 14 | 3 | ~3 h + 21 GB |
+| **M** | dense-hybrid vs A3B MoE under one protocol, both measured in the same run, matched width ladders on both | 21 | 3 | ~4.8 h + 21 GB |
 | **V** | llama.cpp vs vLLM on the same single card | 4 | 3 | ~2 h + disk juggling |
 | **X** | thinking on/off x method, multimodal, concurrency | - | - | later |
 
