@@ -975,6 +975,90 @@ class TestForkPositionUnits(unittest.TestCase):
                          "token column no longer describe the same records")
 
 
+class TestSpecDraftBounds(unittest.TestCase):
+    """An arm whose n_min exceeds its n_max never speculates, and nothing says so.
+
+    `common/speculative.cpp` clears the draft when `result->size() < params.n_min`, and neither
+    arg.cpp nor speculative.cpp checks n_min against n_max. An arm configured that way runs to
+    completion, writes a full set of records, and reports roughly no speedup, because every draft
+    it produced was thrown away. Adding `--spec-draft-n-min 4` across a ladder that includes
+    n_max 2 did exactly that here.
+    """
+
+    ROOT = Path(__file__).parent
+
+    @staticmethod
+    def _bounds(arm):
+        out = {}
+        ea = arm.extra_args
+        for i, t in enumerate(ea):
+            if t in ("--spec-draft-n-min", "--spec-draft-n-max") and i + 1 < len(ea):
+                try:
+                    out[t] = int(ea[i + 1])
+                except ValueError:
+                    pass
+        return out.get("--spec-draft-n-min"), out.get("--spec-draft-n-max")
+
+    def _all_arms(self):
+        import importlib
+        d = self.ROOT / "matrices"
+        if not d.exists():
+            self.skipTest("no matrices directory")
+        sys.path.insert(0, str(d))
+        for f in sorted(d.glob("phase_*.py")):
+            try:
+                mod = importlib.import_module(f.stem)
+            except Exception:
+                continue
+            for a in getattr(mod, "ARMS", None) or []:
+                # phase_v drives vLLM and declares its arms as dicts, not Arm. These bounds are
+                # llama.cpp flags, so that matrix is out of scope rather than being skipped.
+                if hasattr(a, "extra_args"):
+                    yield f.stem, a
+
+    def test_no_arm_asks_for_more_draft_tokens_than_it_allows(self):
+        seen = 0
+        for name, arm in self._all_arms():
+            lo, hi = self._bounds(arm)
+            if lo is None or hi is None:
+                continue
+            seen += 1
+            self.assertLessEqual(
+                lo, hi,
+                f"{name}: {arm.name} sets n_min={lo} above n_max={hi}. Every draft it makes is "
+                f"shorter than n_min, so every draft is cleared and the arm silently measures "
+                f"nothing.")
+        if seen == 0:
+            self.skipTest("no arm sets both bounds")
+
+    def test_matched_arms_differ_only_in_their_model(self):
+        """`moe-X` and `dense-X` are a pair; anything else that differs is a confound."""
+        import importlib
+        d = self.ROOT / "matrices"
+        sys.path.insert(0, str(d))
+        checked = 0
+        for f in sorted(d.glob("phase_*.py")):
+            try:
+                mod = importlib.import_module(f.stem)
+            except Exception:
+                continue
+            arms = {a.name: a for a in getattr(mod, "ARMS", None) or []
+                    if hasattr(a, "extra_args")}
+            for nm, arm in arms.items():
+                if not nm.startswith("dense-"):
+                    continue
+                twin = arms.get("moe-" + nm[len("dense-"):])
+                if twin is None:
+                    continue
+                self.assertEqual(
+                    arm.extra_args, twin.extra_args,
+                    f"{f.stem}: {nm} and {twin.name} are a matched pair but their flags differ. "
+                    f"Whatever the comparison then measures, it is not the model alone.")
+                checked += 1
+        if checked == 0:
+            self.skipTest("no matched pairs")
+
+
 class TestCrossModelMatricesCanFitBothSlopes(unittest.TestCase):
     """A matrix that compares two models has to compare their slopes, not just their levels.
 

@@ -114,17 +114,17 @@ ARMS = [
         note="REPLICATION ANCHOR: the predecessor's 0.8B draft-then-verify arm, -10.8 % raw "
                     "and -21.5 % class-stratified. Not its -44.6 %, which is a different method"),
     Arm("moe-draft08b-n16", ["--spec-type", "draft-simple", "--spec-draft-n-max", "16",
-                             "-md", str(DRAFT_08B), "-ngld", "99"],
+                             "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True,
         note="the predecessor also tested 16; larger K, closer to expert-set saturation"),
 
     # n4, n8 and n16 are verification widths 5, 9 and 17, and only 5 is inside MMVQ, so a fit
     # over this path had exactly one usable point and no `c` at all. n2 and n6 add widths 3 and 7.
     Arm("moe-draft08b-n2", ["--spec-type", "draft-simple", "--spec-draft-n-max", "2",
-                            "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+                            "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True, note="width 3, on the MMVQ path"),
     Arm("moe-draft08b-n6", ["--spec-type", "draft-simple", "--spec-draft-n-max", "6",
-                            "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+                            "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True, note="width 7, on the MMVQ path"),
 
     # The dense side, measured in this run rather than read out of a file from another day. Every
@@ -162,15 +162,15 @@ ARMS = [
     # predecessor's loss lives on this path, which makes it the one where a difference in c
     # between the two models would say the most, so it gets the same 3, 5, 7 the MoE side has.
     Arm("dense-draft08b-n2", ["--spec-type", "draft-simple", "--spec-draft-n-max", "2",
-                              "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+                              "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True, model=DENSE,
         note="width 3, matched against moe-draft08b-n2"),
     Arm("dense-draft08b-n4", ["--spec-type", "draft-simple", "--spec-draft-n-max", "4",
-                              "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+                              "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True, model=DENSE,
         note="width 5, matched against moe-draft08b-n4"),
     Arm("dense-draft08b-n6", ["--spec-type", "draft-simple", "--spec-draft-n-max", "6",
-                              "--spec-draft-n-min", "4", "-md", str(DRAFT_08B), "-ngld", "99"],
+                              "-md", str(DRAFT_08B), "-ngld", "99"],
         tree="master", expects_drafter=True, model=DENSE,
         note="width 7, matched against moe-draft08b-n6"),
 ]
