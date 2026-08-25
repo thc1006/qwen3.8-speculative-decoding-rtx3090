@@ -274,6 +274,7 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
     j_by: dict[str, list[float]] = defaultdict(list)
     a_by: dict[str, list[float]] = defaultdict(list)
     l_by: dict[str, list[float]] = defaultdict(list)
+    g_by: dict[str, list[float]] = defaultdict(list)
     for rec in result["records"]:
         ok, _ = _usable(rec)
         if not ok:
@@ -282,6 +283,9 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
             e_by[rec["arm"]].append(rec["tok_per_joule_decode"])
         if rec.get("decode_energy_j"):
             j_by[rec["arm"]].append(rec["decode_energy_j"])
+        pw = rec.get("power") or {}
+        if pw.get("energy_instant_vs_average_pct") is not None:
+            g_by[rec["arm"]].append(pw["energy_instant_vs_average_pct"])
         tm = rec.get("timings") or {}
         dn, da = tm.get("t_draft_n") or 0, tm.get("t_draft_n_accepted") or 0
         if dn:
@@ -293,6 +297,22 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
             ml = speclen.mean_len(rec)
             if ml is not None:
                 l_by[rec["arm"]].append(ml)
+    # power.draw on Ampere is a rolling average of about a second. A steady load integrates the
+    # same either way; a speculative one does not, because a drafter pass at width 1 and a wide
+    # verification are different power states and the average smooths the peak. Measured on the
+    # depth ladder the gap is 0.00 to 0.34 % for the baselines and 0.58 to 1.97 % for the
+    # speculative arms, always positive, so the averaged field understates exactly the arms whose
+    # energy is being compared against a baseline. Reported per arm, because a bias that is one
+    # sided is not covered by any interval.
+    if g_by:
+        print("\n--- averaged against instantaneous power, per arm ---")
+        for a in sorted(g_by):
+            v = g_by[a]
+            print(f"  {a:22s} {statistics.median(v):+6.2f} %   n={len(v)}")
+        print("  Positive means power.draw integrated low. It leaves the baselines nearly alone")
+        print("  and understates the speculative arms, so an energy saving read off the averaged")
+        print("  field is larger than the instantaneous field supports, by about this much.")
+
     ref_e = statistics.fmean(e_by[default_baseline]) if e_by.get(default_baseline) else None
     ref_j = statistics.fmean(j_by[default_baseline]) if j_by.get(default_baseline) else None
     for a in present:

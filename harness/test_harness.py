@@ -749,6 +749,22 @@ class TestAlgebraicInvariants(unittest.TestCase):
         self.assertIn("CLOCK, WHICH DEPTH MOVES ON ITS OWN", code)
         self.assertIn("0.266", code, "the elasticity that converts drift into throughput")
         self.assertIn("sm_clock_mean_mhz", code)
+    def test_the_two_power_integrals_are_compared_per_arm(self):
+        """power.draw on Ampere is a rolling average, and averaging is not neutral here.
+
+        A steady load integrates the same either way. A speculative one does not: a drafter pass
+        at width 1 and a wide verification are different power states, and the average smooths
+        the peak. On the depth ladder the two integrals agree to 0.00 to 0.34 % on the baselines
+        and differ by 0.58 to 1.97 % on the speculative arms, always positive. The averaged field
+        understates exactly the arms whose energy is compared against a baseline, so the bias is
+        one sided and no interval covers it.
+        """
+        import analyze
+        code = "\n".join(l for l in inspect.getsource(analyze).splitlines()
+                         if not l.strip().startswith("#"))
+        self.assertIn("energy_instant_vs_average_pct", code,
+                      "the gap is recorded per record and has to be reported per arm")
+        self.assertIn("averaged against instantaneous power", code)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
