@@ -6,6 +6,7 @@ record of them as much as a guard. `analyze.py` claimed one of these existed bef
 Run: python3 harness/test_harness.py
 """
 import inspect
+import time
 import sys
 import unittest
 from pathlib import Path
@@ -793,6 +794,55 @@ class TestAlgebraicInvariants(unittest.TestCase):
 
         import analyze
         self.assertIn("energy window coverage", inspect.getsource(analyze))
+    def test_the_port_guard_refuses_a_stale_server(self):
+        """The README advertises this guard; it had never been exercised.
+
+        A killed-but-unreaped llama-server keeps answering /health, and a contributor to another
+        study published three rows measured against one. The check walks up from whoever owns the
+        port looking for our own pid, so the case that matters is a stale owner with no relation
+        to the server we think we started.
+
+        The degenerate input is the other half: every process reaches pid 1, so a walk that
+        accepts an ancestor match would hold vacuously against it.
+        """
+        import os
+        import socket
+        import subprocess
+        import sys
+        import telemetry as T
+
+        port = 19741
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", port))
+            except OSError:
+                self.skipTest(f"port {port} is in use on this host")
+
+        self.assertRaises(RuntimeError, T.assert_port_owned_by, port, 1)
+        self.assertRaises(RuntimeError, T.assert_port_owned_by, port, 0)
+
+        hold = (f"import socket,time;s=socket.socket();s.setsockopt(1,2,1);"
+                f"s.bind(('127.0.0.1',{port}));s.listen(1);time.sleep(20)")
+        stale = subprocess.Popen([sys.executable, "-c", hold])
+        other = subprocess.Popen([sys.executable, "-c", "import time;time.sleep(20)"])
+        try:
+            for _ in range(40):
+                if T.pid_owning_port(port):
+                    break
+                time.sleep(0.1)
+            if not T.pid_owning_port(port):
+                self.skipTest("could not observe the listening socket on this host")
+            # the stale holder is not our server, and sharing an ancestor is not ownership
+            self.assertRaises(RuntimeError, T.assert_port_owned_by, port, other.pid)
+            # our own descendant is
+            T.assert_port_owned_by(port, os.getpid())
+        finally:
+            stale.terminate()
+            other.terminate()
+            stale.wait()
+            other.wait()
+
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -57,6 +57,11 @@ def pid_owning_port(port: int) -> int | None:
 
 def assert_port_owned_by(port: int, pid: int) -> None:
     """Raise unless `pid` (or a descendant of it) owns `port`."""
+    # Every process reaches pid 1, so the ancestor walk below would accept anything against it
+    # and the assertion would hold vacuously. A real server pid is never 1; refuse rather than
+    # pass.
+    if pid <= 1:
+        raise RuntimeError(f"refusing to check port {port} against pid {pid}: not a server pid")
     owner = pid_owning_port(port)
     if owner is None:
         raise RuntimeError(f"port {port}: nothing listening, but server was expected")
