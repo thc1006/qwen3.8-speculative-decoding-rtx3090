@@ -2515,6 +2515,29 @@ class TestPassStabilityFindsTheNoisyArmPass(unittest.TestCase):
                       "a flagged arm-pass on a quiet host was left ambiguous, which is the "
                       "question Correction 17 had to answer by hand")
 
+    def test_scatter_that_tracks_power_at_constant_clock_is_named(self):
+        import contextlib
+        import io
+        import math
+        import pass_stability as PS
+        # Identical work, same clock, and power moving with throughput: the GPU idling less. That
+        # is the signature every outlier in Phase M carries, and the thermal gate cannot see it.
+        recs = []
+        for p in (1, 2):
+            for i in range(12):
+                wob = 9.0 * math.cos(i * 2.0) if p == 2 else 0.0
+                recs.append({"arm": "a", "pass": p, "prompt": f"p{i}",
+                             "class": "code" if i % 2 else "prose",
+                             "decode_tok_s": 100.0 + wob, "predicted_n": 400, "hit_cap": True,
+                             "power": {"power_mean_w": 200.0 + 2.0 * wob,   # moves with it
+                                       "sm_clock_mean_mhz": 1920.0}})       # does not
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            PS.report({"records": recs})
+        out = buf.getvalue()
+        self.assertIn("tracks POWER", out, f"the power signature was not reported:\n{out}")
+        self.assertIn("idling less", out)
+
     def test_a_file_without_the_field_says_so_rather_than_guessing(self):
         out = self._run(self._result(noisy_arm="b"))
         self.assertIn("predates arm_pass_host_load", out,

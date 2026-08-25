@@ -1710,3 +1710,49 @@ verification width 4, and nothing in the design predicts it. Left as an observat
 
 Recorded as `harness/pass_stability.py`, which answers in one run what these three corrections took
 by hand.
+
+## Correction 18, 2026-08-26 02:25: what the noisy arm-passes have in common, closing Correction 17's open question
+
+Correction 17 established that `moe-mtp-n3` is noisy in a pass that predates any disturbance, and
+left why unanswered. It has an answer, and it generalises past that arm.
+
+Greedy decoding is deterministic and the prompt order is fixed across passes, so a prompt at a given
+position runs **bit-identical work** in every pass: acceptance is the same to 0.1 points for every
+prompt in every arm compared. The between-pass differences are therefore pure timing on identical
+work, with position held constant.
+
+Pairing power and SM clock the same way as throughput, the four noisiest arm-passes in Phase M all
+carry one signature:
+
+| arm-pass | within-pass sd | corr with power | corr with clock |
+|---|---|---|---|
+| `moe-mtp-n3` p2 | 5.17 % | **+0.92** | -0.20 |
+| `moe-mtp-n3` p1 | 4.53 % | **+0.92** | -0.21 |
+| `moe-draft08b-n8` p1 | 3.89 % | **+0.94** | -0.03 |
+| `moe-draft08b-n8` p2 | 3.57 % | **+0.95** | -0.04 |
+| quiet arm-passes | under 1.6 % | +0.20 to +0.46 | near zero |
+
+Identical work, the same clock, more watts, more throughput. That is the GPU spending **less time
+idle**, not running faster. On the individual prompts the fast runs were at the same or a slightly
+*lower* clock while drawing 15 to 28 W more.
+
+Phase R2 confirms it independently and more cleanly: that matrix pins the SM clock with
+`nvidia-smi -lgc`, so the clock cannot vary at all, and its flagged arm-pass still tracks power at
+r = +0.89.
+
+Two things follow.
+
+* **The thermal gate does not cover this axis.** Every arm waits for a settled temperature and
+  records the clock it entered at, and neither would have caught any of these. Occupancy is a
+  separate axis and power at constant clock is what reveals it.
+* **It is not simply that fast arms are noisier.** `moe-draft08b-n8` runs at 48.8 tok/s and is the
+  second noisiest in the matrix, while `dense-mtp-n3` at 62.9 tok/s is among the quietest. An
+  earlier guess along those lines is withdrawn; the power signature is what separates them.
+
+What causes the idle is not established here. It is consistent with host-side work between decode
+steps, which would also explain why it survives a pinned clock, but nothing in this data separates
+that from a memory or scheduling effect on the device.
+
+No reported figure changes. The paired endpoints are unaffected: every arm meets the same prompt
+order and the comparison is within-pass. What changes is that "this arm-pass was noisy" is now a
+readable property with a named mechanism rather than an anomaly.

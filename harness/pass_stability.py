@@ -39,13 +39,30 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import analyze as AN  # noqa: E402
 
 
+def _corr(x, y):
+    """Pearson r, or None when either side has no spread."""
+    if len(x) != len(y) or len(x) < 3:
+        return None
+    mx, my = statistics.fmean(x), statistics.fmean(y)
+    num = sum((a - mx) * (b - my) for a, b in zip(x, y))
+    den = (sum((a - mx) ** 2 for a in x) * sum((b - my) ** 2 for b in y)) ** 0.5
+    return num / den if den else None
+
+
 def deviations(result: dict, metric: str = "decode_tok_s"):
     """-> {(arm, pass): {"mean": %, "sd": %, "max": %, "n": prompts}} against the other passes."""
     vals: dict = defaultdict(dict)
+    pw: dict = defaultdict(dict)
+    clk: dict = defaultdict(dict)
     for rec in result["records"]:
         v = rec.get(metric)
         if v:
             vals[(rec["arm"], rec["pass"])][rec["prompt"]] = float(v)
+        p = rec.get("power") or {}
+        if p.get("power_mean_w") is not None:
+            pw[(rec["arm"], rec["pass"])][rec["prompt"]] = float(p["power_mean_w"])
+        if p.get("sm_clock_mean_mhz") is not None:
+            clk[(rec["arm"], rec["pass"])][rec["prompt"]] = float(p["sm_clock_mean_mhz"])
 
     passes_of = defaultdict(list)
     for arm, p in vals:
@@ -56,18 +73,30 @@ def deviations(result: dict, metric: str = "decode_tok_s"):
         others = [q for q in passes_of[arm] if q != p]
         if not others:
             continue
-        deltas = []
+        deltas, dw, dc = [], [], []
         for tag, v in series.items():
             # the same prompt in the arm's other passes, so the comparison is paired
             ref = [vals[(arm, q)][tag] for q in others if tag in vals[(arm, q)]]
-            if ref:
-                deltas.append(100.0 * (v / statistics.fmean(ref) - 1.0))
+            if not ref:
+                continue
+            deltas.append(100.0 * (v / statistics.fmean(ref) - 1.0))
+            # The same pairing over power and clock. Where an arm-pass is noisy, which of these
+            # moves with it says what kind of noise it is: power at constant clock is the GPU
+            # spending less time idle on identical work, which is not a thing the thermal gate
+            # can see.
+            for src, dst in ((pw, dw), (clk, dc)):
+                cur = src.get((arm, p), {}).get(tag)
+                r = [src[(arm, q)][tag] for q in others
+                     if tag in src.get((arm, q), {})]
+                dst.append((cur - statistics.fmean(r)) if (cur is not None and r) else 0.0)
         if len(deltas) < 2:
             continue
         out[(arm, p)] = {"mean": statistics.fmean(deltas),
                          "sd": statistics.stdev(deltas),
                          "max": max(abs(d) for d in deltas),
-                         "n": len(deltas)}
+                         "n": len(deltas),
+                         "r_power": _corr(deltas, dw) if len(dw) == len(deltas) else None,
+                         "r_clock": _corr(deltas, dc) if len(dc) == len(deltas) else None}
     return out
 
 
@@ -96,8 +125,8 @@ def report(result: dict) -> None:
     print("PASS STABILITY   each arm-pass against the same prompts in its own other passes")
     print("=" * 100)
     print(f"median within-arm-pass sd {med:.2f} %, so an arm-pass is flagged above {cut:.2f} %\n")
-    print(f"{'arm':22} {'pass':>4} {'mean':>8} {'sd':>7} {'worst':>8} {'entry C':>8} "
-          f"{'host':>8}  note")
+    print(f"{'arm':22} {'pass':>4} {'mean':>8} {'sd':>7} {'worst':>8} {'r pwr':>6} "
+          f"{'r clk':>6} {'host':>8}  note")
 
     flagged = []
     for (arm, p), d in sorted(dev.items(), key=lambda kv: -kv[1]["sd"]):
@@ -106,17 +135,26 @@ def report(result: dict) -> None:
         st = settle.get(tag) or {}
         host = (f"{hl['competing_pct']:.0f}%" if hl.get("competing_pct") is not None else "-")
         temp = (f"{st['entry_temp_c']:.0f}" if st.get("entry_temp_c") is not None else "-")
+        # Three reasons to say more about an arm-pass, and only the first is about being unusual.
+        # A contended host that did NOT hurt is a finding. And scatter that tracks power rather
+        # than clock says what kind of noise it is, which matters at any size -- a median-relative
+        # rule cannot flag anything in a matrix of two arm-passes, but the signature is still
+        # readable there.
+        powerish = ((d.get("r_power") or 0) > 0.7 and abs(d.get("r_clock") or 0) < 0.5
+                    and d["sd"] >= 1.0)
         note = ""
         if d["sd"] > cut:
             note = "OUTLIER"
         if hl.get("contended"):
             note = (note + " + host contended").strip(" +")
-        # A contended host is worth a paragraph even when the arm-pass came out stable: that it
-        # did not hurt is a finding, and it is the one this study wanted and could not look up.
+        if powerish and not note:
+            note = "power-bound"
         if note:
             flagged.append((arm, p, d, hl))
+        rp = f"{d['r_power']:+.2f}" if d.get("r_power") is not None else "-"
+        rc = f"{d['r_clock']:+.2f}" if d.get("r_clock") is not None else "-"
         print(f"{arm:22} {p:>4} {d['mean']:+7.2f}% {d['sd']:6.2f}% {d['max']:7.2f}% "
-              f"{temp:>8} {host:>8}  {note}")
+              f"{rp:>6} {rc:>6} {host:>8}  {note}")
 
     if not flagged:
         print("\n  No arm-pass exceeds the threshold. Nothing here is evidence that any pass ran "
@@ -135,6 +173,15 @@ def report(result: dict) -> None:
         elif hl:
             print(f"      the host was NOT contended at arm entry "
                   f"({hl.get('competing_pct', 0):.0f}% competing), so the scatter is the arm's own.")
+        if (d.get("r_power") or 0) > 0.7 and abs(d.get("r_clock") or 0) < 0.5:
+            # r_clock is None when the clock never moved -- which phase_r2 arranges deliberately
+            # with nvidia-smi -lgc. That is the stronger case, not a missing one, so it gets a
+            # sentence rather than a format specifier that would have crashed on those files.
+            clk = (f"not clock (r={d['r_clock']:+.2f})" if d.get("r_clock") is not None
+                   else "not clock, which did not move at all")
+            print(f"      the scatter tracks POWER (r={d['r_power']:+.2f}) and {clk}. Identical "
+                  f"work at the same clock drawing more watts is the GPU idling less, which the "
+                  f"thermal gate cannot see.")
         else:
             print(f"      this file predates arm_pass_host_load, so there is nothing recorded "
                   f"about the host and the cause cannot be settled from the result alone.")
