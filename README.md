@@ -12,9 +12,11 @@ saturation threshold forces the verify pass to load the union of K positions' ex
 is dense-hybrid - no experts, no routing, no union - so that mechanism cannot decide the answer
 here, and the question was open again.
 
-> **Status, 2026-08-25.** Phase A complete (875 measurements, 0 incidents), Phase R complete
-> (1125), **Phase R2 complete (1575, 0 incidents)**. Phase KV and the n-max ladder are running.
-> Later phases are designed and not yet measured; each says so where it appears.
+> **Status, 2026-08-25.** Complete: Phase A (875 measurements, 0 incidents), Phase R (1125),
+> Phase R2 (1575, 0 incidents), Phase KV (175), the n-max ladder (1050), Phase C (750), and the
+> four-build forced-warp intervention (600) with its disassembly and kernel benchmark. The depth
+> ladder is running and has two of five rungs. Phase M and Phase Q are queued behind it. Later
+> phases are designed and not yet measured; each says so where it appears.
 
 **It is not open any more.**
 
@@ -158,7 +160,12 @@ predicts for MTP and 6.7 % below for DFlash2, and throughput jumps back from +9.
 +39.1 % at width 9. Fitting one line across the boundary dragged the MTP coefficient from 0.2904
 to 0.2215 and the fit from 0.9958 to 0.8304. The same boundary shows up a third way: two unrelated
 drafters that share only the verification width agree on the fork position for 25 of 25 prompts at
-widths 3, 5 and 7, and for 8 of 25 at width 9.
+widths 3, 5 and 7. At width 9 they agree on only 8 of 25, and that is not the control failing: they
+never verified at the same width there. `n_max` is what was asked for, and the width verified is
+one plus what the drafter actually proposed. DFlash2 fills 87 % of its budget at `n_max` 8 and MTP
+99 %, so they run at 7.94 and 8.93 columns, one inside `MMVQ_MAX_BATCH_SIZE` and one past it. At
+widths 3, 5 and 7 the two match to 0.00 columns. `harness/width_groups.py` now computes effective
+width per arm and refuses to score a pair that differ by more than a quarter column.
 
 **`c` agrees to within 15 %** between the target's own built-in nextn head and a structurally
 unrelated 1.1 GB block-diffusion drafter. `k` is the whole speculative cycle, though: target
@@ -282,18 +289,40 @@ widths it did touch differ on 60 of 75, and disassembly confirms the edit change
 kernels it should and no others. But of the 18 prompts that can discriminate, the registered
 prediction that widths 5, 6 and 8 adopt the `{3,4}` fork positions held on **3**. The forced-down
 direction was void on its first attempt for a reason worth stating: its table row included width
-1, and a drafter decodes one token at a time, so it perturbed every arm through its drafter. A
-corrected build that leaves widths 1 and 2 alone is running. **Warp count is not currently
-supported as the cause of the grouping**, and the co-occurrence above is reported as
-co-occurrence.
+1, and a drafter decodes one token at a time, so it perturbed every arm through its drafter.
 
-**Some of the agreements are censored.** Every arm stops at 400 tokens, which is about 950
-characters of dense Chinese while forks here have been resolved as late as character 1537. A
-record that never differs within its own output is recorded identical, and for the short ones that
-means "did not diverge before the cap" rather than "identical". `harness/truncation_audit.py`
-lists them; on Phase A that is 15 of 25 prompts. The partition is the same computed on all 25 and
-on the 10 with no censored verdict, so it does not depend on the generation length, but the
-individual byte-identity claims do.
+That set has since been replaced by four builds from a single cmake configure, which is what the
+first attempt lacked: its control had been built under a different configure, and a reconfigure
+regenerates `flags.make` and recompiles every `ggml-base` source, which is enough to move a
+width-1 greedy baseline that shares byte-identical kernel machine code. The fourth build is a
+second stock one, and it is the control the first set never had. **control and control2 agree on
+0 of 6202 SASS kernels differing and on 150 of 150 outputs byte for byte**, so the build is
+deterministic and a difference from a forced build is the table.
+
+The result is a null, and a clean one. Disassembly shows the edit reached the machine code and
+only there: forced-up differs from control in 92 of 6202 kernels, all `mul_mat_vec_q`, at template
+widths 5 to 8; forced-down2 in 46, at 3 and 4. `ggml_cuda_should_use_mmvq` falls through to
+`ne11 <= MMVQ_MAX_BATCH_SIZE` on Ampere for every quantized type, so those kernels are the ones
+that run. `test-backend-ops perf` puts the effect on the kernel at **+13.6 % at width 5 and
++26.7 % at width 8**, against a rebuild noise floor of 0.17 %. And the output does not move: **0
+of 75 records differ for forced-up, 0 of 50 for forced-down2**.
+
+So the warp count changes this kernel a great deal and changes no output byte. A fork position is
+a property of the text, and a mechanism that cannot change the text cannot change where two texts
+diverge. **The warp count is out as the cause**, on those grounds rather than on a measured
+absence, and the co-occurrence above is reported as co-occurrence. What else changes at that width
+is open.
+
+**Every agreement is censored, not some of them.** An earlier version of this paragraph measured
+the window in characters and reported 15 of 25 prompts censored, with the partition checked against
+the 10 that were not. The design fixes the window in tokens, and characters per token span 1.36 to
+6.17 across these prompts, so that split was an artefact of the wrong unit. Measured in tokens,
+`harness/truncation_audit.py` gives 490 of 750 Phase A records diverged, 260 right-censored, and
+**0 that reached EOS**. No record anywhere in this study stopped on its own, so no identity here is
+exact: every one means "did not diverge within 400 tokens". There is no clean subset, because the
+censoring is uniform, and the robustness check the earlier text claimed cannot be run on this data
+at all. Forks resolve between token 6 and token 334, the latest at 83 % of the window. What settles
+it is a larger budget, which is TODO.md item D2.
 
 This corroborates [llama.cpp #25618](https://github.com/ggml-org/llama.cpp/issues/25618) rather
 than discovering anything: that thread already establishes the phenomenon, its
@@ -422,16 +451,17 @@ mixture.
 
 ## Later phases
 
-Designed, pre-registered and not yet measured. Each hypothesis was written down before its data
-existed, in the addenda to [`PREREGISTRATION.md`](PREREGISTRATION.md).
+Each hypothesis was written down before its data existed, in the addenda to
+[`PREREGISTRATION.md`](PREREGISTRATION.md). Six of the eight below have since been measured; the
+status column says which.
 
 | phase | question | status |
 |---|---|---|
 | **R2** | does the compute elasticity hold with the SM clock pinned rather than power-capped? | **complete**, 1575 measurements, 0 incidents |
 | **KV** | does the width partition survive an f16 cache, or was it an artefact of q8_0? | complete |
-| **n-max** | the full width ladder, 2 to 9, for the CUDA boundary question | running |
-| **C** | does drafter quantization change the answer, and does the predecessor's v3.0 need an erratum? | queued |
-| **L** | does the long-context decode collapse of [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) reproduce on sm_86, and does speculation survive it? | designed, ladder to 96K |
+| **n-max** | the full width ladder, 2 to 9, for the CUDA boundary question | **complete**, 1050 measurements. The registered prediction held: widths partition as `{2,3,4}` and `{5,6,7,8}`, with 9 on its own past the MMVQ dispatch limit |
+| **C** | does drafter quantization change the answer, and does the predecessor's v3.0 need an erratum? | **complete**, 750 measurements, 0 incidents. It barely changes the answer and the highest precision is the slowest: q8 **+53.4 %**, q4k **+52.0 %**, bf16 **+48.5 %**, so a bf16 drafter costs about five points to run. The class effect is larger than the quantization effect: code +117 %, reason +90 %, zh +0.8 %. The three n-gram methods fail three different ways, and the counters separate them: `ngram-mod` has `t_draft_n = 0` on all 75 records and output byte-identical to baseline on all 75, so its flag was accepted and did nothing; `ngram-map-k` drafts on 6 of 75; `ngram-cache` drafts 9699 tokens and accepts **none**, which is where its -8.3 % comes from |
+| **L** | does the long-context decode collapse of [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) reproduce on sm_86, and does speculation survive it? | **running**, two of five rungs. Through 64 K there is no collapse and speculation neither amplifies nor masks the decline: retention against each method's own 8 K rung is 76.4 % for the baseline, 78.3 % for mtp-n2 and 78.0 % for dflash2-n4, and the speedups hold at +54 % and +47 %. The report puts the cliff past 80 K, which is the fourth rung, so the verdict is withheld until it runs6K |
 | **M** | does `draft-mtp` at small n-max escape the MoE penalty that `draft-simple` at n-max 8 suffers? | designed, anchored on reproducing the predecessor's -44.6 % |
 | **Q** | does the target quantization ladder move the marginal cost per verified position? | driver written, needs a 48 GB card above `UD-Q5_K_XL` |
 | **V** | does the same comparison hold on vLLM rather than llama.cpp? | designed, [`docs/PHASE_V_DESIGN.md`](docs/PHASE_V_DESIGN.md) |
