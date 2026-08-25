@@ -975,6 +975,47 @@ class TestForkPositionUnits(unittest.TestCase):
                          "token column no longer describe the same records")
 
 
+class TestCostModelSeparatesModels(unittest.TestCase):
+    """Two targets in one result file must not be fitted as one line.
+
+    cost_model.py grouped by spec_type alone. Phase M runs draft-mtp on a dense target and on an
+    MoE target at the same five widths, so every width would have carried k values from both and
+    the slope printed would have been neither model's. It would not have errored: the r-squared
+    stays high when you average two lines that are close.
+    """
+
+    ROOT = Path(__file__).parent.parent
+
+    def test_a_two_model_file_is_fitted_twice(self):
+        import subprocess
+        import tempfile
+        src = self.ROOT / "results" / "phase_nmax.json"
+        if not src.exists():
+            self.skipTest("no phase_nmax.json")
+        d = json.loads(src.read_text())
+        for name, meta in d.get("arms", {}).items():
+            if name.startswith("mtp-"):
+                meta["model"] = "/fake/MODEL_B.gguf"
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            json.dump(d, fh)
+            tmp = fh.name
+        try:
+            out = subprocess.run(
+                [sys.executable, str(self.ROOT / "harness" / "cost_model.py"), tmp],
+                capture_output=True, text=True).stdout
+        finally:
+            Path(tmp).unlink(missing_ok=True)
+
+        fits = [ln for ln in out.splitlines() if "MMVQ widths" in ln and "->" in ln]
+        self.assertGreaterEqual(len(fits), 2, f"expected a fit per model, got:\n{out[-800:]}")
+        self.assertTrue(any("MODEL_B" in ln for ln in fits),
+                        "the relabelled arms were not fitted as their own group")
+        self.assertTrue(any("MODEL_B" not in ln for ln in fits),
+                        "every group was labelled with the same model")
+        for ln in fits:
+            self.assertIn("@", ln, "a two-model file must name the model on each fit")
+
+
 class TestMatchedPairsRunTogether(unittest.TestCase):
     """A matched pair has to meet the card in the same state, in every pass.
 

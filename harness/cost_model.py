@@ -292,6 +292,10 @@ def collect(result: dict) -> list[dict]:
         rows.append({
             "arm": rec["arm"], "pass": rec["pass"], "prompt": rec["prompt"],
             "class": rec["class"], "spec_type": _spec_type(meta),
+            # Phase M runs two targets in one matrix, so the method alone no longer identifies a
+            # fit. Without this, k values from two different models pool into one line and the
+            # slope that comes out is not either model's.
+            "model": meta.get("model") or (result.get("env") or {}).get("model"),
             "n_max": nmax, "width": nmax + 1,
             "acceptance": accepted / drafted,
             "drafted": drafted, "accepted": accepted,
@@ -434,11 +438,18 @@ def report(result: dict) -> None:
     print("    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified")
     print("    position in serial-decode-step equivalents, over the whole cycle rather than")
     print("    attributed to any one component; see the note under the fits.")
-    by_method: dict[str, list[dict]] = defaultdict(list)
+    def _label(key):
+        """method alone while the file holds one model, method and model once it holds two."""
+        return key[0] if n_models < 2 else f"{key[0]} @ {str(key[1]).rsplit('/', 1)[-1][:22]}"
+
+    by_method: dict[tuple, list[dict]] = defaultdict(list)
     for r in rows:
-        by_method[r["spec_type"]].append(r)
-    fits: dict[str, tuple] = {}
-    for method, g in sorted(by_method.items()):
+        by_method[(r["spec_type"], r.get("model"))].append(r)
+    n_models = len({k[1] for k in by_method})
+    fits: dict[tuple, tuple] = {}
+    for key, g in sorted(by_method.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
+        # one model in the file: print what this always printed
+        method = _label(key)
         pts: dict[int, list[float]] = defaultdict(list)
         for r in g:
             pts[r["width"]].append(r["k"])
@@ -460,7 +471,7 @@ def report(result: dict) -> None:
         a, b, r2 = _linfit(xs, ys)
         print(f"  {method:14s} MMVQ widths {on_path}  ->  k0={a:.4f}  c={b:.4f}  r2={r2:.4f}")
         ci = fit_ci(g, on_path)
-        fits[method] = (g, on_path)
+        fits[key] = (g, on_path)
         if ci:
             print(f"      {'':14s} k0 {ci['k0'].lo:.4f} to {ci['k0'].hi:.4f}   "
                   f"c {ci['c'].lo:.4f} to {ci['c'].hi:.4f}   "
@@ -488,7 +499,8 @@ def report(result: dict) -> None:
         if v is not None:
             div[(r["arm"], r["prompt"], r["pass"])] = not v.get("identical")
     print("\n--- the same fit on requests that never diverged from their baseline ---")
-    for method, g in sorted(by_method.items()):
+    for key, g in sorted(by_method.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
+        method = _label(key)
         pts_all: dict[int, list[float]] = defaultdict(list)
         pts_same: dict[int, list[float]] = defaultdict(list)
         for r in g:
@@ -514,13 +526,34 @@ def report(result: dict) -> None:
     # This used to assert that the two coefficients agree, whatever they were. On Phase A they
     # did, 0.2829 against 0.2784, and the shared-slope reading followed. On the completed ladder
     # they are 0.2904 against 0.2481, so the reading has to be decided by the interval instead.
-    if len(fits) == 2:
-        (ma, (ga, oa)), (mb, (gb, ob)) = sorted(fits.items())
+    # With one model this is the two methods. With two models the pairing that answers H6b is the
+    # same method on each, so the comparison is chosen rather than assumed to be whatever is left.
+    if n_models >= 2:
+        by_meth: dict[str, list] = defaultdict(list)
+        for (meth, mdl), v in fits.items():
+            by_meth[meth].append((mdl, v))
+        cmps = [(f"{m} @ {str(a[0]).rsplit('/', 1)[-1][:22]}", a[1],
+                 f"{m} @ {str(b[0]).rsplit('/', 1)[-1][:22]}", b[1])
+                for m, v in sorted(by_meth.items()) if len(v) == 2
+                for a, b in [sorted(v, key=lambda x: str(x[0]))]]
+    elif len(fits) == 2:
+        (ka, va), (kb, vb) = sorted(fits.items())
+        cmps = [(_label(ka), va, _label(kb), vb)]
+    else:
+        cmps = []
+
+    for ma, (ga, oa), mb, (gb, ob) in cmps:
         d = delta_c_ci(ga, oa, gb, ob)
-        print("\n  Two methods with independent drafters, fitted separately. What `k` measures is")
-        print("  the whole speculative cycle: target verification, the drafter's own forwards,")
-        print("  sampling, launch and synchronisation, output extraction and any per-step state")
-        print("  management. The two methods share every one of those except the drafter.")
+        same_method = ma.split(" @ ")[0] == mb.split(" @ ")[0]
+        if same_method:
+            print("\n  One method on two targets, fitted separately. Everything about the cycle is")
+            print("  held except the model, so a difference in the slope is a difference in what a")
+            print("  verified position costs on the two architectures. That is H6b.")
+        else:
+            print("\n  Two methods with independent drafters, fitted separately. What `k` measures is")
+            print("  the whole speculative cycle: target verification, the drafter's own forwards,")
+            print("  sampling, launch and synchronisation, output extraction and any per-step state")
+            print("  management. The two methods share every one of those except the drafter.")
         if d is None:
             print("  The two fits do not share enough prompts to be compared.")
         else:
@@ -543,7 +576,8 @@ def report(result: dict) -> None:
     print("    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k")
     print("    has an interior maximum in principle. Over the widths measured here it falls")
     print("    monotonically, so what follows is the best TESTED point, not a fitted optimum:")
-    for method, g in sorted(by_method.items()):
+    for key, g in sorted(by_method.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
+        method = _label(key)
         best: dict[int, float] = defaultdict(float)
         cnt: dict[int, list[float]] = defaultdict(list)
         for r in g:
