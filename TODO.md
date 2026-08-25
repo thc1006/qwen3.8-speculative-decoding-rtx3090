@@ -274,9 +274,22 @@ there was omission, not misstatement.
       `VerifyTreeGreedy` launches `dim3 block(1)`.
 
       **Not yet run**: it needs a free GPU and the card is mid-benchmark.
-- [ ] **E3** llama.cpp acceptance histogram from the per-position survival counts the server
-      already keeps, with reconciliation tests, then an AIPerf adapter against its existing
-      `SpecDecodeAcceptanceRecord` schema rather than a new one.
+- [ ] **E3** llama.cpp acceptance histogram. **Do not write the PR.** The counters exist -
+      `slot.n_accepted_per_pos[i]` is incremented for every `i < n_accepted`, so it is a survival
+      count: steps that accepted at least i+1 - but they are kept out of the task result on
+      purpose, and the source says so twice:
+
+          // note: the per-position breakdown lives in server_slot, it is not needed in a task result
+          // not in server_slot_stats to avoid copying to every task result
+
+      A patch that moves the vector into `server_slot_stats` contradicts a documented decision and
+      should expect to be told so. `AGENTS.md` there also asks for an issue before a feature PR.
+      So: write the issue, and have it answer the reason rather than route around it. The compact
+      form is k+1 integers rather than a vector per request, from
+      `H[0] = steps - S[0]`, `H[j] = S[j-1] - S[j]`, `H[k] = S[k-1]`, with
+      `sum(H) == steps` and `sum(j*H[j]) == accepted` as reconciliation. An opt-in verbose field
+      is the other way to answer it. The AIPerf adapter comes after, against the existing
+      `SpecDecodeAcceptanceRecord` schema, not a new one.
 - [ ] **E4** `embd_layer_inp` index-space reproducer before any claim is made about it.
 - [ ] **E5** quantized batch-invariance conformance harness across backend, quant, width, context,
       flash attention and parallelism.
