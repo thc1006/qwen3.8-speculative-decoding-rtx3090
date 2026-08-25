@@ -28,6 +28,37 @@ def _read(path):
         return None
 
 
+def parse_generic_table(src):
+    """{ncols_dst -> warp count} from the GENERIC arm of `calc_nwarps`, or None if absent.
+
+    Accepts either a whole `mmvq.cu` or the extracted block the warp runs save as `table.txt`,
+    since both begin at the same line. Cases fall through to the next `return`, which is what
+    makes `case 1: case 2: case 3: case 4: return 4;` four entries rather than one.
+
+    warp_intervention.py needs this to check the table it assumes for a build against the source
+    that build was compiled from. Its docstring claimed such a check existed; it did not, and a
+    build whose table the scorer had wrong would have been scored against the wrong prediction
+    in silence.
+    """
+    start = src.find("if (table_id == MMVQ_PARAMETERS_GENERIC)")
+    if start < 0:
+        return None
+    end = src.find("} else if", start)
+    block = src[start:end if end > 0 else start + 2000]
+
+    table, pending = {}, []
+    for tok in re.finditer(r"case\s+(\d+)\s*:|return\s+(\d+)\s*;|default\s*:", block):
+        if tok.group(1):
+            pending.append(int(tok.group(1)))
+        elif tok.group(2) and pending:
+            for c in pending:
+                table[c] = int(tok.group(2))
+            pending = []
+        elif tok.group(0).startswith("default"):
+            pending = []
+    return table
+
+
 def mmvq_facts(tree):
     """`MMVQ_MAX_BATCH_SIZE` and the GENERIC arm of `calc_nwarps`, from `tree`'s own source."""
     out = {"source": None, "mmvq_max_batch_size": None, "generic_nwarps": None, "note": None}
@@ -56,26 +87,10 @@ def mmvq_facts(tree):
     if not m:
         out["note"] = "MMVQ_MAX_BATCH_SIZE not found in the backend sources"
 
-    # The GENERIC arm only: a table keyed by ncols_dst, read as {width: warps}. Cases fall through
-    # to the next `return`, which is what makes `case 1: case 2: case 3: case 4: return 4;` one
-    # entry per case rather than one entry.
-    start = src.find("if (table_id == MMVQ_PARAMETERS_GENERIC)")
-    if start < 0:
+    table = parse_generic_table(src)
+    if table is None:
         out["note"] = "no MMVQ_PARAMETERS_GENERIC branch found"
         return out
-    end = src.find("} else if", start)
-    block = src[start:end if end > 0 else start + 2000]
-
-    table, pending = {}, []
-    for tok in re.finditer(r"case\s+(\d+)\s*:|return\s+(\d+)\s*;|default\s*:", block):
-        if tok.group(1):
-            pending.append(int(tok.group(1)))
-        elif tok.group(2) and pending:
-            for c in pending:
-                table[c] = int(tok.group(2))
-            pending = []
-        elif tok.group(0).startswith("default"):
-            pending = []
     out["generic_nwarps"] = {str(k): v for k, v in sorted(table.items())} or None
     if not table:
         out["note"] = "the GENERIC branch did not parse as a case/return table"

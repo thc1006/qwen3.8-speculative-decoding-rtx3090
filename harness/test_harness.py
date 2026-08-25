@@ -410,6 +410,85 @@ class TestAlgebraicInvariants(unittest.TestCase):
         self.assertAlmostEqual(
             speclen.mean_len({"predicted_n": 400, "timings": {"t_draft_n_accepted": 0}}), 1.0)
         self.assertIsNone(speclen.mean_len({"predicted_n": 1, "timings": {}}))
+    def test_the_warp_scorer_knows_every_build_it_is_handed(self):
+        """It knew three builds and the v2 run produced four.
+
+        The collector passes forced_down2 third, where the v1 collector passed forced_down, and
+        main() read its arguments by position. forced_down and forced_down2 differ at width 1 and
+        nowhere else any arm runs - and width 1 is the greedy baseline. Scored against the
+        forced_down row, the file takes the branch that says the baseline is part of the
+        intervention and cannot also be its control, so the one gate the rebuild exists to make
+        applicable is skipped and a paragraph about a different build is printed instead.
+        """
+        import warp_intervention as W
+
+        self.assertIn("forced_down2", W.TABLES)
+        self.assertEqual(W.TABLES["forced_down2"][1], 4,
+                         "leaving width 1 at four warps is the whole point of this build: the "
+                         "drafter decodes one token at a time and the greedy baseline runs there")
+        self.assertEqual(W.TABLES["forced_down2"][3], 2)
+        self.assertEqual(W.TABLES["forced_down2"][4], 2)
+        self.assertEqual(W.TABLES["control2"], W.TABLES["control"],
+                         "control2 is stock; if it were not it could not be the guard")
+
+        # longest match, or the v2 file is labelled v1 and control2 is labelled control
+        for name, want in (("results/phase_warp_v2_forced_down2.json", "forced_down2"),
+                           ("results/phase_warp_v2_forced_down.json", "forced_down"),
+                           ("results/phase_warp_v2_control2.json", "control2"),
+                           ("results/phase_warp_v2_control.json", "control"),
+                           ("results/phase_warp_v2_forced_up.json", "forced_up")):
+            self.assertEqual(W.build_of(name), want, name)
+        self.assertIsNone(W.build_of("results/phase_a.json"),
+                          "a file that names no build must be refused, not guessed at")
+
+    def test_the_warp_scorer_checks_its_tables_against_what_was_built(self):
+        """The docstring promised validate_tables() and no such function existed.
+
+        One mention, zero definitions. A build whose table this file had wrong would have been
+        scored against the wrong prediction in silence, which is what happened when the v2 run
+        added a fourth build and the table was not updated.
+        """
+        import os
+        import tempfile
+        import warp_intervention as W
+
+        self.assertTrue(callable(getattr(W, "validate_tables", None)))
+
+        block = """    if (table_id == MMVQ_PARAMETERS_GENERIC) {
+        switch (ncols_dst) {
+            case 1:
+            case 2:
+                return 4;
+            case 3:
+            case 4:
+                return 2;
+            case 5:
+            case 6:
+            case 7:
+            case 8:
+                return 2;
+            default:
+                return 1;
+        }
+    } else if"""
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "warp_builds_v2_forced_down2_table.txt"), "w") as fh:
+                fh.write(block)
+            problems, checked, missing = W.validate_tables(["forced_down2"], dirs=(d,))
+            self.assertEqual((problems, checked, missing), ([], ["forced_down2"], []))
+
+            # the same source scored as forced_up must be caught, not accepted
+            with open(os.path.join(d, "warp_builds_v2_forced_up_table.txt"), "w") as fh:
+                fh.write(block)
+            problems, checked, _ = W.validate_tables(["forced_up"], dirs=(d,))
+            self.assertTrue(problems, "a table that disagrees with the built source must be "
+                                      "reported, not accepted")
+            self.assertEqual(checked, [])
+
+        # absent is reported as unchecked rather than treated as agreement
+        with tempfile.TemporaryDirectory() as d:
+            problems, checked, missing = W.validate_tables(["control"], dirs=(d,))
+            self.assertEqual((problems, checked, missing), ([], [], ["control"]))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

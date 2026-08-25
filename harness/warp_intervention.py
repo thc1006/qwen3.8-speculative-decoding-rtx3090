@@ -27,6 +27,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import kernel_facts as KF  # noqa: E402
 import truncation_audit as TA  # noqa: E402
 
 # arm name -> verification width. Width is n_max + 1; the greedy baseline runs at width 1.
@@ -36,10 +37,77 @@ WIDTH = {"baseline": 1, "mtp-n2": 3, "mtp-n3": 4, "mtp-n4": 5, "mtp-n5": 6, "mtp
 # patched table to warp/<build>/table.txt; validate_tables() checks these against those files when
 # they are reachable.
 TABLES = {
-    "control":     {1: 4, 3: 4, 4: 4, 5: 2, 6: 2, 8: 2},
-    "forced_up":   {1: 4, 3: 4, 4: 4, 5: 4, 6: 4, 8: 4},
-    "forced_down": {1: 2, 3: 2, 4: 2, 5: 2, 6: 2, 8: 2},
+    "control":      {1: 4, 3: 4, 4: 4, 5: 2, 6: 2, 8: 2},
+    "control2":     {1: 4, 3: 4, 4: 4, 5: 2, 6: 2, 8: 2},
+    "forced_up":    {1: 4, 3: 4, 4: 4, 5: 4, 6: 4, 8: 4},
+    "forced_down":  {1: 2, 3: 2, 4: 2, 5: 2, 6: 2, 8: 2},
+    # The v2 direction. It differs from forced_down at width 1 and nowhere else that any arm
+    # runs, and width 1 is the greedy baseline: leaving it at four warps is the whole reason
+    # this build exists, because the first forced_down moved it and so could not have the
+    # baseline as its control. Scoring this file against the forced_down row would take the
+    # branch that says the baseline is part of the intervention, and skip the one gate the
+    # rebuild was for.
+    "forced_down2": {1: 4, 3: 2, 4: 2, 5: 2, 6: 2, 8: 2},
 }
+
+
+def build_of(path):
+    """Which build a result file holds, from its name rather than its position on the argv.
+
+    Longest name first: "forced_down2" contains "forced_down" and "control2" contains "control",
+    so a shortest-match would silently label the v2 file as v1 and score it against a table it
+    was not built with.
+    """
+    name = os.path.basename(path)
+    for tag in sorted(TABLES, key=len, reverse=True):
+        if tag in name:
+            return tag
+    return None
+
+
+def validate_tables(builds, dirs=("upstream/llamacpp", ".")):
+    """Check each assumed table against the source the build was compiled from.
+
+    The runs save the patched GENERIC block next to the binary and the collector brings it home
+    as warp_builds_v2_<build>_table.txt. Reading it back is the only thing that can catch this
+    file's table having drifted from the one that was built, which is not hypothetical: the v2
+    run introduced a fourth build and this table was not updated for it.
+
+    -> list of complaints, empty when everything reachable agrees. A table.txt that is not
+    present is reported as unchecked rather than assumed correct.
+    """
+    problems, checked, missing = [], [], []
+    for b in builds:
+        found = None
+        for d in dirs:
+            for pat in (f"warp_builds_v2_{b}_table.txt", f"warp_builds_{b}_table.txt"):
+                cand = os.path.join(d, pat)
+                if os.path.exists(cand):
+                    found = cand
+                    break
+            if found:
+                break
+        if not found:
+            missing.append(b)
+            continue
+        try:
+            src = open(found, encoding="utf-8", errors="replace").read()
+        except OSError as e:
+            problems.append(f"{b}: {found} unreadable ({e})")
+            continue
+        parsed = KF.parse_generic_table(src)
+        if not parsed:
+            problems.append(f"{b}: {found} did not parse as a case/return table")
+            continue
+        want = TABLES[b]
+        bad = {w: (want[w], parsed.get(w)) for w in want if parsed.get(w) != want[w]}
+        if bad:
+            problems.append(
+                f"{b}: this file assumes {want} but {found} was compiled with "
+                + ", ".join(f"width {w}: assumed {a}, built {g}" for w, (a, g) in sorted(bad.items())))
+        else:
+            checked.append(b)
+    return problems, checked, missing
 
 
 def load(path):
@@ -225,42 +293,98 @@ def score(tag, control_forks, forced_forks, control_by, forced_by, table,
         print("    effect and none is invented here.")
 
 
+def guard(control_by, control2_by):
+    """control against control2: two builds from one configure with no source difference.
+
+    Checked before anything is scored, not after. The collector printed this underneath the
+    verdict, with the note that nothing above should be read - which asks a reader to discard a
+    conclusion they have already formed. A failure here voids every comparison in the set, so it
+    belongs first.
+    """
+    ks = sorted(set(control_by) & set(control2_by))
+    same = sum(1 for k in ks if text_of(control_by[k]) == text_of(control2_by[k]))
+    print("\n  --- the guard: two builds, one configure, no source difference ---")
+    print("    control against control2: %d/%d byte-identical" % (same, len(ks)))
+    if not ks:
+        print("    no shared records; the guard could not run")
+        return False
+    if same != len(ks):
+        print("    THE GUARD FAILED. Two builds that differ in nothing produced different output,")
+        print("    so nothing in this set is a measurement of the table. Not scoring.")
+        return False
+    print("    The guard holds, so a difference between control and a forced build is the table.")
+    return True
+
+
 def main():
     if len(sys.argv) < 3:
         print(__doc__)
         return 2
-    paths = {"control": sys.argv[1], "forced_up": sys.argv[2]}
-    if len(sys.argv) > 3:
-        paths["forced_down"] = sys.argv[3]
+
+    # Named by file, never by position. The collector passes forced_down2 third, where an
+    # earlier version of this file put forced_down, and the two differ exactly at the width
+    # that decides whether the baseline gate applies.
+    paths = {}
+    for arg in sys.argv[1:]:
+        tag = build_of(arg)
+        if tag is None:
+            print("  cannot tell which build %r holds from its name; refusing to guess" % arg)
+            return 2
+        if tag in paths:
+            print("  two files claim to be %s: %s and %s" % (tag, paths[tag], arg))
+            return 2
+        paths[tag] = arg
+
+    print("=" * 92)
+    print("FORCED-WARP INTERVENTION")
+    print("=" * 92)
+    for tag in sorted(paths):
+        print("  %-13s : %s" % (tag, paths[tag]))
+
+    problems, checked, missing = validate_tables(sorted(paths))
+    print("\n  --- tables verified against the source each build was compiled from ---")
+    if checked:
+        print("    verified: %s" % ", ".join(checked))
+    if missing:
+        print("    no table.txt found for %s; assumed, not checked" % ", ".join(missing))
+    if problems:
+        for pr in problems:
+            print("    MISMATCH %s" % pr)
+        print("    The table this file assumes is not the table that was built. Every prediction")
+        print("    below would be scored against the wrong intervention. Refusing to score.")
+        return 1
 
     loaded = {}
     for tag, path in paths.items():
         try:
             loaded[tag] = load(path)
         except FileNotFoundError:
-            print("  %s: %s not present yet; skipping that direction" % (tag, path))
+            print("  %s: %s not present; skipping that direction" % (tag, path))
 
     if "control" not in loaded:
         print("  control build is required")
         return 1
     c_by, c_forks, c_raw = loaded["control"]
+    print("\n  control holds %d records" % len(c_by))
 
-    print("=" * 92)
-    print("FORCED-WARP INTERVENTION")
-    print("=" * 92)
-    print("  control     : %s (%d records)" % (paths["control"], len(c_by)))
-    for tag in ("forced_up", "forced_down"):
-        if tag in loaded:
-            print("  %-11s : %s (%d records)" % (tag, paths[tag], len(loaded[tag][0])))
-        else:
-            print("  %-11s : not yet run" % tag)
+    if "control2" in loaded:
+        if not guard(c_by, loaded["control2"][0]):
+            return 1
+    else:
+        print("\n  --- the guard ---")
+        print("    control2 was not supplied. Two builds from one configure and no source")
+        print("    difference is the only check that separates the table from the build, and")
+        print("    without it a difference below could be either. Reported, not assumed away.")
 
-    for tag in ("forced_up", "forced_down"):
-        if tag in loaded:
-            f_by, f_forks, f_raw = loaded[tag]
-            score(tag, c_forks, f_forks, c_by, f_by, TABLES[tag], c_raw, f_raw)
+    directions = [t for t in ("forced_up", "forced_down", "forced_down2") if t in loaded]
+    if not directions:
+        print("\n  no forced build supplied; nothing to score")
+        return 1
+    for tag in directions:
+        f_by, f_forks, f_raw = loaded[tag]
+        score(tag, c_forks, f_forks, c_by, f_by, TABLES[tag], c_raw, f_raw)
 
-    if "forced_down" not in loaded:
+    if len(directions) < 2:
         print("\n%s" % ("=" * 92))
         print("  One direction only. The registered design needs both: a single direction cannot")
         print("  separate the warp count from an accidental one-way effect. No overall verdict.")
