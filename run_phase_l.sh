@@ -35,6 +35,7 @@ try: print(len(json.load(open('$1'))['records']))
 except Exception: print(0)" 2>/dev/null
 }
 
+LADDER_T0=$(date +%s)
 log "depth ladder:${DEPTHS} - expecting ${EXPECTED} records each"
 
 for D in $DEPTHS; do
@@ -48,9 +49,32 @@ for D in $DEPTHS; do
       mv "$OUT" "${OUT%.json}.partial.$(date +%s).json"; }
 
   log "=== depth ${D} tokens ==="
+  # This ladder exists to find out whether decode collapses past long context. If it does, a rung
+  # takes as long as the collapse is deep - at the 1.4 tok/s the report describes, 160 tokens is
+  # 114 seconds a request and a rung is close to six hours. Nothing in the harness has a timeout,
+  # so the only protection is that the log says where it is going while there is still time to
+  # decide. QWEN_L_BUDGET_S stops the ladder between rungs if one is set.
+  t0=$(date +%s)
   QWEN_L_DEPTH="$D" python3 -u harness/bench.py --matrix phase_l --passes "$PASSES" \
       --gpu "$GPU" --port "$PORT" --out "$OUT" > "logs/phase_l_${D}.log" 2>&1
   rc=$?
+  el=$(( $(date +%s) - t0 ))
+  got_now=$(records_in "$OUT")
+  log "depth $D took ${el}s for ${got_now:-0} records"
+  if [ "${got_now:-0}" -gt 0 ]; then
+    per=$(( el / got_now ))
+    left=$(( EXPECTED - got_now ))
+    log "  ${per}s per record; the remaining rungs are $(( ${#DEPTHS} )) deep and each is "\
+        "${EXPECTED} records, so at this rate one more rung is about $(( per * EXPECTED / 60 )) min"
+  fi
+  if [ -n "${QWEN_L_BUDGET_S:-}" ]; then
+    spent=$(( $(date +%s) - LADDER_T0 ))
+    if [ "$spent" -ge "${QWEN_L_BUDGET_S}" ]; then
+      log "  ladder budget of ${QWEN_L_BUDGET_S}s is spent after ${spent}s; stopping between rungs"
+      log "  rungs completed so far keep their results; nothing is half-written"
+      break
+    fi
+  fi
   got=$(records_in "$OUT")
   log "depth $D exited rc=$rc with ${got}/${EXPECTED} records"
 
