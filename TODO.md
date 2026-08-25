@@ -86,9 +86,17 @@ second-host addendum in `PREREGISTRATION.md`.
 - [x] **Phase C** - complete 2026-08-25 10:43, 750/750, 0 incidents. Drafter quantization barely
       matters and the highest precision is the slowest: q8 +53.4 %, q4k +52.0 %, bf16 +48.5 %
       against baseline, so a bf16 drafter costs about five points to run. The class effect is
-      larger than the quantization effect: code +117 %, reason +90 %, zh +0.8 %. `ngram-mod` and
-      `ngram-map-k` sit at -0.2 %, consistent with drafting on almost nothing; `ngram-cache` is
-      -8.3 %. Both baselines agree to 0.01 tok/s across the two trees.
+      larger than the quantization effect: code +117 %, reason +90 %, zh +0.8 %. Both baselines
+      agree to 0.01 tok/s across the two trees.
+
+      The three n-gram arms are three different failures and the drafting counters separate them.
+      `ngram-mod` has `t_draft_n = 0` on all 75 records and output byte-identical to baseline on
+      all 75: the flag was accepted and did nothing, which is the predecessor's
+      `draft-qwen3-0.6b` failure exactly, caught this time because the guard records instead of
+      asserting. `ngram-map-k` drafts on 6 of 75, 288 tokens for 24 accepted. `ngram-cache` drafts
+      on 63 of 75, 9699 tokens, and accepts none of them, so its -8.3 % is drafting cost with no
+      return. For contrast DFlash2 accepts 41.1 % and draft08b-n8 21.0 %, the latter below n4's
+      35.2 % and slower for it. That `ngram-mod` is silently inert is worth an upstream issue.
 - [ ] **Phase L** - the context-depth ladder to 96 K, against llama.cpp #27623. Started 10:43:24;
       rung 1 of 5 at 11.9 s/record. Rungs 8192, 32768 and 65536 sit below the reported ~80 K
       cliff, so the fourth rung is what decides whether the ladder takes four hours or thirteen.
