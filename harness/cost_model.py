@@ -460,6 +460,16 @@ def collect(result: dict) -> list[dict]:
             # more relative to itself", which is not the question a per-position cost is usually
             # asked.
             "baseline_tok_s": base,
+            # A LOWER BOUND on the verified width, against `width` which is the upper bound.
+            # `width` is n_max + 1, what the flags asked for. `width_lo` is what the drafter
+            # generated per token-emitting forward, plus one. Two things push it below the truth
+            # and neither is separable from the counters this build returns: the drafter can stop
+            # short of its budget, and on partial acceptance the server replays the accepted
+            # prefix instead of drafting (server-context.cpp:3818 returns before spec_draft is
+            # moved out, so the next cycle takes the reuse branch at :2893). llama.cpp counts the
+            # real thing in `n_draft_verif_steps` at :3859 and does not put it in to_json(); the
+            # patch that exposes it is in upstream/.
+            "width_lo": drafted / forwards + 1,
             "speedup": speedup, "k": mean_len / speedup,
         })
     return rows
@@ -696,6 +706,15 @@ def report(result: dict) -> None:
         # family, so a single line through both sides is a line through two regimes. On phase_nmax
         # that dragged the MTP coefficient from 0.2915 to 0.2215 and the fit quality from
         # r2 = 0.9959 to 0.8304, and the width-9 point sits 26 % below what the MMVQ line predicts.
+        # The MMVQ side is decided by the width the KERNEL sees, which is bracketed rather than
+        # known. `dflash2-n8` brackets [7.94, 9.00] across a limit of 8: the fit had been calling
+        # it off-path on the nominal 9 while docs/COST_MODEL.md called it on-path on the realised
+        # 7.94, from the same data. Neither is wrong; the data does not decide it.
+        lo_of: dict[int, float] = {}
+        for r in g:
+            lo_of.setdefault(r["width"], []).append(r["width_lo"])
+        lo_of = {w: statistics.fmean(v) for w, v in lo_of.items()}
+        straddling = sorted(w for w in pts if lo_of.get(w, w) <= mmvq_max < w)
         on_path = [w for w in sorted(pts) if w <= mmvq_max]
         off_path = [w for w in sorted(pts) if w > mmvq_max]
         if len(on_path) < 2:
@@ -705,6 +724,34 @@ def report(result: dict) -> None:
         ys = [statistics.fmean(pts[w]) for w in on_path]
         a, b, r2 = _linfit(xs, ys)
         print(f"  {method:14s} MMVQ widths {on_path}  ->  k0={a:.4f}  c={b:.4f}  r2={r2:.4f}")
+
+        # The same fit against the LOWER bound of the width bracket. Where the bracket is tight
+        # the two agree and the choice does not matter; where it is wide the pair is the honest
+        # range for `c`, and quoting either endpoint alone would be a precision this data has not
+        # got. On Phase M the MTP arms bracket to within 1 % and the 0.8B draft-simple arms run
+        # at 53-77 % of the width their flags asked for, which moves `c` by about a factor of two.
+        gap = max((w - lo_of[w]) / w for w in on_path if w in lo_of) if lo_of else 0.0
+        if gap > 0.01 and all(w in lo_of for w in on_path):
+            xs_lo = [lo_of[w] - 1 for w in on_path]
+            a_lo, b_lo, r2_lo = _linfit(xs_lo, ys)
+            print(f"      {'':14s} the widths above are what the FLAGS asked for and are an upper "
+                  f"bound; per token-emitting forward the drafter delivered "
+                  + ", ".join(f"{lo_of[w]:.2f}" for w in on_path)
+                  + f" ({100 * gap:.0f} % short at the widest).")
+            print(f"      {'':14s} refitting on that lower bound: k0={a_lo:.4f}  c={b_lo:.4f}  "
+                  f"r2={r2_lo:.4f}. `c` is bracketed "
+                  f"[{min(b, b_lo):.4f}, {max(b, b_lo):.4f}], not known to the four decimals "
+                  f"above.")
+            print(f"      {'':14s} The counters cannot close it: the drafter may stop short, and "
+                  f"on partial acceptance the server replays the accepted prefix instead of "
+                  f"drafting. llama.cpp counts verification steps exactly and does not return "
+                  f"the number; the patch is in upstream/.")
+        if straddling:
+            print(f"      {'':14s} width(s) {straddling} bracket ACROSS the MMVQ limit of "
+                  f"{mmvq_max} ("
+                  + ", ".join(f"w={w} spans [{lo_of[w]:.2f}, {w:.2f}]" for w in straddling)
+                  + "), so which kernel they took is not decided by this data. They are treated "
+                    "as off-path here, which is the assumption the fit has always made.")
         ci = fit_ci(g, on_path)
         fits[key] = (g, on_path, a, b)
         if ci:

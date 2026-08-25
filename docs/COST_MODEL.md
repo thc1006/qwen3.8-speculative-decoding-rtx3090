@@ -38,8 +38,14 @@ to 0.2215 and the fit from 0.9958 to 0.8304. The same boundary shows up a third 
 drafters that share only the verification width agree on the fork position for 25 of 25 prompts at
 widths 3, 5 and 7. At width 9 they agree on only 8 of 25, and that is not the control failing: they
 never verified at the same width there. `n_max` is what was asked for, and the width verified is
-one plus what the drafter actually proposed. DFlash2 fills 87 % of its budget at `n_max` 8 and MTP
-99 %, so they run at 7.94 and 8.93 columns, one inside `MMVQ_MAX_BATCH_SIZE` and one past it. At
+one plus what the drafter actually proposed. DFlash2 delivers 87 % of its budget at `n_max` 8 and
+MTP 99 %, so they run at 7.94 and 8.93 columns, one inside `MMVQ_MAX_BATCH_SIZE` and one past it --
+though 7.94 is a lower bound rather than a measurement, so `dflash2-n8` brackets [7.94, 9.00]
+across the limit and the counters do not decide which kernel it took. The fit treats it as
+off-path, on the requested 9, and says so. The size of the deviation is the circumstantial
+argument for the other reading: `mtp-n8`, whose bracket does not straddle, sits 26 % off its line
+and `dflash2-n8` sits 6.7 % off, which is the scale of a residual rather than of a kernel change.
+At
 widths 3, 5 and 7 the two match to 0.00 columns. `harness/width_groups.py` now computes effective
 width per arm and refuses to score a pair that differ by more than a quarter column.
 
@@ -85,6 +91,23 @@ output extraction and any per-step state management -- so `c` is reported as a t
 per verified position and never as a target-verification cost. Separating the components needs
 per-context event timing, a replay that skips drafter compute, or a profiler decomposition; none of
 those is in this repo.
+
+**The width a fit regresses on is bracketed, not known.** `n_max + 1` is an upper bound: it is
+what the flags asked for. What the drafter delivered per token-emitting forward, plus one, is a
+lower bound. Two mechanisms sit between them and neither is separable from the counters this build
+returns -- the drafter can stop short of its budget, and on partial acceptance the server replays
+the accepted prefix instead of drafting, which costs a forward pass and generates nothing
+(`tools/server/server-context.cpp:3818` returns before `spec_draft` is moved out, so the next cycle
+takes the reuse branch at `:2893`).
+
+For every MTP arm in this study the bracket is tighter than 1 %, which is why none of the
+coefficients above move. For the 0.8B `draft-simple` arms the drafter delivered **53-77 %** of the
+requested depth, and the shortfall grows with depth, so the bracket is wide and asymmetric.
+Refitting Phase M's MoE `draft-simple` arm on the lower bound moves `c` from **0.2909 to 0.5851**.
+That is a factor of two behind four printed decimals, so `c` for that method is reported as the
+range and not as either endpoint. llama.cpp counts verification steps exactly in
+`n_draft_verif_steps` and does not return it; the patch that exposes it is in `upstream/`, and it
+closes this bracket outright.
 
 **`k(w=1)` has a floor the model never reaches.** A cycle at zero draft depth is a plain decode
 step plus whatever the drafter costs, and a drafter costs at least nothing, so `k(1) >= 1.0`. (It

@@ -2323,6 +2323,90 @@ class TestForwardsIsDerivedInOnePlace(unittest.TestCase):
             + "\n  ".join(offenders))
 
 
+class TestVerificationWidthIsBracketed(unittest.TestCase):
+    """`n_max + 1` is what the flags asked for, not what the target verified.
+
+    The fit regressed `k` on the requested width for every arm. For the MTP arms that is right to
+    within 1 %. For the 0.8B `draft-simple` arms the drafter delivered 53-77 % of it, and refitting
+    on the delivered figure moves `c` from 0.2909 to 0.5851 -- a factor of two hiding behind four
+    printed decimals.
+
+    The counters cannot close the bracket, which is why this reports a range rather than swapping
+    the regressor. Two mechanisms push the delivered figure below the verified width and neither is
+    separable from `t_draft_n`: the drafter can stop short of its budget, and on partial acceptance
+    the server replays the accepted prefix instead of drafting -- server-context.cpp:3818 returns
+    before `spec_draft` is moved out, so the next cycle takes the reuse branch at :2893 and costs a
+    forward pass while generating nothing. llama.cpp counts the real thing at :3859 and does not
+    return it.
+
+    The same bracket decides which kernel an arm took, and there the old code and the prose
+    disagreed from the same data: `dflash2-n8` brackets [7.94, 9.00] across MMVQ_MAX_BATCH_SIZE of
+    8, the fit called it off-path on the 9, and docs/COST_MODEL.md called it on-path on the 7.94.
+    """
+
+    @staticmethod
+    def _result(arm_widths):
+        """arm_widths: {arm: (spec, {n_max: (k, delivered_draft_per_forward)})}."""
+        arms = {"baseline": {"extra_args": [], "tree": "master", "model": None}}
+        recs = []
+        for i in range(8):
+            recs.append({"arm": "baseline", "pass": 1, "prompt": f"p{i}",
+                         "class": "code" if i % 2 else "prose", "decode_tok_s": 100.0,
+                         "predicted_n": 400, "hit_cap": True,
+                         "timings": {"t_draft_n": 0, "t_draft_n_accepted": 0}})
+        for arm, (stype, ladder) in arm_widths.items():
+            for n, (k, dpf) in ladder.items():
+                name = f"{arm}-n{n}"
+                arms[name] = {"extra_args": ["--spec-type", stype,
+                                             "--spec-draft-n-max", str(n)],
+                              "tree": "master", "expects_drafter": True, "model": None}
+                for i in range(8):
+                    f = 150
+                    accepted = 399 - f
+                    mean_len = 1.0 + accepted / f
+                    recs.append({"arm": name, "pass": 1, "prompt": f"p{i}",
+                                 "class": "code" if i % 2 else "prose",
+                                 "decode_tok_s": 100.0 * mean_len / k, "predicted_n": 400,
+                                 "hit_cap": True,
+                                 "timings": {"t_draft_n": int(round(dpf * f)),
+                                             "t_draft_n_accepted": accepted}})
+        return {"env": {"model": "/m/x.gguf"}, "arms": arms, "records": recs}
+
+    def _run(self, arm_widths):
+        import contextlib
+        import cost_model as CM
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            CM.report(self._result(arm_widths))
+        return buf.getvalue()
+
+    def test_a_drafter_that_fills_its_budget_gets_no_bracket(self):
+        # Delivered == requested, as every MTP arm in this study is. Printing a bracket here would
+        # be noise, and the coefficients must not move.
+        out = self._run({"mtp": ("draft-mtp", {2: (1.6, 2.0), 4: (2.2, 4.0), 6: (2.8, 6.0)})})
+        self.assertNotIn("is bracketed", out,
+                         f"a bracket was reported for an arm that delivered its full "
+                         f"budget:\n{out[-1200:]}")
+
+    def test_a_drafter_that_falls_short_reports_c_as_a_range(self):
+        # Delivered about 60 % of the requested depth, as the 0.8B arms do.
+        out = self._run({"simple": ("draft-simple",
+                                    {2: (4.4, 1.3), 4: (5.0, 2.3), 6: (5.6, 3.3)})})
+        self.assertIn("is bracketed", out,
+                      f"c was printed to four decimals for an arm whose verified width is not "
+                      f"known to a factor of two:\n{out[-1500:]}")
+        self.assertIn("what the FLAGS asked for", out)
+
+    def test_a_width_straddling_the_dispatch_limit_is_named(self):
+        # Requested 9, delivered 7.9: the kernel it took is not decided by this data.
+        out = self._run({"d": ("draft-dflash",
+                               {2: (1.5, 2.0), 4: (2.0, 4.0), 6: (2.5, 6.0), 8: (2.7, 6.9)})})
+        self.assertIn("bracket ACROSS the MMVQ limit", out,
+                      f"an arm whose width bracket spans the dispatch limit was classified "
+                      f"silently:\n{out[-1500:]}")
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 
