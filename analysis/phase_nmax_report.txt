@@ -1,4 +1,6 @@
 
+[selection] per-protocol and intention-to-treat hold the same 1050 records; the exclusion rule does no work here.
+
 ====================================================================================================
 metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
 design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
@@ -29,12 +31,22 @@ mtp-n3                       baseline@master        +52.36 [+48.49, +56.55]  FAS
 mtp-n4                       baseline@master        +45.03 [+39.44, +50.73]  FASTER
 mtp-n5                       baseline@master        +32.18 [+26.46, +37.82]  FASTER
 mtp-n6                       baseline@master        +19.38 [+13.72, +25.16]  FASTER
-mtp-n7                       baseline@master         +9.14 [+3.74, +14.55]  FASTER
+mtp-n7                       baseline@master         +9.14 [+3.74, +14.55]  FASTER  (margin 0.69 half-widths, see below)
 mtp-n8                       baseline@master        +39.07 [+31.84, +46.31]  FASTER
 dflash2-n2                   baseline@pr27342       +53.71 [+50.43, +57.16]  FASTER
 dflash2-n4                   baseline@pr27342       +52.05 [+45.65, +58.28]  FASTER
 dflash2-n6                   baseline@pr27342       +31.48 [+23.80, +39.19]  FASTER
 dflash2-n8                   baseline@pr27342       +22.59 [+14.64, +30.35]  FASTER
+
+  COVERAGE NOTE. The interval above is a percentile bootstrap, which is not
+  second-order accurate and undercovers at this sample size. Measured on 25
+  prompts with 800 replications: 90.9 % for a normal draw, 90.6 % uniform, 88.0 %
+  heavy-tailed, against a nominal 95 %. A t interval on the same draws reaches
+  94.1 %. The intervals are therefore too narrow, and putting the missing
+  coverage back is worth roughly 1.15 to 1.25 times the width. These verdicts sit
+  inside that margin and should not be leaned on:
+    mtp-n7                    +9.14 [+3.74, +14.55]   margin 0.69 half-widths
+  Everything not listed clears zero by more than the correction is worth.
 
 --- SECONDARY (exploratory): per-class effect ---
   mtp-n1                     chat: +38.2%  code: +58.3%  prose: +41.0%  reason: +52.5%  zh: +34.8%

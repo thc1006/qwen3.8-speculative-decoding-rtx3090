@@ -194,6 +194,7 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         print(f"{a:28s} {strat:11.2f} {statistics.fmean(allv):10.2f} {len(allv):7d}  "
               f"{worst[0]}={worst[1]:.1f}%")
 
+    near_zero_seen: list = []
     print("\n--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---")
     print(f"{'arm':28s} {'vs':22s} {'delta %':>22s}  verdict")
     for a in present:
@@ -206,9 +207,29 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         # NOTE argument order: (baseline, arm). Passing (arm, baseline) silently inverts
         # the sign of every reported effect. harness/test_harness.py holds that case.
         iv = ST.paired_cluster_bootstrap(base_s, arm_s, prompt_class, relative=True)
+        # The percentile bootstrap undercovers at 25 prompts, by 4 to 7 points depending on the
+        # tail, and the error makes intervals too narrow. A verdict whose interval nearly touches
+        # zero is the one that moves when the missing coverage is put back, so it is marked
+        # rather than printed like the rest. stats.Interval.margin_half_widths carries the
+        # measurement.
         verdict = ("no detected effect" if iv.spans_zero
                    else ("FASTER" if iv.point > 0 else "SLOWER"))
+        if iv.near_zero:
+            verdict += f"  (margin {iv.margin_half_widths:.2f} half-widths, see below)"
+        near_zero_seen.append((a, iv)) if iv.near_zero else None
         print(f"{a:28s} {b:22s} {str(iv):>22s}  {verdict}")
+
+    if near_zero_seen:
+        print("\n  COVERAGE NOTE. The interval above is a percentile bootstrap, which is not")
+        print("  second-order accurate and undercovers at this sample size. Measured on 25")
+        print("  prompts with 800 replications: 90.9 % for a normal draw, 90.6 % uniform, 88.0 %")
+        print("  heavy-tailed, against a nominal 95 %. A t interval on the same draws reaches")
+        print("  94.1 %. The intervals are therefore too narrow, and putting the missing")
+        print("  coverage back is worth roughly 1.15 to 1.25 times the width. These verdicts sit")
+        print("  inside that margin and should not be leaned on:")
+        for a, iv in near_zero_seen:
+            print(f"    {a:24s} {str(iv):>22s}   margin {iv.margin_half_widths:.2f} half-widths")
+        print("  Everything not listed clears zero by more than the correction is worth.")
 
     print("\n--- SECONDARY (exploratory): per-class effect ---")
     for a in present:

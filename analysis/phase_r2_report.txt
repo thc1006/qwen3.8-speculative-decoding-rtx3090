@@ -35,17 +35,31 @@ arm                          vs                                    delta %  verd
 mtp-n3@sm600                 baseline@sm600         +20.20 [+17.12, +23.51]  FASTER
 mtp-n7@sm600                 baseline@sm600         -17.17 [-21.31, -13.00]  SLOWER
 mtp-n3@sm1200                baseline@sm1200        +29.63 [+26.34, +33.18]  FASTER
-mtp-n7@sm1200                baseline@sm1200         -9.55 [-14.03, -5.03]  SLOWER
+mtp-n7@sm1200                baseline@sm1200         -9.55 [-14.03, -5.03]  SLOWER  (margin 1.12 half-widths, see below)
 mtp-n3@sm1700                baseline@sm1700        +53.52 [+49.65, +57.68]  FASTER
-mtp-n7@sm1700                baseline@sm1700         +9.33 [+3.95, +14.78]  FASTER
+mtp-n7@sm1700                baseline@sm1700         +9.33 [+3.95, +14.78]  FASTER  (margin 0.73 half-widths, see below)
 mtp-n3@sm1200-bwlo           baseline@sm1200-bwlo   +32.24 [+28.91, +35.81]  FASTER
-mtp-n7@sm1200-bwlo           baseline@sm1200-bwlo    -7.66 [-12.23, -3.03]  SLOWER
+mtp-n7@sm1200-bwlo           baseline@sm1200-bwlo    -7.66 [-12.23, -3.03]  SLOWER  (margin 0.66 half-widths, see below)
 mtp-n3@sm1200-bwhi           baseline@sm1200-bwhi   +27.26 [+24.03, +30.73]  FASTER
 mtp-n7@sm1200-bwhi           baseline@sm1200-bwhi   -11.21 [-15.60, -6.75]  SLOWER
 mtp-n3@sm1700-bwlo           baseline@sm1700-bwlo   +57.90 [+53.90, +62.21]  FASTER
-mtp-n7@sm1700-bwlo           baseline@sm1700-bwlo   +12.34 [+6.82, +17.95]  FASTER
+mtp-n7@sm1700-bwlo           baseline@sm1700-bwlo   +12.34 [+6.82, +17.95]  FASTER  (margin 1.22 half-widths, see below)
 mtp-n3@sm1700-bwhi           baseline@sm1700-bwhi   +49.43 [+45.63, +53.52]  FASTER
-mtp-n7@sm1700-bwhi           baseline@sm1700-bwhi    +6.62 [+1.36, +11.95]  FASTER
+mtp-n7@sm1700-bwhi           baseline@sm1700-bwhi    +6.62 [+1.36, +11.95]  FASTER  (margin 0.26 half-widths, see below)
+
+  COVERAGE NOTE. The interval above is a percentile bootstrap, which is not
+  second-order accurate and undercovers at this sample size. Measured on 25
+  prompts with 800 replications: 90.9 % for a normal draw, 90.6 % uniform, 88.0 %
+  heavy-tailed, against a nominal 95 %. A t interval on the same draws reaches
+  94.1 %. The intervals are therefore too narrow, and putting the missing
+  coverage back is worth roughly 1.15 to 1.25 times the width. These verdicts sit
+  inside that margin and should not be leaned on:
+    mtp-n7@sm1200             -9.55 [-14.03, -5.03]   margin 1.12 half-widths
+    mtp-n7@sm1700             +9.33 [+3.95, +14.78]   margin 0.73 half-widths
+    mtp-n7@sm1200-bwlo        -7.66 [-12.23, -3.03]   margin 0.66 half-widths
+    mtp-n7@sm1700-bwlo       +12.34 [+6.82, +17.95]   margin 1.22 half-widths
+    mtp-n7@sm1700-bwhi        +6.62 [+1.36, +11.95]   margin 0.26 half-widths
+  Everything not listed clears zero by more than the correction is worth.
 
 --- SECONDARY (exploratory): per-class effect ---
   mtp-n3@sm600               chat:  +3.6%  code: +56.9%  prose:  +7.8%  reason: +35.3%  zh:  -2.7%

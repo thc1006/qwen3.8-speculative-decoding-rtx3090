@@ -637,6 +637,46 @@ class TestAlgebraicInvariants(unittest.TestCase):
                       "the elasticity must say so when the step carries the toolchain too")
         self.assertIn("build environment, which decides whether the controls CAN hold", code,
                       "the environment belongs before the controls, not after them")
+    def test_relative_has_no_default(self):
+        """It switches the unit between a percentage and raw tok/s and both print plausibly.
+
+        A caller that omits it gets an absolute difference where it almost certainly wanted a
+        percentage, and nothing says so. Every caller in this repo passes it; the default is
+        removed so a new one cannot quietly not.
+        """
+        import inspect as _i
+        import stats as ST
+        sig = _i.signature(ST.paired_cluster_bootstrap)
+        self.assertIs(sig.parameters["relative"].default, _i.Parameter.empty)
+        with self.assertRaises(TypeError):
+            ST.paired_cluster_bootstrap({"p": [1.0]}, {"p": [2.0]}, {"p": "c"})
+
+    def test_intervals_that_nearly_touch_zero_are_marked(self):
+        """The percentile bootstrap undercovers at this sample size, and one-sidedly.
+
+        Measured on 25 prompts, 800 replications: 90.9 % for a normal draw, 90.6 % uniform,
+        88.0 % heavy-tailed, against a nominal 95 %. At 50 prompts it recovers to 92.4 %, and a
+        t interval on the same draws reaches 94.1 %. The intervals come out too narrow, so the
+        verdicts that move when the coverage is restored are the ones already close to zero.
+        Phase A's five arms clear it comfortably; Phase R2's mtp-n7 rows do not.
+        """
+        import stats as ST
+
+        far = ST.Interval(point=59.77, lo=56.95, hi=62.75, n_clusters=25)
+        self.assertAlmostEqual(far.margin_half_widths, 56.95 / ((62.75 - 56.95) / 2), places=6)
+        self.assertFalse(far.near_zero)
+
+        near = ST.Interval(point=6.62, lo=1.36, hi=11.95, n_clusters=25)
+        self.assertLess(near.margin_half_widths, 1.3)
+        self.assertTrue(near.near_zero)
+
+        spanning = ST.Interval(point=0.5, lo=-2.0, hi=3.0, n_clusters=25)
+        self.assertEqual(spanning.margin_half_widths, 0.0)
+        self.assertFalse(spanning.near_zero, "an interval already spanning zero is not 'near' it")
+
+        import analyze
+        self.assertIn("COVERAGE NOTE", inspect.getsource(analyze),
+                      "a report carrying a verdict inside the margin must say so")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -1,4 +1,6 @@
 
+[selection] per-protocol and intention-to-treat hold the same 1125 records; the exclusion rule does no work here.
+
 ====================================================================================================
 metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
 design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
@@ -25,15 +27,28 @@ mtp-n7@pw-vlo                      15.45      15.45      75  prose_letter=1.2%
 --- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
 arm                          vs                                    delta %  verdict
 mtp-n3@stock                 baseline@stock         +52.35 [+48.48, +56.53]  FASTER
-mtp-n7@stock                 baseline@stock          +9.07 [+3.67, +14.50]  FASTER
+mtp-n7@stock                 baseline@stock          +9.07 [+3.67, +14.50]  FASTER  (margin 0.68 half-widths, see below)
 mtp-n3@bw-lo                 baseline@bw-lo         +56.46 [+52.49, +60.76]  FASTER
-mtp-n7@bw-lo                 baseline@bw-lo         +12.19 [+6.66, +17.79]  FASTER
+mtp-n7@bw-lo                 baseline@bw-lo         +12.19 [+6.66, +17.79]  FASTER  (margin 1.20 half-widths, see below)
 mtp-n3@bw-hi                 baseline@bw-hi         +48.54 [+44.76, +52.61]  FASTER
-mtp-n7@bw-hi                 baseline@bw-hi          +6.34 [+1.08, +11.63]  FASTER
+mtp-n7@bw-hi                 baseline@bw-hi          +6.34 [+1.08, +11.63]  FASTER  (margin 0.21 half-widths, see below)
 mtp-n3@pw-lo                 baseline@pw-lo         +44.00 [+40.26, +47.98]  FASTER
-mtp-n7@pw-lo                 baseline@pw-lo          +9.37 [+3.92, +14.85]  FASTER
+mtp-n7@pw-lo                 baseline@pw-lo          +9.37 [+3.92, +14.85]  FASTER  (margin 0.72 half-widths, see below)
 mtp-n3@pw-vlo                baseline@pw-vlo        +45.35 [+41.58, +49.38]  FASTER
 mtp-n7@pw-vlo                baseline@pw-vlo        +13.15 [+7.53, +18.86]  FASTER
+
+  COVERAGE NOTE. The interval above is a percentile bootstrap, which is not
+  second-order accurate and undercovers at this sample size. Measured on 25
+  prompts with 800 replications: 90.9 % for a normal draw, 90.6 % uniform, 88.0 %
+  heavy-tailed, against a nominal 95 %. A t interval on the same draws reaches
+  94.1 %. The intervals are therefore too narrow, and putting the missing
+  coverage back is worth roughly 1.15 to 1.25 times the width. These verdicts sit
+  inside that margin and should not be leaned on:
+    mtp-n7@stock              +9.07 [+3.67, +14.50]   margin 0.68 half-widths
+    mtp-n7@bw-lo             +12.19 [+6.66, +17.79]   margin 1.20 half-widths
+    mtp-n7@bw-hi              +6.34 [+1.08, +11.63]   margin 0.21 half-widths
+    mtp-n7@pw-lo              +9.37 [+3.92, +14.85]   margin 0.72 half-widths
+  Everything not listed clears zero by more than the correction is worth.
 
 --- SECONDARY (exploratory): per-class effect ---
   mtp-n3@stock               chat: +31.4%  code: +99.0%  prose: +36.9%  reason: +71.3%  zh: +23.1%
@@ -58,20 +73,20 @@ mtp-n7@pw-vlo                baseline@pw-vlo        +13.15 [+7.53, +18.86]  FAST
 
 arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
 baseline@stock             0.1005     +0.0%       3979     +0.0%       -          -
-mtp-n3@stock               0.1550    +54.2%       2681    -32.6%   0.558       2.65
-mtp-n7@stock               0.1106    +10.1%       4028     +1.2%   0.323       3.22
+mtp-n3@stock               0.1550    +54.2%       2681    -32.6%   0.558       2.67
+mtp-n7@stock               0.1106    +10.1%       4028     +1.2%   0.323       3.24
 baseline@bw-lo             0.0974     -3.1%       4108     +3.2%       -          -
-mtp-n3@bw-lo               0.1539    +53.1%       2701    -32.1%   0.558       2.65
-mtp-n7@bw-lo               0.1099     +9.3%       4055     +1.9%   0.323       3.22
+mtp-n3@bw-lo               0.1539    +53.1%       2701    -32.1%   0.558       2.67
+mtp-n7@bw-lo               0.1099     +9.3%       4055     +1.9%   0.323       3.24
 baseline@bw-hi             0.1037     +3.2%       3856     -3.1%       -          -
-mtp-n3@bw-hi               0.1557    +54.9%       2669    -32.9%   0.558       2.65
-mtp-n7@bw-hi               0.1113    +10.7%       4010     +0.8%   0.323       3.22
+mtp-n3@bw-hi               0.1557    +54.9%       2669    -32.9%   0.558       2.67
+mtp-n7@bw-hi               0.1113    +10.7%       4010     +0.8%   0.323       3.24
 baseline@pw-lo             0.1201    +19.5%       3330    -16.3%       -          -
-mtp-n3@pw-lo               0.1739    +73.0%       2391    -39.9%   0.558       2.65
-mtp-n7@pw-lo               0.1331    +32.4%       3347    -15.9%   0.323       3.22
+mtp-n3@pw-lo               0.1739    +73.0%       2391    -39.9%   0.558       2.67
+mtp-n7@pw-lo               0.1331    +32.4%       3347    -15.9%   0.323       3.24
 baseline@pw-vlo            0.0786    -21.8%       5091    +27.9%       -          -
-mtp-n3@pw-vlo              0.1144    +13.8%       3632     -8.7%   0.558       2.65
-mtp-n7@pw-vlo              0.0889    -11.5%       5003    +25.7%   0.323       3.22
+mtp-n3@pw-vlo              0.1144    +13.8%       3632     -8.7%   0.558       2.67
+mtp-n7@pw-vlo              0.0889    -11.5%       5003    +25.7%   0.323       3.24
 
 --- losslessness (greedy arms vs baseline text, same prompt+pass) ---
   baseline@bw-hi             byte-identical 75/75   median shared prefix when forked: -

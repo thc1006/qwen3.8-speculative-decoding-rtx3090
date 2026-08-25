@@ -45,6 +45,31 @@ class Interval:
     def width_understated(self) -> bool:
         return bool(self.singleton_classes)
 
+    @property
+    def margin_half_widths(self) -> float:
+        """How far the nearer bound sits from zero, counted in half-widths.
+
+        The percentile bootstrap is not second-order accurate and undercovers at the sample size
+        this study runs. Measured here against three data-generating processes at 25 prompts,
+        800 replications each: 90.9 % for a normal, 90.6 % for a uniform and 88.0 % for a
+        heavy-tailed mixture, against a nominal 95 %; at 50 prompts it recovers to 92.4 %. A t
+        interval on the same draws reaches 94.1 %. The error is one-sided, the intervals come out
+        too narrow, so the verdicts that can move are the ones whose interval nearly touches zero
+        already. Restoring the missing coverage is worth roughly a 1.15 to 1.25 times wider
+        interval, so a margin under about 1.3 is a verdict that should not be leaned on.
+
+        Zero when the interval already spans zero.
+        """
+        half = (self.hi - self.lo) / 2.0
+        if half <= 0 or self.spans_zero:
+            return 0.0
+        return min(abs(self.lo), abs(self.hi)) / half
+
+    @property
+    def near_zero(self) -> bool:
+        """True when undercoverage at this sample size could reach zero."""
+        return not self.spans_zero and self.margin_half_widths < 1.3
+
     def __str__(self) -> str:
         return f"{self.point:+.2f} [{self.lo:+.2f}, {self.hi:+.2f}]"
 
@@ -74,9 +99,13 @@ def paired_cluster_bootstrap(
     n_boot: int = 10_000,
     alpha: float = 0.05,
     seed: int = 20260824,
-    relative: bool = False,
+    relative: bool,
 ) -> Interval:
     """Paired cluster bootstrap over prompts.
+
+    `relative` has no default on purpose. It switches the unit between a percentage and raw
+    tok/s, both of which print as a plausible number, and a caller that omits it gets the one it
+    probably did not mean without anything saying so. Every caller in this repo passes it.
 
     ARGUMENT ORDER IS (baseline, arm) AND IT MATTERS. The statistic is arm-minus-baseline;
     swapping the two silently inverts the sign of every effect this study reports. Callers
