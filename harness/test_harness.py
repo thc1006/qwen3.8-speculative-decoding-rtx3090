@@ -765,6 +765,34 @@ class TestAlgebraicInvariants(unittest.TestCase):
         self.assertIn("energy_instant_vs_average_pct", code,
                       "the gap is recorded per record and has to be reported per arm")
         self.assertIn("averaged against instantaneous power", code)
+    def test_the_energy_window_records_what_it_covered(self):
+        """The integral runs first sample to last, and the record carried only a count.
+
+        The sampler queries nvidia-smi and then waits interval_s, so its period is the sum, not
+        interval_s. Measured here the query is about 16 ms against a 100 ms wait, a 118 ms
+        period, and 39 samples over a 4.65 s request leave roughly 4 % of the wall outside the
+        window. Assuming the nominal 0.10 s instead gives 18 %, which is how a reader without
+        this field would get it wrong by four times. Now the span is recorded and the fraction
+        is arithmetic rather than an estimate.
+        """
+        import time
+        import telemetry as T
+
+        with T.sampling(0, interval_s=0.10) as s:
+            time.sleep(0.6)
+        d = s.summary()
+        if not d.get("n_power_samples"):
+            self.skipTest("no GPU telemetry on this host")
+        self.assertIn("sample_span_s", d)
+        self.assertIsNotNone(d["sample_span_s"])
+        self.assertLess(d["sample_span_s"], 0.6,
+                        "the span cannot exceed the window it was sampled in")
+        period = d["sample_span_s"] / max(d["n_power_samples"] - 1, 1)
+        self.assertGreater(period, 0.10,
+                           "the period is the query plus the wait, so it must exceed interval_s")
+
+        import analyze
+        self.assertIn("energy window coverage", inspect.getsource(analyze))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

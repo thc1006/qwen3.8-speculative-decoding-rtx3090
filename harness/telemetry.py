@@ -184,12 +184,24 @@ class PowerSampler:
         """The same trapezoid over power.draw.instant rather than the averaged field."""
         return self._integrate(self._samples_instant)
 
+    def sample_span_s(self) -> float | None:
+        """Seconds between the first and last sample, which is what energy_j integrates over.
+
+        The loop queries nvidia-smi and then waits interval_s, so the period is the sum of the
+        two and not interval_s alone. Without this the record carries only a sample count, and
+        the fraction of the request the integral covers cannot be recovered from it.
+        """
+        if len(self._samples) < 2:
+            return None
+        return self._samples[-1][0] - self._samples[0][0]
+
     def summary(self) -> dict[str, float | int | None]:
         watts = [w for _, w in self._samples]
         ei = self.energy_j_instant()
         e = self.energy_j()
         return {
             "energy_j": e,
+            "sample_span_s": self.sample_span_s(),
             "energy_j_instant": ei,
             "energy_instant_vs_average_pct": (100.0 * (ei - e) / e) if (e and ei) else None,
             "n_power_samples_instant": len(self._samples_instant),

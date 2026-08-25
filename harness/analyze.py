@@ -275,6 +275,7 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
     a_by: dict[str, list[float]] = defaultdict(list)
     l_by: dict[str, list[float]] = defaultdict(list)
     g_by: dict[str, list[float]] = defaultdict(list)
+    c_by: dict[str, list[float]] = defaultdict(list)
     for rec in result["records"]:
         ok, _ = _usable(rec)
         if not ok:
@@ -286,6 +287,8 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         pw = rec.get("power") or {}
         if pw.get("energy_instant_vs_average_pct") is not None:
             g_by[rec["arm"]].append(pw["energy_instant_vs_average_pct"])
+        if pw.get("sample_span_s") and rec.get("wall_ms"):
+            c_by[rec["arm"]].append(pw["sample_span_s"] / (rec["wall_ms"] / 1000.0))
         tm = rec.get("timings") or {}
         dn, da = tm.get("t_draft_n") or 0, tm.get("t_draft_n_accepted") or 0
         if dn:
@@ -304,6 +307,16 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
     # speculative arms, always positive, so the averaged field understates exactly the arms whose
     # energy is being compared against a baseline. Reported per arm, because a bias that is one
     # sided is not covered by any interval.
+    # The integral runs from the first sample to the last, and the sampler queries nvidia-smi
+    # before it waits, so its period is the query plus interval_s rather than interval_s. What
+    # falls outside is energy the figure does not contain. Records written before sample_span_s
+    # existed carry only a count and cannot report this.
+    if c_by:
+        cov = [v for vs in c_by.values() for v in vs]
+        print(f"\n--- energy window coverage: {statistics.median(cov)*100:.1f} % of wall time "
+              f"(min {min(cov)*100:.1f} %) ---")
+        print("  Energy outside the first and last sample is not in the figure above.")
+
     if g_by:
         print("\n--- averaged against instantaneous power, per arm ---")
         for a in sorted(g_by):
