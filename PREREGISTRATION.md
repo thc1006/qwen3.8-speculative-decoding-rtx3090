@@ -1871,3 +1871,47 @@ weaker and is to be labelled as such. Neither, and 19a is refuted.
 Noting also that the trend cuts *for* Correction 19 on the observation that prompted it:
 `baseline-moe` fell 1.95 % from pass 1 to pass 2 while the session as a whole rose 1.47 %, so
 relative to its own session it lost about 3.4 points while moving from first place to last.
+
+## Correction 19c, 2026-08-26 04:35: the pre-registered test REFUTES Correction 19's hypothesis
+
+Phase M finished, 1575 of 1575 records, 0 incidents. Correction 19a's prediction resolves and it
+fails.
+
+**Registered prediction.** `baseline-dense` moves from position 1 in pass 2 to position 21 in pass
+3, and Correction 19 predicted it would come out *"about 2 % lower"*.
+
+**Result.** 41.40 tok/s at position 1, 41.38 at position 21: **-0.05 % raw**, and -0.31 pp after
+removing the +0.25 % session move measured on the twenty other arms. The direction is right and the
+magnitude is out by a factor of about forty. A prediction that named a size is not confirmed by a
+result forty times smaller, and **19a is refuted as registered.**
+
+The first script written to score it printed CONFIRMED, because it tested the sign and ignored the
+size that 19a had committed to. That is the error 19a existed to prevent, made in the scoring
+rather than the prediction.
+
+**What the three passes actually show.** Only three arms ever occupied position 1. Against their
+own other positions, with the session trend removed using every other arm:
+
+| arm | tok/s | position 1 advantage |
+|---|---|---|
+| `baseline-dense` | 41.4 | **-0.07 pp** |
+| `moe-draft08b-n8` | 49.8 | **+1.37 pp** |
+| `baseline-moe` | 144.9 | **+3.06 pp** |
+
+Not ordered by throughput: `moe-draft08b-n8` at 49.8 tok/s shows an effect and `baseline-dense` at
+41.4 does not. What the two arms with an effect share is the **MoE target**; the arm without one is
+the dense target. So position is not the variable. Something about the 35B-A3B target is, and this
+data does not say what -- the MoE file is 22 GB against the dense 16.35 GB and each arm-pass loads
+a fresh server, which makes page cache a candidate and not a conclusion.
+
+`baseline-moe` remains the strongest single observation: -3.10 pp and -3.11 pp below trend at
+positions 21 and 20, agreeing to 0.01 pp across two independent passes.
+
+**Effect on reported figures.** MoE effects divide by a baseline measured at position 1 in pass 1
+and late in passes 2 and 3, so pass 1's MoE effects are deflated by roughly 3 pp relative to the
+others and the three-pass average carries about a third of that, near 1 pp on effects of +27 %.
+Dense effects are untouched, the arm being flat across all three positions. Ranking, sign, and
+`mtp-n2` as the best MTP depth are unaffected on either target.
+
+Correction 19's fix still applies for a different reason than it gave: measuring the baseline more
+than once per pass would remove this whatever its mechanism turns out to be.
