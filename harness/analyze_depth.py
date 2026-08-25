@@ -101,6 +101,34 @@ def main():
             status += "; cache never hit (prefill repeated every request)"
         print(f"  {depth:8d}  {fil:8.0f}  {pt:8.0f}  {cn:8.0f}  {ev:9.0f}  {status}")
 
+    # The ladder's denominator is not perfectly clean. A deeper rung moves more memory traffic,
+    # which takes budget from the core inside one power limit, so the SM clock drifts down with
+    # depth even when nothing is thermally throttling. Phase R2 measured the baseline's compute
+    # elasticity at 0.266 near the top of the clock range, so a clock drift of d per cent costs
+    # about 0.27d per cent of throughput and that much of any decline below is not depth.
+    print("\nCLOCK, WHICH DEPTH MOVES ON ITS OWN")
+    print(f"  {'depth':>8}  {'SM mean':>8}  {'vs first':>9}  {'mem':>7}  {'temp':>6}  {'watt':>6}"
+          f"   throughput cost at elasticity 0.266")
+    _first_sm = None
+    for depth in sorted(rungs):
+        _, d = rungs[depth]
+        base = [r for r in d["records"] if method_of(r["arm"]).startswith("baseline")]
+        vals = lambda k: [(r.get("power") or {}).get(k) for r in base
+                          if (r.get("power") or {}).get(k) is not None]
+        sm, mem, tp, w = vals("sm_clock_mean_mhz"), vals("mem_clock_mean_mhz"), \
+            vals("temp_mean_c"), vals("power_mean_w")
+        if not sm:
+            continue
+        sm_m = st.median(sm)
+        if _first_sm is None:
+            _first_sm = sm_m
+        drift = (sm_m / _first_sm - 1) * 100
+        print(f"  {depth:8d}  {sm_m:8.0f}  {drift:>+8.2f}%  {st.median(mem) if mem else 0:7.0f}"
+              f"  {st.median(tp) if tp else 0:6.1f}  {st.median(w) if w else 0:6.0f}"
+              f"   {drift * 0.266:>+8.2f}%")
+    print("  A clock that falls with depth puts part of the decline in the wrong column. Read the")
+    print("  last column against the retention above: what is left is depth.")
+
     # ---------------------------------------------------------------- throughput vs depth
     methods, by = [], {}
     for depth in sorted(rungs):

@@ -733,6 +733,22 @@ class TestAlgebraicInvariants(unittest.TestCase):
         for mod in (divergence_report, warp_intervention, width_groups, analyze_cross_device):
             self.assertIn("fork_cell", inspect.getsource(mod),
                           f"{mod.__name__} still decides the three states itself")
+    def test_the_depth_ladder_shows_the_clock_it_moved(self):
+        """Depth moves the core clock, so part of any decline is not depth.
+
+        A deeper rung moves more memory traffic and takes budget from the core inside one power
+        limit. Measured across this ladder the SM clock falls 2.02 % from the 8 K rung to the
+        82 K one with the temperature flat, so it is budget and not throttling. Phase R2 puts the
+        baseline's compute elasticity near the top of the range at 0.266, which makes that drift
+        worth 0.54 % of throughput against a 28.7 % decline. Small, and it belongs in the report
+        rather than in a reader's head.
+        """
+        import analyze_depth
+        code = "\n".join(l for l in inspect.getsource(analyze_depth).splitlines()
+                         if not l.strip().startswith("#"))
+        self.assertIn("CLOCK, WHICH DEPTH MOVES ON ITS OWN", code)
+        self.assertIn("0.266", code, "the elasticity that converts drift into throughput")
+        self.assertIn("sm_clock_mean_mhz", code)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
