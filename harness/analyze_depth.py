@@ -22,6 +22,7 @@ import re
 import statistics as st
 import speclen
 import sys
+import completeness as _CO  # noqa: E402
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -59,6 +60,26 @@ def main():
     print("=" * 78)
     print("PHASE L - speculative decoding across context depth")
     print("=" * 78)
+
+    # ---------------------------------------------------------------- completeness, first
+    # A rung is one bench run and the driver calls this after every one of them, so the deepest
+    # file is routinely still being appended to when this prints. analyze.py, cost_model.py and
+    # width_groups.py all say so; this file did not, and it is the one that decides the cliff.
+    # A half-written rung is not simply noisier: records land one arm-pass at a time and the arm
+    # order rotates between passes, so a partial file holds an unbalanced set of arms and its
+    # median is a different estimator, not a wider one.
+    incomplete = set()
+    print("\nCOMPLETENESS")
+    for depth in sorted(rungs):
+        _, d = rungs[depth]
+        n, expected, _ = _CO.completeness(d)
+        ok = bool(expected) and n >= expected
+        if not ok:
+            incomplete.add(depth)
+        print(f"  {depth:8d}  {n:4d}/{expected or '?':<5} {'complete' if ok else 'STILL BEING WRITTEN'}")
+    if incomplete:
+        print(f"  Rungs {sorted(incomplete)} are short. Everything below that uses them is")
+        print("  provisional, and the cliff verdict is withheld rather than taken from them.")
 
     # ---------------------------------------------------------------- depth actually reached
     print("\nREALISED DEPTH (from the server's counters, not the request)")
@@ -105,7 +126,22 @@ def main():
             row += f"{v:>12.1f}{'':>6}"
         print(row)
 
+    # The anchor is per method, so a method absent from the shallowest rung is measured against
+    # a deeper one and shows 100 % there while the others show a fall. Read side by side that
+    # looks like better retention. Name the anchors and say so when they differ.
+    anchors = {}
+    for d in sorted(rungs):
+        for m in methods:
+            if by.get((d, m)) and m not in anchors:
+                anchors[m] = d
+    shared = len(set(anchors.values())) <= 1
     print("\n  retention, as a fraction of that method's own shallowest rung")
+    if not shared:
+        print("  ANCHORS DIFFER: " + ", ".join(f"{m}@{anchors[m]}" for m in methods if m in anchors))
+        print("  A method absent from a shallower rung reads 100 % at its own first one. These")
+        print("  columns are not on a common scale and must not be compared across methods.")
+    else:
+        print(f"  all methods anchored at {next(iter(anchors.values())) if anchors else '-'}")
     print("  " + f"{'depth':>8}" + "".join(f"{m:>18}" for m in methods))
     for depth in sorted(rungs):
         row = f"  {depth:8d}"
@@ -133,8 +169,14 @@ def main():
         # had not reached.
         CLIFF_DEPTH = 80000
         deepest = max(d for d, _ in vals) if vals else 0
+        used_incomplete = sorted(incomplete & {d for d, _ in vals})
         if len(vals) < 2:
             print("  need at least two rungs")
+        elif used_incomplete:
+            print(f"  {b}: rungs {used_incomplete} are still being written.")
+            print("  VERDICT WITHHELD. A 25x claim decided from a rung that is half a run is the")
+            print("  same mistake that put a DFlash2 coefficient of 0.2479 in the README against")
+            print("  0.2481 finished. Re-run this once the ladder is done.")
         elif deepest < CLIFF_DEPTH:
             print(f"  {b}: {vals[0][1]:.1f} tok/s at {vals[0][0]} -> {vals[-1][1]:.1f} tok/s at {deepest}")
             print(f"  VERDICT WITHHELD. The report puts the collapse past about {CLIFF_DEPTH//1000} K and the")

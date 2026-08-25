@@ -302,11 +302,18 @@ class TestAlgebraicInvariants(unittest.TestCase):
         self.assertTrue(CO.warn_if_incomplete(whole))
 
     def test_the_analysers_call_it(self):
-        import analyze, cost_model, width_groups
-        for mod in (analyze, cost_model, width_groups):
-            self.assertIn("warn_if_incomplete", inspect.getsource(mod),
-                          f"{mod.__name__} can be pointed at a half-written file and would say "
-                          f"nothing about it")
+        """Every analyser must consult completeness before it reports.
+
+        analyze_depth reads it per rung and gates the cliff verdict on it rather than printing
+        the generic notice, so the assertion is on the module being consulted, not on one
+        function name.
+        """
+        import analyze, analyze_depth, cost_model, width_groups
+        for mod in (analyze, analyze_depth, cost_model, width_groups):
+            src = inspect.getsource(mod)
+            self.assertTrue("warn_if_incomplete" in src or "completeness(" in src,
+                            f"{mod.__name__} can be pointed at a half-written file and would say "
+                            f"nothing about it")
 
     def test_the_cache_check_tests_what_the_matrix_declared(self):
         """The detector asserted one invariant and reported it as the other.
@@ -489,6 +496,58 @@ class TestAlgebraicInvariants(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             problems, checked, missing = W.validate_tables(["control"], dirs=(d,))
             self.assertEqual((problems, checked, missing), ([], [], ["control"]))
+    def test_the_cliff_verdict_refuses_a_rung_still_being_written(self):
+        """The driver calls analyze_depth after every rung, so the deepest file is routinely
+        half-written when it runs.
+
+        The three other analysers announce a short file; this one did not, and it is the one that
+        decides whether a 25x collapse reproduced. A partial rung is not merely noisier: records
+        land one arm-pass at a time and the arm order rotates between passes, so a short file
+        holds an unbalanced set of arms and its median is a different estimator.
+        """
+        import json
+        import os
+        import subprocess
+        import tempfile
+
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = os.path.join(here, "results", "phase_l_8192.json")
+        if not os.path.exists(src):
+            self.skipTest("no phase_l rung on disk to build the case from")
+        with open(src) as fh:
+            whole = json.load(fh)
+
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "phase_l_8192.json"), "w") as fh:
+                json.dump(whole, fh)
+            # a deep rung, past the reported threshold, holding half a run
+            deep = dict(whole, records=whole["records"][: len(whole["records"]) // 2])
+            with open(os.path.join(d, "phase_l_98304.json"), "w") as fh:
+                json.dump(deep, fh)
+            out = subprocess.run(
+                ["python3", os.path.join(here, "harness", "analyze_depth.py"),
+                 os.path.join(d, "phase_l_8192.json"), os.path.join(d, "phase_l_98304.json")],
+                capture_output=True, text=True, cwd=here).stdout
+
+        self.assertIn("STILL BEING WRITTEN", out,
+                      "a short rung must be named before anything is computed from it")
+        self.assertIn("VERDICT WITHHELD", out,
+                      "the cliff verdict must not be taken from a rung that is half a run")
+        self.assertNotIn("REPRODUCES", out)
+        self.assertNotIn("DOES NOT REPRODUCE", out)
+
+    def test_retention_says_which_rung_each_method_is_anchored_to(self):
+        """Retention is per method against its own shallowest rung.
+
+        A method absent from the shallowest rung is measured against a deeper one and prints
+        100 % there, which read beside a column that fell looks like better retention. The
+        columns are then not on a common scale, and nothing said so.
+        """
+        import analyze_depth
+        code = "\n".join(l for l in inspect.getsource(analyze_depth).splitlines()
+                         if not l.strip().startswith("#"))
+        self.assertIn("ANCHORS DIFFER", code)
+        self.assertIn("anchors", code)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
