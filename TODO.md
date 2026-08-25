@@ -445,6 +445,27 @@ there was omission, not misstatement.
 
 ## Deleted from scope, with reasons
 
+- **Phase L at f16 KV on the A6000** - built, started, withdrawn the same afternoon without
+  producing a record. It was to remove a KV-precision confound from the cliff test. There is no
+  such confound. `docs/PHASE_L_DESIGN.md` had already settled it: `full_attention_interval` is 4,
+  so 16 of 64 layers hold KV, the cache at 96 K and q8_0 is 3.27 GB, and the whole ladder runs at
+  20.8 of 24 GB. q8_0 is this study's standard setting at every depth, not a compromise made to
+  reach one, so it is held constant across the ladder and cannot confound a within-ladder ratio.
+
+  Two further errors were mine. The VRAM arithmetic used 64 KV layers instead of 16 and so
+  overstated an f16 cache four-fold, which is what made the 48 GB card look necessary: f16 at
+  86 016 needs 23.93 GiB and the 24 GB card holds it. And the A6000 is sm_86, the same as the
+  3090, while the report is from an RTX 4080 SUPER on sm_89, so it adds no architectural
+  coverage either.
+
+  A third point stands on its own: the cliff is a 25x effect and does not need 4 arms x 15
+  prompts x 3 passes. That matrix exists to put confidence intervals on speedup and acceptance.
+  Applying its statistical power to a question that needs almost none was how a twenty-hour run
+  got planned for something a short probe would answer.
+
+  The card was released without a record written. Nothing rests on this and nothing was lost.
+
+
 Recorded so they are not quietly revived.
 
 - **A public SpecDecode Trace schema.** AIPerf already defines an engine-neutral, tree-agnostic
