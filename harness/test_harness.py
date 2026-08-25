@@ -1483,5 +1483,312 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
                                  f"{tree} is at {head} but the README pins {pins[var]}")
 
 
+class TestAnchorEstimatorMatchesBand(unittest.TestCase):
+    """The Phase M anchor must be judged by the estimator its band was calibrated on.
+
+    The gate first shipped inline in run_remaining.sh and compared a POOLED MEDIAN against a band
+    calibrated on a CLASS-STRATIFIED figure. Its own header names both predecessor numbers,
+    "-10.8 % raw, -21.5 % class-stratified", and the band -12 % to -32 % brackets only the second:
+    a perfect replication of the raw figure would have failed the gate it was written for. On the
+    live 2026-08-26 data the two estimators differ by 6.7 points, which happened not to change the
+    verdict because the arm missed the band by 34 points. A borderline arm would have been decided
+    by the estimator rather than by the data.
+
+    The discriminating case below is one where the two estimators give OPPOSITE verdicts, so the
+    test fails against the old logic and passes against anchor_verdict.py.
+    """
+
+    @staticmethod
+    def _result(arm_by_class, base_rate=100.0, n_by_class=(("code", 9), ("prose", 1))):
+        """A synthetic Phase M shaped so pooled and stratified disagree.
+
+        One class carries most of the prompts and a small penalty; the other carries one prompt
+        and a large one. The pooled median is drawn from the crowded class and reports its
+        penalty; the stratified mean weights the two classes equally.
+        """
+        recs = []
+        for cls, n in n_by_class:
+            for i in range(n):
+                tag = f"{cls}_{i}"
+                recs.append({"arm": "baseline-moe", "pass": 1, "prompt": tag, "class": cls,
+                             "decode_tok_s": base_rate, "predicted_n": 400, "hit_cap": True})
+                recs.append({"arm": "moe-draft08b-n8", "pass": 1, "prompt": tag, "class": cls,
+                             "decode_tok_s": base_rate * (1 + arm_by_class[cls]),
+                             "predicted_n": 400, "hit_cap": True})
+        return {"records": recs}
+
+    def test_stratified_verdict_wins_over_pooled_median(self):
+        import anchor_verdict as AV
+        # code -5 %, prose -35 %  ->  stratified -20 % (inside the -12/-32 band),
+        # pooled median -5 % (outside it). The two verdicts are opposite.
+        v = AV.verdict(self._result({"code": -0.05, "prose": -0.35}))
+        self.assertAlmostEqual(v["point"], -20.0, places=6,
+                               msg="the primary is not the class-stratified mean")
+        self.assertAlmostEqual(v["pooled_median"], -5.0, places=6,
+                               msg="the synthetic case no longer separates the estimators; "
+                                   "it cannot catch the defect it was written for")
+        self.assertTrue(v["holds"],
+                        f"the anchor was judged on the pooled estimator: {v['reason']}")
+
+    def test_pooled_median_passing_does_not_rescue_a_failing_stratified_arm(self):
+        import anchor_verdict as AV
+        # The mirror image: pooled median -20 % (inside the band), stratified -40 % (outside).
+        v = AV.verdict(self._result({"code": -0.20, "prose": -0.60}))
+        self.assertAlmostEqual(v["pooled_median"], -20.0, places=6)
+        self.assertAlmostEqual(v["point"], -40.0, places=6)
+        self.assertFalse(v["holds"],
+                         "an arm outside the band on the registered estimator was passed "
+                         "because a pooled estimator happened to land inside it")
+
+    def test_an_effect_that_could_be_zero_never_holds(self):
+        import anchor_verdict as AV
+        # Per-prompt effects that straddle zero and average -20 %, squarely inside the band. A
+        # point-in-band test alone calls this a reproduction of the penalty; it is not evidence
+        # of one. Written out rather than drawn, so the fixture cannot drift with a seed.
+        effects = [-0.95, -0.90, -0.85, 0.50, 0.60, 0.40]      # mean -0.20
+        recs = []
+        for cls in ("code", "prose"):
+            for i, eff in enumerate(effects):
+                tag = f"{cls}_{i}"
+                recs.append({"arm": "baseline-moe", "pass": 1, "prompt": tag, "class": cls,
+                             "decode_tok_s": 100.0, "predicted_n": 400, "hit_cap": True})
+                recs.append({"arm": "moe-draft08b-n8", "pass": 1, "prompt": tag, "class": cls,
+                             "decode_tok_s": 100.0 * (1 + eff),
+                             "predicted_n": 400, "hit_cap": True})
+        v = AV.verdict({"records": recs})
+        lo, hi = v["band"]
+        self.assertTrue(lo < v["point"] < hi,
+                        "the fixture no longer lands inside the band, so it cannot show that "
+                        "being inside the band is not sufficient")
+        self.assertTrue(v["spans_zero"], "the fixture stopped spanning zero; rewrite it")
+        self.assertFalse(v["holds"],
+                         "an interval containing zero was reported as a reproduced penalty")
+        self.assertIn("zero", v["reason"])
+
+    def test_band_brackets_the_figure_the_estimator_names(self):
+        import anchor_verdict as AV
+        lo, hi = AV.ANCHOR["band"]
+        self.assertLess(lo, AV.ANCHOR["predecessor_stratified"])
+        self.assertLess(AV.ANCHOR["predecessor_stratified"], hi)
+        self.assertIn("stratified", AV.ANCHOR["estimator"].lower(),
+                      "the band is calibrated on the class-stratified figure, so the estimator "
+                      "field must name that quantity")
+        # The trap this file closes: the other published figure lies outside the same band, so
+        # which estimator is used decides the verdict on a faithful replication.
+        self.assertFalse(lo < AV.ANCHOR["predecessor_raw"] < hi,
+                         "the two predecessor figures now fall on the same side of the band; "
+                         "if that is intended, this test and the module docstring both need "
+                         "rewriting, because the estimator would no longer be load-bearing")
+
+    ROOT = Path(__file__).parent
+
+    def test_a_stale_marker_cannot_gate_a_later_run(self):
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            res = Path(td) / "phase_m.json"
+            res.write_text(json.dumps(self._result({"code": -0.20, "prose": -0.60})))
+            marker = Path(td) / "anchor_ok"
+            marker.write_text("+0.00\n")          # left behind by an earlier, passing run
+            p = subprocess.run(
+                [sys.executable, str(self.ROOT / "anchor_verdict.py"), str(res),
+                 "--marker", str(marker)],
+                capture_output=True, text=True)
+            self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+            self.assertFalse(marker.exists(),
+                             "a failing anchor left the previous run's marker in place, which "
+                             "would let run_remaining.sh delete the MoE target it needs to "
+                             "chase the failure")
+
+
+class TestRejectionSlopeIsIntervalBased(unittest.TestCase):
+    """TEST 1's verdict came from a point estimate's sign, with r2 printed but never consulted.
+
+    Three defects in one block, all live on the Phase M data:
+
+    1. `r2` was computed and printed and had no effect on the verdict, so an arm whose fit
+       explained 13 % of the variance in `k` was announced as "rejection cost present" in exactly
+       the words used for one explaining 99 %.
+    2. The summary bound was `max(r_estimates)` -- the maximum of several noisy point estimates,
+       biased upward by construction and not a bound on anything. It also gated whether TEST 1's
+       conclusion was printed at all, so one arm's noise (r2 = 0.134, clearing zero by 0.10
+       half-widths) silenced the finding.
+    3. The model treats the draft length as the constant `n_max`. On the 0.8B draft-simple arms
+       the realised length is 4.20 against an n_max of 8 and it correlates with acceptance at
+       +0.94, because the server reuses a surviving draft tail rather than re-drafting
+       (server-context.cpp:2893). The regressor is then inside the response, and the resulting
+       bias is positive in the slope, hence negative in r -- which is the conclusion TEST 1
+       draws. An omitted variable that pushes toward the paper's own answer.
+    """
+
+    @staticmethod
+    def _rows(arm, n_max, slope, intercept, widths, n=12):
+        """An arm whose k is exactly intercept + slope*acceptance, with given widths."""
+        rows = []
+        for i in range(n):
+            acc = 0.1 + 0.8 * i / (n - 1)
+            rows.append({
+                "arm": arm, "pass": 1, "prompt": f"p{i}", "class": "code" if i % 2 else "prose",
+                "spec_type": "draft-simple", "model": "m", "n_max": n_max, "width": n_max + 1,
+                "acceptance": acc, "drafted": 100, "accepted": 50, "forwards": 25,
+                "mean_len": 2.0, "speedup": 1.0,
+                "draft_per_forward": widths(acc),
+                "k": intercept + slope * acc,
+            })
+        return rows
+
+    def test_r_divides_by_the_realised_width_not_the_requested_n_max(self):
+        import cost_model as CM
+        # Constant realised width of 6.94 against an n_max of 8: the case dflash2-n8 is in.
+        # Dividing by 8 understates r by 13 %, and r is reported as an upper bound.
+        rows = self._rows("a", 8, slope=-0.4, intercept=1.0, widths=lambda acc: 6.94)
+        iv, r2 = CM.rejection_slope_ci(rows, n_boot=400)
+        self.assertAlmostEqual(r2, 1.0, places=6, msg="the fixture is not an exact line")
+        self.assertAlmostEqual(iv.point, 0.4 / 6.94, places=6,
+                              msg=f"r was divided by n_max rather than the realised width; "
+                                  f"got {iv.point:.5f}, expected {0.4/6.94:.5f}")
+
+    def test_the_bound_is_an_upper_limit_over_unconfounded_arms(self):
+        import contextlib
+        import cost_model as CM
+        import io
+        DENSE = "/m/dense.gguf"
+
+        def rec(arm, i, tok_s, drafted, accepted, pn=400):
+            return {"arm": arm, "pass": 1, "prompt": f"p{i}",
+                    "class": "code" if i % 2 else "prose", "decode_tok_s": tok_s,
+                    "predicted_n": pn, "hit_cap": True,
+                    "timings": {"t_draft_n": drafted, "t_draft_n_accepted": accepted}}
+
+        recs = []
+        for i in range(12):
+            recs.append(rec("baseline", i, 100.0, 0, 0))
+            # pinned: 2 drafted per forward pass whatever the acceptance
+            f = 130 + 5 * i
+            recs.append(rec("pinned", i, 150.0, 2 * f, 399 - f))
+            # varying: drafted per forward pass climbs with acceptance
+            f2 = 200 - 8 * i
+            recs.append(rec("varying", i, 120.0, int((2 + 0.02 * i) * f2), 399 - f2))
+        result = {
+            "env": {"model": DENSE},
+            "arms": {
+                "baseline": {"extra_args": [], "tree": "master", "model": None},
+                "pinned": {"extra_args": ["--spec-type", "draft-mtp",
+                                          "--spec-draft-n-max", "2"],
+                           "tree": "master", "expects_drafter": True, "model": None},
+                "varying": {"extra_args": ["--spec-type", "draft-simple",
+                                           "--spec-draft-n-max", "8"],
+                            "tree": "master", "expects_drafter": True, "model": None},
+            },
+            "records": recs,
+        }
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            CM.report(result)
+        out = buf.getvalue()
+        self.assertIn("CONFOUNDED", out,
+                      "an arm whose draft length tracks acceptance was not flagged")
+        self.assertRegex(out, r"Excluded from the bound as confounded:.*varying",
+                         "the confounded arm still contributes to the bound")
+        self.assertIn("Largest upper 95 % limit", out,
+                      "the bound is still reported as a point estimate")
+        self.assertNotIn("Largest r across arms", out,
+                         "the old max-of-points summary is still being printed")
+
+
+class TestRejectionBoundTableMatchesArtifacts(unittest.TestCase):
+    """The rejection-bound table in docs/COST_MODEL.md against the files it was read from.
+
+    The section it replaced quoted "|r| <= 0.0028, r^2 between 0.001 and 0.060", which was true of
+    the phases that existed when it was written and false by the time Phase M ran. A hand-copied
+    number in prose has no way to notice that. This reads both sides.
+    """
+
+    ROOT = Path(__file__).parent.parent
+
+    def test_every_row_matches_the_cost_artifact_it_came_from(self):
+        import re
+        doc = (self.ROOT / "docs" / "COST_MODEL.md").read_text(encoding="utf-8")
+        block = re.search(r"\| matrix \| arms fitted \|.*?\n\n", doc, re.S)
+        self.assertIsNotNone(block, "the rejection-bound table is gone from docs/COST_MODEL.md")
+        rows = re.findall(r"^\| ([A-Z0-9]+) \| (\d+) \| ([+-][\d.]+) \| ([\d.]+) % \|$",
+                          block.group(0), re.M)
+        self.assertTrue(rows, "the table parsed to no rows; the format changed")
+        checked = 0
+        for name, arms, r_hi, share in rows:
+            art = self.ROOT / "analysis" / f"phase_{name.lower()}_cost.txt"
+            if not art.exists():
+                continue
+            text = art.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r"Largest upper 95 % limit on r, over the (\d+) arm\(s\) where the "
+                          r"model applies: ([+-][\d.]+)", text)
+            self.assertIsNotNone(m, f"{art.name} carries no bound line")
+            self.assertEqual(arms, m.group(1), f"{name}: arms fitted")
+            self.assertEqual(r_hi, m.group(2), f"{name}: upper limit on r")
+            ms = re.search(r"accounts for at most \+?([\d.]+) % of the cycle cost", text)
+            self.assertIsNotNone(ms, f"{art.name} carries no share line")
+            self.assertEqual(share, ms.group(1), f"{name}: share of cycle cost")
+            checked += 1
+        self.assertGreaterEqual(checked, 3,
+                                f"only {checked} of {len(rows)} rows had an artifact to check "
+                                f"against; the test would pass on an empty analysis/ directory")
+
+    def test_the_prose_bound_is_not_below_any_row(self):
+        import re
+        doc = (self.ROOT / "docs" / "COST_MODEL.md").read_text(encoding="utf-8")
+        shares = [float(x) for x in re.findall(r"^\| [A-Z0-9]+ \| \d+ \| [+-][\d.]+ \| "
+                                               r"([\d.]+) % \|$", doc, re.M)]
+        self.assertTrue(shares)
+        claim = re.search(r"Nothing reaches ([\d.]+) %", doc)
+        self.assertIsNotNone(claim, "the summarising sentence under the table is gone")
+        self.assertLess(max(shares), float(claim.group(1)),
+                        f"the prose claims nothing reaches {claim.group(1)} % but the table "
+                        f"holds {max(shares)} %")
+
+
+class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
+    """A class appended after the `__main__` guard is defined too late to be collected.
+
+    That is how TestAnchorEstimatorMatchesBand first landed: five cases appended to the end of
+    the file, `Ran 61 tests` unchanged from before the edit, and a green suite that had executed
+    none of them. The guard is the last thing in the file, so "append to the end" is the obvious
+    edit and it silently does nothing -- the worst shape a test defect can take, because the
+    signal it produces is the same one a passing suite produces.
+
+    Comparing what the source declares against what the loader collected catches it, and catches
+    any later variant of the same mistake.
+    """
+
+    def test_the_loader_collects_every_test_the_source_declares(self):
+        import ast
+        tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+        declared = {}
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            if not any("TestCase" in ast.dump(b) for b in node.bases):
+                continue
+            for item in node.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                        and item.name.startswith("test"):
+                    declared[f"{node.name}.{item.name}"] = item.lineno
+
+        module = sys.modules[type(self).__module__]
+        collected = set()
+        for suite in unittest.TestLoader().loadTestsFromModule(module):
+            for case in suite:
+                collected.add(f"{type(case).__name__}.{case._testMethodName}")
+
+        missing = sorted(set(declared) - collected)
+        self.assertFalse(
+            missing,
+            "declared in the source but never collected -- most likely defined after the "
+            "__main__ guard at the end of the file, where the class is created only after "
+            "unittest.main() has already chosen what to run: "
+            + ", ".join(f"{m} (line {declared[m]})" for m in missing))
+        # The reverse direction would mean a test exists that the source does not declare at
+        # top level, which is not a defect this file can produce, so it is not asserted.
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

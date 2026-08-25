@@ -28,25 +28,39 @@ draft08b-n8      draft-simple     9   75   2.9608  0.0828   2.847-3.132
 
 --- TEST 1: is the overhead charged to REJECTION? ---
     Model a rejection-proportional cost r (decode-steps per rejected draft token):
-        k = k_verify + r * n_max * (1 - acceptance)
-        => dk/d(acceptance) = -r * n_max,   so  r = -slope / n_max
+        k = k_verify + r * w * (1 - acceptance),  w = realised draft len / forward
+        => dk/d(acceptance) = -r * w,   so  r = -slope / w
     A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+    The model holds w constant within an arm. Where the server reuses a surviving
+    draft tail instead of re-drafting, w moves WITH acceptance and the slope picks
+    that up rather than any rejection cost - biased positive, which reads as r < 0,
+    which is this test's own conclusion. Arms whose w varies are fitted and shown,
+    and excluded from the bound.
 
-arm               n    accept range     slope     r2  r estimate  reading
-dflash2-q4k       4  0.162-0.843    0.0144  0.116    -0.00361  r <= 0 - no rejection cost detected (k spread 2.56%)
-dflash2-q8        4  0.167-0.868    0.0182  0.152    -0.00456  r <= 0 - no rejection cost detected (k spread 3.22%)
-dflash2-bf16      4  0.165-0.868    0.0164  0.071    -0.00409  r <= 0 - no rejection cost detected (k spread 3.41%)
-draft08b-n4       4  0.192-0.735    0.3678  0.946    -0.09195  r <= 0 - no rejection cost detected (k spread 8.49%)
-ngram-cache       4  0.000-0.000    0.0000    nan    -0.00000  r <= 0 - no rejection cost detected (k spread 20.63%)
-ngram-map-k       4  0.000-0.167    0.0145  0.820    -0.00363  r <= 0 - no rejection cost detected (k spread 0.36%)
-draft08b-n8       8  0.106-0.611    0.4863  0.948    -0.06079  r <= 0 - no rejection cost detected (k spread 9.61%)
+arm                 n    accept range      w  w cv%     r2                   r [95 %]  reading
+dflash2-q4k         4  0.162-0.843   3.98   0.39  0.116       -0.00 [-0.01, +0.00]  no rejection cost detected (interval contains zero)
+dflash2-q8          4  0.167-0.868   3.98   0.38  0.152       -0.00 [-0.01, -0.00]  clears zero by only 0.15 half-widths - inside the known undercoverage; would be -0.5% of k
+dflash2-bf16        4  0.165-0.868   3.98   0.37  0.071       -0.00 [-0.01, +0.00]  no rejection cost detected (interval contains zero)
+draft08b-n4         4  0.192-0.735   2.26  12.88  0.946       -0.16 [-0.18, -0.15]  CONFOUNDED: draft/fwd varies 12.9% and tracks acceptance at r=+0.99; the regressor is inside the response
+ngram-cache         4  0.000-0.000   0.39  57.85      -              not estimable  too few prompts to resample
+ngram-map-k         4  0.000-0.167   0.12   1.11      -              not estimable  too few prompts to resample
+draft08b-n8         8  0.106-0.611   4.19   8.34  0.948       -0.12 [-0.12, -0.11]  CONFOUNDED: draft/fwd varies 8.3% and tracks acceptance at r=+0.97; the regressor is inside the response
 
-  Largest r across arms: -0.00000 decode-steps per rejected draft token.
+  Largest upper 95 % limit on r, over the 3 arm(s) where the model applies: +0.00075
+  decode-steps per rejected draft token (dflash2-bf16). The bound is an upper confidence
+  limit, not the largest point estimate: the maximum of several noisy points is
+  biased upward and is not a bound on anything.
+  At that limit the rejection term accounts for at most +0.08 % of the cycle cost (dflash2-bf16),
+  which is the comparable figure: r is per rejected draft token, so arms at different widths
+  carry the same total cost at different r.
   Acceptance spans roughly 0.000-0.868 in this data - nearly a ten-fold range -
   so a rejection-driven overhead of any consequence would have shown up here.
   Reading: the verification overhead is paid per position VERIFIED, not per
   draft REJECTED. This does not say rollback is free; it bounds how much of
   the observed cost rollback can account for.
+  dflash2-q8: r is significantly NEGATIVE, the opposite of a rollback account. k rises with acceptance at constant
+  draft width, which is what a cost paid per position verified looks like near saturation: mean_len climbs toward w+1 while the cycle cost does not.
+  Excluded from the bound as confounded: draft08b-n4, draft08b-n8.
 
 --- TEST 2: k vs verification width, per method ---
     MMVQ dispatch limit 8, from the analyser's constant: this file predates harness/kernel_facts.py

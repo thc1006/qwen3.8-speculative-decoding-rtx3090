@@ -84,6 +84,16 @@ def _linfit(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     return (a, b, r2)
 
 
+def _corr(xs, ys):
+    """Pearson r, or nan when either side has no spread. Used only to describe a confound."""
+    if len(xs) != len(ys) or len(xs) < 2:
+        return float("nan")
+    mx, my = statistics.fmean(xs), statistics.fmean(ys)
+    num = sum((a - mx) * (b - my) for a, b in zip(xs, ys))
+    den = (sum((a - mx) ** 2 for a in xs) * sum((b - my) ** 2 for b in ys)) ** 0.5
+    return num / den if den else float("nan")
+
+
 def _fit_prompts(g: list[dict], on_path: list[int]):
     """{prompt -> {width -> [k]}} and {prompt -> class}, restricted to the fitted widths."""
     by_prompt: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
@@ -159,6 +169,76 @@ def fit_ci(g: list[dict], on_path: list[int], *, n_boot: int = 4000, alpha: floa
                          len(prompt_class), singles),
         "n_prompts": len(prompt_class),
     }
+
+
+def rejection_slope_ci(g: list[dict], *, n_boot: int = 4000, alpha: float = 0.05,
+                       seed: int = 20260826):
+    """Interval on `r` in k = k_verify + r*n_max*(1 - acceptance), resampling prompts in class.
+
+    TEST 1 reported `r` as a bare point estimate and chose its verdict string from that point's
+    sign alone. `r2` was computed, printed, and never consulted, so an arm whose fit explained
+    13 % of the variance in `k` was announced as "rejection cost present" in the same words as
+    one that explained 99 %. The summary line then took `max(r_estimates)` across arms -- the
+    maximum of a set of noisy point estimates, which is biased upward by construction -- and used
+    it to gate whether TEST 1's actual conclusion got printed at all. On the Phase M data one
+    arm's noise (r2 = 0.134) suppressed that paragraph.
+
+    An interval fixes both: a verdict comes from whether it excludes zero, and a bound comes from
+    the largest upper limit rather than the largest point.
+    """
+    by_prompt: dict[str, list[dict]] = defaultdict(list)
+    prompt_class: dict[str, str] = {}
+    for r in g:
+        by_prompt[r["prompt"]].append(r)
+        prompt_class[r["prompt"]] = r["class"]
+    if len(prompt_class) < 3:
+        return None
+    # The DIVISOR is the realised draft length per forward pass, not the requested n_max. They
+    # are the same on every MTP and DFlash arm in this study (within 0.6 %), and they are not the
+    # same on `dflash2-n8` (6.94) or the 0.8B draft-simple arms (4.20): the server reuses a
+    # surviving draft tail without re-drafting, so a cycle can cost a forward pass and generate
+    # nothing. Dividing by 8 where 6.94 tokens were actually at risk understates r, which is the
+    # wrong direction for something reported as an upper bound.
+    widths = [r["draft_per_forward"] for r in g if r.get("draft_per_forward")]
+    w = statistics.fmean(widths) if widths else g[0]["n_max"]
+    if not w:
+        return None
+    classes: dict[str, list[str]] = defaultdict(list)
+    for tag, cls in prompt_class.items():
+        classes[cls].append(tag)
+
+    def fit(tags):
+        xs, ys = [], []
+        for t in tags:
+            for r in by_prompt[t]:
+                xs.append(r["acceptance"])
+                ys.append(r["k"])
+        if len(set(xs)) < 2:
+            return None
+        return _linfit(xs, ys)
+
+    point = fit(sorted(prompt_class))
+    if point is None:
+        return None
+    rng = random.Random(seed)
+    rs = []
+    for _ in range(n_boot):
+        draw = []
+        for tags in classes.values():
+            draw.extend(rng.choices(tags, k=len(tags)))
+        got = fit(draw)
+        if got:
+            rs.append(-got[1] / w)
+    if len(rs) < n_boot // 2:
+        return None
+    rs.sort()
+
+    def pct(q):
+        return rs[max(0, min(len(rs) - 1, int(round(q * (len(rs) - 1)))))]
+
+    singles = tuple(sorted(c for c, t in classes.items() if len(t) < 2))
+    return ST.Interval(-point[1] / w, pct(alpha / 2), pct(1 - alpha / 2),
+                       len(prompt_class), singles), point[2]
 
 
 def delta_c_ci(ga: list[dict], on_a: list[int], gb: list[dict], on_b: list[int],
@@ -310,6 +390,14 @@ def collect(result: dict) -> list[dict]:
             "acceptance": accepted / drafted,
             "drafted": drafted, "accepted": accepted,
             "forwards": forwards, "mean_len": mean_len,
+            # Draft tokens the DRAFTER generated per target forward pass. Not the same as
+            # `width`: the server reuses a surviving draft tail without re-drafting
+            # (server-context.cpp:2893, "we have a previous (partial) draft to reuse"), so a
+            # reused cycle costs a forward pass and generates nothing. On this run the MTP arms
+            # sit on n_max to three decimals (0.998, 1.990, 2.987) and the 0.8B draft-simple arm
+            # sits at 4.20 against an n_max of 8. TEST 1 needs that difference, because its model
+            # treats n_max as a constant multiplier.
+            "draft_per_forward": drafted / forwards,
             "speedup": speedup, "k": mean_len / speedup,
         })
     return rows
@@ -405,39 +493,114 @@ def report(result: dict) -> None:
 
     print("\n--- TEST 1: is the overhead charged to REJECTION? ---")
     print("    Model a rejection-proportional cost r (decode-steps per rejected draft token):")
-    print("        k = k_verify + r * n_max * (1 - acceptance)")
-    print("        => dk/d(acceptance) = -r * n_max,   so  r = -slope / n_max")
+    print("        k = k_verify + r * w * (1 - acceptance),  w = realised draft len / forward")
+    print("        => dk/d(acceptance) = -r * w,   so  r = -slope / w")
     print("    A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.")
-    print(f"\n{'arm':16s} {'n':>2s} {'accept range':>15s} {'slope':>9s} {'r2':>6s} "
-          f"{'r estimate':>11s}  reading")
-    r_estimates = []
+    print("    The model holds w constant within an arm. Where the server reuses a surviving")
+    print("    draft tail instead of re-drafting, w moves WITH acceptance and the slope picks")
+    print("    that up rather than any rejection cost - biased positive, which reads as r < 0,")
+    print("    which is this test's own conclusion. Arms whose w varies are fitted and shown,")
+    print("    and excluded from the bound.")
+    print(f"\n{'arm':18s} {'n':>2s} {'accept range':>15s} {'w':>6s} {'w cv%':>6s} {'r2':>6s} "
+          f"{'r [95 %]':>26s}  reading")
+    bounds, confounded = [], []
     for arm in sorted(by_arm, key=lambda a: by_arm[a][0]["width"]):
         g = by_arm[arm]
         xs = [r["acceptance"] for r in g]
-        ys = [r["k"] for r in g]
-        a, b, r2 = _linfit(xs, ys)
         n = g[0]["n_max"]
-        r_est = -b / n if n else float("nan")
-        r_estimates.append(r_est)
-        spread = (max(ys) - min(ys)) / statistics.fmean(ys) * 100
-        if r_est <= 0:
-            reading = f"r <= 0 - no rejection cost detected (k spread {spread:.2f}%)"
-        elif r_est < 0.02:
-            reading = f"r negligible (k spread {spread:.2f}%)"
+        dpf = [r["draft_per_forward"] for r in g if r.get("draft_per_forward")]
+        mean_dpf = statistics.fmean(dpf) if dpf else float("nan")
+        cv = (statistics.stdev(dpf) / mean_dpf * 100) if len(dpf) > 1 and mean_dpf else 0.0
+        # What breaks the model is draft length VARYING WITH ACCEPTANCE, not draft length simply
+        # differing from the requested n_max: a length that is constant at 6.94 rather than 8 only
+        # rescales r, and rejection_slope_ci divides by the realised length for exactly that
+        # reason. A length that moves with acceptance puts the regressor inside the response.
+        # The threshold is not doing fine work: every arm in this study is either under 0.7 %
+        # (every MTP and DFlash arm) or over 8 % (both draft-simple arms), a 13-fold gap.
+        pinned = bool(dpf) and cv < 2.0
+        got = rejection_slope_ci(g)
+        if got is None:
+            print(f"{arm:18s} {n:2d} {min(xs):6.3f}-{max(xs):.3f} {mean_dpf:6.2f} "
+                  f"{cv:6.2f} {'-':>6s} {'not estimable':>26s}  too few prompts to resample")
+            continue
+        iv, r2 = got
+        # What the estimate would account for, if taken at face value: r*n_max*(1 - acceptance)
+        # against this arm's own k. An r that clears zero and still explains under a percent of
+        # the cycle is not the overhead this test is looking for, and saying so is more useful
+        # than a bare "present".
+        share = (iv.point * mean_dpf * (1 - statistics.fmean(xs))
+                 / statistics.fmean([r["k"] for r in g]) * 100)
+        if not pinned:
+            reading = (f"CONFOUNDED: draft/fwd varies {cv:.1f}% and tracks acceptance at "
+                       f"r={_corr(xs, dpf):+.2f}; the regressor is inside the response")
+            confounded.append(arm)
+        elif iv.spans_zero:
+            reading = "no rejection cost detected (interval contains zero)"
+        elif iv.near_zero:
+            reading = (f"clears zero by only {iv.margin_half_widths:.2f} half-widths - inside "
+                       f"the known undercoverage; would be {share:+.1f}% of k")
+        elif iv.point > 0:
+            reading = f"rejection cost present, {share:+.1f}% of k at mean acceptance"
         else:
-            reading = f"rejection cost present (k spread {spread:.2f}%)"
-        print(f"{arm:16s} {n:2d} {min(xs):6.3f}-{max(xs):.3f} {b:9.4f} {r2:6.3f} "
-              f"{r_est:11.5f}  {reading}")
-    if r_estimates:
-        worst = max(r_estimates)
-        print(f"\n  Largest r across arms: {worst:+.5f} decode-steps per rejected draft token.")
+            reading = "k FALLS with rejection - not a rollback account"
+        if pinned:
+            # The share of k that the UPPER limit of r would account for. `r` alone is not
+            # comparable across arms: it is per rejected draft token, so an arm with w = 1 and an
+            # arm with w = 8 can carry the same total cost at eight times the r. The share is the
+            # quantity a reader needs, and it is what the bound below is stated in.
+            hi_share = (iv.hi * mean_dpf * (1 - statistics.fmean(xs))
+                        / statistics.fmean([r["k"] for r in g]) * 100)
+            bounds.append((arm, iv, hi_share))
+        print(f"{arm:18s} {n:2d} {min(xs):6.3f}-{max(xs):.3f} {mean_dpf:6.2f} "
+              f"{cv:6.2f} {r2:6.3f} {str(iv):>26s}  {reading}")
+
+    if bounds:
+        arm, iv, _ = max(bounds, key=lambda kv: kv[1].hi)
+        sarm, _, share = max(bounds, key=lambda kv: kv[2])
+        print(f"\n  Largest upper 95 % limit on r, over the {len(bounds)} arm(s) where the model "
+              f"applies: {iv.hi:+.5f}")
+        print(f"  decode-steps per rejected draft token ({arm}). The bound is an upper confidence")
+        print("  limit, not the largest point estimate: the maximum of several noisy points is")
+        print("  biased upward and is not a bound on anything.")
+        print(f"  At that limit the rejection term accounts for at most {share:+.2f} % of the "
+              f"cycle cost ({sarm}),")
+        print("  which is the comparable figure: r is per rejected draft token, so arms at "
+              "different widths")
+        print("  carry the same total cost at different r.")
         print(f"  Acceptance spans roughly {min(r['acceptance'] for r in rows):.3f}-"
               f"{max(r['acceptance'] for r in rows):.3f} in this data - nearly a ten-fold range -")
         print("  so a rejection-driven overhead of any consequence would have shown up here.")
-        if worst <= 0.02:
+        # A verdict that clears zero by a fraction of a half-width is inside the undercoverage
+        # this repo measured at n = 25 (88.0-90.9 % actual against a nominal 95 %), so it does not
+        # get to overturn the conclusion on its own. stats.Interval.near_zero carries the rule.
+        established = [b for b in bounds
+                       if not b[1].spans_zero and b[1].point > 0 and not b[1].near_zero]
+        if not established:
             print("  Reading: the verification overhead is paid per position VERIFIED, not per")
             print("  draft REJECTED. This does not say rollback is free; it bounds how much of")
             print("  the observed cost rollback can account for.")
+            falls = [b for b in bounds if not b[1].spans_zero and b[1].point < 0]
+            if falls:
+                print("  " + ", ".join(b[0] for b in falls) + ": r is significantly NEGATIVE, "
+                      "the opposite of a rollback account. k rises with acceptance at constant")
+                print("  draft width, which is what a cost paid per position verified looks like "
+                      "near saturation: mean_len climbs toward w+1 while the cycle cost does not.")
+            marginal = [b for b in bounds
+                        if not b[1].spans_zero and b[1].point > 0 and b[1].near_zero]
+            if marginal:
+                print("  Not established, and not treated as overturning the reading: "
+                      + ", ".join(f"{b[0]} ({b[1].margin_half_widths:.2f} half-widths)"
+                                  for b in marginal))
+        else:
+            print("  Reading: at least one arm shows an r that clears zero by more than the "
+                  "known undercoverage: "
+                  + ", ".join(f"{b[0]} {str(b[1])}" for b in established))
+    else:
+        print("\n  No arm in this file holds its draft length at n_max, so none of them can")
+        print("  estimate r under this model and no bound is reported. That is a limit of the")
+        print("  design, not a finding about rollback.")
+    if confounded:
+        print(f"  Excluded from the bound as confounded: {', '.join(confounded)}.")
 
     _CO.warn_if_incomplete(result)
     mmvq_max, from_record = recorded_mmvq_max(result)

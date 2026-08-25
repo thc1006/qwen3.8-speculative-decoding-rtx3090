@@ -18,37 +18,70 @@ dflash2-n7       draft-dflash     8  125   2.7316  0.0162   2.697-2.783
 
 --- TEST 1: is the overhead charged to REJECTION? ---
     Model a rejection-proportional cost r (decode-steps per rejected draft token):
-        k = k_verify + r * n_max * (1 - acceptance)
-        => dk/d(acceptance) = -r * n_max,   so  r = -slope / n_max
+        k = k_verify + r * w * (1 - acceptance),  w = realised draft len / forward
+        => dk/d(acceptance) = -r * w,   so  r = -slope / w
     A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+    The model holds w constant within an arm. Where the server reuses a surviving
+    draft tail instead of re-drafting, w moves WITH acceptance and the slope picks
+    that up rather than any rejection cost - biased positive, which reads as r < 0,
+    which is this test's own conclusion. Arms whose w varies are fitted and shown,
+    and excluded from the bound.
 
-arm               n    accept range     slope     r2  r estimate  reading
-mtp-n2            2  0.418-0.918    0.0043  0.017    -0.00214  r <= 0 - no rejection cost detected (k spread 1.53%)
-mtp-n3            3  0.325-0.857    0.0070  0.028    -0.00234  r <= 0 - no rejection cost detected (k spread 1.79%)
-dflash2-n4        4  0.162-0.843    0.0197  0.210    -0.00494  r <= 0 - no rejection cost detected (k spread 2.41%)
-mtp-n5            5  0.173-0.720    0.0142  0.060    -0.00285  r <= 0 - no rejection cost detected (k spread 2.06%)
-dflash2-n7        7  0.096-0.695    0.0346  0.191    -0.00494  r <= 0 - no rejection cost detected (k spread 3.15%)
+arm                 n    accept range      w  w cv%     r2                   r [95 %]  reading
+mtp-n2              2  0.418-0.918   1.99   0.28  0.017       -0.00 [-0.01, +0.00]  no rejection cost detected (interval contains zero)
+mtp-n3              3  0.325-0.857   2.99   0.34  0.028       -0.00 [-0.01, +0.00]  no rejection cost detected (interval contains zero)
+dflash2-n4          4  0.162-0.843   3.98   0.39  0.210       -0.00 [-0.01, -0.00]  clears zero by only 0.23 half-widths - inside the known undercoverage; would be -0.5% of k
+mtp-n5              5  0.173-0.720   4.96   0.47  0.060       -0.00 [-0.01, +0.00]  no rejection cost detected (interval contains zero)
+dflash2-n7          7  0.096-0.695   6.94   0.61  0.191       -0.00 [-0.01, -0.00]  clears zero by only 0.02 half-widths - inside the known undercoverage; would be -0.8% of k
 
-  Largest r across arms: -0.00214 decode-steps per rejected draft token.
+  Largest upper 95 % limit on r, over the 5 arm(s) where the model applies: +0.00435
+  decode-steps per rejected draft token (mtp-n2). The bound is an upper confidence
+  limit, not the largest point estimate: the maximum of several noisy points is
+  biased upward and is not a bound on anything.
+  At that limit the rejection term accounts for at most +0.29 % of the cycle cost (mtp-n5),
+  which is the comparable figure: r is per rejected draft token, so arms at different widths
+  carry the same total cost at different r.
   Acceptance spans roughly 0.096-0.918 in this data - nearly a ten-fold range -
   so a rejection-driven overhead of any consequence would have shown up here.
   Reading: the verification overhead is paid per position VERIFIED, not per
   draft REJECTED. This does not say rollback is free; it bounds how much of
   the observed cost rollback can account for.
+  dflash2-n4, dflash2-n7: r is significantly NEGATIVE, the opposite of a rollback account. k rises with acceptance at constant
+  draft width, which is what a cost paid per position verified looks like near saturation: mean_len climbs toward w+1 while the cycle cost does not.
 
 --- TEST 2: k vs verification width, per method ---
-    fitting k = k0 + c*(w-1); c is the marginal cost of one more verified position
-  draft-dflash   widths [5, 8]  ->  k0=0.7825  c=0.2784  r2=1.0000
+    MMVQ dispatch limit 8, from the analyser's constant: this file predates harness/kernel_facts.py
+    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified
+    position in serial-decode-step equivalents, over the whole cycle rather than
+    attributed to any one component; see the note under the fits.
+  draft-dflash   MMVQ widths [5, 8]  ->  k0=0.7825  c=0.2784  r2=1.0000
+                     k0 0.7790 to 0.7858   c 0.2775 to 0.2795   nominal 95 %, 25 prompts resampled within class
       w= 5  k=1.8963  fit=1.8963  resid=+0.0000
       w= 8  k=2.7316  fit=2.7316  resid=+0.0000
-  draft-mtp      widths [3, 4, 6]  ->  k0=0.8937  c=0.2829  r2=0.9998
+  draft-mtp      MMVQ widths [3, 4, 6]  ->  k0=0.8937  c=0.2829  r2=0.9998
+                     k0 0.8919 to 0.8954   c 0.2821 to 0.2837   nominal 95 %, 25 prompts resampled within class
       w= 3  k=1.4545  fit=1.4595  resid=-0.0050
       w= 4  k=1.7498  fit=1.7423  resid=+0.0075
       w= 6  k=2.3056  fit=2.3081  resid=-0.0025
 
-  Two methods with independent drafters fitted separately. If their `c` agree
-  while `k0` differ, the marginal cost belongs to the verification path rather
-  than to the drafter.
+--- the same fit on requests that never diverged from their baseline ---
+  draft-dflash   only 2 widths keep two or more non-diverging records; not fitted
+  draft-mtp      c on all  375 = 0.2829   c on the  85 that never diverged = 0.2815   -0.5 %
+
+  Two methods with independent drafters, fitted separately. What `k` measures is
+  the whole speculative cycle: target verification, the drafter's own forwards,
+  sampling, launch and synchronisation, output extraction and any per-step state
+  management. The two methods share every one of those except the drafter.
+
+  c(draft-dflash) - c(draft-mtp) = -0.0044  [-0.0052, -0.0037]   nominal 95 %, 25 shared prompts, paired on them
+  The difference clears zero, so the marginal cost is NOT shared: the two
+  methods pay different amounts per verified position. Whatever `c` is
+  charging for, part of it moves with the drafter, and the shared-machinery
+  reading that Phase A's two-point fit supported does not survive the
+  completed ladder.
+
+  Separating the components needs per-context CUDA-event timing, a replay that
+  skips drafter compute, or a profiler decomposition - none of which this file has.
 
 --- implied optimum ---
     mean_len saturates with depth while k grows linearly, so speedup = mean_len/k

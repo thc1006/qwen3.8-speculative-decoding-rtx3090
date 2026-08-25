@@ -139,17 +139,57 @@ not the one this claim is about.
 
 A state-rollback account charges the overhead to *rejection*: 48 of this model's 64 layers are
 Gated DeltaNet and cannot roll back by truncating a KV suffix. Writing that as
-`k = k_verify + r*n_max*(1 - acceptance)` makes `r` estimable from the slope of `k` against
-acceptance. Across an acceptance range of **0.096-0.918**, every arm returns **|r| <= 0.0028**
-decode-steps per rejected token, r^2 between 0.001 and 0.060.
+`k = k_verify + r*w*(1 - acceptance)` makes `r` estimable from the slope of `k` against
+acceptance, where `w` is the draft length per target forward pass.
 
-No relationship appears that is consistent with that specific proxy. What it bounds is the
-component of cost proportional to `n_max*(1 - acceptance)`, and that component is approximately
-none. It does not bound a fixed checkpoint paid every verification step, a fixed restore paid once
-per rejection, or a cost depending on where in the draft the first rejection lands: the first two
-are absorbed into `k_verify` and are invisible to a slope against acceptance. Separating them needs
-per-step drafted and accepted lengths, which the server does not yet report. The hypothesis was
-this repo's own, pre-registered, and is reported as unsupported in the form it was written.
+Across an acceptance range of **0.096-0.980**, the bound holds in every completed matrix. Taking
+the largest upper 95 % confidence limit on `r` among the arms the model applies to, and converting
+it to the share of the cycle it would account for:
+
+| matrix | arms fitted | largest upper limit on `r` | share of cycle cost |
+|---|---|---|---|
+| A | 5 | +0.00435 | 0.29 % |
+| C | 3 | +0.00075 | 0.08 % |
+| KV | 5 | +0.00293 | 0.22 % |
+| NMAX | 12 | +0.04818 | 1.29 % |
+| R2 | 14 | +0.01518 | 1.37 % |
+
+The share is the comparable column, because `r` is per rejected *draft token* and arms at
+different widths carry the same total cost at very different `r`. Nothing reaches 1.4 %.
+
+Three corrections were needed before that sentence could be written, and each of them had been
+silently wrong:
+
+* **The verdict came from a point estimate's sign.** `r^2` was computed, printed, and never
+  consulted, so an arm whose fit explained 13 % of the variance in `k` was announced in the same
+  words as one explaining 99 %. Every `r` now carries a prompt-cluster bootstrap interval and the
+  verdict comes from whether it excludes zero.
+* **The bound was `max` over the arms' point estimates.** The maximum of several noisy estimates
+  is biased upward and is not a bound on anything. It is now the largest upper confidence limit.
+  That gate also decided whether this section's conclusion was printed at all, so on the Phase M
+  data one arm clearing zero by 0.10 half-widths -- well inside the undercoverage measured at
+  n = 25 -- suppressed the finding entirely.
+* **`w` is not `n_max`.** The server reuses a surviving draft tail instead of re-drafting
+  (`tools/server/server-context.cpp:2893`), so a cycle can cost a forward pass and generate
+  nothing. On the MTP and DFlash arms the realised `w` sits within 0.7 % of `n_max` and the
+  distinction is immaterial; on `dflash2-n8` it is 6.94 against 8, and on the 0.8B `draft-simple`
+  arms it is **4.20 against 8** and **varies with acceptance at r = +0.94**. There the regressor
+  is inside the response. The induced bias is positive in the slope and therefore negative in
+  `r` -- which is the direction of this section's own conclusion, so those arms are reported and
+  excluded from the bound rather than counted toward it.
+
+Three arms return an `r` that is significantly *negative*: `k` rises with acceptance at constant
+draft width. That is the opposite of a rollback account and is what a cost paid per position
+verified looks like near saturation, where `mean_len` climbs toward `w + 1` while the cycle cost
+does not.
+
+What the bound covers is the component of cost proportional to `w*(1 - acceptance)`, and that
+component is approximately none. It does not bound a fixed checkpoint paid every verification
+step, a fixed restore paid once per rejection, or a cost depending on where in the draft the first
+rejection lands: the first two are absorbed into `k_verify` and are invisible to a slope against
+acceptance. Separating them needs per-step drafted and accepted lengths, which the server does not
+yet report. The hypothesis was this repo's own, pre-registered, and is reported as unsupported in
+the form it was written.
 
 </details>
 

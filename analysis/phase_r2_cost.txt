@@ -27,40 +27,58 @@ mtp-n7@sm1700-bwhi draft-mtp        8   75   2.0340  0.7142   1.519-3.065
 
 --- TEST 1: is the overhead charged to REJECTION? ---
     Model a rejection-proportional cost r (decode-steps per rejected draft token):
-        k = k_verify + r * n_max * (1 - acceptance)
-        => dk/d(acceptance) = -r * n_max,   so  r = -slope / n_max
+        k = k_verify + r * w * (1 - acceptance),  w = realised draft len / forward
+        => dk/d(acceptance) = -r * w,   so  r = -slope / w
     A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+    The model holds w constant within an arm. Where the server reuses a surviving
+    draft tail instead of re-drafting, w moves WITH acceptance and the slope picks
+    that up rather than any rejection cost - biased positive, which reads as r < 0,
+    which is this test's own conclusion. Arms whose w varies are fitted and shown,
+    and excluded from the bound.
 
-arm               n    accept range     slope     r2  r estimate  reading
-mtp-n3@sm600      3  0.325-0.857    0.0049  0.000    -0.00165  r <= 0 - no rejection cost detected (k spread 74.68%)
-mtp-n3@sm1200     3  0.325-0.857    0.0171  0.000    -0.00569  r <= 0 - no rejection cost detected (k spread 75.00%)
-mtp-n3@sm1700     3  0.325-0.857    0.0071  0.000    -0.00235  r <= 0 - no rejection cost detected (k spread 75.62%)
-mtp-n3@sm1200-bwlo  3  0.325-0.857    0.0178  0.000    -0.00593  r <= 0 - no rejection cost detected (k spread 75.19%)
-mtp-n3@sm1200-bwhi  3  0.325-0.857    0.0182  0.000    -0.00608  r <= 0 - no rejection cost detected (k spread 75.07%)
-mtp-n3@sm1700-bwlo  3  0.325-0.857    0.0105  0.000    -0.00351  r <= 0 - no rejection cost detected (k spread 75.79%)
-mtp-n3@sm1700-bwhi  3  0.325-0.857    0.0030  0.000    -0.00101  r <= 0 - no rejection cost detected (k spread 75.67%)
-mtp-n7@sm600      7  0.125-0.644   -0.0317  0.000     0.00453  r negligible (k spread 75.57%)
-mtp-n7@sm1200     7  0.125-0.644    0.0339  0.000    -0.00484  r <= 0 - no rejection cost detected (k spread 75.53%)
-mtp-n7@sm1700     7  0.125-0.644    0.0358  0.000    -0.00512  r <= 0 - no rejection cost detected (k spread 75.61%)
-mtp-n7@sm1200-bwlo  7  0.125-0.644    0.0349  0.000    -0.00499  r <= 0 - no rejection cost detected (k spread 75.54%)
-mtp-n7@sm1200-bwhi  7  0.125-0.644    0.0354  0.000    -0.00506  r <= 0 - no rejection cost detected (k spread 75.46%)
-mtp-n7@sm1700-bwlo  7  0.125-0.644    0.0423  0.000    -0.00605  r <= 0 - no rejection cost detected (k spread 75.64%)
-mtp-n7@sm1700-bwhi  7  0.125-0.644    0.0287  0.000    -0.00410  r <= 0 - no rejection cost detected (k spread 75.97%)
+arm                 n    accept range      w  w cv%     r2                   r [95 %]  reading
+mtp-n3@sm600        3  0.325-0.857   2.99   0.34  0.000       -0.00 [-0.00, +0.00]  no rejection cost detected (interval contains zero)
+mtp-n3@sm1200       3  0.325-0.857   2.99   0.34  0.000       -0.01 [-0.01, -0.00]  k FALLS with rejection - not a rollback account
+mtp-n3@sm1700       3  0.325-0.857   2.99   0.34  0.000       -0.00 [-0.01, +0.00]  no rejection cost detected (interval contains zero)
+mtp-n3@sm1200-bwlo  3  0.325-0.857   2.99   0.34  0.000       -0.01 [-0.01, -0.00]  k FALLS with rejection - not a rollback account
+mtp-n3@sm1200-bwhi  3  0.325-0.857   2.99   0.34  0.000       -0.01 [-0.01, -0.00]  k FALLS with rejection - not a rollback account
+mtp-n3@sm1700-bwlo  3  0.325-0.857   2.99   0.34  0.000       -0.00 [-0.01, -0.00]  clears zero by only 0.66 half-widths - inside the known undercoverage; would be -0.4% of k
+mtp-n3@sm1700-bwhi  3  0.325-0.857   2.99   0.34  0.000       -0.00 [-0.00, +0.00]  no rejection cost detected (interval contains zero)
+mtp-n7@sm600        7  0.125-0.644   6.93   0.59  0.000       +0.00 [-0.01, +0.02]  no rejection cost detected (interval contains zero)
+mtp-n7@sm1200       7  0.125-0.644   6.93   0.59  0.000       -0.00 [-0.01, -0.00]  clears zero by only 0.37 half-widths - inside the known undercoverage; would be -0.8% of k
+mtp-n7@sm1700       7  0.125-0.644   6.93   0.59  0.000       -0.01 [-0.01, -0.00]  clears zero by only 1.10 half-widths - inside the known undercoverage; would be -1.2% of k
+mtp-n7@sm1200-bwlo  7  0.125-0.644   6.93   0.59  0.000       -0.01 [-0.01, -0.00]  clears zero by only 0.38 half-widths - inside the known undercoverage; would be -0.9% of k
+mtp-n7@sm1200-bwhi  7  0.125-0.644   6.93   0.59  0.000       -0.01 [-0.01, -0.00]  clears zero by only 0.46 half-widths - inside the known undercoverage; would be -0.9% of k
+mtp-n7@sm1700-bwlo  7  0.125-0.644   6.93   0.59  0.000       -0.01 [-0.01, -0.00]  k FALLS with rejection - not a rollback account
+mtp-n7@sm1700-bwhi  7  0.125-0.644   6.93   0.59  0.000       -0.00 [-0.01, -0.00]  clears zero by only 0.40 half-widths - inside the known undercoverage; would be -1.0% of k
 
-  Largest r across arms: +0.00453 decode-steps per rejected draft token.
+  Largest upper 95 % limit on r, over the 14 arm(s) where the model applies: +0.01518
+  decode-steps per rejected draft token (mtp-n7@sm600). The bound is an upper confidence
+  limit, not the largest point estimate: the maximum of several noisy points is
+  biased upward and is not a bound on anything.
+  At that limit the rejection term accounts for at most +1.37 % of the cycle cost (mtp-n7@sm600),
+  which is the comparable figure: r is per rejected draft token, so arms at different widths
+  carry the same total cost at different r.
   Acceptance spans roughly 0.125-0.857 in this data - nearly a ten-fold range -
   so a rejection-driven overhead of any consequence would have shown up here.
   Reading: the verification overhead is paid per position VERIFIED, not per
   draft REJECTED. This does not say rollback is free; it bounds how much of
   the observed cost rollback can account for.
+  mtp-n3@sm1200, mtp-n3@sm1200-bwlo, mtp-n3@sm1200-bwhi, mtp-n3@sm1700-bwlo, mtp-n7@sm1200, mtp-n7@sm1700, mtp-n7@sm1200-bwlo, mtp-n7@sm1200-bwhi, mtp-n7@sm1700-bwlo, mtp-n7@sm1700-bwhi: r is significantly NEGATIVE, the opposite of a rollback account. k rises with acceptance at constant
+  draft width, which is what a cost paid per position verified looks like near saturation: mean_len climbs toward w+1 while the cycle cost does not.
 
 --- TEST 2: k vs verification width, per method ---
+    MMVQ dispatch limit 8, from the analyser's constant: this file predates harness/kernel_facts.py
     fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified
     position in serial-decode-step equivalents, over the whole cycle rather than
     attributed to any one component; see the note under the fits.
   draft-mtp      MMVQ widths [4, 8]  ->  k0=0.7187  c=0.2954  r2=1.0000
+                     k0 0.7161 to 0.7213   c 0.2945 to 0.2964   nominal 95 %, 25 prompts resampled within class
       w= 4  k=1.6049  fit=1.6049  resid=+0.0000
       w= 8  k=2.7866  fit=2.7866  resid=+0.0000
+
+--- the same fit on requests that never diverged from their baseline ---
+  draft-mtp      only 2 widths keep two or more non-diverging records; not fitted
 
 --- implied optimum ---
     mean_len saturates with depth while k grows linearly, so speedup = mean_len/k
