@@ -27,28 +27,28 @@ mtp-n7     stock       45.33     1732     9501    413
 ====================================================================================================
 --- memory bandwidth ---
 
-  interval bw-lo -> stock
-    baseline     9101 ->   9501  elasticity  0.783 [ 0.773,  0.793]
-    mtp-n3       9101 ->   9501  elasticity  0.167 [ 0.153,  0.181]  ( 0.21x baseline)
-    mtp-n7       9101 ->   9501  elasticity  0.130 [ 0.122,  0.138]  ( 0.17x baseline)
+  interval bw-lo -> stock   <-- crosses bw-lo, stock, where the methods did not hold the same core clock
+    baseline     9101 ->   9501  elasticity  0.783 [ 0.773,  0.793]  [unmatched]
+    mtp-n3       9101 ->   9501  elasticity  0.167 [ 0.153,  0.181]  ( 0.21x baseline)  [unmatched]
+    mtp-n7       9101 ->   9501  elasticity  0.130 [ 0.122,  0.138]  ( 0.17x baseline)  [unmatched]
 
-  interval stock -> bw-hi
-    baseline     9501 ->   9901  elasticity  0.718 [ 0.703,  0.732]
-    mtp-n3       9501 ->   9901  elasticity  0.101 [ 0.084,  0.120]  ( 0.14x baseline)
-    mtp-n7       9501 ->   9901  elasticity  0.100 [ 0.094,  0.106]  ( 0.14x baseline)
+  interval stock -> bw-hi   <-- crosses bw-hi, stock, where the methods did not hold the same core clock
+    baseline     9501 ->   9901  elasticity  0.718 [ 0.703,  0.732]  [unmatched]
+    mtp-n3       9501 ->   9901  elasticity  0.101 [ 0.084,  0.120]  ( 0.14x baseline)  [unmatched]
+    mtp-n7       9501 ->   9901  elasticity  0.100 [ 0.094,  0.106]  ( 0.14x baseline)  [unmatched]
 
 ====================================================================================================
 --- compute (SM clock) ---
 
-  interval pw-vlo -> pw-lo
-    baseline      387 ->    906  elasticity  0.915 [ 0.902,  0.929]
-    mtp-n3        478 ->   1081  elasticity  0.944 [ 0.922,  0.967]  ( 1.03x baseline)
-    mtp-n7        525 ->   1178  elasticity  0.924 [ 0.891,  0.961]  ( 1.01x baseline)
+  interval pw-vlo -> pw-lo   <-- crosses pw-lo, pw-vlo, where the methods did not hold the same core clock
+    baseline      387 ->    906  elasticity  0.915 [ 0.902,  0.929]  [unmatched]
+    mtp-n3        478 ->   1081  elasticity  0.944 [ 0.922,  0.967]  ( 1.03x baseline)  [unmatched]
+    mtp-n7        525 ->   1178  elasticity  0.924 [ 0.891,  0.961]  ( 1.01x baseline)  [unmatched]
 
-  interval pw-lo -> stock
-    baseline      906 ->   1785  elasticity  0.491 [ 0.485,  0.498]
-    mtp-n3       1081 ->   1716  elasticity  0.843 [ 0.824,  0.864]  ( 1.71x baseline)
-    mtp-n7       1178 ->   1732  elasticity  0.857 [ 0.797,  0.921]  ( 1.74x baseline)
+  interval pw-lo -> stock   <-- crosses pw-lo, stock, where the methods did not hold the same core clock
+    baseline      906 ->   1785  elasticity  0.491 [ 0.485,  0.498]  [unmatched]
+    mtp-n3       1081 ->   1716  elasticity  0.843 [ 0.824,  0.864]  ( 1.71x baseline)  [unmatched]
+    mtp-n7       1178 ->   1732  elasticity  0.857 [ 0.797,  0.921]  ( 1.74x baseline)  [unmatched]
 
 ====================================================================================================
 --- correction: the bandwidth lever is not clean ---
@@ -87,13 +87,25 @@ mtp-n7     stock       45.33     1732     9501    413
   mtp-n3
     memory bandwidth     bw-lo->bw-hi      0.135 vs baseline  0.751  ratio  0.18
     compute (SM clock)   pw-vlo->stock     0.908 vs baseline  0.727  ratio  1.25
-    -> less bandwidth-elastic AND more compute-elastic than baseline.
-       Speculation has converted a bandwidth-bound decode into a
-       compute-bound verify. Consistent with H2'; inconsistent with H2.
+    -> less bandwidth-elastic AND more compute-elastic than baseline over
+       these clock intervals. Consistent with H2' and inconsistent with H2.
+       Not a bottleneck measurement: elasticity also moves with the
+       voltage-frequency curve, power headroom, boost behaviour, occupancy
+       and launch amortisation, none of which this measures. Calling the
+       verify path compute-bound needs achieved DRAM bandwidth, SM and
+       tensor utilisation, stall reasons and per-kernel times, which means
+       a profiler. What this shows is that the speculative arms respond to
+       core clock where the baseline responds to memory clock.
 
   mtp-n7
     memory bandwidth     bw-lo->bw-hi      0.115 vs baseline  0.751  ratio  0.15
     compute (SM clock)   pw-vlo->stock     0.902 vs baseline  0.727  ratio  1.24
-    -> less bandwidth-elastic AND more compute-elastic than baseline.
-       Speculation has converted a bandwidth-bound decode into a
-       compute-bound verify. Consistent with H2'; inconsistent with H2.
+    -> less bandwidth-elastic AND more compute-elastic than baseline over
+       these clock intervals. Consistent with H2' and inconsistent with H2.
+       Not a bottleneck measurement: elasticity also moves with the
+       voltage-frequency curve, power headroom, boost behaviour, occupancy
+       and launch amortisation, none of which this measures. Calling the
+       verify path compute-bound needs achieved DRAM bandwidth, SM and
+       tensor utilisation, stall reasons and per-kernel times, which means
+       a profiler. What this shows is that the speculative arms respond to
+       core clock where the baseline responds to memory clock.

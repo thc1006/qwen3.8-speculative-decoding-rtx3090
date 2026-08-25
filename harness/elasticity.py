@@ -232,6 +232,16 @@ def report(result: dict) -> None:
         for a, (_, cs) in axes.items():
             print(f"  {a}: {' -> '.join(cs)}")
 
+    # Which conditions held the same core clock for every method. Computed here rather than only
+    # in the section further down, which explains the consequence in prose while the elasticity
+    # rows above it print unmarked. The headline compute comparison, baseline against a
+    # speculative arm at the top of the ladder, crosses one of these.
+    unmatched = set()
+    for _c in {c for _a in axes for c in axes[_a][1]}:
+        _per = {m: _clock(result, m, _c, SM_KEY) for m in methods if _clock(result, m, _c, SM_KEY)}
+        if len(_per) >= 2 and (max(_per.values()) - min(_per.values())) / min(_per.values()) > 0.005:
+            unmatched.add(_c)
+
     for axis, (clock_key, order) in axes.items():
         print(f"\n{'=' * 100}\n--- {axis} ---")
         present = [c for c in order if any((m, c) in cells for m in methods)]
@@ -239,7 +249,10 @@ def report(result: dict) -> None:
             print("  not enough conditions measured yet")
             continue
         for lo_c, hi_c in zip(present, present[1:]):
-            print(f"\n  interval {lo_c} -> {hi_c}")
+            crossed = sorted({lo_c, hi_c} & unmatched)
+            warn = (f"   <-- crosses {', '.join(crossed)}, where the methods did not"
+                    f" hold the same core clock" if crossed else "")
+            print(f"\n  interval {lo_c} -> {hi_c}{warn}")
             base_e = None
             for m in methods:
                 if (m, lo_c) not in cells or (m, hi_c) not in cells:
@@ -254,7 +267,8 @@ def report(result: dict) -> None:
                     base_e = e
                 rel = f"  ({e/base_e:5.2f}x baseline)" if base_e and m != baseline else ""
                 print(f"    {m:10s} {x_lo:6.0f} -> {x_hi:6.0f}  "
-                      f"elasticity {e:6.3f} [{l:6.3f}, {h:6.3f}]{rel}")
+                      f"elasticity {e:6.3f} [{l:6.3f}, {h:6.3f}]{rel}"
+                      f"{'  [unmatched]' if crossed else ''}")
 
     # ------------------------------------------------------- cross-term correction
     bw_axes = [a for a in axes if a.startswith("memory bandwidth")]

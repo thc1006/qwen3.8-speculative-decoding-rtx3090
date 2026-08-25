@@ -677,6 +677,23 @@ class TestAlgebraicInvariants(unittest.TestCase):
         import analyze
         self.assertIn("COVERAGE NOTE", inspect.getsource(analyze),
                       "a report carrying a verdict inside the margin must say so")
+    def test_elasticity_marks_intervals_the_pin_did_not_hold(self):
+        """A pin binds only while the power limit does not.
+
+        Phase R2 pins the SM clock, and it holds at five of seven conditions. At the top two a
+        speculative arm draws more at the same clock, reaches the cap first, and lands short: at
+        sm1700 the methods sit at 1710, 1698 and 1708 MHz against one request. The report
+        explained that in a section below the elasticity tables while the tables themselves
+        printed unmarked, and the headline compute comparison, 0.27 against 0.76 and 0.81,
+        crosses exactly that condition.
+        """
+        import elasticity as E
+        code = "\n".join(l for l in inspect.getsource(E).splitlines()
+                         if not l.strip().startswith("#"))
+        self.assertIn("unmatched = set()", code)
+        self.assertIn("[unmatched]", code,
+                      "each row of an interval that crosses an unmatched condition must say so")
+        self.assertIn("did not", code)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

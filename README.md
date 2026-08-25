@@ -393,8 +393,15 @@ the speculative arms keep scaling at 0.759 and 0.805. The ratio between them the
 number: it is 1.14x in the low regime and 2.85x in the high one, which is why this repo reports
 elasticities per interval and never pools them across a regime change.
 
-Pinning also tightened the intervals to the third decimal, because the denominator is now a
-setting rather than something the card negotiates with its power cap.
+Pinning tightened the intervals to the third decimal, and it binds at five of the seven
+conditions. It does not bind at the top two. A pin holds only while the power limit does not, and
+a speculative arm draws more at the same clock, so at `sm1700` the methods land on 1710, 1698 and
+1708 MHz against one request, and at `sm1700-bwhi` on 1710, 1689 and 1703. The elasticities in the
+table above cross `sm1700`, and `harness/elasticity.py` marks every interval that crosses an
+unmatched condition rather than leaving it to be noticed in the clock columns. The arithmetic is
+unaffected, since each elasticity divides by that arm's own log clock ratio, but the comparison
+between arms there spans slightly different ranges. Phase R, for contrast, was mismatched at 30.0 %
+and 35.8 %.
 
 ## Design
 
