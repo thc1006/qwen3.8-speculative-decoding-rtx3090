@@ -103,6 +103,27 @@ second-host addendum in `PREREGISTRATION.md`.
       `.ladder_budget_s` holds a seconds count that stops it at a rung boundary.
 - [ ] **Phase M** - dense against MoE under one protocol, anchored on reproducing the
       predecessor's -44.6 %.
+
+      Audited before it runs, since the n-gram guard already showed one bad arm can stop a phase.
+      Two risks checked, one cleared and one open.
+
+      Cleared: the MoE carries a real MTP block. `blk.40.nextn.{eh_proj,enorm,hnorm,
+      shared_head_norm}` matches the dense target's `blk.64` set exactly, so the five `moe-mtp-*`
+      arms will not repeat `ngram-mod` and come out as silent baseline duplicates.
+
+      Open: the three `moe-draft08b-*` arms put a second model on the card with `-ngld 99`, and
+      the margin is thin. llama.cpp ignores the MTP block's attention and expert tensors - the
+      server log says so for the dense model, `blk.64.attn_q.weight ... ignoring` - which for this
+      MoE is 0.48 GiB of `blk.40` never reaching VRAM, so the load is 20.79 rather than 21.27 GiB.
+      With the 0.50 GiB drafter and 0.34 GiB of q8_0 KV at 8192 that leaves about 0.57 GiB for the
+      compute buffer at 1.8 GiB, and nothing fits above about 2.4 GiB. It cannot be settled
+      without the card: no server log here records a buffer allocation, and the MoE has never been
+      loaded on this host. `assert_capacity` compares against total VRAM, 24.0 against the
+      matrix's 23.8, so it passes and will not pre-empt an OOM at load.
+
+      If it does OOM, `run_phase phase_m ... || exit 1` stops the chain, the 22 GB MoE is never
+      deleted, and Phase Q never gets the disk it needs. The monitor greps server logs for `out of
+      memory`, so it surfaces immediately rather than being found in the morning.
 - [ ] **Phase Q** - the target-quantization ladder. Needs host C to itself; `UD-Q6_K_XL` and
       `Q8_0` do not fit on 24 GB, and 29 GB free is not enough for `Q8_0` either.
 - [ ] **Phase V** - vLLM, matched at K=1, so it waits on the n-max ladder.
