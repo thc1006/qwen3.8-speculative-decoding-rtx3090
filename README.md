@@ -147,6 +147,11 @@ Phase A fitted three MTP widths and two DFlash2 widths; two points make an r^2 o
 rather than evidence, which is why `phase_nmax` runs the full ladder. On seven MTP widths the line
 holds at r^2 = 0.9958 with five residual degrees of freedom.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_dispatch_boundary_dark.png">
+  <img alt="The cost of one verification step against verification width, from the n-max ladder. Widths 2 through 8 for draft-mtp and 3 through 7 for draft-dflash rise on a straight line, with c equal to 0.2904 at r-squared 0.9958 and 0.2481 at 0.9947. A vertical line marks MMVQ_MAX_BATCH_SIZE at 8. Width 9 sits past it with an open marker, 26 percent below the line for draft-mtp and 7 percent below for draft-dflash." src="analysis/plot_dispatch_boundary.png">
+</picture>
+
 The two fits stop at width 8 deliberately. `MMVQ_MAX_BATCH_SIZE` is 8, so a wider verification
 batch never reaches that kernel at all: at width 9 `k` sits **26 % below** what the MMVQ line
 predicts for MTP and 6.7 % below for DFlash2, and throughput jumps back from +9.1 % at width 8 to

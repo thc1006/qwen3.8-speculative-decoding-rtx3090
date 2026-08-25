@@ -50,6 +50,7 @@ import stats as ST  # noqa: E402
 
 OUT = ROOT / "analysis"
 RESULT = ROOT / "results/phase_a.json"
+RESULT_NMAX = ROOT / "results/phase_nmax.json"
 RESULT_R2 = ROOT / "results/phase_r2.json"
 
 DPI = 150
@@ -307,6 +308,79 @@ def _forks(result):
     return {p: v for p, v in fork.items() if len(v) == len(SPEC_ARMS)}
 
 
+
+def fig_dispatch_boundary(result_nmax):
+    """k against verification width across the full ladder, with the MMVQ dispatch limit marked.
+
+    The cost-model figure fits Phase A's three MTP widths and two DFlash2 ones. The n-max ladder
+    has seven and three, all inside the dispatch limit, plus a point past it. That point is the
+    figure: MMVQ_MAX_BATCH_SIZE is 8, so a wider verification batch takes a different kernel
+    family, and it sits well below the line the widths below it define. Fitting one line across
+    both regimes dragged the MTP coefficient from 0.2904 to 0.2215 and the fit from 0.9958 to
+    0.8304, which is what this exists to make visible rather than argued.
+    """
+    rows = CM.collect(result_nmax)
+    mmvq_max, _ = CM.recorded_mmvq_max(result_nmax)
+    grp = defaultdict(list)
+    for r in rows:
+        grp[(r["spec_type"], r["width"])].append(r["k"])
+    widths = sorted({w for _, w in grp})
+
+    fig, ax = plt.subplots(figsize=(FIG_W, 5.1))
+    notes, drops = [], []
+    for spec, (col, mk) in STYLE.items():
+        pts = sorted((w, fmean(v)) for (s, w), v in grp.items() if s == spec)
+        if not pts:
+            continue
+        on = [(w, k) for w, k in pts if w <= mmvq_max]
+        off = [(w, k) for w, k in pts if w > mmvq_max]
+        ax.plot([w for w, _ in on], [k for _, k in on], marker=mk, color=col, lw=1.8, ms=9,
+                markeredgecolor=C("bg"), markeredgewidth=1.2, label=spec, zorder=3)
+        if len(on) < 2:
+            continue
+        k0, c, r2 = CM._linfit([w - 1 for w, _ in on], [k for _, k in on])
+        gx = np.linspace(on[0][0], on[-1][0], 40)
+        ax.plot(gx, k0 + c * (gx - 1), color=col, lw=1.1, ls="--", alpha=0.75, zorder=1)
+        notes.append((f"c = {c:.4f}, r^2 = {r2:.4f}   ({spec}, widths {on[0][0]}-{on[-1][0]})", col))
+        for w, k in off:
+            pred = k0 + c * (w - 1)
+            ax.plot([w], [pred], marker="_", color=col, ms=13, mew=1.6, alpha=0.8, zorder=2)
+            ax.plot([w], [k], marker=mk, color=col, ms=9, mfc=C("bg"), mew=1.8, zorder=3)
+            ax.annotate("", xy=(w, k), xytext=(w, pred),
+                        arrowprops=dict(arrowstyle="->", color=col, lw=1.1, ls=":", alpha=0.85))
+            drops.append((w, k, pred, 100 * (k - pred) / pred, col))
+
+    # Room on the right for the deviation labels, so nothing is clipped at the frame.
+    ax.set_xlim(widths[0] - 0.55, widths[-1] + 1.5)
+    lo, hi = ax.get_ylim()
+    ax.set_ylim(lo, hi + (hi - lo) * 0.10)
+
+    # One label per drop, stacked by which is higher, placed to the right of the marker rather
+    # than on top of the other one.
+    for i, (w, k, pred, pct, col) in enumerate(sorted(drops, key=lambda d: -d[1])):
+        ax.annotate(f"{pct:+.0f} % against the line",
+                    xy=(w, (k + pred) / 2), xytext=(14, 6 if i == 0 else -14),
+                    textcoords="offset points", fontsize=9, color=col, va="center", ha="left")
+
+    ax.axvline(mmvq_max + 0.5, color=C("mut"), lw=1.0, alpha=0.55, zorder=0)
+    ax.text(mmvq_max + 0.44, ax.get_ylim()[0] + (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.5,
+            f"MMVQ_MAX_BATCH_SIZE = {mmvq_max}", rotation=90, ha="right", va="center",
+            fontsize=8.6, color=C("mut"))
+
+    ax.set_xlabel("verification width  (n-max + 1)")
+    ax.set_ylabel("k, cost of one verification step\nin plain decode steps")
+    ax.set_title("The cost line stops where the kernel does", pad=12)
+    ax.set_xticks(widths)
+    for i, (txt, col) in enumerate(notes):
+        ax.text(0.03, 0.94 - i * 0.075, txt, transform=ax.transAxes, fontsize=9.2, color=col)
+    ax.legend(loc="lower right", bbox_to_anchor=(0.99, 0.02), frameon=False, fontsize=9.5)
+    _despine(ax)
+    _save(fig, "plot_dispatch_boundary", bottom=0.13,
+          note="A width past the dispatch limit takes a different kernel family. Its marker is "
+               "open, it is excluded from the fit, and the arrow is the distance from the line "
+               "the widths below define.")
+
+
 def fig_width_partition(result):
     fork = _forks(result)
     prompts = sorted(fork)
@@ -428,12 +502,15 @@ def main():
     result = A.load(RESULT)
     series, prompt_class, _, _ = A.build_series(result, "decode_tok_s")
     result_r2 = A.load(RESULT_R2) if RESULT_R2.exists() else None
+    result_nmax = A.load(RESULT_NMAX) if RESULT_NMAX.exists() else None
     for mode in ("light", "dark"):
         print(f"  --- {mode}")
         with theme(mode):
             fig_headline(series, prompt_class)
             fig_per_class(series, prompt_class)
             fig_cost_model(result)
+            if result_nmax is not None:
+                fig_dispatch_boundary(result_nmax)
             fig_width_partition(result)
             if result_r2:
                 fig_bound_by(result_r2)
