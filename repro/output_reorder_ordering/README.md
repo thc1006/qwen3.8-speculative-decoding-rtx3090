@@ -72,12 +72,26 @@ existing swap is load-bearing. Row 4 is where upstream breaks: with `n_outputs <
 swap indices address output rows while the buffer holds token rows, and the result is neither
 ubatch nor batch order.
 
-## Not covered
+## `embd_nextn`, and a claim that was wrong
 
-Unmasked `embd_nextn` takes the same treatment on structural grounds and is not measured here.
-A synthetic model cannot carry nextn tensors: `llama_model_saver::add_tensors_from_model` copies
-them from an already-loaded model, so a from-scratch gguf has none and the loader aborts on
-`GGML_ASSERT(buft != nullptr)`. The grounds are that `output_reserve` sizes unmasked `embd_nextn`
-`n_embd_out * n_batch` against masked's `n_embd_out * n_outputs_max`, the decode loop writes it at
-`masked ? n_outputs_prev : n_tokens_prev`, and `common/speculative.cpp:607-609` reads it and
-`embd_layer_inp` in one loop with the same `i * n_embd_tgt` stride.
+An earlier version of this file said a synthetic model cannot carry nextn tensors, citing
+`llama_model_saver::add_tensors_from_model` and an abort on `GGML_ASSERT(buft != nullptr)`. That
+was wrong, and it was used to justify leaving `embd_nextn` untested.
+
+`src/models/qwen35.cpp:213` sets `res->t_h_nextn` **unconditionally** -- it is the hidden state
+after the final norm, it does not read `hparams.n_layer_nextn`, and it involves no nextn weight
+tensors. `arch_supported()` in `tests/test-llama-archs.cpp` does not exclude `LLM_ARCH_QWEN35` and
+the fixture already special-cases it. The masked/unmasked split is in the same graph: `:178`
+applies `ggml_get_rows(..., inp_out_ids)` at the last layer when masked, so `t_h_nextn` carries
+`n_outputs` rows, and unmasked carries `n_tokens`. That is exactly the split `output_reserve`
+sizes for.
+
+So both layouts are directly testable and are now tested in
+`tests/test-llama-archs.cpp:test_output_reorder_nextn_rows`, together with the two mode-toggle
+lifecycles. The values are the whole model output rather than a layer-0 lookup, so they are not
+bit-comparable across batch shapes; each row is matched to its nearest reference row instead,
+which tests the ordering without assuming numerical identity.
+
+The narrow true statement is that the fixture never emits `LLM_KV_NEXTN_PREDICT_LAYERS`, so
+`n_layer_nextn` is 0 and no nextn *weights* exist. That does not matter, because `t_h_nextn` does
+not use them.
