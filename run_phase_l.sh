@@ -26,6 +26,14 @@ DEPTHS="${DEPTHS:-8192 32768 65536 81920 98304}"
 N_ARMS=4
 PROMPTS=15         # phase_l declares PROMPTS_PER_CLASS = 3 over 5 classes
 EXPECTED=$(( N_ARMS * PROMPTS * PASSES ))
+N_RUNGS=$(set -- $DEPTHS; echo $#)
+RUNG_I=0
+
+# `bash run_phase_l.sh` fixes QWEN_L_BUDGET_S at exec time, and the rung that decides whether the
+# cliff reproduces does not start for hours after that. Reading a file at each rung boundary as
+# well keeps the choice available for as long as there is a boundary left to stop at. With neither
+# the variable nor the file set, nothing here runs and the ladder is unchanged.
+BUDGET_FILE="${QWEN_L_BUDGET_FILE:-.ladder_budget_s}"
 
 log() { echo "[$(date -Is)] $*"; }
 records_in() {
@@ -39,6 +47,7 @@ LADDER_T0=$(date +%s)
 log "depth ladder:${DEPTHS} - expecting ${EXPECTED} records each"
 
 for D in $DEPTHS; do
+  RUNG_I=$(( RUNG_I + 1 ))
   OUT="results/phase_l_${D}.json"
   got=$(records_in "$OUT")
   if [ "${got:-0}" -ge "$EXPECTED" ]; then
@@ -53,7 +62,7 @@ for D in $DEPTHS; do
   # takes as long as the collapse is deep - at the 1.4 tok/s the report describes, 160 tokens is
   # 114 seconds a request and a rung is close to six hours. Nothing in the harness has a timeout,
   # so the only protection is that the log says where it is going while there is still time to
-  # decide. QWEN_L_BUDGET_S stops the ladder between rungs if one is set.
+  # decide. QWEN_L_BUDGET_S, or a seconds count in $BUDGET_FILE, stops it between rungs.
   t0=$(date +%s)
   QWEN_L_DEPTH="$D" python3 -u harness/bench.py --matrix phase_l --passes "$PASSES" \
       --gpu "$GPU" --port "$PORT" --out "$OUT" > "logs/phase_l_${D}.log" 2>&1
@@ -63,14 +72,17 @@ for D in $DEPTHS; do
   log "depth $D took ${el}s for ${got_now:-0} records"
   if [ "${got_now:-0}" -gt 0 ]; then
     per=$(( el / got_now ))
-    left=$(( EXPECTED - got_now ))
-    log "  ${per}s per record; the remaining rungs are $(( ${#DEPTHS} )) deep and each is "\
-        "${EXPECTED} records, so at this rate one more rung is about $(( per * EXPECTED / 60 )) min"
+    log "  ${per}s per record; rung ${RUNG_I}/${N_RUNGS} done, each rung is ${EXPECTED} records,"
+    log "  so at this rate one more rung is about $(( per * EXPECTED / 60 )) min"
   fi
-  if [ -n "${QWEN_L_BUDGET_S:-}" ]; then
+  budget="${QWEN_L_BUDGET_S:-}"
+  if [ -z "$budget" ] && [ -r "$BUDGET_FILE" ]; then
+    budget=$(tr -cd '0-9' < "$BUDGET_FILE")
+  fi
+  if [ -n "$budget" ]; then
     spent=$(( $(date +%s) - LADDER_T0 ))
-    if [ "$spent" -ge "${QWEN_L_BUDGET_S}" ]; then
-      log "  ladder budget of ${QWEN_L_BUDGET_S}s is spent after ${spent}s; stopping between rungs"
+    if [ "$spent" -ge "$budget" ]; then
+      log "  ladder budget of ${budget}s is spent after ${spent}s; stopping between rungs"
       log "  rungs completed so far keep their results; nothing is half-written"
       break
     fi
