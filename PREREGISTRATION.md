@@ -1795,3 +1795,39 @@ of it out.
 If it holds, the design fix is not more passes: it is measuring the baseline more than once per
 pass, so every arm is divided by a baseline measured near it rather than by one that may sit twenty
 places away.
+
+## Correction 19a, registered 2026-08-26 03:00, BEFORE pass 3 completes: a pre-registered test of Correction 19
+
+Correction 19 said pass 3 would be a weak test because `baseline-moe` stays late. That was wrong:
+the rotation hands the same lever to the other target. Derived from `phase_m.ARMS` and
+`rot = (p_idx - 1) % 21`, the baseline positions are
+
+| | pass 1 | pass 2 | pass 3 |
+|---|---|---|---|
+| `baseline-moe` | 1 | 21 | 20 |
+| `baseline-dense` | 2 | **1** | **21** |
+
+`baseline-dense` makes the 1 -> 21 wrap between passes 2 and 3, which is the move `baseline-moe`
+made between passes 1 and 2 and which Correction 19 suspects of costing 1.95 %. Meanwhile
+`baseline-moe` barely moves, 21 -> 20.
+
+**Registered now, with pass 3 at one arm-pass of twenty-one and `baseline-dense` scheduled last:**
+
+1. `baseline-dense` throughput in pass 3 is **lower** than in pass 2, by roughly 2 %.
+2. Every **dense** effect shifts **up** by roughly 2 pp from pass 2 to pass 3, being that
+   baseline's reciprocal.
+3. Every **MoE** effect is roughly **flat** from pass 2 to pass 3, because its baseline hardly
+   moves.
+
+Refuted if `baseline-dense` does not drop and the dense effects do not rise. A drop in
+`baseline-dense` together with flat dense effects would refute the mechanism rather than the
+observation, since the two are tied by arithmetic.
+
+This is one further observation, not a designed experiment: the rotation supplies one wrapping arm
+per pass and nothing was varied on purpose. Three consistent observations across two targets would
+still be three observations. What would settle it is measuring the baseline more than once per
+pass, which is the fix Correction 19 names and which this matrix cannot do retrospectively.
+
+Nothing in the reported comparisons depends on the answer. Within a pass every arm divides by the
+same baseline whatever its position, so ranking, sign, and `mtp-n2` being the best MTP depth are
+untouched either way.
