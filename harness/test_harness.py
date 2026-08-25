@@ -781,15 +781,23 @@ class TestAlgebraicInvariants(unittest.TestCase):
         import time
         import telemetry as T
 
+        # The bound is the MEASURED wall time of the block, not the nominal 0.6 s. The sampler
+        # thread keeps going until __exit__ returns, so its last sample can land after the sleep
+        # does, and on a loaded host the gap is real: this assertion failed at 0.60029 against
+        # 0.6 while the machine was running a benchmark. Asserting against the requested value
+        # rather than the realised one is the same mistake this suite exists to catch elsewhere.
+        t0 = time.monotonic()
         with T.sampling(0, interval_s=0.10) as s:
             time.sleep(0.6)
+        elapsed = time.monotonic() - t0
         d = s.summary()
         if not d.get("n_power_samples"):
             self.skipTest("no GPU telemetry on this host")
         self.assertIn("sample_span_s", d)
         self.assertIsNotNone(d["sample_span_s"])
-        self.assertLess(d["sample_span_s"], 0.6,
-                        "the span cannot exceed the window it was sampled in")
+        self.assertLessEqual(d["sample_span_s"], elapsed,
+                             f"the span cannot exceed the window it was sampled in: "
+                             f"{d['sample_span_s']:.5f} s of samples in a {elapsed:.5f} s block")
         period = d["sample_span_s"] / max(d["n_power_samples"] - 1, 1)
         self.assertGreater(period, 0.10,
                            "the period is the query plus the wait, so it must exceed interval_s")
@@ -1410,36 +1418,65 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
                          f"the ladder's best n-max values are {sorted(best)} but the README cell "
                          f"marks {sorted(claimed)}:\n{cell[0]}")
 
-    def test_the_readme_does_not_claim_c_agrees_when_it_does_not(self):
-        """The shared-machinery reading is only available while the two coefficients agree.
+    def test_the_prose_matches_the_verdict_the_analysis_actually_reaches(self):
+        """The prose about `c` must agree with what cost_model prints, whichever way that goes.
 
-        Phase A's two-point fit had them 1.6 % apart and the README inferred that the marginal
-        cost sits in the machinery both methods share. On the completed ladder they are 15 %
-        apart on a paired interval that clears zero, and the inference does not survive it.
+        Two earlier versions of this test each hard-coded an analysis, and each hard-coded a wrong
+        one. The first read the paired PROMPT bootstrap as the arbiter and required the prose to
+        say the coefficients differ. The second called that the wrong tool, recomputed the bound
+        from each fit's width residuals added in quadrature, and required the prose to say the
+        question was open. The right answer is the first one, reached a third way: restrict both
+        fits to the widths they share, because k(w) is curved and a slope is a chord, then check
+        shape on the DIFFERENCE, where the shared curvature cancels. See PREREGISTRATION.md
+        Corrections 13 and 14.
+
+        The lesson this test now encodes is that it must not hold its own copy of the analysis. It
+        reads cost_model's verdict and checks the prose against that, so the two cannot part
+        company again.
         """
+        import contextlib
         import cost_model as CM
-        res = self._load("phase_nmax.json")
-        rows = CM.collect(res)
-        by_method = collections.defaultdict(list)
-        for r in rows:
-            by_method[r["spec_type"]].append(r)
-        mmvq = CM.recorded_mmvq_max(res)[0]
-        fits = {}
-        for m, g in by_method.items():
-            on = sorted({r["width"] for r in g if r["width"] <= mmvq})
-            if len(on) >= 2:
-                fits[m] = (g, on)
-        if len(fits) != 2:
-            self.skipTest("need two fitted methods")
-        (ma, (ga, oa)), (mb, (gb, ob)) = sorted(fits.items())
-        d = CM.delta_c_ci(ga, oa, gb, ob, n_boot=400)
-        self.assertIsNotNone(d, "the paired delta could not be computed")
+        import io
+        import re
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            CM.report(self._load("phase_nmax.json"))
+        verdicts = re.findall(r"VERDICT: (.+)", buf.getvalue())
+        if not verdicts:
+            self.skipTest("phase_nmax produced no c comparison")
+        verdict = verdicts[0]
 
         text = self._prose()
-        if not d.spans_zero:
-            self.assertNotIn("`c` agrees", text,
-                             f"the paired interval [{d.lo:+.4f}, {d.hi:+.4f}] clears zero, so the "
-                             "README must not say the coefficients agree")
+        asserts_difference = ["the marginal cost is not shared",
+                              "part of the marginal cost moves with the drafter"]
+        says_open = ["not resolved"]
+        if verdict.startswith("the marginal costs differ"):
+            self.assertTrue(any(a in text.lower() for a in asserts_difference),
+                            f"cost_model reports '{verdict}' but the prose does not say the "
+                            f"marginal costs differ")
+        else:
+            self.assertTrue(any(a in text.lower() for a in says_open),
+                            f"cost_model reports '{verdict}' but the prose does not say so; "
+                            f"silence reads as agreement")
+            for a in asserts_difference:
+                self.assertNotIn(a, text.lower(),
+                                 f"the prose asserts a difference that cost_model does not "
+                                 f"reach: '{verdict}'")
+
+    def test_the_comparison_is_made_on_a_matched_width_range(self):
+        """A slope is a chord of a curved k(w), so the ranges have to match before comparing."""
+        import contextlib
+        import cost_model as CM
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            CM.report(self._load("phase_nmax.json"))
+        out = buf.getvalue()
+        self.assertIn("both fitted on the shared widths", out,
+                      "the two methods are compared over whatever widths each happened to run")
+        self.assertIn("Shape check on the DIFFERENCE", out,
+                      "shape is still being checked on each fit separately, which charges shared "
+                      "curvature against the comparison twice")
 
     def test_phase_l_rung_count_matches_the_files_on_disk(self):
         """'N of five rungs complete' against the result files that actually hold 180 records."""
@@ -1814,6 +1851,378 @@ class TestImpliedOptimumReadsTheLadder(unittest.TestCase):
         # assigned from a comparison over the measured sequence.
         self.assertIn("zip(seq, seq[1:])", tail,
                       "the ladder's shape is no longer derived from the measured sequence")
+
+
+class TestFitUncertaintyHasTwoSources(unittest.TestCase):
+    """`c` carried a prompt-bootstrap interval and nothing about misfit across widths.
+
+    fit_ci redraws which prompts contribute to each width's mean `k`. It never asks whether a
+    straight line is the right shape for those means. On Phase M's MoE arm the w = 4 point misses
+    the line by 0.137, 4.7 % of `k`, while the bootstrap reports a half-width of 0.0036.
+
+    The first fix for that was itself wrong and is recorded in PREREGISTRATION.md Correction 14:
+    the residual was treated as independent noise on EACH fit and the two were added in
+    quadrature, which inflates the uncertainty on a difference by more than an order of magnitude.
+    Most of the residual is curvature in k(w), it is shared between arms measured on the same
+    card, and it cancels when the difference is taken. So the shape check belongs on the
+    difference, and per-fit residuals are reported as lack of fit rather than as a standard error
+    on `c`.
+    """
+
+    def test_slope_se_matches_the_textbook_value(self):
+        import cost_model as CM
+        # xs = 1,2,3  ys = 1,3,4 -> slope 1.5, residuals -1/6, +1/3, -1/6, Sxx = 2, dof = 1
+        # se = sqrt((1/6) / 1 / 2) = sqrt(1/12)
+        self.assertAlmostEqual(CM._slope_se([1, 2, 3], [1, 3, 4]), (1 / 12) ** 0.5, places=10)
+
+    def test_a_perfect_line_has_no_residual_uncertainty(self):
+        import cost_model as CM
+        self.assertAlmostEqual(CM._slope_se([1, 2, 3, 4], [2, 4, 6, 8]), 0.0, places=12)
+
+    def test_two_points_report_no_se_rather_than_zero(self):
+        import cost_model as CM
+        # Two points always lie on their own line. Returning 0.0 would say the slope is known
+        # exactly, which is the opposite of what two points support.
+        self.assertIsNone(CM._slope_se([1, 2], [1, 5]))
+
+    def test_the_report_names_the_wider_figure_when_it_is_wider(self):
+        import contextlib
+        import cost_model as CM
+        import io
+        # Widths 2,3,4,6,8 with a deliberate kink, so the width residuals dwarf any prompt spread.
+        K = {2: 1.20, 3: 1.50, 4: 2.10, 6: 2.35, 8: 2.95}
+        recs, arms = [], {"baseline": {"extra_args": [], "tree": "master", "model": None}}
+        for i in range(8):
+            recs.append({"arm": "baseline", "pass": 1, "prompt": f"p{i}",
+                         "class": "code" if i % 2 else "prose", "decode_tok_s": 100.0,
+                         "predicted_n": 400, "hit_cap": True,
+                         "timings": {"t_draft_n": 0, "t_draft_n_accepted": 0}})
+        for w, k in K.items():
+            n = w - 1
+            arms[f"mtp-n{n}"] = {"extra_args": ["--spec-type", "draft-mtp",
+                                                "--spec-draft-n-max", str(n)],
+                                 "tree": "master", "expects_drafter": True, "model": None}
+            for i in range(8):
+                f = 150
+                accepted = 399 - f
+                mean_len = 1.0 + accepted / f
+                recs.append({"arm": f"mtp-n{n}", "pass": 1, "prompt": f"p{i}",
+                             "class": "code" if i % 2 else "prose",
+                             "decode_tok_s": 100.0 * mean_len / k, "predicted_n": 400,
+                             "hit_cap": True,
+                             "timings": {"t_draft_n": n * f, "t_draft_n_accepted": accepted}})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            CM.report({"env": {"model": "/m/x.gguf"}, "arms": arms, "records": recs})
+        out = buf.getvalue()
+        self.assertIn("lack of fit across widths", out,
+                      "the fit reports only the prompt bootstrap")
+        self.assertIn("k(w=1) extrapolates to", out,
+                      "the fit is not checked against the floor a zero-depth cycle must cost")
+        # Every prompt in this fixture returns the same k, so the prompt bootstrap collapses to
+        # zero width. That is the extreme of the defect, not an exemption from it: a zero-width
+        # interval prints as perfect precision and means no precision was estimated.
+        self.assertIn("ZERO width", out,
+                      "a bootstrap interval that collapsed to a point was reported as if it "
+                      "were a precise one")
+        # And the residual must not be relabelled back into a standard error on `c`.
+        self.assertNotIn("`c` is known to about", out,
+                         "the width residual is being reported as sampling uncertainty on c "
+                         "again; it is lack of fit, and on a difference it largely cancels")
+
+
+class TestMatchedAcceptanceContrast(unittest.TestCase):
+    """Two methods on one target at the same acceptance must be reported side by side.
+
+    Acceptance is what draft quality buys. Phase M contains a pair where it is matched almost
+    exactly across methods on the same target -- the 0.8B draft-simple arm at n-max 4 accepts
+    38.7 %, the built-in MTP head at n-max 5 accepts 38.6 % -- and they land 76 points of baseline
+    apart, 0.397x against 1.153x. That single pair rules out draft quality as the explanation for
+    the sign difference, and it was sitting in the data unremarked because nothing looked for it.
+    """
+
+    @staticmethod
+    def _result(specs):
+        """specs: {arm: (spec_type_args, n_max, drafted_per_req, accepted_per_req, tok_s)}."""
+        arms = {"baseline": {"extra_args": [], "tree": "master", "model": None}}
+        recs = []
+        for i in range(8):
+            recs.append({"arm": "baseline", "pass": 1, "prompt": f"p{i}",
+                         "class": "code" if i % 2 else "prose", "decode_tok_s": 100.0,
+                         "predicted_n": 400, "hit_cap": True,
+                         "timings": {"t_draft_n": 0, "t_draft_n_accepted": 0}})
+        for arm, (stype, n, drafted, accepted, tok_s) in specs.items():
+            arms[arm] = {"extra_args": ["--spec-type", stype, "--spec-draft-n-max", str(n)],
+                         "tree": "master", "expects_drafter": True, "model": None}
+            for i in range(8):
+                recs.append({"arm": arm, "pass": 1, "prompt": f"p{i}",
+                             "class": "code" if i % 2 else "prose", "decode_tok_s": tok_s,
+                             "predicted_n": 400, "hit_cap": True,
+                             "timings": {"t_draft_n": drafted,
+                                         "t_draft_n_accepted": accepted}})
+        return {"env": {"model": "/m/x.gguf"}, "arms": arms, "records": recs}
+
+    def _run(self, specs):
+        import contextlib
+        import cost_model as CM
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            CM.report(self._result(specs))
+        return buf.getvalue()
+
+    def test_a_matched_pair_across_methods_is_found_and_quantified(self):
+        out = self._run({
+            "simple-n4": ("draft-simple", 4, 1000, 387, 40.0),
+            "mtp-n5": ("draft-mtp", 5, 1000, 386, 115.0),
+        })
+        self.assertIn("matched acceptance", out,
+                      f"a pair matched to 0.1 acceptance points was not reported:\n{out[-2500:]}")
+        self.assertRegex(out, r"acceptance differs by 0\.1 points, throughput by 7[0-9] points")
+        # A pair whose two arms verify at different widths must say which way that pushes.
+        # The bare word CONFOUNDED tells a reader to discard the pair; on every Phase M pair the
+        # confound runs against the gap, so discarding it would throw away the finding.
+        if "CONFOUNDED" in out:
+            self.assertRegex(out, r"The confound runs (AGAINST|WITH) the gap",
+                             "a pair was flagged as confounded without saying which way")
+
+    def test_two_arms_of_the_SAME_method_are_not_a_contrast(self):
+        # Two MTP depths at matched acceptance separate on depth, not on the drafter, so the pair
+        # would not isolate anything and must not be presented as if it did.
+        out = self._run({
+            "mtp-n4": ("draft-mtp", 4, 1000, 387, 140.0),
+            "mtp-n5": ("draft-mtp", 5, 1000, 386, 115.0),
+        })
+        self.assertIn("TEST 2", out, "the report did not run; the assertion below is vacuous")
+        self.assertNotIn("matched acceptance", out,
+                         "two arms of one method were offered as a cross-method contrast")
+
+    def test_unmatched_acceptance_yields_no_pair(self):
+        out = self._run({
+            "simple-n4": ("draft-simple", 4, 1000, 200, 40.0),
+            "mtp-n5": ("draft-mtp", 5, 1000, 700, 115.0),
+        })
+        self.assertIn("TEST 2", out, "the report did not run; the assertion below is vacuous")
+        self.assertNotIn("matched acceptance", out,
+                         "arms 50 acceptance points apart were reported as matched")
+
+
+class TestBaselinesDoNotAppearAsEffects(unittest.TestCase):
+    """A baseline compared to another baseline is not a speculative effect.
+
+    Phase M declares two baselines, one per target, and its BASELINE_MAP covers only the
+    speculative arms. `baseline-dense` therefore fell through to analyze.py's `default_baseline`
+    -- the first arm present -- and printed in the primary table as "-71.59 % SLOWER" against
+    `baseline-moe`, in the same shape as every real row. The number is true and it is the speed
+    difference between two models, not an effect of anything.
+
+    The same fallback is the general hazard: any arm a matrix forgets to map is silently compared
+    to whichever arm happens to be first.
+    """
+
+    @staticmethod
+    def _result():
+        arms, recs = {}, []
+        for name, model, tok_s in (("baseline-a", None, 100.0), ("baseline-b", "/m/b", 40.0),
+                                   ("spec-a", None, 130.0), ("orphan", None, 90.0)):
+            arms[name] = {"extra_args": ([] if name.startswith("baseline")
+                                         else ["--spec-type", "draft-mtp",
+                                               "--spec-draft-n-max", "2"]),
+                          "tree": "master", "model": model,
+                          "expects_drafter": not name.startswith("baseline")}
+            for i in range(6):
+                recs.append({"arm": name, "pass": 1, "prompt": f"p{i}",
+                             "class": "code" if i % 2 else "prose", "decode_tok_s": tok_s,
+                             "predicted_n": 400, "hit_cap": True,
+                             "timings": {"t_draft_n": 0, "t_draft_n_accepted": 0}})
+        return {"arms": arms, "records": recs,
+                "design": {"passes": 1, "n_prompts": 6, "prompt_classes": {},
+                           "interleaved": True, "fresh_server_per_arm_per_pass": True},
+                "baseline_map": {"spec-a": "baseline-a"}}
+
+    def _run(self):
+        import analyze as AN
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            AN.report(self._result())
+        return buf.getvalue()
+
+    def test_a_baseline_is_not_listed_among_the_effects(self):
+        out = self._run()
+        # The section header itself ends in "---", so split on a newline-anchored one.
+        primary = out.split("--- PRIMARY")[1].split("\n---")[0]
+        self.assertNotIn("baseline-b ", primary,
+                         f"a baseline appears in the primary effect table:\n{primary}")
+        self.assertIn("spec-a", primary, "the real speculative arm went missing")
+
+    def test_the_two_baselines_are_contrasted_separately_and_labelled(self):
+        out = self._run()
+        self.assertIn("unspeculated contrast", out,
+                      "two baselines were not contrasted at all, so the reader loses the "
+                      "control the comparison provides")
+        contrast = out.split("unspeculated contrast")[1].split("--- PRIMARY")[0]
+        self.assertIn("differs in: model", contrast,
+                      f"the contrast does not name what differs between the two "
+                      f"baselines:\n{contrast}")
+
+    def test_an_unmapped_arm_is_named_rather_than_silently_defaulted(self):
+        out = self._run()
+        self.assertRegex(out, r"WARNING: orphan is not in the baseline map",
+                         "an arm missing from a non-empty baseline map was compared to whichever "
+                         "arm happened to be first, without saying so")
+
+
+class TestEmptyDivergenceSaysWhy(unittest.TestCase):
+    """"no divergence records (are the arms greedy, and did the baseline run?)" named neither cause.
+
+    Divergence is attached POST-PASS, because arm order rotates within a pass and the baseline arm
+    can run after the arms measured against it, so a result file whose first pass has not closed
+    carries none at all. That is the normal state of any run still in progress and it is not a
+    fault, but the message guessed at two other causes and sent a reader through bench.py looking
+    for a defect that was not there.
+    """
+
+    @staticmethod
+    def _result(arm_names, temps=0.0, seen=None):
+        arms = {"baseline": {"extra_args": [], "tree": "master", "expects_drafter": False}}
+        for a in arm_names:
+            arms[a] = {"extra_args": ["--spec-type", "draft-mtp"], "tree": "master",
+                       "expects_drafter": True}
+        recs = []
+        for a in (seen if seen is not None else ["baseline"] + list(arm_names)):
+            for i in range(3):
+                recs.append({"arm": a, "pass": 1, "prompt": f"p{i}", "class": "code",
+                             "decode_tok_s": 100.0, "temperature": temps, "predicted_n": 400})
+        return {"arms": arms, "records": recs}
+
+    def _run(self, result):
+        import contextlib
+        import divergence_report as DR
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            DR.report(result)
+        return buf.getvalue()
+
+    def test_an_unfinished_pass_is_named_as_such(self):
+        out = self._run(self._result(["a", "b", "c"], seen=["baseline", "a"]))
+        self.assertIn("no pass has closed yet", out, out[:400])
+        self.assertIn("of the 3 arms this matrix declares", out,
+                      "the diagnosis does not say how far the pass got")
+
+    def test_a_non_greedy_run_is_named_as_such(self):
+        out = self._run(self._result(["a"], temps=0.7))
+        self.assertIn("not all greedy", out, out[:400])
+        self.assertIn("0.7", out, "the diagnosis does not show the temperatures it found")
+
+    def test_the_old_guess_is_gone(self):
+        out = self._run(self._result(["a", "b"], seen=["baseline", "a"]))
+        self.assertNotIn("are the arms greedy, and did the baseline run?", out,
+                         "the message still guesses instead of diagnosing")
+
+
+class TestSlopesAreComparedOnSharedWidths(unittest.TestCase):
+    """Two `c` values fitted over different width ranges are not the same quantity.
+
+    `k(w)` is curved -- every fit in this study extrapolates below the floor a zero-depth cycle
+    must cost -- so a slope is a CHORD, and a chord over widths 3 to 7 is a different number from
+    a chord over 2 to 8. phase_nmax fits draft-dflash on {3,5,7} and draft-mtp on {2..8} and the
+    reported difference moves from -0.0424 to -0.0473 when the ranges are matched, a sixth of the
+    effect. Phase A is worse: {5,8} against {3,4,6}, which share NO width at all, and its
+    "the two coefficients agree to 1.7 %" compared chords of disjoint arcs.
+
+    The second half is the shape check. Comparing each fit's width residual separately and adding
+    them in quadrature treats shared curvature as independent noise: on phase_nmax the two arms'
+    residuals over {3,5,7} are +0.0209/-0.0418/+0.0209 and +0.0210/-0.0420/+0.0210, the same
+    number twice, and the difference of the two curves is straight to 2.4e-4. Adding those in
+    quadrature inflated the bound twentyfold and produced a retraction that was itself wrong
+    (PREREGISTRATION.md Corrections 13 and 14).
+    """
+
+    @staticmethod
+    def _result(width_k):
+        """width_k: {arm: (spec_type, {width: k})} -> a result file that reproduces those k."""
+        arms = {"baseline": {"extra_args": [], "tree": "master", "model": None}}
+        recs = []
+        for i in range(10):
+            recs.append({"arm": "baseline", "pass": 1, "prompt": f"p{i}",
+                         "class": "code" if i % 2 else "prose", "decode_tok_s": 100.0,
+                         "predicted_n": 400, "hit_cap": True,
+                         "timings": {"t_draft_n": 0, "t_draft_n_accepted": 0}})
+        for arm, (stype, ks) in width_k.items():
+            for w, k in ks.items():
+                n = w - 1
+                name = f"{arm}-n{n}"
+                arms[name] = {"extra_args": ["--spec-type", stype,
+                                             "--spec-draft-n-max", str(n)],
+                              "tree": "master", "expects_drafter": True, "model": None}
+                for i in range(10):
+                    f = 150
+                    accepted = 399 - f
+                    mean_len = 1.0 + accepted / f
+                    recs.append({"arm": name, "pass": 1, "prompt": f"p{i}",
+                                 "class": "code" if i % 2 else "prose",
+                                 "decode_tok_s": 100.0 * mean_len / k, "predicted_n": 400,
+                                 "hit_cap": True,
+                                 "timings": {"t_draft_n": n * f,
+                                             "t_draft_n_accepted": accepted}})
+        return {"env": {"model": "/m/x.gguf"}, "arms": arms, "records": recs}
+
+    def _run(self, width_k):
+        import contextlib
+        import cost_model as CM
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            CM.report(self._result(width_k))
+        return buf.getvalue()
+
+    def test_disjoint_width_ranges_are_refused_not_compared(self):
+        out = self._run({
+            "a": ("draft-dflash", {5: 2.0, 8: 2.9}),
+            "b": ("draft-mtp", {3: 1.5, 4: 1.8, 6: 2.4}),
+        })
+        self.assertIn("share 0 width(s)", out,
+                      f"two fits over disjoint width ranges were compared as if they estimated "
+                      f"the same quantity:\n{out[-1500:]}")
+        self.assertNotRegex(out, r"c\(.*\) - c\(.*\) = ",
+                            "a difference was still printed for disjoint ranges")
+
+    def test_the_comparison_uses_only_the_shared_widths(self):
+        # `b` is deliberately curved outside the shared range so that fitting it on its own
+        # widths gives a different slope from fitting it on the shared ones.
+        out = self._run({
+            "a": ("draft-dflash", {3: 1.50, 5: 2.00, 7: 2.50}),
+            "b": ("draft-mtp", {2: 1.05, 3: 1.40, 5: 2.10, 7: 2.90, 8: 3.40}),
+        })
+        self.assertIn("both fitted on the shared widths [3, 5, 7]", out,
+                      f"the comparison did not restrict to the shared range:\n{out[-1500:]}")
+
+    def test_shared_curvature_cancels_instead_of_widening_the_bound(self):
+        # Both arms carry the SAME curvature and differ by an exact straight line. A shape check
+        # that treats each arm's residual as independent noise would call this unresolved; a
+        # paired one sees that the difference is straight and resolves it.
+        bend = {3: 0.02, 5: -0.04, 7: 0.02}
+        a = {w: 1.0 + 0.20 * (w - 1) + bend[w] for w in (3, 5, 7)}
+        b = {w: 1.0 + 0.30 * (w - 1) + bend[w] for w in (3, 5, 7)}
+        out = self._run({"a": ("draft-dflash", a), "b": ("draft-mtp", b)})
+        self.assertIn("shared and cancels", out,
+                      f"identical curvature in both arms was charged against the "
+                      f"comparison:\n{out[-1800:]}")
+        self.assertIn("VERDICT: the marginal costs differ", out,
+                      "a difference of exactly 0.10 per position was reported as unresolved")
+
+    def test_unshared_curvature_still_widens_the_bound(self):
+        # Only `a` bends. The difference is then not linear and the comparison must say so.
+        a = {w: 1.0 + 0.20 * (w - 1) + bend for w, bend in ((3, 0.05), (5, -0.10), (7, 0.05))}
+        b = {w: 1.0 + 0.205 * (w - 1) for w in (3, 5, 7)}
+        out = self._run({"a": ("draft-dflash", a), "b": ("draft-mtp", b)})
+        self.assertIn("curvature does NOT cancel", out,
+                      f"curvature present in one arm only was treated as cancelling:\n"
+                      f"{out[-1800:]}")
+        self.assertIn("VERDICT: not resolved", out)
 
 
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):

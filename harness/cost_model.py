@@ -94,6 +94,62 @@ def _corr(xs, ys):
     return num / den if den else float("nan")
 
 
+def _slope_se(xs, ys):
+    """Textbook standard error of the slope, from the fit's own residuals across WIDTHS.
+
+    fit_ci resamples PROMPTS. That captures prompt-to-prompt variation in `k` and captures none
+    of the model's misfit across widths: it redraws which prompts contribute to each width's mean
+    and never asks whether a line through those means is the right shape. When a width sits off
+    the line -- Phase M's MoE arm at w = 4 misses by 0.137, 4.7 % of `k` -- the prompt bootstrap
+    reports an interval built entirely from the wrong source of variation, and reports it narrow.
+
+    Both are printed. Neither subsumes the other: the prompt interval answers "would other
+    prompts have given this slope", this answers "is a line the right shape for these widths".
+    """
+    n = len(xs)
+    if n < 3:
+        return None                      # with two points the line is exact and has no residual
+    a, b, _ = _linfit(xs, ys)
+    ss_res = sum((y - (a + b * x)) ** 2 for x, y in zip(xs, ys))
+    xbar = statistics.fmean(xs)
+    sxx = sum((x - xbar) ** 2 for x in xs)
+    if sxx <= 0:
+        return None
+    return ((ss_res / (n - 2)) / sxx) ** 0.5
+
+
+# Two-sided 95 % t, by residual degrees of freedom. Needed because a fit over three widths has one
+# residual degree of freedom and the normal quantile is wrong by a factor of six there. Values are
+# the standard table; anything past 30 uses the normal limit.
+_T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306,
+        9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
+        16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086, 22: 2.074, 24: 2.064,
+        26: 2.056, 28: 2.048, 30: 2.042}
+
+
+def _t95(dof):
+    """Two-sided 95 % t, rounded to the SMALLER tabulated dof, which is the larger t.
+
+    Rounding up the dof rounds the critical value down and makes the test liberal: at 21 dof the
+    table skips to 22 and returns 2.074 against the true 2.080. Conservative is the only safe
+    direction for a value that decides whether a difference is reported.
+    """
+    if dof >= 30:
+        return 1.960
+    d = max(1, int(dof))
+    while d not in _T95 and d > 1:
+        d -= 1
+    return _T95.get(d, 12.706)
+
+
+def _welch_dof(s1, n1, s2, n2):
+    """Welch-Satterthwaite dof for the difference of two slopes, from residual dof n1-2, n2-2."""
+    d1, d2 = max(1, n1 - 2), max(1, n2 - 2)
+    v1, v2 = s1 * s1, s2 * s2
+    den = v1 * v1 / d1 + v2 * v2 / d2
+    return ((v1 + v2) ** 2 / den) if den > 0 else 1.0
+
+
 def _fit_prompts(g: list[dict], on_path: list[int]):
     """{prompt -> {width -> [k]}} and {prompt -> class}, restricted to the fitted widths."""
     by_prompt: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
@@ -398,6 +454,12 @@ def collect(result: dict) -> list[dict]:
             # sits at 4.20 against an n_max of 8. TEST 1 needs that difference, because its model
             # treats n_max as a constant multiplier.
             "draft_per_forward": drafted / forwards,
+            # Carried so `c` can also be reported in milliseconds. `c` is in serial-decode-step
+            # equivalents of the arm's OWN target, and two targets whose decode steps differ by
+            # 3.5x do not have comparable steps. Comparing their `c` directly answers "which pays
+            # more relative to itself", which is not the question a per-position cost is usually
+            # asked.
+            "baseline_tok_s": base,
             "speedup": speedup, "k": mean_len / speedup,
         })
     return rows
@@ -649,6 +711,77 @@ def report(result: dict) -> None:
             print(f"      {'':14s} k0 {ci['k0'].lo:.4f} to {ci['k0'].hi:.4f}   "
                   f"c {ci['c'].lo:.4f} to {ci['c'].hi:.4f}   "
                   f"nominal 95 %, {ci['n_prompts']} prompts resampled within class")
+        # A decode step is a different amount of time on each target, so `c` in step-equivalents
+        # is not comparable across models even though both columns print as a plain number. The
+        # millisecond figure is, and on Phase M it reverses the ordering: the MoE's `c` is the
+        # larger of the two relative to its own step and the smaller in wall time, because its
+        # step is roughly 3.5x shorter. Anything that reads a higher `c` as "this architecture
+        # pays more per verified position" needs the second column.
+        # k at zero draft depth has a known LOWER BOUND, not a known value. A cycle at w = 1 is a
+        # plain decode step plus whatever the drafter costs, and the drafter cost is at least
+        # zero, so k(1) >= 1.0. An earlier version of this block called it "the exact 1.0", which
+        # is the baseline arm's k -- and the baseline runs no drafter, so it is a different
+        # configuration from the one the line extrapolates to.
+        #
+        # The bound is still a free falsification test, and the only one available: no fit sees
+        # w = 1, so r2 over the measured widths cannot supply it. Refitting with k(1) pinned at
+        # the bound shows how much the intercept was carrying.
+        xa, ya = [0] + xs, [1.0] + ys
+        aa, ba, r2a = _linfit(xa, ya)
+        if a >= 1.0:
+            print(f"      {'':14s} k(w=1) extrapolates to {a:.4f}, above the floor of 1.0 that a "
+                  f"zero-depth cycle must cost. Consistent; the excess is an upper bound on a "
+                  f"fixed per-cycle cost, not a measurement of one.")
+        else:
+            print(f"      {'':14s} k(w=1) extrapolates to {a:.4f}, BELOW the floor of 1.0: the "
+                  f"line implies a cycle cheaper than a plain decode step at zero draft depth, "
+                  f"which no configuration can be.")
+            print(f"      {'':14s} so k(w) is concave here and the FIRST extra position costs "
+                  f"more than c. Refit with k(1) pinned at the floor: k0={aa:.4f}  c={ba:.4f}  "
+                  f"r2={r2a:.4f}  ({abs(ba - b) / b * 100:.1f} % change in c)")
+            if abs(ba - b) / b < 0.05 and r2a > 0.97:
+                print(f"      {'':14s} under 5 % and r2 still above 0.97, so the line describes "
+                      f"the measured widths well. What it does not support is reading k0 as a "
+                      f"fixed overhead, on this method or any other.")
+            else:
+                print(f"      {'':14s} the pin moves the fit materially, so the linear form does "
+                      f"not reach zero depth and neither coefficient is a mechanism.")
+        se = _slope_se(xs, ys)
+        if se is not None and ci:
+            half = (ci["c"].hi - ci["c"].lo) / 2.0
+            # LACK OF FIT, not a standard error on c. The residual across widths is dominated by
+            # curvature in k(w), which is deterministic and largely shared between methods on the
+            # same card -- on phase_nmax the two arms' residuals over widths 3, 5 and 7 are
+            # +0.0209/-0.0418/+0.0209 and +0.0210/-0.0420/+0.0210, the same number twice. Treating
+            # that as independent noise on each fit and adding it in quadrature inflates the
+            # uncertainty on a DIFFERENCE by more than an order of magnitude and biases every
+            # comparison toward a null. The difference is compared paired instead, below.
+            #
+            # Note also that with three equally spaced widths the residual vector is forced to be
+            # proportional to [1, -2, 1] -- it has to be orthogonal to the constant and linear
+            # directions -- so its shape carries nothing and only its magnitude is informative.
+            print(f"      {'':14s} lack of fit across widths: residual se on the slope "
+                  f"{se:.4f} ({len(xs)} widths, {len(xs) - 2} dof), against the prompt "
+                  f"bootstrap's half-width {half:.4f}")
+            if half <= 0:
+                # Every prompt gave the same k, so the resampling found nothing to vary and the
+                # interval collapsed onto the point. That prints as perfect precision and means
+                # the design could not estimate precision at all -- the same failure
+                # stats.Interval.width_understated names for single-prompt classes, reached a
+                # different way. Skipping the line here would report the collapse as agreement.
+                print(f"      {'':14s} the prompt bootstrap's interval has ZERO width: every "
+                      f"prompt returned the same k, so it estimated no precision at all.")
+            elif se > 1.5 * half:
+                print(f"      {'':14s} the line is a {se / half:.1f}x poorer description of these "
+                      f"widths than prompt-to-prompt scatter alone would suggest, so `c` is a "
+                      f"chord over the widths fitted and not a constant marginal cost.")
+        base_rates = [r["baseline_tok_s"] for r in g if r.get("baseline_tok_s")]
+        if base_rates:
+            step_ms = 1000.0 / statistics.fmean(base_rates)
+            print(f"      {'':14s} baseline {statistics.fmean(base_rates):7.1f} tok/s "
+                  f"-> one decode step {step_ms:.3f} ms; "
+                  f"k0 = {a * step_ms:.3f} ms, c = {b * step_ms:.3f} ms per extra position"
+                  + (f"  [{ci['c'].lo * step_ms:.3f}, {ci['c'].hi * step_ms:.3f}]" if ci else ""))
         for w in on_path:
             pred = a + b * (w - 1)
             print(f"      w={w:2d}  k={statistics.fmean(pts[w]):.4f}  fit={pred:.4f}  "
@@ -727,23 +860,177 @@ def report(result: dict) -> None:
             print("  the whole speculative cycle: target verification, the drafter's own forwards,")
             print("  sampling, launch and synchronisation, output extraction and any per-step state")
             print("  management. The two methods share every one of those except the drafter.")
+        # RESTRICT BOTH FITS TO THE WIDTHS THEY SHARE. k(w) is curved, so a slope over widths
+        # 3 to 7 and a slope over 2 to 8 are chords of different arcs and are not estimates of
+        # the same quantity. On phase_nmax matching the ranges moves the difference from -0.0424
+        # to -0.0473, which is a sixth of the effect being compared.
+        shared = sorted(set(oa) & set(ob))
+        d = delta_c_ci(ga, shared, gb, shared) if len(shared) >= 2 else None
         if d is None:
-            print("  The two fits do not share enough prompts to be compared.")
+            print(f"  The two fits share {len(shared)} width(s) and cannot be compared on a "
+                  f"common range.")
         else:
             print(f"\n  c({ma}) - c({mb}) = {d.point:+.4f}  [{d.lo:+.4f}, {d.hi:+.4f}]"
-                  f"   nominal 95 %, {d.n_clusters} shared prompts, paired on them")
-            if d.spans_zero:
-                print("  The difference does not clear zero. A shared slope would put the marginal")
-                print("  cost in the machinery both methods have in common, though it would still")
-                print("  not say which part of it.")
+                  f"   nominal 95 %, {d.n_clusters} shared prompts, paired on them,"
+                  f" both fitted on the shared widths {shared}")
+            # The bootstrap above redraws prompts and is the sampling uncertainty. What it
+            # cannot see is whether a straight line is the right shape. Checking that on each fit
+            # separately and adding the two in quadrature was wrong: the residual is mostly
+            # curvature in k(w), it is shared between arms measured on the same card, and adding
+            # it twice inflates a DIFFERENCE that it largely cancels from. The check belongs on
+            # the difference itself.
+            ka = {w: statistics.fmean([r["k"] for r in ga if r["width"] == w]) for w in shared}
+            kb = {w: statistics.fmean([r["k"] for r in gb if r["width"] == w]) for w in shared}
+            xd = [w - 1 for w in shared]
+            yd = [ka[w] - kb[w] for w in shared]
+            sed = _slope_se(xd, yd)
+            if sed is None:
+                print("  Two shared widths, so the difference is a line through two points and "
+                      "has no residual. The interval above is the only uncertainty available.")
+                shape_ok, bound = True, None
             else:
-                print("  The difference clears zero, so the marginal cost is NOT shared: the two")
-                print("  methods pay different amounts per verified position. Whatever `c` is")
-                print("  charging for, part of it moves with the drafter, and the shared-machinery")
-                print("  reading that Phase A's two-point fit supported does not survive the")
-                print("  completed ladder.")
+                a0, b0, _ = _linfit(xd, yd)
+                res = [y - (a0 + b0 * x) for x, y in zip(xd, yd)]
+                worst = max(abs(r) for r in res)
+                dof = len(xd) - 2
+                tcrit = _t95(dof)
+                t = abs(b0) / sed if sed else float("inf")
+                print(f"  Shape check on the DIFFERENCE across widths {shared}: residuals "
+                      + " ".join(f"{r:+.5f}" for r in res)
+                      + f", se(slope) {sed:.5f} on {dof} dof.")
+                shape_ok = t >= tcrit
+                bound = None if shape_ok else tcrit * sed
+                if shape_ok:
+                    print(f"  The two k(w) curves differ by a straight line to within {worst:.5f}, "
+                          f"so whatever curvature they carry is shared and cancels. The slope of "
+                          f"the difference is {t:.0f} standard errors from zero against a 95 % "
+                          f"point of {tcrit:.2f}.")
+                else:
+                    print(f"  The difference is not itself linear across these widths, so the "
+                          f"curvature does NOT cancel. Its slope is {t:.2f} se against a 95 % "
+                          f"point of {tcrit:.2f}, which bounds the comparison at "
+                          f"+/-{bound:.4f} -- wider than the interval above, and binding.")
+
+            if shape_ok and not d.spans_zero:
+                print("  VERDICT: the marginal costs differ. `k` is the whole speculative cycle "
+                      "and the two configurations share all of it except what is named at the "
+                      "head of this section, so part of the marginal cost moves with that.")
+            elif shape_ok:
+                print("  VERDICT: no difference in marginal cost is established; the interval "
+                      "contains zero.")
+            elif bound is not None and abs(d.point) >= bound:
+                print("  VERDICT: the difference survives even the wider shape-based bound.")
+            else:
+                print(f"  VERDICT: not resolved. The point estimate is {d.point:+.4f} against a "
+                      f"shape-based bound of {bound:.4f}.")
+                print("  The reason is not a shortage of prompts. The two k(w) curves are not "
+                      "parallel over these widths, so one number for the difference in slope is "
+                      "not a summary of them: whatever separates the two configurations is "
+                      "itself width-dependent. More prompts would narrow the interval above and "
+                      "change nothing here.")
         print("\n  Separating the components needs per-context CUDA-event timing, a replay that")
         print("  skips drafter compute, or a profiler decomposition - none of which this file has.")
+
+    # ---------------------------------------------------------------- matched acceptance
+    # The question this study keeps running into is whether a speculative path loses because its
+    # drafts are bad or because running the drafter costs more than the drafts save. Acceptance
+    # separates the two, and Phase M happens to contain pairs where it is matched almost exactly
+    # across methods on the same target: the 0.8B draft-simple arm at n-max 4 accepts 38.7 % and
+    # the built-in MTP head at n-max 5 accepts 38.6 %, and they land 76 points apart.
+    #
+    # Those two do NOT verify at the same width -- 3.32 columns against 5.97 -- so the pair is
+    # flagged. The flag is not the end of it: the arm verifying 2.6 more columns is the faster
+    # one, so the width difference works against the gap rather than explaining it, and every
+    # pair prints which way its confound runs.
+    #
+    # Pairs are found rather than named, so this says nothing when a file holds no such pair.
+    by_model_arm: dict[tuple, dict] = {}
+    for r in rows:
+        key = (r.get("model"), r["arm"])
+        e = by_model_arm.setdefault(key, {"drafted": 0, "accepted": 0, "sp": [],
+                                          "spec": r["spec_type"], "n_max": r["n_max"]})
+        e["drafted"] += r["drafted"]
+        e["accepted"] += r["accepted"]
+        e["sp"].append(r["speedup"])
+        e.setdefault("dpf", []).append(r["draft_per_forward"])
+    for e in by_model_arm.values():
+        e["acc"] = e["accepted"] / e["drafted"] if e["drafted"] else None
+        e["speedup"] = statistics.fmean(e["sp"])
+        # Effective verification width, one plus what the drafter actually proposed. `n_max` is
+        # what was asked for. Two arms at the same n_max can verify at different widths -- on
+        # phase_nmax DFlash2 fills 87 % of an n_max of 8 and MTP fills 99 %, so they run at 7.94
+        # and 8.93 columns, one inside MMVQ_MAX_BATCH_SIZE and one past it.
+        e["width_eff"] = statistics.fmean(e["dpf"]) + 1 if e.get("dpf") else None
+
+    TOL = 0.02      # 2 acceptance points; the pairs this finds are inside 0.1
+    pairs = []
+    keys = sorted(by_model_arm)
+    for i, ka in enumerate(keys):
+        for kb in keys[i + 1:]:
+            a, b = by_model_arm[ka], by_model_arm[kb]
+            if ka[0] != kb[0] or a["spec"] == b["spec"]:
+                continue                      # same target, different method
+            if a["acc"] is None or b["acc"] is None or abs(a["acc"] - b["acc"]) > TOL:
+                continue
+            pairs.append((ka, kb, a, b))
+    if pairs:
+        print("\n--- matched acceptance: is it draft quality, or the cost of drafting? ---")
+        print("    Two methods on the SAME target whose acceptance agrees to within "
+              f"{100 * TOL:.0f} points.")
+        print("    Acceptance is what draft quality buys, so a pair that matches on it and")
+        print("    separates on throughput separates on something else - and what the two")
+        print("    methods do not share is the drafter's own forward passes.")
+        print("    A pair sits at ONE width, so it speaks to the total cost of a cycle there and")
+        print("    not to the slope: it cannot say whether the difference is in k0 or in c.")
+        for ka, kb, a, b in pairs:
+            m = str(ka[0]).rsplit("/", 1)[-1][:22] if n_models > 1 else ""
+            head = f"  {m + '  ' if m else ''}"
+            print(f"{head}{ka[1]} ({a['spec']}, n-max {a['n_max']}) acceptance "
+                  f"{100 * a['acc']:.1f} %  ->  {a['speedup']:.3f}x")
+            print(f"{' ' * len(head)}{kb[1]} ({b['spec']}, n-max {b['n_max']}) acceptance "
+                  f"{100 * b['acc']:.1f} %  ->  {b['speedup']:.3f}x")
+            gap = (a["speedup"] - b["speedup"]) * 100
+            wa, wb = a.get("width_eff"), b.get("width_eff")
+            print(f"{' ' * len(head)}acceptance differs by "
+                  f"{abs(100 * (a['acc'] - b['acc'])):.1f} points, throughput by "
+                  f"{abs(gap):.0f} points of baseline.")
+            if wa and wb:
+                # A quarter column, the same threshold width_groups.py uses before it will score
+                # a pair. Beyond that the two arms are not verifying the same shape, and if they
+                # straddle MMVQ_MAX_BATCH_SIZE they are not even in the same kernel.
+                line = f"{' ' * len(head)}effective width {wa:.2f} against {wb:.2f} columns"
+                if abs(wa - wb) <= 0.25:
+                    print(line)
+                else:
+                    straddle = ((wa <= mmvq_max) != (wb <= mmvq_max))
+                    print(line + "  -- CONFOUNDED: more than a quarter column apart"
+                          + (f", and they straddle the MMVQ limit of {mmvq_max}"
+                             if straddle else "")
+                          + ", so this pair separates on verification shape as well as on the "
+                            "drafter.")
+                    # A flag with no direction is close to useless. Extra verified positions cost
+                    # more, so if the arm that verifies WIDER is also the faster one, the width
+                    # difference works against the gap rather than explaining it, and correcting
+                    # for it would make the gap larger. Say which case this is, and price it with
+                    # the fitted c when one is available for that method and model.
+                    wider, faster = (ka if wa > wb else kb), (ka if a["speedup"] > b["speedup"]
+                                                              else kb)
+                    cs = [v[3] for kk, v in fits.items()
+                          if kk[1] == ka[0] and len(v) >= 4]
+                    price = ""
+                    if cs:
+                        price = (f" -- about {abs(wa - wb) * statistics.fmean(cs):.2f} "
+                                 f"decode-steps per cycle at the fitted c")
+                    if wider == faster:
+                        print(f"{' ' * len(head)}The confound runs AGAINST the gap: the faster "
+                              f"arm is also the one verifying {abs(wa - wb):.2f} more "
+                              f"columns{price}. Correcting for it widens the gap; it cannot "
+                              f"explain it.")
+                    else:
+                        print(f"{' ' * len(head)}The confound runs WITH the gap: the faster arm "
+                              f"verifies {abs(wa - wb):.2f} fewer columns{price}. Part of the "
+                              f"separation is verification shape, and this pair cannot say how "
+                              f"much.")
 
     print("\n--- implied optimum ---")
     print("    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k has")
@@ -778,10 +1065,11 @@ def report(result: dict) -> None:
         listing = "  ".join(f"n{n}={best[n]:.3f}x" for n in ns)
         print(f"  {method:14s} {listing}")
         print(f"  {'':14s} -> best tested n-max = {bn}   ({shape})")
-        # The fitted line is an independent smoother of k, so the optimum it implies is not the
-        # same statement as the argmax of the raw ladder. It only covers the MMVQ widths the fit
-        # was made on, and it uses each width's OWN measured mean_len, so it tests the k model
-        # rather than any acceptance model.
+        # NOT independent evidence, and it must not be read as any. It reuses each width's own
+        # measured mean_len and only replaces the measured k with the fitted one, so all it asks
+        # is whether smoothing k through a straight line preserves the argmax. It covers only the
+        # MMVQ widths the fit was made on. A disagreement is informative; an agreement mostly says
+        # the residuals are small enough not to move the peak.
         f = fits.get(key)
         if not f:
             continue
@@ -794,8 +1082,10 @@ def report(result: dict) -> None:
         if len(pred) < 2:
             continue
         pn = max(pred, key=lambda n: pred[n])
-        agree = "agrees" if pn == bn else f"DISAGREES with the tested argmax ({bn})"
-        print(f"  {'':14s} -> from the fitted k over MMVQ widths {on_path}: n-max {pn}  ({agree})")
+        agree = ("preserves it" if pn == bn
+                 else f"DISAGREES with the tested argmax ({bn})")
+        print(f"  {'':14s} -> smoothing k through the fit over MMVQ widths {on_path} puts the "
+              f"peak at n-max {pn} ({agree}; same mean_len, so not independent evidence)")
 
 
 def main() -> None:

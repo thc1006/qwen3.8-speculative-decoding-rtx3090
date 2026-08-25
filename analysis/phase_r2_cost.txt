@@ -74,6 +74,10 @@ mtp-n7@sm1700-bwhi  7  0.125-0.644   6.93   0.59  0.000       -0.00 [-0.01, -0.0
     attributed to any one component; see the note under the fits.
   draft-mtp      MMVQ widths [4, 8]  ->  k0=0.7187  c=0.2954  r2=1.0000
                      k0 0.7161 to 0.7213   c 0.2945 to 0.2964   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 0.7187, BELOW the floor of 1.0: the line implies a cycle cheaper than a plain decode step at zero draft depth, which no configuration can be.
+                     so k(w) is concave here and the FIRST extra position costs more than c. Refit with k(1) pinned at the floor: k0=0.9392  c=0.2574  r2=0.9896  (12.9 % change in c)
+                     the pin moves the fit materially, so the linear form does not reach zero depth and neither coefficient is a mechanism.
+                     baseline    28.5 tok/s -> one decode step 35.029 ms; k0 = 25.174 ms, c = 10.348 ms per extra position  [10.316, 10.381]
       w= 4  k=1.6049  fit=1.6049  resid=+0.0000
       w= 8  k=2.7866  fit=2.7866  resid=+0.0000
 
@@ -91,4 +95,4 @@ mtp-n7@sm1700-bwhi  7  0.125-0.644   6.93   0.59  0.000       -0.00 [-0.01, -0.0
     intervals, not this table.
   draft-mtp      n3=2.006x  n7=1.414x
                  -> best tested n-max = 3   (falls monotonically)
-                 -> from the fitted k over MMVQ widths [4, 8]: n-max 3  (agrees)
+                 -> smoothing k through the fit over MMVQ widths [4, 8] puts the peak at n-max 3 (preserves it; same mean_len, so not independent evidence)

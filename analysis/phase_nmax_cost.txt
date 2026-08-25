@@ -70,6 +70,12 @@ dflash2-n8          8  0.096-0.695   6.94   0.61  0.225       -0.01 [-0.01, -0.0
     attributed to any one component; see the note under the fits.
   draft-dflash   MMVQ widths [3, 5, 7]  ->  k0=0.9443  c=0.2481  r2=0.9947
                      k0 0.9418 to 0.9469   c 0.2473 to 0.2488   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 0.9443, BELOW the floor of 1.0: the line implies a cycle cheaper than a plain decode step at zero draft depth, which no configuration can be.
+                     so k(w) is concave here and the FIRST extra position costs more than c. Refit with k(1) pinned at the floor: k0=0.9833  c=0.2397  r2=0.9969  (3.4 % change in c)
+                     under 5 % and r2 still above 0.97, so the line describes the measured widths well. What it does not support is reading k0 as a fixed overhead, on this method or any other.
+                     lack of fit across widths: residual se on the slope 0.0181 (3 widths, 1 dof), against the prompt bootstrap's half-width 0.0008
+                     the line is a 23.6x poorer description of these widths than prompt-to-prompt scatter alone would suggest, so `c` is a chord over the widths fitted and not a constant marginal cost.
+                     baseline    41.6 tok/s -> one decode step 24.058 ms; k0 = 22.719 ms, c = 5.969 ms per extra position  [5.950, 5.986]
       w= 3  k=1.4614  fit=1.4405  resid=+0.0209
       w= 5  k=1.8949  fit=1.9367  resid=-0.0418
       w= 7  k=2.4537  fit=2.4328  resid=+0.0209
@@ -77,6 +83,12 @@ dflash2-n8          8  0.096-0.695   6.94   0.61  0.225       -0.01 [-0.01, -0.0
             excluded from the fit: it is a different kernel, not a residual
   draft-mtp      MMVQ widths [2, 3, 4, 5, 6, 7, 8]  ->  k0=0.8888  c=0.2904  r2=0.9958
                      k0 0.8853 to 0.8924   c 0.2896 to 0.2913   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 0.8888, BELOW the floor of 1.0: the line implies a cycle cheaper than a plain decode step at zero draft depth, which no configuration can be.
+                     so k(w) is concave here and the FIRST extra position costs more than c. Refit with k(1) pinned at the floor: k0=0.9352  c=0.2812  r2=0.9949  (3.2 % change in c)
+                     under 5 % and r2 still above 0.97, so the line describes the measured widths well. What it does not support is reading k0 as a fixed overhead, on this method or any other.
+                     lack of fit across widths: residual se on the slope 0.0084 (7 widths, 5 dof), against the prompt bootstrap's half-width 0.0009
+                     the line is a 9.7x poorer description of these widths than prompt-to-prompt scatter alone would suggest, so `c` is a chord over the widths fitted and not a constant marginal cost.
+                     baseline    41.6 tok/s -> one decode step 24.058 ms; k0 = 21.384 ms, c = 6.988 ms per extra position  [6.967, 7.009]
       w= 2  k=1.2302  fit=1.1793  resid=+0.0510
       w= 3  k=1.4644  fit=1.4697  resid=-0.0053
       w= 4  k=1.7492  fit=1.7602  resid=-0.0110
@@ -96,15 +108,34 @@ dflash2-n8          8  0.096-0.695   6.94   0.61  0.225       -0.01 [-0.01, -0.0
   sampling, launch and synchronisation, output extraction and any per-step state
   management. The two methods share every one of those except the drafter.
 
-  c(draft-dflash) - c(draft-mtp) = -0.0424  [-0.0434, -0.0413]   nominal 95 %, 25 shared prompts, paired on them
-  The difference clears zero, so the marginal cost is NOT shared: the two
-  methods pay different amounts per verified position. Whatever `c` is
-  charging for, part of it moves with the drafter, and the shared-machinery
-  reading that Phase A's two-point fit supported does not survive the
-  completed ladder.
+  c(draft-dflash) - c(draft-mtp) = -0.0473  [-0.0489, -0.0456]   nominal 95 %, 25 shared prompts, paired on them, both fitted on the shared widths [3, 5, 7]
+  Shape check on the DIFFERENCE across widths [3, 5, 7]: residuals -0.00012 +0.00024 -0.00012, se(slope) 0.00010 on 1 dof.
+  The two k(w) curves differ by a straight line to within 0.00024, so whatever curvature they carry is shared and cancels. The slope of the difference is 456 standard errors from zero against a 95 % point of 12.71.
+  VERDICT: the marginal costs differ. `k` is the whole speculative cycle and the two configurations share all of it except what is named at the head of this section, so part of the marginal cost moves with that.
 
   Separating the components needs per-context CUDA-event timing, a replay that
   skips drafter compute, or a profiler decomposition - none of which this file has.
+
+--- matched acceptance: is it draft quality, or the cost of drafting? ---
+    Two methods on the SAME target whose acceptance agrees to within 2 points.
+    Acceptance is what draft quality buys, so a pair that matches on it and
+    separates on throughput separates on something else - and what the two
+    methods do not share is the drafter's own forward passes.
+    A pair sits at ONE width, so it speaks to the total cost of a cycle there and
+    not to the slope: it cannot say whether the difference is in k0 or in c.
+  dflash2-n6 (draft-dflash, n-max 6) acceptance 30.1 %  ->  1.315x
+  mtp-n6 (draft-mtp, n-max 6) acceptance 31.6 %  ->  1.194x
+  acceptance differs by 1.4 points, throughput by 12 points of baseline.
+  effective width 6.95 against 6.94 columns
+  dflash2-n8 (draft-dflash, n-max 8) acceptance 26.6 %  ->  1.226x
+  mtp-n7 (draft-mtp, n-max 7) acceptance 27.6 %  ->  1.091x
+  acceptance differs by 1.1 points, throughput by 13 points of baseline.
+  effective width 7.94 against 7.93 columns
+  dflash2-n8 (draft-dflash, n-max 8) acceptance 26.6 %  ->  1.226x
+  mtp-n8 (draft-mtp, n-max 8) acceptance 24.8 %  ->  1.391x
+  acceptance differs by 1.8 points, throughput by 16 points of baseline.
+  effective width 7.94 against 8.92 columns  -- CONFOUNDED: more than a quarter column apart, and they straddle the MMVQ limit of 8, so this pair separates on verification shape as well as on the drafter.
+  The confound runs AGAINST the gap: the faster arm is also the one verifying 0.98 more columns -- about 0.26 decode-steps per cycle at the fitted c. Correcting for it widens the gap; it cannot explain it.
 
 --- implied optimum ---
     mean_len saturates with depth while k grows linearly, so speedup = mean_len/k has
@@ -117,7 +148,7 @@ dflash2-n8          8  0.096-0.695   6.94   0.61  0.225       -0.01 [-0.01, -0.0
     intervals, not this table.
   draft-dflash   n2=1.537x  n4=1.521x  n6=1.315x  n8=1.226x
                  -> best tested n-max = 2   (falls monotonically)
-                 -> from the fitted k over MMVQ widths [3, 5, 7]: n-max 2  (agrees)
+                 -> smoothing k through the fit over MMVQ widths [3, 5, 7] puts the peak at n-max 2 (preserves it; same mean_len, so not independent evidence)
   draft-mtp      n1=1.450x  n2=1.588x  n3=1.524x  n4=1.450x  n5=1.322x  n6=1.194x  n7=1.091x  n8=1.391x
                  -> best tested n-max = 2   (interior maximum at n-max 2)
-                 -> from the fitted k over MMVQ widths [2, 3, 4, 5, 6, 7, 8]: n-max 2  (agrees)
+                 -> smoothing k through the fit over MMVQ widths [2, 3, 4, 5, 6, 7, 8] puts the peak at n-max 2 (preserves it; same mean_len, so not independent evidence)

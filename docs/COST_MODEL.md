@@ -43,18 +43,62 @@ one plus what the drafter actually proposed. DFlash2 fills 87 % of its budget at
 widths 3, 5 and 7 the two match to 0.00 columns. `harness/width_groups.py` now computes effective
 width per arm and refuses to score a pair that differ by more than a quarter column.
 
-**`c` does not agree between the two methods.** Paired on the 25 prompts both are fitted on,
-`c(draft-dflash) - c(draft-mtp)` is **-0.0424 [-0.0434, -0.0413]**, which clears zero: 0.2481
-against 0.2904, a gap of 15 %. Phase A's two-point fit put them at 0.2784 and 0.2829 and that
-near-agreement carried an inference, that the marginal cost sits in the machinery both methods
-share. The completed ladder does not support it. `k` is the whole speculative cycle - target
-verification, the drafter's own forward passes, sampling, launch and synchronisation, output
-extraction and any per-step state management - and the two methods share all of it except the
-drafter, so a difference this size says part of the marginal cost moves with the drafter. `c` is
-therefore reported as a total marginal cost per verified position, not as a target-verification
-cost, and not as a quantity common to both methods. Separating the components needs per-context
-event timing, a replay that skips drafter compute, or a profiler decomposition; none of those is
-in this repo.
+**`c` does not agree between the two methods, and it took two wrong answers to get there.** The
+point estimates are 0.2481 for `draft-dflash` over widths 3, 5 and 7 and 0.2904 for `draft-mtp`
+over 2 to 8.
+
+The first reading paired the two fits on prompts and reported -0.0424 [-0.0434, -0.0413] as
+clearing zero. The second called that interval the wrong tool -- it redraws prompts and never asks
+whether a line is the right shape -- took each fit's residual across widths as a standard error on
+its slope, added the two in quadrature, and withdrew the difference as unresolved at 2.1 combined
+standard errors. Both are wrong, in opposite directions, and for related reasons.
+
+**A slope here is a chord.** `k(w)` is curved, so a slope fitted over widths 3 to 7 and one fitted
+over 2 to 8 are chords of different arcs and are not estimates of the same quantity. Matched on the
+widths both cover, `c` is **0.2954 against 0.2481** and the difference is
+**-0.0473 [-0.0489, -0.0456]** -- a sixth larger than the number first reported. Phase A is the
+sharper case: it fits DFlash2 on {5, 8} and MTP on {3, 4, 6}, which share no width at all, so its
+"the two agree to 1.7 %" compared chords of disjoint arcs. That comparison is now refused rather
+than printed.
+
+**The curvature is shared, so it cancels.** Over widths 3, 5 and 7 the two arms' residuals are
+`+0.0209, -0.0418, +0.0209` and `+0.0210, -0.0420, +0.0210` -- the same numbers. Two reasons they
+had to look alike: with three equally spaced points the residual vector is forced to be
+proportional to `[1, -2, 1]`, since it must be orthogonal to the constant and linear directions, so
+only its magnitude carries information; and the magnitudes agree to 0.5 %. Treating that as
+independent noise on each fit and adding it in quadrature inflates the bound on a *difference* by
+more than an order of magnitude. Take the difference first: the two `k(w)` curves differ by a
+straight line to within 2.4e-4, and the slope of that difference is 456 standard errors from zero
+against a two-sided 95 % point of 12.71 at one degree of freedom.
+
+So the comparison now restricts both fits to the shared widths, uses the prompt bootstrap for
+sampling uncertainty, and checks shape on the difference rather than on each fit. Where the
+curvature does *not* cancel it says so and the shape bound binds: Phase M's two targets share all
+five widths, their difference is `+0.0029 [-0.0007, +0.0064]`, and their curves are *not* parallel
+-- residuals up to 0.15 -- so the bound is +/-0.0775 and the comparison is **not resolved**. That
+rules out a large architecture effect, against an expert-saturation account predicting the MoE's
+marginal cost per verified position should be clearly the larger. It does not establish equality.
+
+What does not depend on any of this is what `c` is a cost *of*. `k` is the whole speculative cycle
+-- target verification, the drafter's own forward passes, sampling, launch and synchronisation,
+output extraction and any per-step state management -- so `c` is reported as a total marginal cost
+per verified position and never as a target-verification cost. Separating the components needs
+per-context event timing, a replay that skips drafter compute, or a profiler decomposition; none of
+those is in this repo.
+
+**`k(w=1)` has a floor the model never reaches.** A cycle at zero draft depth is a plain decode
+step plus whatever the drafter costs, and a drafter costs at least nothing, so `k(1) >= 1.0`. (It
+is not *equal* to 1.0: that is the baseline arm's `k`, and the baseline runs no drafter, so it is a
+different configuration from the one the line extrapolates to.) No fit sees `w = 1` -- every arm
+starts at `w = 2` -- which makes the floor a free falsification test, and the only one available,
+since `r^2` over the measured widths is computed far away from it.
+
+Every fit on the dense target lands below the floor: 0.7187, 0.7799, 0.7825, 0.8888, 0.8937,
+0.8986, 0.9443 across the five completed matrices. A cycle cheaper than a decode step does not
+exist, so `k(w)` is concave and the first extra position costs more than `c`. Pinning `k(1)` at the
+floor moves `c` by 3.0-3.4 % and holds `r^2` above 0.99, so the line describes the measured widths
+well. What it does not support is reading `k0` as a fixed overhead, on any method or architecture --
+and the concavity is also why a slope has to be compared over a matched width range.
 
 One threat to `c` can be checked without any of them. Once an arm diverges from its baseline it is
 decoding a different token sequence, so what follows is not a comparison of two widths on one

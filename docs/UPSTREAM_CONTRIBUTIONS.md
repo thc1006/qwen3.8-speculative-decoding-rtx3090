@@ -244,12 +244,19 @@ than tabulating one.
 
 An earlier two-point fit on Phase A put the two marginal costs within 1.7 % of each other, and
 this section used to read that as the per-position cost belonging to the verification path and the
-fixed cost to the drafter. The completed ladder does not support it. The coefficients are
-**0.2904** for MTP and **0.2481** for DFlash2, and paired on the 25 prompts both are fitted on,
-`c(dflash) - c(mtp)` is **-0.0424 [-0.0434, -0.0413]**, which clears zero. Part of the marginal
-cost moves with the drafter. `k0` is 0.8888 against 0.9443, so the fixed cost is the higher one for
-DFlash2, not the lower. What is contributable here is the model and the coefficients with
-intervals, not the attribution.
+fixed cost to the drafter. That reading is withdrawn on a technicality worth stating: Phase A fits
+DFlash2 on widths 5 and 8 and MTP on 3, 4 and 6, which **share no width at all**, and `k(w)` is
+curved, so the two numbers are chords of disjoint arcs. `cost_model.py` now refuses that
+comparison rather than printing it.
+
+The completed ladder shares widths 3, 5 and 7. Fitted there, `c` is **0.2954** for MTP against
+**0.2481** for DFlash2 and the difference is **-0.0473 [-0.0489, -0.0456]**. The two `k(w)` curves
+differ by a straight line to within 2.4e-4, so whatever curvature they carry is shared and cancels
+out of the comparison. Part of the marginal cost moves with the drafter.
+
+`k0` is 0.8888 against 0.9443. Both sit below 1.0, which is the floor a zero-depth cycle must
+cost, so neither intercept is a measured fixed cost and the pair should not be read as an
+attribution.
 
 Relevant to [#25187](https://github.com/ggml-org/llama.cpp/issues/25187) (FR-Spec draft-vocab
 trimming research), which is about reducing drafter cost, meaning `k0` rather than `c`.

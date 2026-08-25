@@ -56,10 +56,20 @@ dflash2-n7          7  0.096-0.695   6.94   0.61  0.191       -0.00 [-0.01, -0.0
     attributed to any one component; see the note under the fits.
   draft-dflash   MMVQ widths [5, 8]  ->  k0=0.7825  c=0.2784  r2=1.0000
                      k0 0.7790 to 0.7858   c 0.2775 to 0.2795   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 0.7825, BELOW the floor of 1.0: the line implies a cycle cheaper than a plain decode step at zero draft depth, which no configuration can be.
+                     so k(w) is concave here and the FIRST extra position costs more than c. Refit with k(1) pinned at the floor: k0=0.9736  c=0.2461  r2=0.9962  (11.6 % change in c)
+                     the pin moves the fit materially, so the linear form does not reach zero depth and neither coefficient is a mechanism.
+                     baseline    41.5 tok/s -> one decode step 24.070 ms; k0 = 18.835 ms, c = 6.702 ms per extra position  [6.679, 6.726]
       w= 5  k=1.8963  fit=1.8963  resid=+0.0000
       w= 8  k=2.7316  fit=2.7316  resid=+0.0000
   draft-mtp      MMVQ widths [3, 4, 6]  ->  k0=0.8937  c=0.2829  r2=0.9998
                      k0 0.8919 to 0.8954   c 0.2821 to 0.2837   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 0.8937, BELOW the floor of 1.0: the line implies a cycle cheaper than a plain decode step at zero draft depth, which no configuration can be.
+                     so k(w) is concave here and the FIRST extra position costs more than c. Refit with k(1) pinned at the floor: k0=0.9714  c=0.2624  r2=0.9965  (7.2 % change in c)
+                     the pin moves the fit materially, so the linear form does not reach zero depth and neither coefficient is a mechanism.
+                     lack of fit across widths: residual se on the slope 0.0043 (3 widths, 1 dof), against the prompt bootstrap's half-width 0.0008
+                     the line is a 5.7x poorer description of these widths than prompt-to-prompt scatter alone would suggest, so `c` is a chord over the widths fitted and not a constant marginal cost.
+                     baseline    41.5 tok/s -> one decode step 24.068 ms; k0 = 21.509 ms, c = 6.808 ms per extra position  [6.791, 6.827]
       w= 3  k=1.4545  fit=1.4595  resid=-0.0050
       w= 4  k=1.7498  fit=1.7423  resid=+0.0075
       w= 6  k=2.3056  fit=2.3081  resid=-0.0025
@@ -72,13 +82,7 @@ dflash2-n7          7  0.096-0.695   6.94   0.61  0.191       -0.00 [-0.01, -0.0
   the whole speculative cycle: target verification, the drafter's own forwards,
   sampling, launch and synchronisation, output extraction and any per-step state
   management. The two methods share every one of those except the drafter.
-
-  c(draft-dflash) - c(draft-mtp) = -0.0044  [-0.0052, -0.0037]   nominal 95 %, 25 shared prompts, paired on them
-  The difference clears zero, so the marginal cost is NOT shared: the two
-  methods pay different amounts per verified position. Whatever `c` is
-  charging for, part of it moves with the drafter, and the shared-machinery
-  reading that Phase A's two-point fit supported does not survive the
-  completed ladder.
+  The two fits share 0 width(s) and cannot be compared on a common range.
 
   Separating the components needs per-context CUDA-event timing, a replay that
   skips drafter compute, or a profiler decomposition - none of which this file has.
@@ -94,7 +98,7 @@ dflash2-n7          7  0.096-0.695   6.94   0.61  0.191       -0.00 [-0.01, -0.0
     intervals, not this table.
   draft-dflash   n4=1.519x  n7=1.226x
                  -> best tested n-max = 4   (falls monotonically)
-                 -> from the fitted k over MMVQ widths [5, 8]: n-max 4  (agrees)
+                 -> smoothing k through the fit over MMVQ widths [5, 8] puts the peak at n-max 4 (preserves it; same mean_len, so not independent evidence)
   draft-mtp      n2=1.598x  n3=1.523x  n5=1.321x
                  -> best tested n-max = 2   (falls monotonically)
-                 -> from the fitted k over MMVQ widths [3, 4, 6]: n-max 2  (agrees)
+                 -> smoothing k through the fit over MMVQ widths [3, 4, 6] puts the peak at n-max 2 (preserves it; same mean_len, so not independent evidence)

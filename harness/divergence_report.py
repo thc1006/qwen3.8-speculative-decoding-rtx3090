@@ -69,7 +69,40 @@ def report(result: dict) -> None:
             div[r["arm"]][r["prompt"]][r["pass"]] = d
 
     if not div:
-        print("no divergence records (are the arms greedy, and did the baseline run?)")
+        # The old message guessed at two causes and named neither of the common ones, which sent
+        # a reader hunting through bench.py for a defect that was not there. The comparison is
+        # attached POST-PASS, because arm order rotates within a pass and the baseline arm can
+        # run after the arms measured against it, so a file whose first pass has not closed
+        # carries no divergence at all and that is not a fault. Say which case this is.
+        by_pass = defaultdict(set)
+        for r in recs:
+            by_pass[r["pass"]].add(r["arm"])
+        want = {a for a, m in arms.items()
+                if m.get("extra_args") or m.get("expects_drafter")} or set(arms)
+        complete = [p for p, seen in sorted(by_pass.items()) if want <= seen]
+        temps = {r.get("temperature") for r in recs}
+        print("no divergence records. Diagnosis:")
+        if not recs:
+            print("  the file holds no records at all.")
+        elif not complete:
+            print(f"  no pass has closed yet: {len(recs)} record(s) across pass(es) "
+                  f"{sorted(by_pass)}, and the fullest holds "
+                  f"{max(len(v) for v in by_pass.values())} of the {len(want)} arms this matrix "
+                  f"declares. Divergence is attached after a pass ends, because arm order rotates"
+                  f" and the baseline can run after the arms measured against it. Re-run this "
+                  f"once a pass completes.")
+        elif temps and temps != {0.0}:
+            shown = sorted(t for t in temps if t is not None)
+            print(f"  the arms are not all greedy: temperatures present are {shown}. "
+                  f"Divergence is only attached at temperature 0.")
+        elif any(r.get("baseline_comparison_unavailable") for r in recs):
+            miss = sorted({r.get("baseline_comparison_wanted") for r in recs
+                           if r.get("baseline_comparison_unavailable")} - {None})
+            print(f"  the baseline text was missing for some arms; they wanted {miss}. "
+                  f"Check divergence_baseline_map in the result file.")
+        else:
+            print("  passes closed and the arms are greedy, so this is unexpected: check "
+                  "_attach_baseline_comparisons in bench.py.")
         return
 
     print("=" * 100)

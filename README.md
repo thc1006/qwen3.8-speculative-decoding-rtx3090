@@ -153,9 +153,18 @@ deployment figure would have to reweight these classes by its own traffic.
 
 `speedup = mean_len / k`, with `k(w) = k0 + c*(w-1)` fitted inside the MMVQ dispatch path. On the
 completed ladder that is **c = 0.2904** for `draft-mtp` over widths 2-8 and **0.2481** for
-`draft-dflash` over 3, 5 and 7. Paired on the 25 prompts both are fitted on, the difference is
-**-0.0424 [-0.0434, -0.0413]** and clears zero, so the two methods do not share a marginal cost
-and part of it moves with the drafter. Width 9 leaves the kernel and is analysed separately.
+`draft-dflash` over 3, 5 and 7. `k(w)` is curved, so a slope is a chord and two chords over
+different width ranges are not the same quantity; compared on the widths both cover, 3, 5 and 7,
+the difference is **-0.0473 [-0.0489, -0.0456]**. The two curves differ by a straight line to
+within 2.4e-4, so the curvature they share cancels and the difference survives it. The marginal
+cost is not shared between the two methods. Width 9 leaves the kernel and is analysed separately.
+
+Phase M fits the same method on a 35B-A3B MoE and a 27B dense target in one session, on the same
+five widths, and there the difference is **+0.0029 [-0.0007, +0.0064]** -- but those two curves do
+*not* differ by a straight line, so the shape bound of +/-0.0775 binds instead and the comparison
+is **not resolved**. What that rules out is a large architecture effect, against an
+expert-saturation account that predicts the MoE's marginal cost per verified position should be
+clearly the larger. It does not establish equality.
 
 Derivation, the dispatch boundary, and what `k` does and does not identify:
 [`docs/COST_MODEL.md`](docs/COST_MODEL.md).

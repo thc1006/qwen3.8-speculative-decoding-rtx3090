@@ -194,12 +194,47 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         print(f"{a:28s} {strat:11.2f} {statistics.fmean(allv):10.2f} {len(allv):7d}  "
               f"{worst[0]}={worst[1]:.1f}%")
 
+    # An arm that passes no server flags and expects no drafter IS a baseline. Phase M declares
+    # two of them, one per target, and BASELINE_MAP covers only the speculative arms, so
+    # `baseline-dense` fell through to `default_baseline` and appeared in the primary table as
+    # "-71.59 % SLOWER" against `baseline-moe`. That number is true and is not a speculative
+    # effect; printed in this table, in the same shape as every real row, it reads as one.
+    spec_meta = result.get("arms", {})
+    baseline_arms = {n for n, m in spec_meta.items()
+                     if not m.get("extra_args") and not m.get("expects_drafter")}
+    unmapped = [a for a in present
+                if a not in baseline_arms and baseline_map and a not in baseline_map]
+    if unmapped:
+        print(f"\n!! WARNING: {', '.join(unmapped)} is not in the baseline map, so it is being "
+              f"compared to {default_baseline}, which the matrix did not choose. Fix the "
+              f"matrix's BASELINE_MAP.")
+    if len(baseline_arms & set(present)) > 1:
+        ordered = [a for a in present if a in baseline_arms]
+        print("\n--- unspeculated contrast (baselines against each other; not an effect) ---")
+        ref = ordered[0]
+        for a in ordered[1:]:
+            arm_s, base_s = _balanced(series[a], series[ref])
+            if not arm_s:
+                continue
+            iv = ST.paired_cluster_bootstrap(base_s, arm_s, prompt_class, relative=True)
+            # Name what actually differs. Phase A's two baselines are the same model on two
+            # llama.cpp trees, Phase M's are two models on one tree, and calling either of those
+            # "how much faster one target is" is wrong half the time.
+            ma, mr = spec_meta.get(a, {}), spec_meta.get(ref, {})
+            diff = [k for k in ("model", "tree", "gpu_state")
+                    if (ma.get(k) or None) != (mr.get(k) or None)]
+            what = " and ".join(diff) if diff else "nothing recorded in the arm metadata"
+            print(f"  {a:24s} vs {ref:22s} {str(iv):>22s}   differs in: {what}")
+        print("  Both sides are unspeculated, so this is a property of the setup, not an effect. "
+              "A\n  contrast that spans zero is a control: whatever differs did not move baseline "
+              "throughput.")
+
     near_zero_seen: list = []
     print("\n--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---")
     print(f"{'arm':28s} {'vs':22s} {'delta %':>22s}  verdict")
     for a in present:
         b = baseline_map.get(a, default_baseline)
-        if a == b or b not in series:
+        if a == b or b not in series or a in baseline_arms:
             continue
         arm_s, base_s = _balanced(series[a], series[b])
         if not arm_s:

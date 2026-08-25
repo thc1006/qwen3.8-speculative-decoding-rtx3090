@@ -1459,3 +1459,121 @@ depth, not a comparison point.
 
 No hypothesis changes and no arm is added or removed. `test_a_pair_never_runs_far_apart` fails on
 the previous order, naming the pair and the two positions.
+
+## Correction 13, 2026-08-26 00:45, DURING Phase M: `c` was reported as differing on an interval that cannot say
+
+The README, `docs/COST_MODEL.md` and `docs/UPSTREAM_CONTRIBUTIONS.md` all stated that the completed
+n-max ladder shows the two methods' marginal costs to be different -- `c = 0.2481` for
+`draft-dflash` against `0.2904` for `draft-mtp` -- and cited the paired interval
+`[-0.0434, -0.0413]` as clearing zero. One of them drew the inference that part of the marginal
+cost moves with the drafter. A test enforced the claim. All of that is withdrawn.
+
+The interval came from `cost_model.fit_ci`, which redraws which PROMPTS contribute to each width's
+mean `k`. It never asks whether a straight line is the right shape for those means, and a slope
+comparison is a question about shape. Taken against the fits' own residuals across widths the
+numbers are `se(c) = 0.0181` on **one** residual degree of freedom for `draft-dflash` and `0.0084`
+on five for `draft-mtp`, combined `0.0199` -- twenty times the bootstrap's half-width. The 15 %
+gap is 2.1 combined standard errors at 1.5 Welch degrees of freedom, where the two-sided 95 % point
+is 12.7.
+
+So the comparison is short of WIDTHS, not of prompts, and it resolves nothing either way. Phase A's
+two-point near-agreement (0.2784 against 0.2829) carried the opposite inference and is equally
+unsupported. `cost_model.py` now prints both uncertainties for every fit and takes the verdict from
+the width residuals; `test_the_prose_does_not_settle_c_on_the_wrong_interval` enforces the rule in
+both directions and refuses silence, because silence reads as agreement.
+
+Two things found in the same pass, both recorded here because they change what earlier numbers
+mean rather than only how they are printed:
+
+**`k(w=1)` is an exact anchor that no fit reproduces.** At zero draft depth a cycle is a plain
+decode step, so `mean_len` and `speedup` are both 1 and `k = 1.0` exactly. No fit sees that point.
+Every fit on the dense target extrapolates below it -- 0.7187, 0.7799, 0.7825, 0.8888, 0.8937,
+0.8986, 0.9443 across the five completed matrices -- and a cycle cheaper than a decode step does
+not exist, so `k(w)` is concave and the first extra position costs more than `c`. Refitting with the
+anchor moves `c` by 3.0-3.4 % and holds r^2 above 0.99, so the linear form is sound over the widths
+it is fitted on. What does not survive is reading `k0` as a fixed overhead, on either method or
+either architecture.
+
+**TEST 1's rejection bound was decided by a point estimate's sign, with `r^2` printed and never
+consulted, and its summary took `max` over the arms' point estimates.** The maximum of several
+noisy estimates is biased upward and bounds nothing, and that same quantity gated whether TEST 1's
+conclusion was printed at all, so on the live Phase M data one arm clearing zero by 0.10
+half-widths suppressed the finding. The model also held the draft length at `n_max`, which the
+server does not: it reuses a surviving draft tail instead of re-drafting
+(`tools/server/server-context.cpp:2893`), and on the 0.8B `draft-simple` arms the realised length
+is **4.20 against an `n_max` of 8 and correlates with acceptance at +0.94**. The regressor is inside
+the response there, and the induced bias is negative in `r`, which is TEST 1's own conclusion. The
+bound is now the largest upper confidence limit over arms whose draft length is stable, converted to
+the share of the cycle it would account for: 0.08 % to 1.37 % across the five completed matrices.
+
+No hypothesis changes. H6b's endpoint is unchanged and is now reported against the wider of its two
+uncertainties: on Phase M the difference between the MoE's and the dense target's marginal cost per
+verified position is bounded to about +/-14 %, against an expert-saturation account that predicts
+the MoE's should be the larger.
+
+## Correction 14, 2026-08-26 01:20: Correction 13 was itself wrong, and the reason names a third defect
+
+Correction 13 withdrew the finding that `c` differs between `draft-dflash` and `draft-mtp`. That
+withdrawal is withdrawn. The finding stands, at a larger magnitude than either earlier version, and
+the argument used to withdraw it was a real statistical error that was silently biasing every
+comparison in this file toward a null.
+
+**What Correction 13 got wrong.** It took each fit's residual across widths as a standard error on
+that fit's slope and added the two in quadrature. Over widths 3, 5 and 7 the two arms' residuals
+are `+0.0209, -0.0418, +0.0209` and `+0.0210, -0.0420, +0.0210`. Those are the same numbers. The
+residual is not independent noise on each fit; it is curvature in `k(w)`, it is deterministic, and
+it is shared between two arms measured on the same card. Adding a shared quantity in quadrature
+inflates the bound on a *difference* that it largely cancels from -- here by a factor of about
+twenty.
+
+Two reasons the residual vectors had to look alike, and only the second is evidence: with three
+equally spaced widths the residual must be orthogonal to the constant and the linear direction, so
+it is forced to be proportional to `[1, -2, 1]` and its *shape* carries nothing; what is
+informative is that the *magnitudes* agree to 0.5 %.
+
+Taking the difference first: the two `k(w)` curves differ by a straight line to within `2.4e-4`,
+and the slope of that difference is `-0.04729` with a residual standard error of `0.000104` -- 456
+standard errors from zero against a two-sided 95 % point of 12.71 at one degree of freedom. The
+paired prompt bootstrap on the same restricted range agrees: `-0.0473 [-0.0489, -0.0456]`.
+
+**The third defect, which is why both earlier readings were off.** `k(w)` is curved -- every fit in
+this study lands below the floor a zero-depth cycle must cost -- so a fitted slope is a CHORD, and
+a chord over widths 3 to 7 is not the same quantity as a chord over 2 to 8. The two methods were
+being compared over whatever widths each happened to run. Matched on the shared widths the
+difference is `-0.0473` rather than `-0.0424`, a sixth of the effect. **Phase A is the sharper
+case: it fits DFlash2 on {5, 8} and MTP on {3, 4, 6}, which share no width at all**, so its
+"the two coefficients agree to within 1.7 %" compared chords of disjoint arcs. That comparison is
+now refused rather than printed, and the inference it once carried is void on those grounds rather
+than on Correction 13's.
+
+**What the corrected procedure is.** Restrict both fits to the widths they share; use the paired
+prompt bootstrap for sampling uncertainty; check shape on the DIFFERENCE, not on each fit. Where
+the curvature cancels, the bootstrap interval decides. Where it does not, the shape bound binds and
+is reported as binding.
+
+**H6b is unchanged in verdict and better supported in method.** Phase M's two targets share all
+five widths, so no range mismatch arises. Their difference is `+0.0029 [-0.0007, +0.0064]`, but
+their curves are *not* parallel -- residuals reach 0.15 -- so the shape bound of `+/-0.0775` binds
+and the comparison is **not resolved**. That rules out a large architecture effect, against an
+expert-saturation account predicting the MoE's marginal cost per verified position should be
+clearly the larger. It does not establish equality, and the README no longer says +/-14 %, which
+came from the quadrature error.
+
+**Two smaller items from the same review.**
+
+`k(w=1)` was described in Correction 13 as "the exact 1.0". It is a floor, not a value: a
+zero-depth cycle is a decode step plus a drafter that costs at least nothing, so `k(1) >= 1.0`. The
+exact 1.0 belongs to the baseline arm, which runs no drafter and is a different configuration. The
+conclusion is unaffected -- every dense fit lands *below* the floor, which is impossible whatever
+the drafter costs -- but the pinned refit is a bound-constrained sensitivity check and not an
+anchor.
+
+The matched-acceptance pairs added in the same pass were reported without checking that the two
+arms verify at the same width. Phase M's headline pair -- `moe-draft08b-n4` at 38.7 % acceptance
+against `moe-mtp-n5` at 38.6 % -- runs at **3.32 columns against 5.97**. The pair is now flagged,
+and the flag carries a direction, because a bare "confounded" would tell a reader to discard a
+finding that survives: the arm verifying 2.6 more columns per cycle, at about 0.80 extra
+decode-steps priced at the fitted `c`, is the one that is 76 points of baseline *faster*. The
+confound runs against the gap and cannot explain it.
+
+No hypothesis changes.
