@@ -29,6 +29,7 @@ import os as _os
 import sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import quality  # noqa: E402
+import truncation_audit as TA  # noqa: E402
 
 
 def load(path: Path) -> dict:
@@ -75,18 +76,38 @@ def report(result: dict) -> None:
     print("BYTE-LEVEL DIVERGENCE FROM THE NON-SPECULATIVE BASELINE (greedy, same prompt & pass)")
     print("=" * 100)
 
+    # The earliest fork is the one number here taken across prompts rather than within one, and
+    # a character index does not mean the same thing in each class: measured on Phase A the
+    # output runs 1.56 characters per token in Chinese against 4.65 in prose, a spread of 3.0.
+    # Reported in tokens beside it, from each record's own ratio, so the column can be compared.
+    tok_earliest: dict[str, float] = {}
+    for r in recs:
+        d = r.get("divergence")
+        if not d or d.get("identical"):
+            continue
+        i = quality.fork_position(d)
+        cpt = TA.chars_per_token(r)
+        if i is None or not cpt:
+            continue
+        t = i / cpt
+        if r["arm"] not in tok_earliest or t < tok_earliest[r["arm"]]:
+            tok_earliest[r["arm"]] = t
+
     print("\n--- prevalence ---")
     print(f"{'arm':22s} {'n':>5s} {'identical':>10s} {'rate':>7s} "
-          f"{'median shared prefix':>21s}  {'earliest fork':>13s}")
+          f"{'median shared prefix':>21s}  {'earliest fork':>13s} {'tokens':>8s}")
     for arm in sorted(div):
         flat = [d for p in div[arm].values() for d in p.values()]
         ident = sum(1 for d in flat if d["identical"])
         forks = [d for d in flat if not d["identical"]]
         med = statistics.median(d["common_prefix_frac"] for d in forks) if forks else None
-        earliest = min((d["first_diff_char"] for d in forks), default=None)
+        earliest = min((i for i in map(quality.fork_position, forks) if i is not None),
+                       default=None)
+        te = tok_earliest.get(arm)
         print(f"{arm:22s} {len(flat):5d} {ident:10d} {ident/len(flat)*100:6.1f}% "
               f"{(f'{med:.3f}' if med is not None else '-'):>21s}  "
-              f"{(str(earliest) if earliest is not None else '-'):>13s}")
+              f"{(str(earliest) if earliest is not None else '-'):>13s} "
+              f"{(f'{te:.0f}' if te is not None else '-'):>8s}")
 
     print("\n--- batch-shape signature: fork position per prompt, by arm ---")
     print("    (identical fork positions across drafters that share only their verification")

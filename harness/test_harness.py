@@ -844,5 +844,134 @@ class TestAlgebraicInvariants(unittest.TestCase):
 
 
 
+class TestDeviceFacts(unittest.TestCase):
+    """Three ways devices.py answered a question it had not measured.
+
+    All three were silent: a floor read off a still-cooling card, a card that disappeared because
+    one of its ten fields was unsupported, and a stock power limit invented for a card that never
+    reported one.
+    """
+
+    def test_a_cooling_card_is_not_mistaken_for_a_settled_one(self):
+        """nvidia-smi reports whole degrees, so a 1 C/sample fall clears any pairwise tolerance.
+
+        The old test compared each sample with the one before it and called 78, 77, 76, 75 stable,
+        returning 75 C. Every arm then met a gate of 75 + margin instantly, which is the no-op the
+        function exists to prevent.
+        """
+        import devices
+        real = devices._temp
+        try:
+            taken = {}
+            for series, expect_floor, label in (
+                    ([78, 77, 76, 75, 74, 73, 72, 71, 70, 69] + [68] * 6, 68, "cooling then flat"),
+                    ([60, 60, 61, 60, 60, 60], 60, "flat throughout")):
+                calls = []
+                devices._temp = lambda _i, q=series, c=calls: (
+                    q[len(c)] if len(c) < len(q) else q[-1], c.append(1))[0]
+                floor = devices.idle_floor_c(0, interval_s=0, max_wait_s=5, stable_needed=3,
+                                             tol_c=1.0, verbose=False)
+                self.assertEqual(floor, expect_floor, f"{label}: wrong floor")
+                taken[label] = len(calls)
+            self.assertEqual(taken["flat throughout"], 4,
+                             "a genuinely flat card should settle in stable_needed + 1 samples")
+            self.assertGreater(taken["cooling then flat"], taken["flat throughout"] + 4,
+                               "the fall was accepted as stable again: it settled in "
+                               f"{taken['cooling then flat']} samples, barely more than the "
+                               "4 a flat card takes")
+        finally:
+            devices._temp = real
+
+    def test_one_unsupported_field_does_not_delete_the_device(self):
+        """A card without power-limit control reports [N/A], which used to drop the whole row.
+
+        The caller then saw "no GPU at index 0", which reads as no card installed.
+        """
+        import subprocess
+
+        import devices
+        real = subprocess.check_output
+        good = ("0, NVIDIA GeForce RTX 3090, 24576, 8.6, 610.43.02, "
+                "420.00, 100.00, 450.00, 9751, 2130")
+        try:
+            for line in (good,
+                         good.replace(", 100.00,", ", [N/A],"),
+                         good.replace(", 9751,", ", [N/A],"),
+                         good.replace(", 420.00, 100.00, 450.00,", ", [N/A], [N/A], [N/A],")):
+                subprocess.check_output = lambda *a, **k: line
+                devs = devices.enumerate_devices()
+                self.assertEqual(len(devs), 1, f"device vanished on: {line}")
+                self.assertEqual(devs[0].model_tag, "rtx3090")
+                devs[0].describe()  # must not format None with :.0f
+        finally:
+            subprocess.check_output = real
+
+    def test_stock_is_refused_rather_than_guessed(self):
+        """Restoring the wrong power limit is the defect stock_state_for was added to prevent."""
+        import subprocess
+
+        import devices
+        real = subprocess.check_output
+        try:
+            subprocess.check_output = lambda *a, **k: (
+                "0, NVIDIA GeForce RTX 3090, 24576, 8.6, 610.43.02, "
+                "[N/A], [N/A], [N/A], 9751, 2130")
+            # Not merely assertRaises: before enumerate_devices kept such a card, get_device
+            # itself raised "no GPU at index 0" and this test passed on the broken code.
+            with self.assertRaisesRegex(RuntimeError, "power.default_limit"):
+                devices.stock_state_for(devices.get_device(0))
+        finally:
+            subprocess.check_output = real
+
+
+class TestForkPositionUnits(unittest.TestCase):
+    """The one fork statistic taken across prompts rather than within one.
+
+    Output runs 1.56 characters per token in Chinese against 4.65 in prose on this prompt set, a
+    spread of 3.0, so a character index minimised across classes is not a comparable number.
+    """
+
+    def test_the_two_columns_can_name_different_records(self):
+        """Built so the character minimum and the token minimum fall on different records.
+
+        A Chinese record forks at character 20 and a prose record at character 30. In characters
+        the Chinese one is earliest; in tokens it is 13 against the prose record's 6, so the
+        character column reports the later fork of the two. That is the whole defect, and a
+        report that prints only characters cannot show it.
+        """
+        import contextlib
+        import io as _io
+
+        import divergence_report as DR
+
+        def rec(name, chars, fork):
+            return {"arm": "dflash2-n4", "prompt": name, "pass": 0,
+                    "predicted_n": 400, "text": "x" * chars,
+                    "divergence": {"identical": False, "first_diff_char": fork,
+                                   "prefix_only": False, "len_ref": chars, "len_arm": chars,
+                                   "common_prefix_frac": fork / chars}}
+
+        res = {"arms": {"dflash2-n4": {"extra_args": ["--spec-draft-n-max", "3"]}},
+               "records": [rec("zh_letter", 620, 20), rec("prose_essay", 1860, 30)]}
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            DR.report(res)
+        row = [ln for ln in buf.getvalue().splitlines() if ln.startswith("dflash2-n4")][0]
+        cols = row.split()
+        self.assertEqual(cols[-2], "20", f"character column should be the Chinese fork: {row}")
+        self.assertEqual(cols[-1], "6", f"token column should be the prose fork: {row}")
+
+    def test_both_fork_columns_cover_the_same_records(self):
+        """A prefix-only record must be absent from both columns, not one."""
+        import quality
+        prefix_only = {"identical": False, "first_diff_char": 5, "prefix_only": True,
+                       "len_ref": 5, "len_arm": 40}
+        self.assertIsNone(quality.fork_position(prefix_only))
+        src = (Path(__file__).parent / "divergence_report.py").read_text(encoding="utf-8")
+        self.assertNotIn('min((d["first_diff_char"] for d in forks)', src,
+                         "the character column is back on the unfiltered field, so it and the "
+                         "token column no longer describe the same records")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

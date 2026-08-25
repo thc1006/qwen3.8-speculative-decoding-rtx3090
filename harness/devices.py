@@ -29,18 +29,25 @@ import time
 from dataclasses import dataclass
 
 
+def _n(v, fmt: str = "{:.0f}") -> str:
+    """Format a field the driver may not report, without turning it into a number."""
+    return fmt.format(v) if v is not None else "?"
+
+
 @dataclass(frozen=True)
 class Device:
+    # The first five are what makes a device a device. The rest are reported by most cards and
+    # by no means all of them, and are None when the driver says [N/A].
     index: int
     name: str
     vram_total_mib: float
     compute_cap: str
     driver: str
-    power_default_w: float
-    power_min_w: float
-    power_max_w: float
-    clocks_max_memory_mhz: float
-    clocks_max_graphics_mhz: float
+    power_default_w: float | None
+    power_min_w: float | None
+    power_max_w: float | None
+    clocks_max_memory_mhz: float | None
+    clocks_max_graphics_mhz: float | None
 
     @property
     def vram_gb(self) -> float:
@@ -61,8 +68,15 @@ class Device:
 
     def describe(self) -> str:
         return (f"[{self.index}] {self.name}  {self.vram_gb:.0f} GB  sm_{self.compute_cap.replace('.','')}  "
-                f"{self.power_default_w:.0f} W default ({self.power_min_w:.0f}-{self.power_max_w:.0f})  "
-                f"mem {self.clocks_max_memory_mhz:.0f} MHz")
+                f"{_n(self.power_default_w)} W default ({_n(self.power_min_w)}-{_n(self.power_max_w)})  "
+                f"mem {_n(self.clocks_max_memory_mhz)} MHz")
+
+
+def _f(x: str) -> float | None:
+    try:
+        return float(x)
+    except ValueError:
+        return None
 
 
 _FIELDS = ("index,name,memory.total,compute_cap,driver_version,"
@@ -81,16 +95,24 @@ def enumerate_devices() -> list[Device]:
     for line in out.splitlines():
         p = [x.strip() for x in line.split(",")]
         if len(p) < 10:
+            print(f"[devices] ignoring an nvidia-smi row with {len(p)} of 10 fields: {line!r}",
+                  flush=True)
             continue
+        # Coercing all ten through one float() and swallowing ValueError meant a single [N/A] -
+        # which is what a card without power-limit control reports - dropped the whole device.
+        # The caller then saw "no GPU at index 0", not "one field is unsupported".
         try:
-            devs.append(Device(
-                index=int(p[0]), name=p[1], vram_total_mib=float(p[2]),
-                compute_cap=p[3], driver=p[4],
-                power_default_w=float(p[5]), power_min_w=float(p[6]), power_max_w=float(p[7]),
-                clocks_max_memory_mhz=float(p[8]), clocks_max_graphics_mhz=float(p[9]),
-            ))
+            index, name, vram = int(p[0]), p[1], float(p[2])
         except ValueError:
+            print(f"[devices] ignoring a row whose index or memory did not parse: {line!r}",
+                  flush=True)
             continue
+        devs.append(Device(
+            index=index, name=name, vram_total_mib=vram,
+            compute_cap=p[3], driver=p[4],
+            power_default_w=_f(p[5]), power_min_w=_f(p[6]), power_max_w=_f(p[7]),
+            clocks_max_memory_mhz=_f(p[8]), clocks_max_graphics_mhz=_f(p[9]),
+        ))
     return devs
 
 
@@ -180,30 +202,32 @@ def idle_floor_c(index: int = 0, *, interval_s: float = 5.0, max_wait_s: float =
     heat: a "floor" of, say, 78 C, and a gate target of 86 C that every arm then meets instantly.
     The gate silently becomes a no-op precisely when it is most needed.
 
-    This waits until the reading has stopped falling - `stable_needed` consecutive samples within
-    `tol_c` of each other - and returns the minimum seen. If it never stabilises within
-    `max_wait_s` it returns the minimum anyway and says so, so a degraded measurement is visible
-    rather than assumed.
+    Stability is the span of a window, not the gap between neighbours. Comparing each sample only
+    with the one before it accepts a steady fall: at nvidia-smi's integer resolution a card
+    shedding 1 C per sample clears `abs(v - prev) <= 1.0` every time, so 78, 77, 76, 75 was
+    declared stable and returned a 75 C floor while the card was still cooling - reintroducing the
+    no-op gate this function was written to prevent. Requiring the last `stable_needed + 1`
+    readings to span no more than `tol_c` separates the two: that fall spans 3 C and keeps waiting.
+
+    If it never stabilises within `max_wait_s` it returns the minimum anyway and says so, so a
+    degraded measurement is visible rather than assumed.
     """
     t0 = time.perf_counter()
     seen: list[float] = []
-    stable = 0
     while time.perf_counter() - t0 < max_wait_s:
         v = _temp(index)
         if v is None:
             time.sleep(interval_s)
             continue
-        if seen and abs(v - seen[-1]) <= tol_c and v <= seen[-1] + tol_c:
-            stable += 1
-        else:
-            stable = 0
         seen.append(v)
-        if stable >= stable_needed:
+        window = seen[-(stable_needed + 1):]
+        if len(window) > stable_needed and max(window) - min(window) <= tol_c:
             floor = min(seen)
             if verbose:
                 print(f"[devices] idle floor {floor:.0f} C on GPU {index} "
                       f"(stabilised after {time.perf_counter()-t0:.0f}s, "
-                      f"{len(seen)} samples, {seen[0]:.0f} -> {v:.0f} C)", flush=True)
+                      f"{len(seen)} samples, {seen[0]:.0f} -> {v:.0f} C, "
+                      f"last {len(window)} span {max(window)-min(window):.0f} C)", flush=True)
             return floor
         time.sleep(interval_s)
     floor = min(seen) if seen else 60.0
@@ -216,5 +240,10 @@ def idle_floor_c(index: int = 0, *, interval_s: float = 5.0, max_wait_s: float =
 def stock_state_for(dev: Device):
     """This device's own stock condition, not another card's."""
     from gpustate import GpuState
+    if dev.power_default_w is None:
+        raise RuntimeError(
+            f"device {dev.index} ({dev.name}) does not report power.default_limit, so its stock "
+            f"power limit is not known. Refusing to guess - restoring the wrong limit is the "
+            f"thing this function exists to prevent.")
     return GpuState(f"stock@{dev.short}", mem_transfer_offset=0, core_offset=0,
                     power_limit_w=int(round(dev.power_default_w)))

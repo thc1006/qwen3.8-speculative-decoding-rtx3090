@@ -47,8 +47,8 @@ def _check_device(index: int = 0) -> None:
     if _EXPECT_DEVICE not in d.name.replace(" ", ""):
         raise RuntimeError(
             f"phase_r is calibrated for an RTX 3090 (420 W default, 9751 MHz stock memory) "
-            f"but device {index} is {d.name!r} ({d.power_default_w:.0f} W default, "
-            f"{d.clocks_max_memory_mhz:.0f} MHz). Write a device-specific condition set rather "
+            f"but device {index} is {d.name!r} ({_devices._n(d.power_default_w)} W default, "
+            f"{_devices._n(d.clocks_max_memory_mhz)} MHz). Write a device-specific condition set rather "
             f"than reusing these numbers.")
 
 
