@@ -98,8 +98,29 @@ for h in hits:
 PY
 
 hdr "6. the GPU is where the runs left it"
-python3 harness/gpustate.py --check 2>/dev/null || nvidia-smi \
-  --query-gpu=clocks.max.sm,clocks.max.mem,power.limit --format=csv
+# Through the module's own API. `python3 harness/gpustate.py --check` was here, and gpustate.py
+# has no __main__ and no argparse: it imported, did nothing, exited 0, and the fallback after the
+# || never ran. A section that reported nothing and passed.
+python3 - <<'GPUCHK'
+import sys
+sys.path.insert(0, "harness")
+import gpustate as G
+now, stock = G.read_state(0), G.stock_for(0)
+print(f"   power limit {now['power_limit_w']:.0f} W, stock {stock.power_limit_w} W")
+print(f"   offsets mem {now['mem_transfer_offset']} core {now['core_offset']}, "
+      f"stock {stock.mem_transfer_offset} / {stock.core_offset}")
+drift = []
+if abs(now["power_limit_w"] - stock.power_limit_w) > 0.5:
+    drift.append("power_limit_w")
+for k in ("mem_transfer_offset", "core_offset"):
+    if now[k] != getattr(stock, k):
+        drift.append(k)
+if drift:
+    print("   FAIL: the card is not at the state the runs assume:", drift)
+    sys.exit(1)
+print("   at stock")
+GPUCHK
+[ $? -ne 0 ] && bad "the card is not at stock"
 
 printf '\n'
 if [ $FAIL -eq 0 ]; then echo "All sections passed."; else echo "At least one section failed."; fi
