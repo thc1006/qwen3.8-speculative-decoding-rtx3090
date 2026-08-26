@@ -19,6 +19,7 @@ import analyze as A  # noqa: E402
 import bench  # noqa: E402
 import cost_model as CM  # noqa: E402
 import cross_rung as CR  # noqa: E402
+import ladder_trend as LT  # noqa: E402
 import stats as ST  # noqa: E402
 import telemetry as T  # noqa: E402
 
@@ -2953,6 +2954,71 @@ class TestModelSizeSurvivesTheWeightsBeingDeleted(unittest.TestCase):
         self.assertIsNone(bench._size(P("/")))  # a directory: stat succeeds, but not a file size
         e = bench.environment_snapshot({}, P("/nonexistent/never/here.gguf"))
         self.assertIsNone(e["model_size_bytes"])
+
+
+class TestLadderTrendIdentifiesItsRungs(unittest.TestCase):
+    """A ladder plotted against a label is not plotted against anything measurable.
+
+    ladder_trend took the rung's name from the filename, as stem.split("_")[-1]. That gives "XL"
+    for phase_q_UD-Q4_K_XL and "M" for phase_qsmall_Q4_K_M, so two rungs of the same ladder
+    collapse onto one label -- and the guard that catches duplicate rungs keys on hashes, not on
+    labels, so the collision passes it and shows up only in the printed table. The name now comes
+    from the arms, which the matrix builds from the rung it was told to run.
+    """
+
+    ROOT = Path(__file__).parent.parent
+    FIXTURE = "results/phase_q_UD-Q4_K_XL.json"
+
+    def _load(self, mutate=None):
+        p = self.ROOT / self.FIXTURE
+        if not p.exists():
+            self.skipTest(f"{self.FIXTURE} not present")
+        d = json.loads(p.read_text(encoding="utf-8"))
+        if mutate is not None:
+            mutate(d)
+        import tempfile, os
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as th:
+            json.dump(d, th)
+            tmp = th.name
+        self.addCleanup(lambda: os.unlink(tmp))
+        return LT.load_rung(tmp)
+
+    def test_the_label_comes_from_the_arms_not_the_filename(self):
+        v = self._load()
+        self.assertEqual(v["label"], "UD-Q4_K_XL",
+                         "the rung label is not derived from the arm names; a filename split "
+                         "collapses UD-Q4_K_XL and UD-Q5_K_XL onto the same string")
+
+    def test_a_rung_with_no_recorded_size_has_no_x_value(self):
+        """env.model_size_bytes is the x axis. Without it the rung cannot be placed."""
+        a = self._load()
+        a["size_bytes"] = None
+        b = self._load(lambda d: d["env"].update(model_size_bytes=999, model_sha256="b" * 64))
+        c = self._load(lambda d: d["env"].update(model_size_bytes=1998, model_sha256="c" * 64))
+        why = " | ".join(LT.guards([a, b, c]))
+        self.assertIn("model_size_bytes absent", why,
+                      "a rung with no recorded file size was accepted onto a size axis")
+
+    def test_two_rungs_with_the_same_weights_are_refused(self):
+        a = self._load(lambda d: d["env"].update(model_size_bytes=100, model_sha256="a" * 64))
+        b = self._load(lambda d: d["env"].update(model_size_bytes=200, model_sha256="a" * 64))
+        c = self._load(lambda d: d["env"].update(model_size_bytes=300, model_sha256="c" * 64))
+        why = " | ".join(LT.guards([a, b, c]))
+        self.assertIn("same model hash", why,
+                      "two rungs carrying identical weights were accepted as distinct points")
+
+    def test_bits_per_weight_needs_a_bf16_rung_and_says_so_when_absent(self):
+        a = self._load(lambda d: d["env"].update(model_size_bytes=100, model_sha256="a" * 64))
+        bpw, how = LT.bits_per_weight([a])
+        self.assertIsNone(bpw, "bits per weight was computed with no bf16 rung to scale it")
+        self.assertIn("file size alone", how,
+                      "the fallback does not say the axis became file size")
+
+    def test_a_trend_refuses_fewer_than_three_rungs(self):
+        """Two rungs are a difference, not a trend, and cross_rung.py already does differences."""
+        src = inspect.getsource(LT.main)
+        self.assertIn("len(paths) < 3", src)
+        self.assertIn("cross_rung", src, "the refusal does not point at the pairwise tool")
 
 
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
