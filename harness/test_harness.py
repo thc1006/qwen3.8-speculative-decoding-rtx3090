@@ -19,6 +19,7 @@ import analyze as A  # noqa: E402
 import bench  # noqa: E402
 import cost_model as CM  # noqa: E402
 import cross_rung as CR  # noqa: E402
+import backfill_model_size as BMS  # noqa: E402
 import ladder_trend as LT  # noqa: E402
 import stats as ST  # noqa: E402
 import telemetry as T  # noqa: E402
@@ -3019,6 +3020,70 @@ class TestLadderTrendIdentifiesItsRungs(unittest.TestCase):
         src = inspect.getsource(LT.main)
         self.assertIn("len(paths) < 3", src)
         self.assertIn("cross_rung", src, "the refusal does not point at the pairwise tool")
+
+
+class TestSizeBackfillCannotInventANumber(unittest.TestCase):
+    """This tool writes a number into a measurement file, so its sourcing has to be exact.
+
+    The first version attached a size comment to the next hash line anywhere below it. A prose
+    block naming two sizes therefore gave the second one to a hash that owned the first:
+    UD-Q5_K_XL's hash came back with UD-Q4_K_XL's 17559178144 bytes, and that would have been
+    written into results/phase_q_UD-Q5_K_XL.json as the size of the weights that produced it.
+    Both results lack the field, so this was not hypothetical.
+    """
+
+    def _table(self, text):
+        import tempfile, os
+        from pathlib import Path as P
+        with tempfile.NamedTemporaryFile("w", suffix=".SUMS", delete=False) as th:
+            th.write(text)
+            tmp = th.name
+        self.addCleanup(lambda: os.unlink(tmp))
+        old = BMS.SUMS
+        BMS.SUMS = P(tmp)
+        self.addCleanup(lambda: setattr(BMS, "SUMS", old))
+        return BMS.sizes_by_hash()
+
+    def test_a_size_two_lines_above_a_hash_is_not_attached_to_it(self):
+        t = self._table(
+            "# 111111111 bytes\n"
+            "# some prose about something else entirely\n"
+            + "a" * 64 + "  models/a.gguf\n")
+        self.assertEqual(t, {},
+                         "a size separated from its hash by another comment was still attached")
+
+    def test_the_last_of_several_sizes_does_not_capture_a_later_hash(self):
+        t = self._table(
+            "# 111111111 bytes for one file\n"
+            "# 222222222 bytes for a different file\n"
+            + "a" * 64 + "  models/a.gguf\n")
+        self.assertEqual(t[("a" * 64)][0], 222222222,
+                         "adjacency should take the immediately preceding line")
+        self.assertEqual(len(t), 1)
+
+    def test_a_size_adjacent_to_its_hash_is_attached(self):
+        t = self._table("# 333333333 bytes (0.31 GiB)\n" + "b" * 64 + "  models/b.gguf\n")
+        self.assertEqual(t, {"b" * 64: (333333333, "models/b.gguf")})
+
+    def test_the_real_sums_file_gives_each_hash_its_own_size(self):
+        """Every size in the committed file belongs to the hash it sits above."""
+        table = BMS.sizes_by_hash()
+        if not table:
+            self.skipTest("no sizes recorded yet")
+        for h, (size, path) in table.items():
+            stem = Path(path).name
+            self.assertGreater(size, 10**8, f"{stem}: implausible size {size}")
+            # the ladders' own tables are the cross-check available without the files
+            if "UD-Q4_K_XL" in stem:
+                self.assertEqual(size, 17559178144, "UD-Q4_K_XL took another rung's size")
+            if "UD-Q5_K_XL" in stem:
+                self.assertEqual(size, 20876938144, "UD-Q5_K_XL took another rung's size")
+
+    def test_a_result_whose_hash_is_not_in_the_table_is_refused(self):
+        src = inspect.getsource(BMS.main)
+        self.assertIn("refusing to invent one", src)
+        self.assertIn("already has model_size_bytes", src,
+                      "the tool must not overwrite a size recorded from the file itself")
 
 
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
