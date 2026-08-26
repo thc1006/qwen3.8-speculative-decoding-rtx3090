@@ -896,7 +896,10 @@ def report(result: dict) -> None:
         cmps = []
 
     for ma, (ga, oa, *_), mb, (gb, ob, *_) in cmps:
-        d = delta_c_ci(ga, oa, gb, ob)
+        # The paired interval is computed BELOW, on the shared widths. An earlier version also
+        # computed it here on each fit's own widths and then overwrote it a dozen lines later
+        # without ever reading it: a wasted 4000-replicate bootstrap, and a second number in the
+        # source that looked like it meant something.
         same_method = ma.split(" @ ")[0] == mb.split(" @ ")[0]
         if same_method:
             print("\n  One method on two targets, fitted separately. Everything about the cycle is")
