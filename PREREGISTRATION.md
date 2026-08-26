@@ -2410,3 +2410,57 @@ says. `t_draft_n` is that evidence for speculative arms and this study already r
 request; nothing was looking at it until the audit did. Two arms in one phase turn out to measure
 something other than what their row implies, and neither would have been caught by a completeness
 count, an incident log, or an interval that excludes zero.
+
+
+## Correction 26, 2026-08-26 23:12: H10's verdict overstates what an overlap shows, and its comparator is unverified
+
+Correction 22 scored H10 as "**their CUDA figure REPRODUCES**", on this evidence:
+
+    measured on sm_86   35.0 %  [32.9, 37.3]
+    #26750 on CUDA      35.8 - 40.7 %          intervals overlap
+
+Two problems, found by re-reading it rather than by new data.
+
+**An overlap is not a reproduction.** Two intervals that overlap fail to exclude each other; that
+is weaker than agreement, and much weaker than the word "reproduces" carries. The point estimate
+here, 35.0 %, sits **below** the bottom of the comparator range, and the overlap comes entirely
+from the upper end of our own interval reaching 37.3. A reader who takes "reproduces" at face
+value would think the two measurements landed on the same number. They did not; they failed to
+be distinguished.
+
+The defensible statement is: **sm_86 measures 35.0 % [32.9, 37.3], which does not exclude the
+range #26750 reports for CUDA, and is 57 percentage points below the ~92 % it reports for
+Vulkan.** The second clause is where the strength actually is -- the CUDA/Vulkan gap is enormous
+and the interval is nowhere near it. The first clause is a non-exclusion.
+
+**The comparator itself is unverified.** "35.8-40.7 %" appears in exactly one place in this
+repository, the docstring of `harness/matrices/phase_qsmall.py`, and was carried from there into
+Correction 21, Correction 22 and the README without being checked against the issue. #26750's
+title gives a single figure, 40.7 %. Where 35.8 comes from, whether the pair is a range over
+runs, over prompts, or over two different configurations, and whether it is even the same
+estimator as the acceptance this study computes (`t_draft_n_accepted / t_draft_n`, per request,
+averaged class-stratified over 25 prompts x 3 passes) -- none of that has been established.
+
+Until it is, H10's comparison is against a number of unknown provenance. That does not make the
+measurement wrong: 35.0 % [32.9, 37.3] on sm_86 with `mtp-n6@Q4_K_M` stands on its own, and so
+does its distance from 92 %. It makes the **verdict** unsupported.
+
+**H10 is therefore reopened**, and the scoring in Correction 22 is withdrawn to:
+
+- measured, and reported: `mtp-n6@Q4_K_M` acceptance is 35.0 % [32.9, 37.3] on sm_86.
+- not established: whether that agrees with #26750's CUDA figure, pending a check of what that
+  figure is and how it was computed.
+- unaffected: the CUDA-versus-Vulkan magnitude. Nothing in this study's method could turn 35 %
+  into 92 %.
+
+Correction 21 registered three outcomes for H10 and deliberately predicted none. That was right.
+What went wrong is at the scoring step: an overlap was read as the first branch when it does not
+select any branch. The other four hypotheses in Correction 22 are unaffected -- H9, H9a, H10a and
+H11 are scored against this study's own measurements, not against an external figure.
+
+### Why this is worth its own Correction
+
+The same word did the damage twice today. Correction 23 called a ratio a mechanism; this called
+an overlap a reproduction. Both are cases of a verdict stated more strongly than the evidence
+supports, in a direction that made the result more interesting. The measurements were fine both
+times.
