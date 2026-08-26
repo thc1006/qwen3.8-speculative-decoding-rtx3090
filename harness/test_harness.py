@@ -3668,6 +3668,92 @@ def _parents_of(path):
     return {"/".join(parts[:i]) for i in range(1, len(parts))}
 
 
+class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
+    """The README drifts because the same conclusion is copied into six places by hand.
+
+    Correction 25 established that phase_c's ngram-mod emitting no drafts is the method working
+    as designed; the README kept "its flag was accepted and did nothing" for a further day.
+    Phase M's anchor artifact has said ANCHOR DOES NOT HOLD since the run finished; the opening
+    paragraph kept "the sign belongs to the drafting method, not the architecture".
+
+    These are not style checks. Each one binds a sentence in the README to the artifact that
+    decides whether that sentence is true, so a retraction in one place cannot leave the other
+    standing. They fail closed: a missing artifact is a skip, a present artifact that contradicts
+    the README is a failure.
+    """
+
+    ROOT = Path(__file__).parent.parent
+
+    def setUp(self):
+        f = self.ROOT / "README.md"
+        if not f.exists():
+            self.skipTest("no README.md")
+        self.readme = f.read_text(encoding="utf-8")
+
+    def _artifact(self, name):
+        f = self.ROOT / "analysis" / name
+        if not f.exists():
+            self.skipTest(f"no analysis/{name}")
+        return f.read_text(encoding="utf-8")
+
+    def _result(self, name):
+        f = self.ROOT / "results" / name
+        if not f.exists():
+            self.skipTest(f"no results/{name}")
+        return json.loads(f.read_text(encoding="utf-8"))
+
+    def test_record_counts_quoted_in_the_readme_match_the_result_files(self):
+        import re
+        for phase, pattern in (("phase_a.json", r"Phase A \((\d+) request records"),
+                               ("phase_m.json", r"Phase M, (\d+) records")):
+            m = re.search(pattern, self.readme)
+            if not m:
+                continue
+            self.assertEqual(int(m.group(1)), len(self._result(phase)["records"]),
+                             f"the README's count for {phase} is not the file's")
+
+    def test_no_architecture_claim_while_the_phase_m_anchor_fails(self):
+        anchor = self._artifact("phase_m_anchor.txt")
+        if "ANCHOR DOES NOT HOLD" not in anchor:
+            self.skipTest("the anchor holds; this guard is for when it does not")
+        for claim in ("not the architecture",
+                      "sign belongs to the drafting method",
+                      "rules out a large architecture effect"):
+            self.assertNotIn(claim, self.readme,
+                             f"the README asserts {claim!r} while phase_m_anchor.txt says the "
+                             f"anchor does not hold and that nothing in Phase M may then be read "
+                             f"as a statement about the predecessor or the architecture")
+
+    def test_no_phase_m_cost_numbers_while_its_mean_len_check_fails(self):
+        cost = self._artifact("phase_m_cost.txt")
+        if "The derivation is wrong" not in cost:
+            self.skipTest("Phase M's mean_len check passes; this guard is for when it does not")
+        row = [l for l in self.readme.splitlines() if l.startswith("| **M** |")]
+        self.assertTrue(row, "no Phase M row in the later-phases table to check")
+        self.assertTrue(any(w in row[0] for w in ("withheld", "withdrawn")),
+                        "Phase M's mean_len derivation fails its own integrity check, so the "
+                        "README's Phase M row has to say its cost interpretation is withheld")
+
+    def test_a_zero_draft_arm_is_not_described_as_an_ignored_flag(self):
+        res = self._result("phase_c.json")
+        drafted = {}
+        for r in res["records"]:
+            n = (r.get("timings") or {}).get("t_draft_n") or 0
+            drafted[r["arm"]] = drafted.get(r["arm"], 0) + n
+        if not any(v == 0 for a, v in drafted.items() if "ngram" in a):
+            self.skipTest("no zero-draft n-gram arm in phase_c")
+        for claim in ("flag was accepted and did nothing", "flag was ignored",
+                      "accepted and silently ignored"):
+            self.assertNotIn(claim, self.readme,
+                             f"the README says {claim!r}; Correction 25 established that zero "
+                             f"drafts is ngram-mod's designed behaviour at its default n_min=48")
+
+    def test_the_capped_window_is_not_called_byte_identical(self):
+        """Every request stops at the token cap, so a match inside it is right-censored."""
+        self.assertNotIn("Byte-identical output against each rung's own baseline", self.readme)
+        self.assertNotIn("no quantization anywhere in the target", self.readme)
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 

@@ -2745,3 +2745,83 @@ of them `mtp.*`, and none of those 15 is an embedding or a head.
 Posted as a follow-up comment rather than an edit to the body, so that the error and its
 correction both stay visible: issue 53887, comment 5427886687, verified present by reading it
 back.
+
+
+## Correction 29, 2026-08-27 00:42: an external review of the README, checked line by line
+
+A detailed review of the README, the analysers and the committed results arrived naming commit
+`fba354c4`. Every checkable claim in it was tested against the artifacts before anything was
+changed. Most held. One did not, and correcting it in the reviewer's direction would have made
+the README less accurate, not more.
+
+### What held, and is fixed
+
+**`cost_model.py` printed a fitted cost model after declaring its own input wrong.** On Phase M
+the integrity check reports `mean gap -0.3494, worst 2.9054` over 1425 requests and prints "The
+derivation is wrong, not the counters" -- and then prints `k0=1.2143 c=0.2929 r2=0.9914` with a
+bootstrap interval and a rollback interpretation underneath. `collect()`'s docstring bounds that
+bias at under 1 % of `mean_len`; on this phase it is an order of magnitude past that. The tool
+now refuses to print `k`, `c` or `k0` for a result that fails the check. A number that is
+systematically wrong still fits a line, still produces a tight interval, and still reads as a
+mechanism; printing it with a caption saying it is wrong is how it ends up quoted without the
+caption. This was the most dangerous thing in the repository.
+
+**`analyze.py`'s energy table divided every arm by one reference.** The throughput table three
+blocks above it has always used `baseline_map`. Phase M runs a dense target and an MoE target in
+one matrix, so every dense arm's energy was being compared against the MoE baseline's -- 143 tok/s
+against 41 in the throughput domain, so not a subtle error, and invisible here because energy has
+no familiar scale to check it against.
+
+**`analyze.py` claimed to report a series it did not report.** It computes `itt_series`, prints
+"Both series are reported below where they differ", and then tabulates only the per-protocol one.
+The intention-to-treat table now exists.
+
+**The README carried claims the evidence had stopped supporting**: Phase M's architecture and
+fixed-cost conclusions, Phase C's "the flag was accepted and did nothing" for `ngram-mod` after
+Correction 25 retracted it, `byte-identical` where every request is right-censored at the token
+cap, "no quantization anywhere in the target" for a ladder that runs `q8_0` K/V on every rung,
+and Phase Q as a causal statement about verification cost when its two rungs are eight hours
+apart and the MTP head is quantized with the target it is embedded in. Three of nine
+table-of-contents anchors did not exist. The Reproduce block pinned seven-character commits and
+verified them with `rev-parse --short`, which compares an abbreviation to itself; checked two
+downloaded files against a manifest covering seven; and wrote to `results/phase_a.json`, the
+artifact a reproduction exists to be compared against.
+
+### What did not hold
+
+The review described Phase M's 33 excluded records as post-treatment selection, and reasoned from
+there that the phase's effects are "per-protocol descriptive effects" of uncertain validity.
+
+The exclusions are `zh_self_intro`, across all three passes, in **all eleven MoE arms including
+`baseline-moe`**, and in no dense arm. One prompt drops out of the entire MoE half, treatment and
+control together. That is balanced, not treatment-correlated: the MoE effects are paired estimates
+over 24 of 25 prompts rather than over a subset that speculation selected. It remains an exclusion
+decided by an outcome, and what it costs is which prompts the MoE effect averages over, which is a
+generalisability point and not a bias toward the effect. The README says that, rather than what
+the review assumed.
+
+The distinction matters because the two readings call for different remedies. Under the review's
+reading the effects need re-deriving; under what the data shows they need an intention-to-treat
+table beside them, which now exists.
+
+### The figures, which the review did not cover
+
+Read as rendered images rather than as code. Readers fixate on a figure's title longer than on
+anything else in it, so an assertive title has to be one the data carries; three were not, and
+`plot_phase_m`'s asserted exactly the causal claim this Correction withdraws. Two placement
+defects were only visible in the rendered PNG: `plot_dispatch_boundary` anchored each deviation
+label on the midpoint of its arrow rather than on its marker, and with both drops at the same
+width the blue label landed beside the orange marker -- the figure said `draft-dflash` was the
+-26 % one when its own footer and the data say `draft-mtp` is. `plot_qsmall_ladder`'s legend sat
+on the series it labelled.
+
+### Why this keeps happening, and what now stops it
+
+Every one of these is the same shape: a conclusion copied by hand into the opening, the Findings
+table, the cost section, the later-phases table, a figure title, TODO.md and a Correction, and
+then retracted in one of them. `harness/test_harness.py` now binds the sentences to the artifacts
+that decide whether they are true -- if `phase_m_anchor.txt` says the anchor does not hold, the
+README may not assert an architecture effect; if `phase_m_cost.txt` says the derivation is wrong,
+the Phase M row must say its cost interpretation is withheld; if `phase_c`'s `ngram-mod` drafted
+zero tokens, the README may not call it an ignored flag. Each guard was verified to fail when the
+retracted sentence is put back.
