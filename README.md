@@ -292,50 +292,45 @@ status column says which.
 ## Reproduce
 
 ```bash
-# toolchain (Debian 13; NVIDIA CUDA repo already configured)
-sudo apt-get install -y cuda-toolkit-13-3 ninja-build ccache
-
-# two trees, identical flags: DFlash2 is an unmerged PR, so there is no prebuilt for it, and
-# mixing a prebuilt master with a self-built PR binary would reintroduce a build confound
-# The two trees these results were measured on. Both branches have moved since, so the
-# commits are pinned and verified: without this you build something else and get something else.
-LLAMA_MASTER_COMMIT=c060ca9
-DFLASH2_COMMIT=d1a522f
-
-git clone https://github.com/ggml-org/llama.cpp llamacpp-master
-git -C llamacpp-master checkout --detach $LLAMA_MASTER_COMMIT
-cp -r llamacpp-master llamacpp-dflash2
-git -C llamacpp-dflash2 fetch origin pull/27342/head
-git -C llamacpp-dflash2 checkout --detach $DFLASH2_COMMIT
-test "$(git -C llamacpp-master   rev-parse --short HEAD)" = "$LLAMA_MASTER_COMMIT" || exit 1
-test "$(git -C llamacpp-dflash2  rev-parse --short HEAD)" = "$DFLASH2_COMMIT"      || exit 1
-
-for t in llamacpp-master llamacpp-dflash2; do
-  CUDACXX=/usr/local/cuda-13.3/bin/nvcc cmake -B $t/build -S $t -GNinja \
-    -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86 -DGGML_CCACHE=ON -DCMAKE_BUILD_TYPE=Release
-  cmake --build $t/build -j --target llama-server
-done
-
-# models, then check them against the hashes these runs loaded
-hf download unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-UD-Q4_K_XL.gguf --local-dir models/target
-hf download z-lab/Qwen3.8-27B-DFlash2-GGUF --local-dir models/dflash2
-sha256sum -c models/SHA256SUMS
-
-# the harness's own tests: one case per defect this study shipped and later found
-python3 harness/test_harness.py
-
-# run + analyse (standard library only)
-python3 harness/bench.py --matrix phase_a --passes 5 --out results/phase_a.json
-python3 harness/analyze.py results/phase_a.json
-
-# figures (the only step that needs a third-party package). Use the venv's interpreter:
-# the harness itself runs on the system python, matplotlib is installed only here, and
-# analysis/plot.py imports it at module level.
-.venv/bin/pip install matplotlib && .venv/bin/python analysis/plot.py
+./scripts/reproduce_phase_a.sh
 ```
 
-`harness/bench.py --prompts-per-class 1` runs a reduced dry run; reduced runs label themselves in
-the output file so they can never be mistaken for a full result.
+That is the whole procedure. The script reads every version-specific value from
+[`repro/phase_a.lock.json`](repro/phase_a.lock.json) rather than carrying its own copy, so a rerun
+and the record of what was measured cannot drift apart, and it stops on the failures that have
+actually cost this study a run:
+
+- the two llama.cpp trees are compared at their **full 40-character** commits,
+  `c060ca974c773c7c3d17fd1b66dc9d312bc292c0` and `d1a522fc89c96d1a3057e35681f0c4859810623c`. A
+  short prefix can resolve to a different object as a repository grows, which is the one thing
+  pinning exists to prevent;
+- both trees are configured and built with identical flags, because mixing a prebuilt master with
+  a self-built PR binary reintroduces the build confound the two-tree design exists to remove;
+- checksums are checked against
+  [`models/SHA256SUMS.phase_a`](models/SHA256SUMS.phase_a), which lists **only the two files this
+  phase loads**. The full manifest covers Phase M's MoE target, Phase Q's ladder rung and Phase
+  Q-small's four rungs as well, so checking against it on a clean machine reports missing files
+  for models a Phase A reproduction never downloads;
+- the card is checked for compute capability 8.6 and about 20 GB free before anything is built;
+- the harness's own tests must pass first;
+- the result is written to `results/reproductions/phase_a_<host>_<utc>.json`. It never overwrites
+  `results/phase_a.json`, which is the artifact you would be comparing against;
+- the record count is checked against the 875 the lock file declares, and any incident is
+  reported rather than left in the file.
+
+Absolute tok/s are host-specific. Compare the paired effects, not the levels; see
+[the fleet note](docs/GPU_AS_FOUND.md) for why figures from different hosts are never pooled here.
+
+`python3 harness/bench.py --matrix phase_a --prompts-per-class 1 --out /tmp/dry.json` is a reduced
+dry run. Reduced runs label themselves in the output file, so they can never be read back as a
+full result.
+
+Figures need matplotlib, which is the only third-party dependency and is not needed to reproduce
+the numbers:
+
+```bash
+.venv/bin/pip install matplotlib && .venv/bin/python analysis/plot.py
+```
 
 ## Limitations
 
