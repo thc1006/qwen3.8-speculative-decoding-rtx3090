@@ -2512,3 +2512,200 @@ The same failure ran twice today. Correction 23 called a ratio a mechanism; this
 overlap a reproduction. Both are verdicts stated more strongly than the evidence supports, in
 the direction that made the result more interesting. The measurements were sound both times --
 what failed is the sentence written on top of them, and a sentence is what other people read.
+
+
+## Correction 27, 2026-08-26 23:22: the new tools printed intervals without this study's own near-zero rule
+
+`stats.Interval` carries `near_zero`, and `stats.py:52-59` states why: the percentile bootstrap
+undercovers at 25 prompts -- measured at 90.9 % for a normal, 90.6 % for a uniform, 88.0 % for a
+heavy-tailed mixture against a nominal 95 %, recovering to 92.4 % at 50 -- the error is one-sided
+so intervals come out too narrow, and restoring the coverage is worth a 1.15 to 1.25 times wider
+interval. Hence the rule: **an interval clearing zero by under about 1.3 half-widths is a verdict
+that should not be leaned on.**
+
+`analyze.py`, `cost_model.py` and `anchor_verdict.py` all apply it. The three tools written today
+-- `cross_rung.py`, `ladder_trend.py`, `audit_results.py` -- printed intervals and wrote
+`CLEAR OF ZERO` without consulting it once.
+
+Applied to H9's divergence deltas, Q4_K_M against BF16:
+
+| arm | interval | margin | |
+|---|---|---:|---|
+| mtp-n2 | [+16.0, +52.0] | **0.89** | below 1.3 -- not to be leaned on |
+| mtp-n3 | [+24.0, +56.0] | 1.50 | |
+| mtp-n5 | [+24.0, +60.0] | 1.33 | |
+| mtp-n6 | [+24.0, +60.0] | 1.33 | |
+
+**H9's verdict does not change.** Three of the four arm families clear the threshold, the effect
+is 36 to 44 percentage points, and BF16 sits at 52 % against 8-16 % for every quantized rung. What
+changes is that the one weak interval is now labelled as weak instead of reading like the other
+three.
+
+### A second-order problem the fix does not solve
+
+That 1.3 comes from a calibration run on three **continuous** data-generating processes.
+`identical` is binary: with three passes per prompt, a cluster mean can only take
+`{0, 1/3, 2/3, 1}`. Whether the percentile bootstrap's coverage on that distribution is 90 %, 95 %
+or 80 % has not been measured here, and the 1.3 threshold is not calibrated for it.
+
+So the flag is a floor, not a certificate. Both tools now say so in the code, and this Correction
+says so where a reader will find it. The honest position on any binary-outcome interval in this
+study is that its coverage is unestablished, and that the effects it is being used to detect --
+36 to 44 points -- are large enough that this is unlikely to overturn them.
+
+### Why the new tools missed it
+
+Every one of them was written today, reviewed by reading, and tested. The rule they skipped lives
+on the object they were already handling: `cross_rung` had a `stats.Interval` in hand and printed
+`iv.lo` and `iv.hi` off it while `iv.near_zero` sat unread. Nothing failed, no test caught it, and
+the output looked exactly like the output of the tools that do apply the rule. That is the shape
+of the defect: not a wrong number, a missing qualifier on a right one.
+
+
+## Correction 28, 2026-08-26 23:42: what a result could not prove about itself, and a reader that could not read
+
+Five defects, found by asking what in this repository is asserted rather than checked. Three are
+real and fixed; two things that looked like defects are not, and are recorded as retractions so
+the next reader does not chase them again.
+
+### 1. Server logs from different phases overwrite each other
+
+`bench.py` wrote every arm-pass log to `results/server_logs/pass{NN}_{arm}.log`. The phase is not
+in the name, and every phase writes into the same directory. `pass01_baseline@master` is a name
+most matrices produce.
+
+Counted across this repository's history: **41 log filenames were written by more than one
+phase**, `pass01_baseline@pr27342.log` by seven. No result file references its own log either, so
+the overwrite leaves nothing behind -- a log with the right name sits beside the right result and
+belongs to a different run.
+
+No claim in this study cites a server log, so nothing published is wrong. The fix is
+`server_log_path()`, which puts the result stem in the name, with a test that two phases sharing
+an arm name get different files.
+
+### 2. A result did not record which matrix produced it
+
+`phase_q`, `phase_qsmall`, `phase_l` and `phase_warp` read `QWEN_Q_TARGET`, `QWEN_QS_TARGET`,
+`QWEN_L_DEPTH`, `QWEN_WARP_BUILD` and `QWEN_WARP_DIR` **at import time**. The same matrix file
+therefore produces different arm sets on different runs, and the result recorded neither the
+module name, nor the knob values, nor the argv. The configuration was recoverable only by reading
+the parameter back out of the arm names.
+
+`matrix_provenance_snapshot()` now records the module, the matrix file's sha256, every `QWEN_*`
+variable in the environment, and argv. The hash matters separately from the knobs: *which* knobs
+a matrix reads is a property of the file, and the file is editable between runs.
+
+### 3. The vLLM metric readers looked up names that are never published
+
+`vllm/v1/metrics/loggers.py:468` sets `labelnames = ["model_name", "engine"]` on every counter and
+histogram; `vllm/v1/spec_decode/metrics.py:253` adds `position` to the per-draft-position one. So
+`/metrics` never publishes a line named `vllm:request_decode_time_seconds_sum`. It publishes
+`vllm:request_decode_time_seconds_sum{engine="0",model_name="..."}`.
+
+**`decode_rate()` looked up the bare name.** Both ends returned 0.0, every field came out zero, and
+`decode_tok_s` was never set at all -- silently. The failure reads as "this request generated
+nothing" rather than as "this reader cannot find the counter". This is the function that exists
+specifically so the vLLM side does not repeat llama.cpp #27623's wall-clock rate, the one its
+author withdrew.
+
+**`spec_delta()` scanned for substrings.** "accepted" and "token" also match
+`spec_decode_num_accepted_tokens_per_pos`, which publishes one series per draft position, and
+`_created`, which is a Unix timestamp. Demonstrated against real prometheus_client output with the
+per-position series emitted first: the old scan returned **9999.0**; the correct total is 210.0.
+It was right on vLLM 0.27.1 only because the plain counters happen to be registered before the
+per-position one.
+
+Both now go through `series_sum()`, which matches the metric exactly and sums across label sets.
+Five tests pin it, against exposition text generated by the real client from vLLM's own metric
+names and labels.
+
+### 4. phase_v's VRAM gates had no consumer
+
+`REQUIRES_VRAM_GB = 21.0` is read by `bench.py`, and phase_v's own docstring says bench.py does
+not run it. The `requires_vram_gb: 40.0` on the DFlash2 arms was read by **nothing at all** --
+`A6000_ONLY_ARMS` had zero consumers in the entire repository. The gate that keeps a 3.58 GiB
+speculator from being loaded beside an 18.1 GiB target on a 24 GiB card was a comment shaped like
+code. `assert_arms_fit()` now enforces both.
+
+### 5. phase_v had no run loop, and that -- not VRAM -- is why it never ran
+
+The matrix has been reviewable data since it was written, waiting on "an installed vLLM to be
+tested against". vLLM 0.27.1 is installed in `.venv-vllm`, the INT4 target is in the cache, and
+the probe has been run, so the loop is now written: `harness/vllm_bench.py`, 400 lines. It shares
+the prompt set, the degeneracy and divergence measures, the GPU lock, the settle gate and the
+host-load telemetry with `bench.py`, so a number from either file means the same thing.
+
+One thing it could not have got right by reading: `setproctitle` renames vLLM's processes and the
+rename reaches `/proc/pid/comm` **truncated to 15 characters**, so the engine appears in `ps` as
+`VLLM::EngineCor`. Measured, not assumed. The default `own_names` does not match it, so every
+arm-pass would have been recorded as contended by the server it was measuring.
+
+Verified against the live lock: the driver refuses to start while phase_b holds it, and leaves no
+file behind.
+
+### Two retractions
+
+**The analysis files are not stale.** Nine of them are older than the results they describe, which
+looked like analyses quoting superseded numbers. Commit `b5db2f2` rewrote those result files, and
+its message mentions fixing a parser that gave one rung another's size -- so the suspicion was
+specific. Checked by loading both versions: `records` are **identical**, 300 of 300 in each file,
+and the only change is two added `env` keys. No analysis file reads either of them.
+
+**vLLM is installed.** An earlier check in this session looked in `.venv` and in the system
+interpreter, found nothing, and said so. The venv is `.venv-vllm`.
+
+### A third retraction, of something written in this same Correction an hour ago
+
+An earlier draft of this section said the probe's output "was never saved, so the claim has no
+evidence on disk". That was wrong: `logs/vllm_probe_baseline_out.txt`,
+`logs/vllm_probe_mtp_out.txt` and `logs/vllm_probe_mtp2_out.txt` were sitting untracked in
+`logs/`, which is why a `git status` found them and a `ls results/ analysis/` did not. The
+baseline probe output lists all four metric families by name, so the "Confirmed against vLLM
+0.27.1 by harness/vllm_probe.py" comment in `vllm_server.py` is backed after all.
+
+It is also, precisely, why the label defect survived: the probe printed metric **families**, and a
+family name carries no labels. Reading it back gave every name in its bare form, which is exactly
+the form the two broken lookups used.
+
+### What those saved outputs then showed, which is worse than a reader bug
+
+The probe was run three times: baseline, MTP at 0.90, MTP at 0.95. Only the baseline started.
+Three further starts were tried afterwards -- `--enforce-eager`, the draft's `max_model_len` cut
+to 2048, and `quantization: compressed-tensors` forced onto the speculative config. **All five
+speculative starts failed with the identical allocation:**
+
+```
+torch.OutOfMemoryError: Tried to allocate 2.37 GiB. GPU 0 has a total capacity of 23.56 GiB
+of which 2.25 GiB is free ... this process has 21.28 GiB memory in use
+```
+
+at `vllm/model_executor/models/qwen3_5_mtp.py:244`, `self.lm_head = ParallelLMHead(...)`.
+
+2.37 GiB is `vocab_size 248320 * hidden_size 5120 * 2 bytes`, to the digit. The head is BF16
+because the checkpoint says so: `config.json`'s `quantization_config.ignore` ends with `lm_head`
+and **`re:^mtp.*`**, so every MTP weight is excluded from the INT4 quantization that is the only
+reason the target fits at all. `tie_word_embeddings` is `False`, so nothing is shared: the MTP
+module builds its own `embed_tokens` and its own `lm_head`, 2.37 GiB each, on top of a target that
+already carries one.
+
+This is Correction 24's mechanism, now arithmetic rather than inference.
+
+**`--gpu-memory-utilization` cannot fix it in either direction.** The drafter is loaded before the
+KV cache is sized -- "Loading drafter model..." appears and the OOM follows one second later, with
+no "Available KV cache memory" line anywhere in the file. That flag governs the KV budget, and the
+KV budget is not what is short.
+
+`matrices/phase_v.py` asserted the opposite. Its comment reasoned "0.95 of 23.56 GiB = 22.4 GiB;
+weights 18.12 + head 2.37 = 20.49, leaving 1.9 GiB" and concluded that 0.95 would fit. The log
+disproving that was already on disk when the comment was written; I read the 0.90 failure, changed
+the flag, and did not check the 0.95 log I had also produced. The comment is now replaced by the
+measurement, and `mtp-k1` is marked `may_fail` alongside `mtp-k2`.
+
+### What Phase V can therefore produce on this card
+
+One arm that runs and two that are expected not to. That is still a phase worth running: the
+baseline gives a vLLM decode rate measured the way llama.cpp's `predicted_per_second` measures it
+-- the cross-engine anchor this study has never had -- and the two failures become a recorded,
+reproducible result with logs rather than a remembered one. The matrix already says this is how it
+wants a failure treated. The DFlash2 arms stay gated at 40 GB and stay unrun here.
+

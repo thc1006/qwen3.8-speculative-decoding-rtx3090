@@ -45,6 +45,58 @@ def _get(port: int, path: str, timeout_s: float = 10.0) -> str:
         return r.read().decode("utf-8", errors="replace")
 
 
+def _parse_metrics(body: str, keep) -> dict[str, float]:
+    """Prometheus exposition text to {series name including labels: value}.
+
+    The name is kept with its labels because that is what identifies a series: vLLM publishes
+    one per (model_name, engine), and `spec_decode_num_accepted_tokens_per_pos` adds a third
+    label so it publishes one per draft position. Collapsing them here would decide which one a
+    caller meant.
+    """
+    out: dict[str, float] = {}
+    for line in body.splitlines():
+        if line.startswith("#") or not line.strip():
+            continue
+        name, _, rest = line.partition(" ")
+        if not keep(name.split("{", 1)[0]):
+            continue
+        try:
+            out[name] = float(rest.strip())
+        except ValueError:
+            continue
+    return out
+
+
+def _canon(series_name: str) -> str:
+    """A series name reduced to the metric it belongs to.
+
+    Labels go, the `vllm:` prefix goes, and the suffix prometheus_client appends to a counter
+    goes: a Counter declared `vllm:generation_tokens` is published as
+    `vllm:generation_tokens_total{engine="0",model_name="..."}` plus a `_created` timestamp
+    series. `_created` is deliberately NOT reduced to the same key -- it is a Unix time, and
+    adding it to a token count would produce a number near 1.8e9 that still looks like a number.
+    """
+    base = series_name.split("{", 1)[0]
+    if base.startswith("vllm:"):
+        base = base[len("vllm:"):]
+    if base.endswith("_total"):
+        base = base[:-len("_total")]
+    return base
+
+
+def series_sum(counters: dict[str, float], metric: str) -> float:
+    """Sum every label set of one metric, and only that metric.
+
+    A lookup by bare metric name matches nothing at all, because every series carries labels. A
+    lookup that scans for a substring matches too much: "accepted" and "token" both appear in
+    `spec_decode_num_accepted_tokens_per_pos`, which is a different metric with one series per
+    draft position, and which of the two a substring scan returns depends on the order the
+    server happened to emit them in.
+    """
+    want = _canon(metric)
+    return sum(v for k, v in counters.items() if _canon(k) == want)
+
+
 def spec_counters(port: int) -> dict[str, float]:
     """Every speculative-decoding counter the server currently publishes.
 
@@ -56,19 +108,7 @@ def spec_counters(port: int) -> dict[str, float]:
         body = _get(port, "/metrics")
     except (urllib.error.URLError, OSError) as e:
         raise VllmError(f"/metrics unreachable on port {port}: {e}") from e
-    out: dict[str, float] = {}
-    for line in body.splitlines():
-        if line.startswith("#") or not line.strip():
-            continue
-        name, _, rest = line.partition(" ")
-        base = name.split("{", 1)[0]
-        if not _SPEC_PATTERN.match(base):
-            continue
-        try:
-            out[name] = float(rest.strip())
-        except ValueError:
-            continue
-    return out
+    return _parse_metrics(body, lambda base: bool(_SPEC_PATTERN.match(base)))
 
 
 def spec_delta(before: dict[str, float], after: dict[str, float]) -> dict:
@@ -82,16 +122,19 @@ def spec_delta(before: dict[str, float], after: dict[str, float]) -> dict:
     for k, v in after.items():
         delta.setdefault(k, v)
 
-    def pick(*words):
-        for k, v in delta.items():
-            low = k.lower()
-            if all(w in low for w in words):
-                return v
-        return None
+    def pick(metric):
+        # Exact metric, summed over label sets. The substring scan this replaced returned the
+        # first series whose name contained the words, so "accepted"+"token" could return a
+        # bucket of spec_decode_num_accepted_tokens_per_pos, or a _created timestamp, depending
+        # on emission order. vLLM 0.27.1 happens to emit the plain counters first
+        # (vllm/v1/spec_decode/metrics.py:228-260 creates them before the per-position one), so
+        # the old code was correct by accident of registry ordering rather than by construction.
+        total = series_sum(delta, metric)
+        return total if any(_canon(k) == _canon(metric) for k in delta) else None
 
-    drafted = pick("draft", "token")
-    accepted = pick("accepted", "token")
-    drafts = pick("num_drafts") or pick("draft", "total")
+    drafted = pick("vllm:spec_decode_num_draft_tokens")
+    accepted = pick("vllm:spec_decode_num_accepted_tokens")
+    drafts = pick("vllm:spec_decode_num_drafts")
     out = {"counters": delta, "assumes_single_sequence_in_flight": True,
            "drafted": drafted, "accepted": accepted, "drafts": drafts}
     if drafted:
@@ -141,18 +184,7 @@ def timing_counters(port: int) -> dict[str, float]:
     except (urllib.error.URLError, OSError) as e:
         raise VllmError(f"/metrics unreachable on port {port}: {e}") from e
     want = (DECODE_TIME, PREFILL_TIME, QUEUE_TIME, GEN_TOKENS)
-    out: dict[str, float] = {}
-    for line in body.splitlines():
-        if line.startswith("#") or not line.strip():
-            continue
-        name, _, rest = line.partition(" ")
-        if not name.split("{", 1)[0].startswith(want):
-            continue
-        try:
-            out[name] = float(rest.strip())
-        except ValueError:
-            continue
-    return out
+    return _parse_metrics(body, lambda base: base.startswith(want))
 
 
 def decode_rate(before: dict[str, float], after: dict[str, float]) -> dict:
@@ -164,8 +196,11 @@ def decode_rate(before: dict[str, float], after: dict[str, float]) -> dict:
     speedup comes out too small.
     """
     def delta(prefix, suffix):
+        # series_sum, not after[k]: every series is labelled, so a bare-name lookup returns 0.0
+        # for both ends and the difference is a silent zero -- which reads as "the request
+        # generated nothing" rather than as "this reader cannot find the counter".
         k = prefix + suffix
-        return after.get(k, 0.0) - before.get(k, 0.0)
+        return series_sum(after, k) - series_sum(before, k)
 
     dec = delta(DECODE_TIME, "_sum")
     pre = delta(PREFILL_TIME, "_sum")

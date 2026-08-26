@@ -227,6 +227,41 @@ def arm_model_snapshot(arms) -> dict:
 PROMPT_SUBSET_IS_DELIBERATE = False
 
 
+def server_log_path(log_dir: Path, out_path: Path, tag: str) -> Path:
+    """Where one arm-pass's server log goes.
+
+    The result stem is in the name because every phase writes into the same
+    results/server_logs/, and `pass01_baseline@master` is a name most matrices produce. Without
+    it a phase silently overwrites an earlier phase's log: 41 filenames in this repository were
+    written by more than one phase before this was fixed, one of them by seven. Nothing in a
+    result points at its log either, so the overwrite leaves no trace -- the reader finds a log
+    with the right name sitting beside the right result, and it belongs to a different run.
+    """
+    return log_dir / f"{out_path.stem}_{tag}.log"
+
+
+def matrix_provenance_snapshot(mod, module_name: str, argv: list[str]) -> dict:
+    """Which matrix produced a result, and with which knobs.
+
+    Several matrices are parameterised through the environment and read the variable at import
+    time: QWEN_Q_TARGET, QWEN_QS_TARGET, QWEN_L_DEPTH, QWEN_WARP_BUILD, QWEN_WARP_DIR. Nothing
+    recorded that, so a result could be tied back to its configuration only by reading the
+    parameter out of the arm names, which works until two configurations share a name.
+
+    Every QWEN_* variable in the environment is recorded, not only the ones this matrix reads:
+    which ones it reads is a property of the file version, and that is what file_sha256 pins.
+    """
+    import hashlib
+    mfile = Path(mod.__file__)
+    return {
+        "module": module_name,
+        "file": mfile.name,
+        "file_sha256": hashlib.sha256(mfile.read_bytes()).hexdigest(),
+        "knobs": {k: v for k, v in sorted(os.environ.items()) if k.startswith("QWEN_")},
+        "argv": list(argv),
+    }
+
+
 def run_matrix(
     arms: list[Arm],
     *,
@@ -243,6 +278,7 @@ def run_matrix(
     power_interval_s: float = 0.10,
     prefill_reps: int = 8,
     baseline_map: dict[str, str] | None = None,
+    matrix_provenance: dict | None = None,
     settle_temp_c: float | None = 60.0,
     settle_margin_c: float = 8.0,
     required_vram_gb: float = 0.0,
@@ -320,6 +356,11 @@ def run_matrix(
     result = {
         "schema": "qwen38-specdec/1",
         "env": environment_snapshot(trees, model),
+        # Which matrix, and with which knobs. Several matrices are parameterised through the
+        # environment -- QWEN_Q_TARGET, QWEN_L_DEPTH, QWEN_QS_TARGET, QWEN_WARP_BUILD -- and
+        # read them at import time, so without this a result can only be tied back to the
+        # configuration that produced it by reading the parameter out of the arm names.
+        "matrix": matrix_provenance or {},
         # empty unless some arm overrides the matrix default; see arm_model_snapshot
         "arm_models": arm_model_snapshot(arms),
         "gpu_state_declared": declared_state,
@@ -433,7 +474,7 @@ def run_matrix(
         for arm in pass_arms:
             tag = f"pass{p_idx:02d}_{arm.name}"
             print(f"\n=== {tag} ===", flush=True)
-            log_path = log_dir / f"{tag}.log"
+            log_path = server_log_path(log_dir, out_path, tag)
             binary = binaries[arm.tree]
 
             try:
@@ -867,6 +908,8 @@ def main() -> None:
         max_tokens = int(mod.MAX_TOKENS)
         print(f"max_tokens: {max_tokens}, declared by the {args.matrix} matrix.")
 
+    matrix_provenance = matrix_provenance_snapshot(mod, args.matrix, sys.argv[1:])
+
     run_matrix(
         mod.ARMS,
         binaries=mod.BINARIES,
@@ -883,6 +926,7 @@ def main() -> None:
         prompt_seed=args.prompt_seed,
         latin_arms=args.latin_arms,
         baseline_map=getattr(mod, "BASELINE_MAP", None),
+        matrix_provenance=matrix_provenance,
         required_vram_gb=getattr(mod, "REQUIRES_VRAM_GB", 0.0),
         context_filler_tokens=getattr(mod, "CONTEXT_FILLER_TOKENS", 0),
         cache_prompt=getattr(mod, "CACHE_PROMPT", False),

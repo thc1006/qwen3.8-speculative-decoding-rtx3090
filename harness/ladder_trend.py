@@ -430,8 +430,19 @@ def report(rungs: list[dict]) -> int:
             continue
         rates = "  ".join(f"{v['label']}:{100*p[1]:.1f}%" for v, p in zip(rungs, s2["points"]))
         clear = not (s2["lo"] <= 0 <= s2["hi"])
+        # stats.Interval.near_zero's rule, applied here too. The percentile bootstrap undercovers
+        # at 25 prompts and the error is one-sided, so an interval clearing zero by under about
+        # 1.3 half-widths is not a verdict to lean on. Note the calibration behind that number was
+        # measured on three CONTINUOUS processes; `identical` is binary and a cluster mean over
+        # three passes can only be {0, 1/3, 2/3, 1}, so the true coverage here is not established
+        # even by that.
+        half = (s2["hi"] - s2["lo"]) / 2.0
+        margin = (min(abs(s2["lo"]), abs(s2["hi"])) / half) if (half > 0 and clear) else 0.0
+        tag = "CLEAR OF ZERO" if clear else "covers zero"
+        if clear and margin < 1.3:
+            tag += f", but only by {margin:.2f} half-widths -- do not lean on it"
         print(f"  {fam:10s} slope {100*s2['slope']:+.2f} pp/GB "
-              f"[{100*s2['lo']:+.2f}, {100*s2['hi']:+.2f}]  {'CLEAR OF ZERO' if clear else 'covers zero'}")
+              f"[{100*s2['lo']:+.2f}, {100*s2['hi']:+.2f}]  {tag}")
         print(f"  {'':10s} {rates}")
     print("\n  A binary outcome over 25 prompts resolves very little; Phase Q's pairwise intervals")
     print("  spanned 32 percentage points. Treat an interval covering zero as UNMEASURED.")

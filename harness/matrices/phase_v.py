@@ -23,17 +23,31 @@ COMMON_ARGS = [
     "--max-model-len", "8192",
     "--no-enable-prefix-caching",
     "--max-num-seqs", "1",
-    # 0.90 is vLLM's default and it is NOT enough here, measured 2026-08-26. The baseline arm
-    # loads fine at 0.90 (19,469 MiB resident), but adding the MTP head asks for a further
-    # 2.37 GiB at load time and the run dies with `torch.OutOfMemoryError: Tried to allocate
-    # 2.37 GiB ... 2.25 GiB is free` -- short by 0.12 GiB. The design note in
-    # docs/PHASE_V_DESIGN.md budgeted 18.14 GiB of weights plus KV and did not budget the head's
-    # runtime allocation at all.
-    #   0.95 of 23.56 GiB = 22.4 GiB; weights 18.12 + head 2.37 = 20.49, leaving 1.9 GiB.
-    #   8192 tokens of KV costs about 0.54 GiB on this model (16 of 64 layers hold KV, 4 heads,
-    #   256+256 key/value, ~65.5 KB per token), so the context this phase pins still fits.
-    # Both arms use the same value, so the baseline is not given headroom the speculative arm
-    # lacks -- that would put the comparison's thumb on the scale.
+    # 0.95 rather than vLLM's default 0.90, and it does NOT rescue the speculative arms.
+    # Measured 2026-08-26, five starts, logs in logs/vllm_mtp_*.log and logs/vllm_probe_mtp*.log:
+    # 0.90, 0.95, 0.95 with --enforce-eager, 0.95 with the draft's max_model_len cut to 2048, and
+    # 0.95 with quantization: compressed-tensors forced on the speculative config. Every one died
+    # with the SAME allocation:
+    #     torch.OutOfMemoryError: Tried to allocate 2.37 GiB. GPU 0 has a total capacity of
+    #     23.56 GiB of which 2.25 GiB is free ... this process has 21.28 GiB memory in use
+    # at vllm/model_executor/models/qwen3_5_mtp.py:244, `self.lm_head = ParallelLMHead(...)`.
+    #
+    # 2.37 GiB is exactly vocab_size 248320 * hidden_size 5120 * 2 bytes. The head is BF16 because
+    # the checkpoint's own recipe says so: config.json's quantization_config.ignore ends with
+    # 'lm_head' and 're:^mtp.*', so every MTP weight is excluded from the INT4 quantization that
+    # makes the target fit at all. tie_word_embeddings is False, so nothing is shared -- the MTP
+    # module builds its own embed_tokens AND its own lm_head, 2.37 GiB each, on top of a target
+    # that already carries one.
+    #
+    # gpu_memory_utilization cannot fix this in either direction: the drafter is loaded BEFORE the
+    # KV cache is sized, which the logs show directly -- "Loading drafter model..." appears and
+    # the OOM follows one second later, with no "Available KV cache memory" line anywhere in the
+    # file. The utilization figure governs the KV budget, and the KV budget is not what is short.
+    #
+    # An earlier version of this comment reasoned "0.95 of 23.56 GiB = 22.4 GiB; weights 18.12 +
+    # head 2.37 = 20.49, leaving 1.9 GiB" and concluded that 0.95 would fit. It does not, and the
+    # log proving it was already on disk when that was written. The value stays at 0.95 for the
+    # baseline arm's KV headroom, not as a remedy.
     "--gpu-memory-utilization", "0.95",
     # vLLM 0.27.1 renamed this. `--disable-log-requests` no longer exists and an unknown flag
     # stops the server before it serves anything, so the whole phase would have failed at
@@ -54,8 +68,12 @@ ARMS = [
     {"name": "baseline-vllm", "args": [], "expects_drafter": False,
      "note": "no speculation; the reference every vLLM arm is measured against"},
     {"name": "mtp-k1", "args": _spec({"method": "mtp", "num_speculative_tokens": 1}),
-     "expects_drafter": True,
-     "note": "matched to llama.cpp mtp-n1 from phase_nmax; the only depth both engines run"},
+     "expects_drafter": True, "may_fail": True,
+     "note": "matched to llama.cpp mtp-n1 from phase_nmax; the only depth both engines run. "
+             "Known to fail on a 24 GiB card: the MTP module's BF16 lm_head and embed_tokens "
+             "are 2.37 GiB each and the checkpoint excludes 're:^mtp.*' from its INT4 recipe. "
+             "The arm is kept so the failure is recorded rather than remembered, and so the "
+             "same matrix runs unchanged on a card that can hold it"},
     {"name": "mtp-k2", "args": _spec({"method": "mtp", "num_speculative_tokens": 2}),
      "expects_drafter": True, "may_fail": True,
      "note": "reported to error on this model family. Tested, not assumed; a failure is the "
@@ -75,5 +93,9 @@ A6000_ONLY_ARMS = [
 ]
 
 BASELINE = "baseline-vllm"
-# 18.14 target + 0.51 KV at 8192 + activations and CUDA graphs
+# 17.71 GiB of weights as vLLM reports them for the baseline arm, plus 1.38 GiB of KV at 8192 and
+# the profiling activations. Measured, not budgeted: logs/vllm_probe_baseline.log says
+# "Model loading took 17.71 GiB" and "Available KV cache memory: 1.38 GiB" at 0.90.
+# This gate is what `vllm_bench.assert_arms_fit` checks before anything is loaded; before that
+# function existed nothing read it.
 REQUIRES_VRAM_GB = 21.0

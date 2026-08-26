@@ -1,0 +1,13 @@
+launching: .venv-vllm/bin/vllm serve RedHatAI/Qwen3.8-27B-INT4 --max-model-len 8192 --no-enable-prefix-caching --max-num-seqs 1 --gpu-memory-utilization 0.90 --no-enable-log-requests --seed 20260824 --speculative-config {"method":"mtp","num_speculative_tokens":1}
+(first start compiles CUDA graphs; minutes, not seconds)
+
+Traceback (most recent call last):
+  File "/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/harness/vllm_probe.py", line 161, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/harness/vllm_probe.py", line 83, in main
+    proc = V.start(args.binary, args.model, args.port, extra, Path(args.log), gpu_index=args.gpu)
+  File "/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/harness/vllm_server.py", line 141, in start
+    except (urllib.error.URLError, OSError) as e:
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vllm_server.VllmError: vllm exited with 1 during startup; see logs/vllm_probe_mtp.log

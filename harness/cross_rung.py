@@ -227,9 +227,16 @@ def divergence_dose_response(a: dict, b: dict) -> None:
             band = f"[{100 * iv.lo:+.1f}, {100 * iv.hi:+.1f}]"
             pt = f"{100 * iv.point:+.1f}"
             iv_width = 100 * (iv.hi - iv.lo)
+            # This is a real stats.Interval, so its own rule applies: the percentile bootstrap
+            # undercovers at 25 prompts, one-sidedly, and an interval clearing zero by under
+            # about 1.3 half-widths is not a verdict to lean on. Worth more here than elsewhere:
+            # that calibration was measured on three CONTINUOUS processes, while `identical` is
+            # binary and a cluster mean over three passes can only be {0, 1/3, 2/3, 1}.
+            flag = (f"  <-- clears zero by only {iv.margin_half_widths:.2f} half-widths"
+                    if iv.near_zero else "")
         except Exception as e:
-            band, pt, iv_width = f"({e.__class__.__name__})", "    -", None
-        print(f"  {fam:14s} {cell_a:>16s} {cell_b:>16s}   {pt:>9s}  {band:>20s}")
+            band, pt, iv_width, flag = f"({e.__class__.__name__})", "    -", None, ""
+        print(f"  {fam:14s} {cell_a:>16s} {cell_b:>16s}   {pt:>9s}  {band:>20s}{flag}")
         if iv_width is not None:
             widths.append(iv_width)
     if widths:
