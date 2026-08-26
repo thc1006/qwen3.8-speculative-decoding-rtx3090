@@ -3216,6 +3216,47 @@ class TestAuditCannotBeSilencedByAnEmptyArmList(unittest.TestCase):
         self.assertTrue(r["fails"], "one arm repeated to the right record count passed the audit")
 
 
+class TestBothLadderToolsReportDrift(unittest.TestCase):
+    """cross_rung refused to score two rungs without a drift estimate; ladder_trend had none.
+
+    The paired bootstrap covers prompt sampling only, and pairing makes it very tight -- on
+    phase_qsmall the slope's half-width lands an order of magnitude below any single rung's
+    interval, which is the cancellation working as designed. But each rung is one session and the
+    rungs ran hours apart, so that interval is not the binding uncertainty on a cross-rung claim.
+    cross_rung says this and prints the per-pass spread; ladder_trend printed the interval alone,
+    and Correction 22 scored H11 from it.
+    """
+
+    ROOT = Path(__file__).parent.parent
+
+    def test_ladder_trend_computes_a_per_pass_spread(self):
+        self.assertTrue(hasattr(LT, "per_pass_c"),
+                        "ladder_trend has no per-pass refit, so a cross-rung slope is reported "
+                        "with prompt-sampling uncertainty as if it were the only kind")
+        src = inspect.getsource(LT.report)
+        self.assertIn("DRIFT YARDSTICK", src)
+        self.assertIn("necessary and not sufficient", src,
+                      "the yardstick must say that clearing it is not sufficient; it bounds "
+                      "within-run drift and the rungs are separated by more than that")
+
+    def test_the_two_tools_agree_on_what_a_per_pass_refit_is(self):
+        """Same estimand in both, or the two reports disagree about the same ladder."""
+        a = inspect.getsource(LT.per_pass_c)
+        b = inspect.getsource(CR.per_pass_c)
+        for token in ("_fit_prompts", "_fit_on", 'r["pass"]'):
+            self.assertIn(token, a, f"ladder_trend.per_pass_c does not use {token}")
+            self.assertIn(token, b, f"cross_rung.per_pass_c does not use {token}")
+
+    def test_per_pass_c_returns_one_fit_per_pass(self):
+        f = self.ROOT / "results/phase_qsmall_BF16.json"
+        if not f.exists():
+            self.skipTest("phase_qsmall_BF16 not present")
+        v = LT.load_rung(str(f))
+        per = LT.per_pass_c(v, v["on_path"])
+        self.assertEqual(sorted(per), sorted({r["pass"] for r in v["rows"]}))
+        self.assertTrue(all(x > 0 for x in per.values()), f"non-positive c per pass: {per}")
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 

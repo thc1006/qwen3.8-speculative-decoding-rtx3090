@@ -2480,6 +2480,32 @@ Q8_0 span "works out near 10 % per bit and this is 10.1 % over one bit". That is
 error below, applied to the other external figure. It did not reach the record or the upstream
 threads, and it is noted here so it does not get re-derived.
 
+### A third thing the audit found, and it touches H11
+
+`cross_rung.py` refuses to score two rungs without a within-rung drift estimate and prints one
+next to every difference, saying in the output that clearing it is necessary and not sufficient.
+`ladder_trend.py` -- the four-rung tool, the one Correction 22 scored H11 from -- had no such
+section. Its only reported uncertainty was the paired bootstrap, which covers prompt sampling and
+nothing else.
+
+Pairing makes that interval very tight, and correctly so: each rung's own `c` interval has a
+half-width near 0.0012, while the slope's is 0.0000967, an order of magnitude smaller. That gap is
+the shared prompt variation cancelling, which is what pairing is for. But the four rungs are four
+sessions hours apart, and the per-pass refit says what a fresh server contributes:
+
+    Q4_K_M  p1 0.4138  p2 0.4116  p3 0.4123   spread 0.0023
+    Q6_K    p1 0.3043  p2 0.3038  p3 0.3026   spread 0.0018
+    Q8_0    p1 0.1965  p2 0.1963  p3 0.1958   spread 0.0008
+    BF16    p1 0.1647  p2 0.1671  p3 0.1668   spread 0.0024
+
+The widest is **0.0024 -- 25x the slope's half-width**. So the number Correction 22 quoted as the
+uncertainty on H11 was the smallest of the available ones.
+
+**H11's verdict does not change.** `c` spans 0.2464 across the ladder against 0.0024 of drift,
+**101x**, and that is the ratio the claim actually rests on. What changes is which number is
+reported beside it. `ladder_trend` now prints the yardstick and states the comparison, and a test
+asserts both ladder tools carry the same per-pass estimand.
+
 ### Why this is worth its own Correction
 
 The same failure ran twice today. Correction 23 called a ratio a mechanism; this called an

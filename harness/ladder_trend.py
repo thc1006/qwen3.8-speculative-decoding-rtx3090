@@ -94,6 +94,29 @@ def load_rung(path: str) -> dict:
     }
 
 
+def per_pass_c(v: dict, shared: list[int]) -> dict[int, float]:
+    """`c` refitted from each pass alone, every pass using all prompts.
+
+    The paired bootstrap covers prompt sampling and nothing else -- and it covers it well, since
+    pairing cancels the variation the rungs share. On this ladder the slope's half-width comes out
+    an order of magnitude below any single rung's, which is that cancellation working. What none
+    of it sees is that each rung is one session and the rungs ran hours apart. The pass-to-pass
+    spread within a rung is the only replication of a fresh server this design has, so it is a
+    LOWER bound on what separates two rungs: clearing it is necessary, not sufficient.
+    """
+    xs = [w - 1 for w in shared]
+    out: dict[int, float] = {}
+    for p_idx in sorted({r["pass"] for r in v["rows"]}):
+        g = [r for r in v["rows"] if r["pass"] == p_idx]
+        by_prompt, prompt_class = CM._fit_prompts(g, shared)
+        if not prompt_class:
+            continue
+        fit = CM._fit_on(by_prompt, prompt_class, sorted(prompt_class), shared, xs)
+        if fit:
+            out[p_idx] = fit[1]
+    return out
+
+
 def guards(rungs: list[dict]) -> list[str]:
     """Everything that has to hold before a slope across these rungs means anything."""
     bad = []
@@ -333,7 +356,8 @@ def report(rungs: list[dict]) -> int:
     # ---------------------------------------------------------------- 2. c
     print("\n" + "-" * W)
     print("2. `c` vs SIZE -- the marginal cost of a verified position.")
-    s = paired_slope(rungs, shared, "c")
+    s_c = paired_slope(rungs, shared, "c")
+    s = s_c
     if s is None:
         print("  The paired fit did not converge.")
         return 1
@@ -359,6 +383,37 @@ def report(rungs: list[dict]) -> int:
         print("  THE TWO DISAGREE IN SIGN. `c` is relative to each rung's own decode step and the")
         print("  steps differ across the ladder. H2' is stated as a relative cost, so the")
         print("  dimensionless slope is the one that bears on it.")
+
+    # ---------------------------------------------------------------- 2b. the drift yardstick
+    print("\n" + "-" * W)
+    print("   DRIFT YARDSTICK. The interval above is prompt sampling only. Each rung is one")
+    print("   session and the rungs ran hours apart, so `c` refitted per pass -- every pass using")
+    print("   all prompts -- bounds what a fresh server contributes. It is a LOWER bound on what")
+    print("   separates two rungs; clearing it is necessary and not sufficient.")
+    spreads = {}
+    for v in rungs:
+        per = per_pass_c(v, shared)
+        if len(per) < 2:
+            print(f"     {v['label']:10s} one pass: no drift estimate available")
+            continue
+        vals = list(per.values())
+        spreads[v["label"]] = max(vals) - min(vals)
+        print(f"     {v['label']:10s} "
+              + "  ".join(f"p{p}:{c:.4f}" for p, c in sorted(per.items()))
+              + f"   spread {spreads[v['label']]:.4f}")
+    if len(spreads) >= 2:
+        worst = max(spreads.values())
+        pts = [c for _, c in s_c["points"]]
+        span = max(pts) - min(pts)
+        half = (s_c["hi"] - s_c["lo"]) / 2
+        print(f"\n     widest within-rung spread {worst:.4f}   span across the ladder {span:.4f}"
+              + (f"   ({span/worst:.1f}x)" if worst else ""))
+        print(f"     the slope's half-width is {half:.7f}, which is "
+              f"{worst/half:.0f}x SMALLER than that drift, so the interval printed above is not")
+        print("     the binding uncertainty on a cross-rung claim -- the span-over-drift ratio is.")
+    else:
+        print("\n     Fewer than two rungs supplied a drift estimate, so the span cannot be")
+        print("     weighed against drift at all. That is a missing check, not a passed one.")
 
     # ---------------------------------------------------------------- 3. divergence, H9
     print("\n" + "-" * W)

@@ -51,6 +51,20 @@ x axis: file size in GB. parameter count 9.204e9, derived as the BF16 rung's 18,
   dimensionless slope is the one that bears on it.
 
 ----------------------------------------------------------------------------------------------------
+   DRIFT YARDSTICK. The interval above is prompt sampling only. Each rung is one
+   session and the rungs ran hours apart, so `c` refitted per pass -- every pass using
+   all prompts -- bounds what a fresh server contributes. It is a LOWER bound on what
+   separates two rungs; clearing it is necessary and not sufficient.
+     Q4_K_M     p1:0.4138  p2:0.4116  p3:0.4123   spread 0.0023
+     Q6_K       p1:0.3043  p2:0.3038  p3:0.3026   spread 0.0018
+     Q8_0       p1:0.1965  p2:0.1963  p3:0.1958   spread 0.0008
+     BF16       p1:0.1647  p2:0.1671  p3:0.1668   spread 0.0024
+
+     widest within-rung spread 0.0024   span across the ladder 0.2464   (100.7x)
+     the slope's half-width is 0.0000967, which is 25x SMALLER than that drift, so the interval printed above is not
+     the binding uncertainty on a cross-rung claim -- the span-over-drift ratio is.
+
+----------------------------------------------------------------------------------------------------
 3. BYTE-IDENTICAL vs SIZE -- llama.cpp #25618 and H9.
    #25618 says greedy speculative output diverges on quantized targets and stays
    identical on bf16. On a ladder that is a positive slope, and the bf16 rung is the
