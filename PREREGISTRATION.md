@@ -2868,3 +2868,40 @@ binary verdict is prompts, and the simulation says how many.
 
 The run is `analysis/bootstrap_coverage.txt` and reproduces with
 `python3 harness/coverage_sim.py --replications 300 --n-boot 2000 --n-prompts 25,50`.
+
+
+## Correction 31, 2026-08-27 02:28: what one verification script found on its first run
+
+`scripts/verify_everything.sh` exists because "it is done" is not evidence. Its first real run
+found four defects, three of them in code written the same day, and one of them in itself.
+
+**`vllm_bench` wrote a different schema.** `arms` as a list where `bench.py` writes a dict keyed
+by arm name. Every reader here does `arms.get(name)`, so `audit_results.py` raised
+`AttributeError` on Phase V and audited nothing after it. One driver, one schema; the existing
+result is migrated.
+
+**The audit read a recorded failure as missing data.** Six of Phase V's nine arm-passes are arms
+the matrix marks `may_fail`, whose failures the driver recorded with their server logs. The audit
+reported "75 of 225 records" and six missing arm-passes -- reading the phase's result for those
+arms as absence. It now subtracts recorded failures of `may_fail` arms and reports such a failure
+as a note. On any other arm it stays a FAIL: a baseline that did not start is a broken run.
+
+**Provenance was defined in gguf terms only.** A gguf is one file and a sha256 identifies it. A
+vLLM run loads a Hugging Face repo id resolved through a cache, and the commit is what identifies
+those weights -- `2fb0debc365fb6c1683d7d3ad7722470919627a8` here. The audit accepts either.
+
+**The verification script did not report its own first section.** It ran the test suite through
+`| tail -3`, and unittest writes its verdict to stderr while tests print to stdout, so it showed
+whatever a fixture happened to print last and never showed whether anything passed. Fixed by
+reading the verdict line -- and the fix immediately surfaced a real failure the broken version had
+been hiding: `test_own_processes_are_not_counted_as_competition` asserted that nothing named
+`python*` appears in `competing`, which was true while `python3` was on `own_names` and became
+both wrong and flaky when attribution moved to descent. Another python on the host IS competition
+now. The test asserts the contract that actually holds: nothing the caller started is counted.
+
+The state after: 177 tests, 34 of 35 results clean, 852 tracked paths with no broken links, the
+README's five headline figures recomputed from `results/phase_a.json` and matching, 18 documents
+with no residual withdrawn claim, and the card at stock. The one result that is not clean is Phase
+B, whose two host-contention incidents stand as recorded -- one a false positive from the run's
+own `nvidia-smi` power sampler, one a `git` command of mine during `pass03_mtp-n7-p.75`. Neither
+is going to be edited out of a result file.
