@@ -2433,17 +2433,30 @@ range #26750 reports for CUDA, and is 57 percentage points below the ~92 % it re
 Vulkan.** The second clause is where the strength actually is -- the CUDA/Vulkan gap is enormous
 and the interval is nowhere near it. The first clause is a non-exclusion.
 
-**The comparator itself is unverified.** "35.8-40.7 %" appears in exactly one place in this
-repository, the docstring of `harness/matrices/phase_qsmall.py`, and was carried from there into
-Correction 21, Correction 22 and the README without being checked against the issue. #26750's
-title gives a single figure, 40.7 %. Where 35.8 comes from, whether the pair is a range over
-runs, over prompts, or over two different configurations, and whether it is even the same
-estimator as the acceptance this study computes (`t_draft_n_accepted / t_draft_n`, per request,
-averaged class-stratified over 25 prompts x 3 passes) -- none of that has been established.
+**The comparator was unverified when this was written. It has since been read from the issue**
+(2026-08-26, via the API rather than a remembered figure), and both halves of the pair are real
+and are both CUDA:
 
-Until it is, H10's comparison is against a number of unknown provenance. That does not make the
-measurement wrong: 35.0 % [32.9, 37.3] on sm_86 with `mtp-n6@Q4_K_M` stands on its own, and so
-does its distance from 92 %. It makes the **verdict** unsupported.
+| where in #26750 | figure | device |
+|---|---|---|
+| headline table | **35.8 %** | CUDA, RTX PRO 4000 (Blackwell) |
+| parameter sweep, four rows | **40.7 %** | CUDA, `-c 8192` and `-c 12288`, with and without `--parallel 1` |
+| headline table | 92.2 % | Vulkan, Radeon PRO W7900 (RADV) |
+| headline table | 91.4 % | Vulkan, RX 7800 XT (RADV) |
+
+A second party in the thread reports reproducing "every acceptance figure exactly (35.8 / 3.8 /
+65.6 / 38.6 %)", so 35.8 is not a transcription of 40.7 and the range is over two different CUDA
+configurations rather than over runs or prompts.
+
+**What this does NOT settle, and it is the part that matters for H10: the CUDA side of #26750 is
+a Blackwell RTX PRO 4000, not an sm_86 card.** So "does the collapse reproduce on my hardware" is
+being answered against a figure from a different architecture, and the estimator is still not
+known to be the same one this study computes (`t_draft_n_accepted / t_draft_n`, per request,
+averaged class-stratified over 25 prompts x 3 passes) rather than a server-log aggregate.
+
+The comparison is therefore against a real number of established provenance and uncertain
+comparability, which is a weaker objection than the one this paragraph originally raised but not
+an empty one.
 
 **H10 is therefore reopened**, and the scoring in Correction 22 is withdrawn to:
 
