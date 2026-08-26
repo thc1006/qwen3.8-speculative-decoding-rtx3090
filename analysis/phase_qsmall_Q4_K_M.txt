@@ -1,0 +1,77 @@
+
+[selection] the per-protocol series holds 372 records and the intention-to-treat series 375.
+            3 were excluded. Speculation moves where a request stops, so excluding
+            requests that stopped early selects on a post-treatment variable. Both series are
+            reported below where they differ.
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@Q4_K_M                   121.26     121.26      75  prose_letter=0.3%
+mtp-n2@Q4_K_M                     161.24     161.24      75  code_sql_report=0.5%
+mtp-n3@Q4_K_M                     143.11     144.25      72  reason_zebra=0.6%
+mtp-n5@Q4_K_M                     121.94     121.94      75  reason_scheduling=0.6%
+mtp-n6@Q4_K_M                     109.84     109.84      75  reason_probability=0.5%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2@Q4_K_M                baseline@Q4_K_M        +32.95 [+30.62, +35.31]  FASTER
+mtp-n3@Q4_K_M                baseline@Q4_K_M        +17.99 [+15.13, +20.98]  FASTER
+mtp-n5@Q4_K_M                baseline@Q4_K_M          +0.53 [-2.77, +4.11]  no detected effect
+mtp-n6@Q4_K_M                baseline@Q4_K_M         -9.44 [-12.98, -5.59]  SLOWER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2@Q4_K_M              chat: +21.5%  code: +51.8%  prose: +20.4%  reason: +57.4%  zh: +13.6%
+  mtp-n3@Q4_K_M              chat:  +4.4%  code: +38.8%  prose:  +2.9%  reason: +48.4%  zh:  -4.4%
+  mtp-n5@Q4_K_M              chat: -20.3%  code: +21.0%  prose: -21.4%  reason: +47.4%  zh: -24.1%
+  mtp-n6@Q4_K_M              chat: -29.0%  code:  +8.4%  prose: -30.5%  reason: +37.1%  zh: -33.1%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 3 / 375
+    mtp-n3@Q4_K_M: 3
+        zh_self_intro/p1: early stop (n=355)
+        zh_self_intro/p2: early stop (n=355)
+        zh_self_intro/p3: early stop (n=355)
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+
+--- energy window coverage: 98.8 % of wall time (min 94.7 %) ---
+  Energy outside the first and last sample is not in the figure above.
+
+--- averaged against instantaneous power, per arm ---
+  baseline@Q4_K_M         +1.07 %   n=75
+  mtp-n2@Q4_K_M           +2.86 %   n=75
+  mtp-n3@Q4_K_M           +2.53 %   n=72
+  mtp-n5@Q4_K_M           +2.06 %   n=75
+  mtp-n6@Q4_K_M           +1.69 %   n=75
+  Positive means power.draw integrated low. It leaves the baselines nearly alone
+  and understates the speculative arms, so an energy saving read off the averaged
+  field is larger than the instantaneous field supports, by about this much.
+baseline@Q4_K_M            0.2949     +0.0%       1353     +0.0%       -          -
+mtp-n2@Q4_K_M              0.4082    +38.4%       1001    -26.0%   0.646       2.29
+mtp-n3@Q4_K_M              0.3633    +23.2%       1141    -15.7%   0.540       2.61
+mtp-n5@Q4_K_M              0.3048     +3.4%       1428     +5.6%   0.403       3.00
+mtp-n6@Q4_K_M              0.2730     -7.4%       1611    +19.0%   0.350       3.08
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  mtp-n2@Q4_K_M              byte-identical 12/75   median shared prefix when forked: 0.198
+  mtp-n3@Q4_K_M              byte-identical 9/75   median shared prefix when forked: 0.245
+  mtp-n5@Q4_K_M              byte-identical 6/75   median shared prefix when forked: 0.251
+  mtp-n6@Q4_K_M              byte-identical 6/75   median shared prefix when forked: 0.251
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@Q4_K_M            reproducible 50/50
+  mtp-n2@Q4_K_M              reproducible 50/50
+  mtp-n3@Q4_K_M              reproducible 50/50
+  mtp-n5@Q4_K_M              reproducible 50/50
+  mtp-n6@Q4_K_M              reproducible 50/50

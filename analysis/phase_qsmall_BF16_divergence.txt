@@ -1,0 +1,107 @@
+====================================================================================================
+BYTE-LEVEL DIVERGENCE FROM THE NON-SPECULATIVE BASELINE (greedy, same prompt & pass)
+====================================================================================================
+
+--- prevalence ---
+arm                        n  identical    rate  median shared prefix  earliest fork   tokens
+mtp-n2@BF16               75         39   52.0%                 0.524             86       23
+mtp-n3@BF16               75         39   52.0%                 0.524             86       23
+mtp-n5@BF16               75         39   52.0%                 0.524             86       23
+mtp-n6@BF16               75         39   52.0%                 0.524             86       23
+
+--- batch-shape signature: fork position per prompt, by arm ---
+    (identical fork positions across drafters that share only their verification
+     width is the signature of reduction-order-dependent argmax flips)
+
+prompt                 mtp-n2@BF16   mtp-n3@BF16   mtp-n5@BF16   mtp-n6@BF16
+chat_advice                  @1065         @1065         @1065         @1065
+chat_desk_robot               @964          @964          @964          @964
+chat_disagree                @1357         @1357         @1357         @1357
+chat_music                    @199          @199          @199          @199
+chat_travel                   SAME          SAME          SAME          SAME
+code_go_worker                SAME          SAME          SAME          SAME
+code_nginx_cfg                SAME          SAME          SAME          SAME
+code_py_ratelimiter           SAME          SAME          SAME          SAME
+code_rust_mergesort           SAME          SAME          SAME          SAME
+code_sql_report                @86           @86           @86           @86
+prose_argument                @880          @880          @880          @880
+prose_bookshelves            @1694         @1694         @1694         @1694
+prose_letter                 @1501         @1501         @1501         @1501
+prose_market                  @491          @491          @491          @491
+prose_rainbow                 @144          @144          @144          @144
+reason_invariant              SAME          SAME          SAME          SAME
+reason_probability            SAME          SAME          SAME          SAME
+reason_scheduling             SAME          SAME          SAME          SAME
+reason_trains                 SAME          SAME          SAME          SAME
+reason_zebra                  SAME          SAME          SAME          SAME
+zh_debug                      SAME          SAME          SAME          SAME
+zh_moving                     SAME          SAME          SAME          SAME
+zh_review                     @344          @344          @344          @344
+zh_self_intro                 SAME          SAME          SAME          SAME
+zh_tea                        @285          @285          @285          @285
+
+  prompts where at least two arms fork at the SAME character: 12/25
+  NOT MEASURABLE HERE: no width in this file carries two drafter families, so the
+  caption's criterion cannot be evaluated. The line above counts arms that differ
+  in width, in family, or in neither, and on its own says which of those only in
+  a matrix built to separate them. phase_nmax is the file that does.
+
+--- does the fork position move with n-max? ---
+  chat_advice              mtp-n2=1065  mtp-n3=1065  mtp-n5=1065  mtp-n6=1065
+  chat_desk_robot          mtp-n2=964  mtp-n3=964  mtp-n5=964  mtp-n6=964
+  chat_disagree            mtp-n2=1357  mtp-n3=1357  mtp-n5=1357  mtp-n6=1357
+  chat_music               mtp-n2=199  mtp-n3=199  mtp-n5=199  mtp-n6=199
+  code_sql_report          mtp-n2=86  mtp-n3=86  mtp-n5=86  mtp-n6=86
+  prose_argument           mtp-n2=880  mtp-n3=880  mtp-n5=880  mtp-n6=880
+  prose_bookshelves        mtp-n2=1694  mtp-n3=1694  mtp-n5=1694  mtp-n6=1694
+  prose_letter             mtp-n2=1501  mtp-n3=1501  mtp-n5=1501  mtp-n6=1501
+  prose_market             mtp-n2=491  mtp-n3=491  mtp-n5=491  mtp-n6=491
+  prose_rainbow            mtp-n2=144  mtp-n3=144  mtp-n5=144  mtp-n6=144
+  zh_review                mtp-n2=344  mtp-n3=344  mtp-n5=344  mtp-n6=344
+  zh_tea                   mtp-n2=285  mtp-n3=285  mtp-n5=285  mtp-n6=285
+
+--- determinism across passes (same arm, same prompt) ---
+arm                     checked  reproducible
+mtp-n2@BF16                  25            25
+mtp-n3@BF16                  25            25
+mtp-n5@BF16                  25            25
+mtp-n6@BF16                  25            25
+
+--- arm metadata (for a bug report) ---
+  mtp-n2@BF16            tree=master    args=--spec-type draft-mtp --spec-draft-n-max 2
+  mtp-n3@BF16            tree=master    args=--spec-type draft-mtp --spec-draft-n-max 3
+  mtp-n5@BF16            tree=master    args=--spec-type draft-mtp --spec-draft-n-max 5
+  mtp-n6@BF16            tree=master    args=--spec-type draft-mtp --spec-draft-n-max 6
+
+  gpu           : NVIDIA GeForce RTX 3090, 24576 MiB, 610.43.02, 8.6, 420.00 W, 420.00 W, 450.00 W, 2130 MHz, 9751 MHz
+  llama.cpp     : {'master': 'c060ca9'}
+  model sha256  : aafa81e375a72a5fe992730116e02fa3786558cbd3e41d9de3f0e96addd257ea
+  overclock     : {'power_limit_w': 420.0, 'power_default_limit_w': 420.0, 'power_min_limit_w': 100.0, 'power_max_limit_w': 450.0, 'clocks_max_graphics_mhz': 2130.0, 'clocks_max_memory_mhz': 9751.0, 'clocks_max_sm_mhz': 2130.0, 'mem_transfer_rate_offset': 0.0, 'graphics_clock_offset': 0.0, 'is_stock': True}
+  design        : greedy, sampler chain pinned, cache_prompt=False, max_tokens=400
+
+====================================================================================================
+GROUP STABILITY  (3 passes: [1, 2, 3])
+====================================================================================================
+
+--- 1. determinism: same arm + prompt across passes ---
+arm                     prompts  stable  unstable  examples
+mtp-n2@BF16                  25      25         0  
+mtp-n3@BF16                  25      25         0  
+mtp-n5@BF16                  25      25         0  
+mtp-n6@BF16                  25      25         0  
+
+  every fork position reproduces exactly across passes.
+
+--- 2/3. fork-position partition of arms, per pass ---
+  pass 1: modal partition on 25/25 prompts -> {mtp-n2@BF16,mtp-n3@BF16,mtp-n5@BF16,mtp-n6@BF16}
+  pass 2: modal partition on 25/25 prompts -> {mtp-n2@BF16,mtp-n3@BF16,mtp-n5@BF16,mtp-n6@BF16}
+  pass 3: modal partition on 25/25 prompts -> {mtp-n2@BF16,mtp-n3@BF16,mtp-n5@BF16,mtp-n6@BF16}
+
+  partition identical in every pass: True
+  -> the grouping is a stable property of the configuration, not a single-pass coincidence.
+
+--- 4. does the partition track n-max or the drafter? ---
+  mtp-n2@BF16            spec-type=draft-mtp      n-max=2
+  mtp-n3@BF16            spec-type=draft-mtp      n-max=3
+  mtp-n5@BF16            spec-type=draft-mtp      n-max=5
+  mtp-n6@BF16            spec-type=draft-mtp      n-max=6

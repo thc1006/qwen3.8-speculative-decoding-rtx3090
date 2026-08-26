@@ -1,0 +1,93 @@
+
+[selection] the per-protocol series holds 360 records and the intention-to-treat series 375.
+            15 were excluded. Speculation moves where a request stops, so excluding
+            requests that stopped early selects on a post-treatment variable. Both series are
+            reported below where they differ.
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@BF16                      49.68      49.68      72  zh_review=1.7%
+mtp-n2@BF16                        79.44      79.84      72  reason_scheduling=0.3%
+mtp-n3@BF16                        81.51      82.11      72  reason_trains=0.4%
+mtp-n5@BF16                        76.84      77.58      72  prose_rainbow=0.2%
+mtp-n6@BF16                        73.47      74.24      72  reason_invariant=0.2%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2@BF16                  baseline@BF16          +59.89 [+56.65, +63.16]  FASTER
+mtp-n3@BF16                  baseline@BF16          +64.02 [+59.96, +68.19]  FASTER
+mtp-n5@BF16                  baseline@BF16          +54.61 [+49.32, +60.09]  FASTER
+mtp-n6@BF16                  baseline@BF16          +47.83 [+42.30, +53.74]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2@BF16                chat: +46.2%  code: +82.8%  prose: +42.4%  reason: +86.9%  zh: +41.1%
+  mtp-n3@BF16                chat: +43.7%  code: +95.5%  prose: +36.9%  reason:+108.7%  zh: +35.3%
+  mtp-n5@BF16                chat: +25.3%  code: +92.0%  prose: +17.3%  reason:+119.1%  zh: +19.4%
+  mtp-n6@BF16                chat: +16.5%  code: +84.7%  prose:  +8.7%  reason:+118.3%  zh: +10.9%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 15 / 375
+    baseline@BF16: 3
+        zh_self_intro/p1: early stop (n=390)
+        zh_self_intro/p2: early stop (n=390)
+        zh_self_intro/p3: early stop (n=390)
+    mtp-n2@BF16: 3
+        zh_self_intro/p1: early stop (n=390)
+        zh_self_intro/p2: early stop (n=390)
+        zh_self_intro/p3: early stop (n=390)
+    mtp-n3@BF16: 3
+        zh_self_intro/p1: early stop (n=390)
+        zh_self_intro/p2: early stop (n=390)
+        zh_self_intro/p3: early stop (n=390)
+    mtp-n5@BF16: 3
+        zh_self_intro/p1: early stop (n=390)
+        zh_self_intro/p2: early stop (n=390)
+        zh_self_intro/p3: early stop (n=390)
+    mtp-n6@BF16: 3
+        zh_self_intro/p1: early stop (n=390)
+        zh_self_intro/p2: early stop (n=390)
+        zh_self_intro/p3: early stop (n=390)
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+
+--- energy window coverage: 99.0 % of wall time (min 96.6 %) ---
+  Energy outside the first and last sample is not in the figure above.
+
+--- averaged against instantaneous power, per arm ---
+  baseline@BF16           +0.42 %   n=72
+  mtp-n2@BF16             +1.30 %   n=72
+  mtp-n3@BF16             +1.16 %   n=72
+  mtp-n5@BF16             +1.00 %   n=72
+  mtp-n6@BF16             +1.02 %   n=72
+  Positive means power.draw integrated low. It leaves the baselines nearly alone
+  and understates the speculative arms, so an energy saving read off the averaged
+  field is larger than the instantaneous field supports, by about this much.
+baseline@BF16              0.1277     +0.0%       3126     +0.0%       -          -
+mtp-n2@BF16                0.2138    +67.4%       1903    -39.1%   0.648       2.29
+mtp-n3@BF16                0.2187    +71.3%       1902    -39.1%   0.549       2.64
+mtp-n5@BF16                0.2038    +59.6%       2121    -32.1%   0.405       3.01
+mtp-n6@BF16                0.1949    +52.6%       2258    -27.8%   0.358       3.13
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  mtp-n2@BF16                byte-identical 39/75   median shared prefix when forked: 0.524
+  mtp-n3@BF16                byte-identical 39/75   median shared prefix when forked: 0.524
+  mtp-n5@BF16                byte-identical 39/75   median shared prefix when forked: 0.524
+  mtp-n6@BF16                byte-identical 39/75   median shared prefix when forked: 0.524
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@BF16              reproducible 50/50
+  mtp-n2@BF16                reproducible 50/50
+  mtp-n3@BF16                reproducible 50/50
+  mtp-n5@BF16                reproducible 50/50
+  mtp-n6@BF16                reproducible 50/50

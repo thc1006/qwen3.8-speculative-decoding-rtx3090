@@ -1,0 +1,28 @@
+====================================================================================================
+PASS STABILITY   each arm-pass against the same prompts in its own other passes
+====================================================================================================
+median within-arm-pass sd 0.17 %, so an arm-pass is flagged above 1.00 %
+
+arm                    pass     mean      sd    worst  r pwr  r clk     host  note
+baseline@BF16             1   -1.01%   1.19%    2.98%  -0.92  +0.67       0%  OUTLIER
+baseline@BF16             3   +0.48%   0.63%    1.55%  -0.68  +0.54       0%  
+baseline@BF16             2   +0.55%   0.58%    1.50%  -0.84  +0.35       0%  
+mtp-n3@BF16               1   -0.09%   0.21%    0.62%  -0.11  +0.19       0%  
+mtp-n3@BF16               2   +0.06%   0.20%    0.53%  -0.13  +0.35       0%  
+mtp-n5@BF16               1   -0.02%   0.17%    0.34%  +0.32  +0.09       0%  
+mtp-n2@BF16               1   -0.10%   0.17%    0.43%  +0.05  -0.35       0%  
+mtp-n2@BF16               2   +0.04%   0.17%    0.31%  +0.16  -0.10       0%  
+mtp-n3@BF16               3   +0.03%   0.15%    0.32%  -0.04  +0.04       0%  
+mtp-n2@BF16               3   +0.05%   0.14%    0.28%  +0.08  -0.08       0%  
+mtp-n6@BF16               1   +0.06%   0.14%    0.32%  -0.45  -0.06       0%  
+mtp-n5@BF16               2   +0.00%   0.14%    0.24%  +0.15  -0.04       0%  
+mtp-n6@BF16               3   -0.00%   0.13%    0.27%  -0.11  +0.02       0%  
+mtp-n6@BF16               2   -0.06%   0.12%    0.37%  -0.45  -0.15       0%  
+mtp-n5@BF16               3   +0.02%   0.12%    0.27%  -0.03  +0.11       0%  
+
+  baseline@BF16 pass 1: OUTLIER, within-pass scatter 1.19 % against a median of 0.17 %, worst prompt 2.98 %.
+      the host was NOT contended at arm entry (0% competing), so the scatter is the arm's own.
+      this file predates arm_pass_host_load, so there is nothing recorded about the host and the cause cannot be settled from the result alone.
+
+  An outlier is a candidate, not a verdict. What settles it is another pass: an arm-pass that
+  is noisy under known-clean conditions was noisy for its own reasons.

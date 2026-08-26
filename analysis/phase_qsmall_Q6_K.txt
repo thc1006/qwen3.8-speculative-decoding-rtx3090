@@ -1,0 +1,89 @@
+
+[selection] the per-protocol series holds 363 records and the intention-to-treat series 375.
+            12 were excluded. Speculation moves where a request stops, so excluding
+            requests that stopped early selects on a post-treatment variable. Both series are
+            reported below where they differ.
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@Q6_K                      98.53      98.53      75  code_py_ratelimiter=0.5%
+mtp-n2@Q6_K                       147.97     148.66      72  prose_argument=0.3%
+mtp-n3@Q6_K                       138.78     139.67      72  prose_letter=0.4%
+mtp-n5@Q6_K                       121.38     122.58      72  reason_trains=0.4%
+mtp-n6@Q6_K                       112.52     113.74      72  reason_scheduling=0.3%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2@Q6_K                  baseline@Q6_K          +50.18 [+47.46, +53.18]  FASTER
+mtp-n3@Q6_K                  baseline@Q6_K          +40.84 [+37.33, +44.39]  FASTER
+mtp-n5@Q6_K                  baseline@Q6_K          +23.18 [+19.26, +27.33]  FASTER
+mtp-n6@Q6_K                  baseline@Q6_K          +14.18 [+9.76, +19.00]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2@Q6_K                chat: +37.8%  code: +68.3%  prose: +33.8%  reason: +77.2%  zh: +33.7%
+  mtp-n3@Q6_K                chat: +25.3%  code: +63.5%  prose: +18.2%  reason: +77.8%  zh: +19.4%
+  mtp-n5@Q6_K                chat:  +0.6%  code: +49.2%  prose:  -4.3%  reason: +76.2%  zh:  -5.9%
+  mtp-n6@Q6_K                chat:  -9.5%  code: +39.2%  prose: -14.2%  reason: +70.7%  zh: -15.3%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 12 / 375
+    mtp-n2@Q6_K: 3
+        zh_self_intro/p1: early stop (n=328)
+        zh_self_intro/p2: early stop (n=328)
+        zh_self_intro/p3: early stop (n=328)
+    mtp-n3@Q6_K: 3
+        zh_self_intro/p1: early stop (n=314)
+        zh_self_intro/p2: early stop (n=314)
+        zh_self_intro/p3: early stop (n=314)
+    mtp-n5@Q6_K: 3
+        zh_self_intro/p1: early stop (n=351)
+        zh_self_intro/p2: early stop (n=351)
+        zh_self_intro/p3: early stop (n=351)
+    mtp-n6@Q6_K: 3
+        zh_self_intro/p1: early stop (n=351)
+        zh_self_intro/p2: early stop (n=351)
+        zh_self_intro/p3: early stop (n=351)
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+
+--- energy window coverage: 98.3 % of wall time (min 94.8 %) ---
+  Energy outside the first and last sample is not in the figure above.
+
+--- averaged against instantaneous power, per arm ---
+  baseline@Q6_K           +0.76 %   n=75
+  mtp-n2@Q6_K             +2.10 %   n=72
+  mtp-n3@Q6_K             +2.07 %   n=72
+  mtp-n5@Q6_K             +1.66 %   n=72
+  mtp-n6@Q6_K             +1.53 %   n=72
+  Positive means power.draw integrated low. It leaves the baselines nearly alone
+  and understates the speculative arms, so an energy saving read off the averaged
+  field is larger than the instantaneous field supports, by about this much.
+baseline@Q6_K              0.2409     +0.0%       1657     +0.0%       -          -
+mtp-n2@Q6_K                0.3702    +53.7%       1097    -33.8%   0.652       2.30
+mtp-n3@Q6_K                0.3485    +44.7%       1189    -28.2%   0.554       2.65
+mtp-n5@Q6_K                0.3038    +26.1%       1420    -14.3%   0.412       3.05
+mtp-n6@Q6_K                0.2837    +17.8%       1555     -6.1%   0.367       3.18
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  mtp-n2@Q6_K                byte-identical 6/75   median shared prefix when forked: 0.170
+  mtp-n3@Q6_K                byte-identical 6/75   median shared prefix when forked: 0.128
+  mtp-n5@Q6_K                byte-identical 3/75   median shared prefix when forked: 0.202
+  mtp-n6@Q6_K                byte-identical 3/75   median shared prefix when forked: 0.202
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@Q6_K              reproducible 50/50
+  mtp-n2@Q6_K                reproducible 50/50
+  mtp-n3@Q6_K                reproducible 50/50
+  mtp-n5@Q6_K                reproducible 50/50
+  mtp-n6@Q6_K                reproducible 50/50

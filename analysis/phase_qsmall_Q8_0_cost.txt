@@ -1,0 +1,80 @@
+====================================================================================================
+VERIFICATION-STEP COST MODEL     speedup = mean_len / k
+  mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)   [derived; the API has
+            no verification-step count, and this is low by <1 %. See the docstring.]
+====================================================================================================
+[integrity] derived mean_len vs the server's printed mean len: 300 requests, mean gap -0.0042, worst 0.0438
+            within the log's own %5.2f printing precision, so the derivation tracks the server.
+
+[integrity] API counters vs llama.cpp log lines: 300 requests compared, 0 mismatched  -- two independent sources agree to the token
+
+--- k by arm (pooled over classes and passes) ---
+arm              spec             w    n   k mean    k sd         k range
+mtp-n2@Q8_0      draft-mtp        3   75   1.4464  0.0073   1.432-1.462
+mtp-n3@Q8_0      draft-mtp        4   75   1.6259  0.0110   1.606-1.648
+mtp-n5@Q8_0      draft-mtp        6   75   2.0402  0.0185   2.012-2.089
+mtp-n6@Q8_0      draft-mtp        7   75   2.2203  0.0200   2.187-2.263
+
+--- TEST 1: is the overhead charged to REJECTION? ---
+    Model a rejection-proportional cost r (decode-steps per rejected draft token):
+        k = k_verify + r * w * (1 - acceptance),  w = realised draft len / forward
+        => dk/d(acceptance) = -r * w,   so  r = -slope / w
+    A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+    The model holds w constant within an arm. Where the server reuses a surviving
+    draft tail instead of re-drafting, w moves WITH acceptance and the slope picks
+    that up rather than any rejection cost - biased positive, which reads as r < 0,
+    which is this test's own conclusion. Arms whose w varies are fitted and shown,
+    and excluded from the bound.
+
+arm                 n    accept range      w  w cv%     r2                   r [95 %]  reading
+mtp-n2@Q8_0         2  0.425-0.915   1.99   0.19  0.801       -0.02 [-0.02, -0.02]  k FALLS with rejection - not a rollback account
+mtp-n3@Q8_0         3  0.301-0.878   2.99   0.25  0.847       -0.02 [-0.02, -0.02]  k FALLS with rejection - not a rollback account
+mtp-n5@Q8_0         5  0.187-0.761   4.97   0.79  0.576       -0.02 [-0.02, -0.01]  k FALLS with rejection - not a rollback account
+mtp-n6@Q8_0         6  0.156-0.698   5.96   0.82  0.632       -0.02 [-0.02, -0.01]  k FALLS with rejection - not a rollback account
+
+  Largest upper 95 % limit on r, over the 4 arm(s) where the model applies: -0.01023
+  decode-steps per rejected draft token (mtp-n5@Q8_0). The bound is an upper confidence
+  limit, not the largest point estimate: the maximum of several noisy points is
+  biased upward and is not a bound on anything.
+  At that limit the rejection term accounts for at most -0.84 % of the cycle cost (mtp-n2@Q8_0),
+  which is the comparable figure: r is per rejected draft token, so arms at different widths
+  carry the same total cost at different r.
+  Acceptance spans roughly 0.156-0.915 in this data - nearly a ten-fold range -
+  so a rejection-driven overhead of any consequence would have shown up here.
+  Reading: the verification overhead is paid per position VERIFIED, not per
+  draft REJECTED. This does not say rollback is free; it bounds how much of
+  the observed cost rollback can account for.
+  mtp-n2@Q8_0, mtp-n3@Q8_0, mtp-n5@Q8_0, mtp-n6@Q8_0: r is significantly NEGATIVE, the opposite of a rollback account. k rises with acceptance at constant
+  draft width, which is what a cost paid per position verified looks like near saturation: mean_len climbs toward w+1 while the cycle cost does not.
+
+--- TEST 2: k vs verification width, per method ---
+    MMVQ dispatch limit 8, read from this run's own record
+    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified
+    position in serial-decode-step equivalents, over the whole cycle rather than
+    attributed to any one component; see the note under the fits.
+  draft-mtp      MMVQ widths [3, 4, 6, 7]  ->  k0=1.0483  c=0.1962  r2=0.9992
+                     k0 1.0449 to 1.0511   c 0.1952 to 0.1975   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 1.0483, above the floor of 1.0 that a zero-depth cycle must cost. Consistent; the excess is an upper bound on a fixed per-cycle cost, not a measurement of one.
+                     lack of fit across widths: residual se on the slope 0.0039 (4 widths, 2 dof), against the prompt bootstrap's half-width 0.0012
+                     the line is a 3.3x poorer description of these widths than prompt-to-prompt scatter alone would suggest, so `c` is a chord over the widths fitted and not a constant marginal cost.
+                     baseline    84.0 tok/s -> one decode step 11.900 ms; k0 = 12.475 ms, c = 2.335 ms per extra position  [2.323, 2.351]
+      w= 3  k=1.4464  fit=1.4407  resid=+0.0056
+      w= 4  k=1.6259  fit=1.6370  resid=-0.0111
+      w= 6  k=2.0402  fit=2.0294  resid=+0.0108
+      w= 7  k=2.2203  fit=2.2256  resid=-0.0053
+
+--- the same fit on requests that never diverged from their baseline ---
+  draft-mtp      c on all  300 = 0.1962   c on the  12 that never diverged = 0.2023   +3.1 %
+
+--- implied optimum ---
+    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k has
+    an interior maximum in principle. Whether the measured ladder shows one is read
+    off the data below rather than asserted. An earlier version of this line stated
+    that the ladder falls monotonically over every width measured. That was true of
+    the dense phases it was written against and false the moment Phase M ran an MTP
+    ladder that peaks at n-max 2 on both targets, and nothing would have caught it.
+    These are best TESTED points. Whether a peak clears noise is analyze.py's paired
+    intervals, not this table.
+  draft-mtp      n2=1.570x  n3=1.601x  n5=1.456x  n6=1.377x
+                 -> best tested n-max = 3   (interior maximum at n-max 3)
+                 -> smoothing k through the fit over MMVQ widths [3, 4, 6, 7] puts the peak at n-max 3 (preserves it; same mean_len, so not independent evidence)

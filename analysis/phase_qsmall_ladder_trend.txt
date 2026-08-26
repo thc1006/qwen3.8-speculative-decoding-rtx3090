@@ -1,0 +1,69 @@
+====================================================================================================
+Quantization ladder as a trend: does `c` move WITH bits per weight?
+====================================================================================================
+
+Q4_K_M       5,868,826,976 bytes    5.87 GB   sha e8dd94817e95...  captured 2026-08-26T17:43:54+0800
+           widths on-path [3, 4, 6, 7]   passes [1, 2, 3]   baseline 121.26 tok/s  -> step 8.246 ms
+
+Q6_K         7,684,551,008 bytes    7.68 GB   sha 8ae8fd04e30c...  captured 2026-08-26T15:25:39+0800
+           widths on-path [3, 4, 6, 7]   passes [1, 2, 3]   baseline 98.53 tok/s  -> step 10.149 ms
+
+Q8_0         9,786,061,152 bytes    9.79 GB   sha 107125cda29d...  captured 2026-08-26T16:03:32+0800
+           widths on-path [3, 4, 6, 7]   passes [1, 2, 3]   baseline 84.04 tok/s  -> step 11.900 ms
+
+BF16        18,407,321,728 bytes   18.41 GB   sha aafa81e375a7...  captured 2026-08-26T16:42:31+0800
+           widths on-path [3, 4, 6, 7]   passes [1, 2, 3]   baseline 49.69 tok/s  -> step 20.126 ms
+
+----------------------------------------------------------------------------------------------------
+All fits restricted to the shared widths [3, 4, 6, 7]. `c` is a chord over the widths it
+was fitted on, so every rung must be fitted over the same arc for a slope across them
+to be a slope in one quantity.
+
+x axis: file size in GB. parameter count 9.204e9, derived as the BF16 rung's 18,407,321,728 bytes / 2 (bf16 is two bytes per weight). An over-estimate by whatever metadata and higher-precision tensors the file carries, identically for every rung, so it shifts the axis and not any slope's sign.
+  Q4_K_M 5.101 bpw   Q6_K 6.680 bpw   Q8_0 8.506 bpw   BF16 16.000 bpw
+
+----------------------------------------------------------------------------------------------------
+1. ACCEPTANCE vs SIZE -- must be FLAT for the rest to mean anything.
+   The MTP head is inside the target file, so quantizing the target quantizes the
+   drafter. A moving acceptance makes a moving `c` a mixture of cost and behaviour.
+  mtp-n2     slope -0.00038 /GB [-0.00147, +0.00075]  FLAT   Q4_K_M:0.6462  Q6_K:0.6444  Q8_0:0.6384  BF16:0.6405
+  mtp-n3     slope +0.00038 /GB [-0.00048, +0.00127]  FLAT   Q4_K_M:0.5305  Q6_K:0.5453  Q8_0:0.5377  BF16:0.5405
+  mtp-n5     slope -0.00045 /GB [-0.00111, +0.00020]  FLAT   Q4_K_M:0.4034  Q6_K:0.4038  Q8_0:0.3982  BF16:0.3980
+  mtp-n6     slope -0.00010 /GB [-0.00063, +0.00046]  FLAT   Q4_K_M:0.3497  Q6_K:0.3593  Q8_0:0.3463  BF16:0.3516
+
+  Acceptance is flat across the ladder; `c` below is not drafting behaviour.
+
+----------------------------------------------------------------------------------------------------
+2. `c` vs SIZE -- the marginal cost of a verified position.
+  slope -0.01648 per GB  [-0.01658, -0.01639]   r2 0.6664   25 shared prompts, paired
+  rung            GB         c   step ms   c in ms
+  Q4_K_M        5.87    0.4126     8.246     3.402
+  Q6_K          7.68    0.3036    10.149     3.081
+  Q8_0          9.79    0.1962    11.900     2.335
+  BF16         18.41    0.1662    20.126     3.345
+
+  per bit of weight: -0.01896 [-0.01908, -0.01885]
+
+  in WALL TIME: slope +0.0122 ms per GB, r2 0.0189. No interval: it needs each
+  baseline's own uncertainty propagated through a ratio across sessions.
+  THE TWO DISAGREE IN SIGN. `c` is relative to each rung's own decode step and the
+  steps differ across the ladder. H2' is stated as a relative cost, so the
+  dimensionless slope is the one that bears on it.
+
+----------------------------------------------------------------------------------------------------
+3. BYTE-IDENTICAL vs SIZE -- llama.cpp #25618 and H9.
+   #25618 says greedy speculative output diverges on quantized targets and stays
+   identical on bf16. On a ladder that is a positive slope, and the bf16 rung is the
+   only place the claim's own control exists.
+  mtp-n2     slope +3.43 pp/GB [+2.15, +4.71]  CLEAR OF ZERO
+             Q4_K_M:16.0%  Q6_K:8.0%  Q8_0:4.0%  BF16:52.0%
+  mtp-n3     slope +3.63 pp/GB [+2.49, +4.81]  CLEAR OF ZERO
+             Q4_K_M:12.0%  Q6_K:8.0%  Q8_0:4.0%  BF16:52.0%
+  mtp-n5     slope +3.94 pp/GB [+2.46, +5.27]  CLEAR OF ZERO
+             Q4_K_M:8.0%  Q6_K:4.0%  Q8_0:4.0%  BF16:52.0%
+  mtp-n6     slope +3.94 pp/GB [+2.46, +5.27]  CLEAR OF ZERO
+             Q4_K_M:8.0%  Q6_K:4.0%  Q8_0:4.0%  BF16:52.0%
+
+  A binary outcome over 25 prompts resolves very little; Phase Q's pairwise intervals
+  spanned 32 percentage points. Treat an interval covering zero as UNMEASURED.
+====================================================================================================
