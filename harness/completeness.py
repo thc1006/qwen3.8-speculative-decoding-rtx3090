@@ -6,9 +6,16 @@ appending to it. The file had 1025 of 1050 records, the missing 25 were one base
 pass, and the DFlash2 coefficient it produced was 0.2479 against the finished file's 0.2481. Small
 enough to survive review and wrong.
 
-The design block a run writes carries the passes, and the arms and prompt tags are recoverable from
-the records, so the expected count can be reconstructed from the file itself without knowing which
-matrix produced it.
+The design block a run writes carries the passes and the prompt count, and the arm list is
+declared beside it, so the expected count can be reconstructed from the file itself without
+knowing which matrix produced it.
+
+Two of those three have to come from the DECLARATION rather than from the records, and the prompt
+count did not until 2026-08-27. Counting distinct prompts in the records makes the check circular:
+a run that died inside its first pass after ten prompts has ten distinct prompts and one pass, so
+1 x 10 x 1 is exactly what the file holds and it reported complete -- which is the case this
+module exists to catch. A file whose design block predates `n_prompts` falls back to the observed
+count and says so in the note rather than silently.
 """
 
 import json
