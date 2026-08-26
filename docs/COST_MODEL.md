@@ -11,7 +11,7 @@ units of a plain decode step, as `speedup = mean_len / k` with `k(w) = k0 + c*(w
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../analysis/plot_cost_model_dark.png">
-  <img alt="Three stacked panels against verification width, from Phase A only. Top: tokens accepted per target pass rises from 2.3 to 3.3 but falls far below a dotted line showing growth in proportion to width. Middle: the cost of one target pass rises linearly, with c equal to 0.2829 for draft-mtp and 0.2784 for draft-dflash on these five arms; the completed ladder supersedes both at 0.2904 and 0.2481. Bottom: speedup, the ratio of the two, falls from 1.60 to 1.23 across the widths measured here." src="../analysis/plot_cost_model.png">
+  <img alt="Three stacked panels against verification width, from Phase A only. Top: tokens accepted per target pass rises from 2.3 to 3.3 but falls far below a dotted line showing growth in proportion to width. Middle: the cost of one target pass rises with width, with the chord c equal to 0.2829 for draft-mtp and 0.2784 for draft-dflash over these five arms; the completed ladder supersedes both at 0.2904 and 0.2481, and k(w) is concave rather than a line. Bottom: speedup, the ratio of the two, falls from 1.60 to 1.23 across the widths measured here." src="../analysis/plot_cost_model.png">
 </picture>
 
 | phase | method | widths | k0 | **c** | r^2 |
