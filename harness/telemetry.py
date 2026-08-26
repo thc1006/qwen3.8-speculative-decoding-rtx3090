@@ -273,7 +273,21 @@ def assert_gpu_exclusive(index: int = 0, allow_pids: tuple[int, ...] = ()) -> No
             "Timing and energy would both be contaminated. Stop the other workload and retry.")
 
 
-def host_load(own_names=("llama-server", "python3", "python", "bench.py")):
+def _descendants_of(pid: int, ppid_of: dict[int, int]) -> set[int]:
+    """Every pid whose parent chain reaches `pid`, plus `pid` itself."""
+    kids: dict[int, list[int]] = {}
+    for child, parent in ppid_of.items():
+        kids.setdefault(parent, []).append(child)
+    seen, stack = {pid}, [pid]
+    while stack:
+        for c in kids.get(stack.pop(), ()):
+            if c not in seen:
+                seen.add(c)
+                stack.append(c)
+    return seen
+
+
+def host_load(own_names=("llama-server",)):
     """What else is competing for the CPU at arm entry.
 
     The GPU is gated on temperature and clock; the host was not gated on anything. On 2026-08-26 a
@@ -281,33 +295,57 @@ def host_load(own_names=("llama-server", "python3", "python", "bench.py")):
     to compare object-file timestamps against server-log timestamps by hand. Recording it per
     arm-pass turns that into a field.
 
-    `own_names` are the processes the run itself is expected to have. Everything else above the
-    threshold is competition and is named, so a reader sees `cc1plus` rather than a bare number.
+    OWNERSHIP IS BY DESCENT, and names are only the fallback. Matching on names alone is wrong in
+    both directions and this repository has now been bitten by each:
+
+      * A false positive. The run polls nvidia-smi continuously to integrate power into joules,
+        `nvidia-smi` is not in `own_names`, and a poll that happens to be alive when `ps` runs is
+        recorded as 50 % of a core of outside competition. Phase B pass 2 has exactly that
+        incident.
+      * A false negative, which is worse. `python3` WAS in `own_names`, so any python on this
+        host -- an analysis script, a plotting run, anything started in another terminal --
+        competed invisibly. "The incident log is clean" was therefore only ever evidence about
+        processes that are not python. python3, python and bench.py have been removed from the
+        list for exactly that reason: descent already covers the run's own interpreter, and
+        keeping the names would have kept the hole open on everyone else's.
+
+    Descent settles both: the run's own poller is a child of this process and is not counted;
+    someone else's python is not, and is. `own_names` survives as a fallback for a process that
+    has been reparented away (a session leader whose parent has exited), which is why
+    llama-server stays on the list.
     """
-    out = {"loadavg_1m": None, "competing_pct": 0.0, "competing": [], "contended": False}
+    out = {"loadavg_1m": None, "competing_pct": 0.0, "competing": [], "contended": False,
+           "attribution": "descent"}
     try:
         out["loadavg_1m"] = os.getloadavg()[0]
     except OSError:
         pass
     try:
-        ps = subprocess.run(["ps", "-eo", "pcpu,comm", "--no-headers"],
+        ps = subprocess.run(["ps", "-eo", "pid,ppid,pcpu,comm", "--no-headers"],
                             capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         out["note"] = "ps unavailable; contention not checked"
         return out
+
+    rows = []
+    ppid_of: dict[int, int] = {}
     for line in ps.stdout.splitlines():
-        parts = line.split(None, 1)
-        if len(parts) != 2:
+        parts = line.split(None, 3)
+        if len(parts) != 4:
             continue
         try:
-            pct = float(parts[0])
+            pid, ppid, pct = int(parts[0]), int(parts[1]), float(parts[2])
         except ValueError:
             continue
-        name = parts[1].strip()
-        if pct < 5.0 or any(o in name for o in own_names):
+        ppid_of[pid] = ppid
+        rows.append((pid, pct, parts[3].strip()))
+
+    mine = _descendants_of(os.getpid(), ppid_of)
+    for pid, pct, name in rows:
+        if pct < 5.0 or pid in mine or any(o in name for o in own_names):
             continue
         out["competing_pct"] += pct
-        out["competing"].append({"comm": name, "pcpu": pct})
+        out["competing"].append({"comm": name, "pcpu": pct, "pid": pid})
     out["competing"].sort(key=lambda c: -c["pcpu"])
     out["competing"] = out["competing"][:5]
     # a quarter of one core. a build shows up as several hundred percent, so this is nowhere near

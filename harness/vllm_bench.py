@@ -50,11 +50,13 @@ import vllm_server as V
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 
-# vLLM renames its processes through setproctitle, which also sets /proc/pid/comm, truncated by
-# the kernel to 15 characters: "VLLM::EngineCore" arrives as "VLLM::EngineCor". Matching on the
-# prefix covers the API server, the engine core and the workers without depending on where the
-# truncation lands. Verified on 2026-08-26 against the installed setproctitle.
-OWN_PROCESS_NAMES = ("VLLM::", "vllm", "python3", "python", "vllm_bench.py")
+# A fallback only: `telemetry.host_load` attributes by descent, and every vLLM process this
+# driver starts is a descendant of it. The name matters when one has been reparented, and it is a
+# prefix because setproctitle also sets /proc/pid/comm, which the kernel truncates to 15
+# characters -- "VLLM::EngineCore" arrives in `ps` as "VLLM::EngineCor". Verified 2026-08-26
+# against the setproctitle in .venv-vllm. python3 is deliberately NOT here: it would make every
+# other python on the host invisible, which is the hole descent was introduced to close.
+OWN_PROCESS_NAMES = ("VLLM::",)
 
 
 def _cmd(*argv: str) -> str | None:

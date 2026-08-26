@@ -3483,6 +3483,137 @@ class TestPhaseVDriverRefusesBeforeItLoadsAnything(unittest.TestCase):
             self.assertFalse(any(o in comm for o in VB.OWN_PROCESS_NAMES), comm)
 
 
+class TestContentionIsAttributedByDescentNotByName(unittest.TestCase):
+    """Matching processes by name was wrong in both directions, and both directions bit.
+
+    False positive: the run polls nvidia-smi continuously to integrate power into joules, and
+    `nvidia-smi` was not in own_names, so a poll alive when `ps` ran was recorded as outside
+    competition. Phase B pass 2 carries exactly that incident, "50% of CPU is not this run:
+    nvidia-smi 50%", and it was this run's own sampler.
+
+    False negative, which is worse: `python3` WAS in own_names, so every python on the host was
+    invisible -- including the analysis scripts this study runs while a phase is measuring. A
+    clean incident log was only ever evidence about processes that are not python.
+    """
+
+    def test_a_descendant_is_not_competition_however_deep(self):
+        import telemetry
+        # 100 -> 200 -> 300 -> 400, and 500 unrelated
+        ppid = {100: 1, 200: 100, 300: 200, 400: 300, 500: 1}
+        mine = telemetry._descendants_of(100, ppid)
+        self.assertEqual(mine, {100, 200, 300, 400})
+        self.assertNotIn(500, mine)
+
+    def test_a_cycle_in_the_table_does_not_hang(self):
+        """ps output is a snapshot; pids are reused and a self-parent can appear in one."""
+        import telemetry
+        self.assertEqual(telemetry._descendants_of(7, {7: 7}), {7})
+        self.assertEqual(telemetry._descendants_of(1, {1: 2, 2: 1}), {1, 2})
+
+    def test_someone_elses_python_is_no_longer_exempt(self):
+        import telemetry
+        import inspect
+        names = inspect.signature(telemetry.host_load).parameters["own_names"].default
+        for n in ("python3", "python", "bench.py"):
+            self.assertNotIn(n, names,
+                             f"{n!r} back in own_names would make every other {n} on the host "
+                             f"invisible, which is the hole descent was added to close")
+        # llama-server stays: it is started with start_new_session and can outlive its parent,
+        # and a reparented server would otherwise be charged to the run as competition.
+        self.assertIn("llama-server", names)
+
+    def test_the_vllm_driver_keeps_only_the_reparenting_fallback(self):
+        import vllm_bench as VB
+        self.assertEqual(VB.OWN_PROCESS_NAMES, ("VLLM::",))
+        self.assertTrue(any(o in "VLLM::EngineCor" for o in VB.OWN_PROCESS_NAMES))
+
+
+class TestMechanismBRecoversAKnownTruth(unittest.TestCase):
+    """An analysis tool that has never been shown a known answer is an assertion, not a measurement.
+
+    Two synthetic worlds are built from Phase B's own arm design -- n_max in {3,7} crossed with
+    p_min in {0,.5,.75}, which is what makes drafted and rejected counts move by different
+    amounts. In one world the cost is exactly per drafted token; in the other, exactly per
+    rejected token. The tool has to pick the right one in each.
+    """
+
+    ARMS = [(3, 2.985, 1.320), (3, 2.067, 0.601), (3, 1.343, 0.174),
+            (7, 6.930, 4.689), (7, 3.567, 1.581), (7, 1.911, 0.422)]
+
+    def _result(self, ms_per_drafted, ms_per_rejected, ms_per_step=0.0):
+        import random
+        rng = random.Random(11)
+        classes = ("code", "prose", "reason", "chat", "zh")
+        prompts = [(f"p{i:02d}", classes[i % len(classes)]) for i in range(25)]
+        arms_meta = {"baseline": {"expects_drafter": False, "extra_args": []}}
+        recs = []
+        tau0 = 20.0
+        for tag, cls in prompts:
+            f0 = 200
+            recs.append({"arm": "baseline", "pass": 1, "prompt": tag, "class": cls,
+                         "predicted_n": f0 + 1,
+                         "timings": {"t_predicted_ms": f0 * tau0, "t_draft_n": 0,
+                                     "t_draft_n_accepted": 0}})
+        for i, (nmax, d, r) in enumerate(self.ARMS):
+            name = f"mtp-n{nmax}-{i}"
+            arms_meta[name] = {"expects_drafter": True,
+                               "extra_args": ["--spec-draft-n-max", str(nmax)]}
+            for tag, cls in prompts:
+                f = 200
+                drafted = int(round(d * f))
+                rejected = int(round(r * f))
+                accepted = drafted - rejected
+                ms = (f * tau0 + ms_per_step * f
+                      + ms_per_drafted * drafted + ms_per_rejected * rejected)
+                ms *= 1.0 + rng.gauss(0, 0.01)      # 1 % per-request noise
+                recs.append({"arm": name, "pass": 1, "prompt": tag, "class": cls,
+                             "predicted_n": accepted + f + 1,
+                             "timings": {"t_predicted_ms": ms, "t_draft_n": drafted,
+                                         "t_draft_n_accepted": accepted}})
+        return {"arms": arms_meta, "records": recs}
+
+    def _fits(self, result):
+        import mechanism_b as M
+        rs = M.rows(result)
+        self.assertTrue(rs)
+        bd = M._fit1([(x["excess_ms"], x["drafted"]) for x in rs])
+        br = M._fit1([(x["excess_ms"], x["rejected"]) for x in rs])
+        rss_d = sum((x["excess_ms"] - bd * x["drafted"]) ** 2 for x in rs)
+        rss_r = sum((x["excess_ms"] - br * x["rejected"]) ** 2 for x in rs)
+        return bd, br, rss_d, rss_r
+
+    def test_a_world_where_cost_is_per_drafted_token_is_read_that_way(self):
+        bd, br, rss_d, rss_r = self._fits(self._result(ms_per_drafted=7.0, ms_per_rejected=0.0))
+        self.assertLess(rss_d, rss_r, "the drafted model must fit a drafted world better")
+        self.assertAlmostEqual(bd, 7.0, delta=0.35)
+
+    def test_a_world_where_cost_is_per_rejected_token_is_read_that_way(self):
+        bd, br, rss_d, rss_r = self._fits(self._result(ms_per_drafted=0.0, ms_per_rejected=7.0))
+        self.assertLess(rss_r, rss_d, "the rejected model must fit a rejected world better")
+        self.assertAlmostEqual(br, 7.0, delta=0.35)
+
+    def test_a_per_step_cost_is_not_charged_to_either_token_count(self):
+        """The drafter runs one forward per step whatever the gate does.
+
+        Without a step term that cost has to be absorbed by whichever token count happens to
+        correlate with step count, which would make a purely per-step world look like evidence
+        for one of the two hypotheses.
+        """
+        import mechanism_b as M
+        rs = M.rows(self._result(ms_per_drafted=0.0, ms_per_rejected=0.0, ms_per_step=5.0))
+        fit = M._fit2([(x["excess_ms"], float(x["forwards"]), float(x["drafted"])) for x in rs])
+        self.assertIsNotNone(fit)
+        per_step, per_token = fit
+        self.assertAlmostEqual(per_step, 5.0, delta=0.4)
+        self.assertAlmostEqual(per_token, 0.0, delta=0.25)
+
+    def test_a_baseline_only_result_yields_no_rows_rather_than_a_fit(self):
+        import mechanism_b as M
+        r = self._result(7.0, 0.0)
+        r["records"] = [x for x in r["records"] if x["arm"] == "baseline"]
+        self.assertEqual(M.rows(r), [])
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 
