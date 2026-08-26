@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# One command that re-checks every claim this repository makes about itself.
+#
+# Written because "it is done" is not evidence. Each section below is a check that has caught a
+# real defect in this study, and each prints what it looked at rather than only whether it liked
+# it -- a check that reports "OK" without saying what it examined is the same shape as a check
+# that examined nothing.
+#
+# CPU-heavy. Do not run while .gpu-in-use.lock exists: telemetry.host_load samples once per
+# arm-pass and a running phase will record this as contention.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+FAIL=0
+hdr() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
+bad() { FAIL=1; printf '   FAIL: %s\n' "$*"; }
+
+if [ -f .gpu-in-use.lock ]; then
+  echo "REFUSING: .gpu-in-use.lock exists, so a measurement is running."
+  cat .gpu-in-use.lock
+  exit 2
+fi
+
+hdr "1. the harness's own tests"
+python3 harness/test_harness.py 2>&1 | tail -3 || bad "test suite"
+
+hdr "2. every committed result, audited"
+python3 harness/audit_results.py || bad "audit_results reported a problem"
+
+hdr "3. documents link only at paths a clone would have"
+python3 - <<'PY' || exit 1
+import re, pathlib, subprocess, sys
+tracked = set(subprocess.check_output(["git", "ls-files"], text=True).split("\n")) - {""}
+dirs = {"/".join(t.split("/")[:i]) for t in tracked for i in range(1, len(t.split("/")))}
+bad = []
+for name in ("README.md", "TODO.md", "PREREGISTRATION.md"):
+    p = pathlib.Path(name)
+    if not p.exists():
+        continue
+    text = p.read_text(encoding="utf-8")
+    targets = [t for _, t in re.findall(r"\[([^\]]+)\]\(([^)#][^)]*)\)", text)]
+    targets += re.findall(r'src="([^"]+)"', text) + re.findall(r'srcset="([^"]+)"', text)
+    for t in targets:
+        if t.startswith(("http://", "https://", "mailto:")):
+            continue
+        path = t.split("#")[0].rstrip("/")
+        if path and path not in tracked and path not in dirs:
+            bad.append(f"{name} -> {path}")
+print(f"   {len(tracked)} tracked paths, {len(bad)} broken links")
+for b in bad:
+    print("   FAIL:", b)
+sys.exit(1 if bad else 0)
+PY
+[ $? -ne 0 ] && bad "a document links at an untracked path"
+
+hdr "4. the README's numbers against the result files"
+python3 - <<'PY'
+import json, collections, statistics, sys
+sys.path.insert(0, "harness")
+import stats as ST
+d = json.load(open("results/phase_a.json"))
+cls = {r["prompt"]: r["class"] for r in d["records"]}
+per = collections.defaultdict(lambda: collections.defaultdict(list))
+for r in d["records"]:
+    per[r["arm"]][r["prompt"]].append(r["decode_tok_s"])
+def strat(a):
+    byc = collections.defaultdict(list)
+    for p, v in per[a].items():
+        byc[cls[p]].append(statistics.fmean(v))
+    return ST.stratified_mean(byc)
+base = strat("baseline@master")
+readme = open("README.md").read()
+print(f"   baseline {base:.2f} tok/s, quoted in README: {'41.55' in readme}")
+for arm, pct in (("mtp-n2", 59.8), ("mtp-n3", 52.3), ("dflash2-n4", 51.9),
+                 ("mtp-n5", 32.1), ("dflash2-n7", 22.6)):
+    got = (strat(arm) / base - 1) * 100
+    ok = abs(got - pct) < 0.1 and f"+{pct} %" in readme
+    print(f"   {arm:12s} recomputed {got:+.2f} %, README says +{pct} %  {'ok' if ok else 'MISMATCH'}")
+PY
+
+hdr "5. no committed document carries a withdrawn claim"
+python3 - <<'PY'
+import subprocess, pathlib
+claims = ("not the architecture", "sign belongs to the drafting method",
+          "rules out a large architecture effect", "flag was accepted and did nothing",
+          "no quantization anywhere", "the cost is linear", "costs a fixed c")
+marks = ("withdraw", "Withdraw", "used to read", "an earlier version", "no longer", "retract")
+files = [f for f in subprocess.check_output(["git", "ls-files", "*.md"], text=True).split("\n")
+         if f and "PREREGISTRATION" not in f and not f.startswith(("upstream/", "llamacpp"))]
+hits = []
+for f in files:
+    for i, line in enumerate(pathlib.Path(f).read_text(errors="replace").splitlines(), 1):
+        if any(m in line for m in marks):
+            continue
+        hits += [f"{f}:{i} {c!r}" for c in claims if c in line]
+print(f"   {len(files)} documents scanned, {len(hits)} residual claims")
+for h in hits:
+    print("   FAIL:", h)
+PY
+
+hdr "6. the GPU is where the runs left it"
+python3 harness/gpustate.py --check 2>/dev/null || nvidia-smi \
+  --query-gpu=clocks.max.sm,clocks.max.mem,power.limit --format=csv
+
+printf '\n'
+if [ $FAIL -eq 0 ]; then echo "All sections passed."; else echo "At least one section failed."; fi
+exit $FAIL
