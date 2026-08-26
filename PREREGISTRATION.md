@@ -1915,3 +1915,35 @@ Dense effects are untouched, the arm being flat across all three positions. Rank
 
 Correction 19's fix still applies for a different reason than it gave: measuring the baseline more
 than once per pass would remove this whatever its mechanism turns out to be.
+
+## Correction 20, 2026-08-26 06:55: the MoE target is released, which overrides Correction 9's hold
+
+Correction 9 said the MoE target is kept whenever the Phase M anchor does not clear, "so it can be
+chased". The anchor did not clear -- `moe-draft08b-n8` came out -65.63 % [-67.60, -63.70] against a
+registered band of -32 % to -12 %. That hold is now lifted deliberately, and the reason is a
+conflict between two registered decisions rather than a change of mind about either.
+
+The 22 GB target is the only thing on this disk large enough to matter. Holding it leaves 26 GB
+free, and Phase Q's remaining rungs need 33, 38 and 41 GB staged, so **the ladder stops at one rung
+of four**. A quantization ladder with a single point is not a ladder. Releasing the file frees 48 GB
+and every remaining rung fits.
+
+What is given up, stated plainly: chasing the anchor gets harder. What that chase actually needs is
+a **new experiment** -- comparing the 0.8B drafter's acceptance on this prompt set against the
+predecessor's, since 22.9 % against 53.7 % is the whole discrepancy -- and not a re-run of Phase M.
+A new experiment needs the model again, and re-downloading is 22 GB of bandwidth, not a lost
+measurement.
+
+Nothing measured is lost:
+
+* `results/phase_m.json` is tracked and pushed, 1575 records, 0 incidents.
+* Its `env.model_sha256` is `55983c5a75a1ab969824077b3bb3de4146e82a9234072b48ad4e8f92ad3fe9f1`.
+* That hash was recomputed from the file immediately before deleting it and **matches**, so the
+  result is verifiably tied to this exact file.
+* `models/SHA256SUMS` now carries the hash and the exact re-fetch command. The source,
+  `unsloth/Qwen3.6-35B-A3B-GGUF`, was recovered from the predecessor repository, which records it
+  twelve times; this repository recorded it nowhere, which is its own small gap now closed.
+
+`models/dflash2` (6.6 GB) was considered and **kept**. Releasing the MoE alone clears every
+remaining rung, so deleting more would be gratuitous, and five completed phases load those files.
+`models/target` (18 GB) is used by every phase in the study and is not a candidate.
