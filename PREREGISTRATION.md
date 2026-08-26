@@ -2458,9 +2458,31 @@ What went wrong is at the scoring step: an overlap was read as the first branch 
 select any branch. The other four hypotheses in Correction 22 are unaffected -- H9, H9a, H10a and
 H11 are scored against this study's own measurements, not against an external figure.
 
+### Two things this audit checked and found clean
+
+**H11 does not share the defect.** Correction 22 scores it as moving "in the direction H2'
+requires" and nowhere compares this study's coefficient to #27342's 6.7 / 14.5 / 23.4 %. That
+restraint is inherited from `harness/matrices/phase_q.py:12-18`, which states in the same
+paragraph as those figures that they come from `llama-batched-bench`, that they are NOT the same
+quantity as `c`, and that the ladder can therefore only make an **ordinal** check. The `-10.1 %`
+appearing in Correction 22 is Phase Q's own measurement, not theirs.
+
+`harness/matrices/phase_qsmall.py:21` quotes #26750's range with none of that framing. The
+difference between the two docstrings is the whole difference between H11 and H10 here.
+
+**Nothing unverified was published.** The #25618 comment and the vLLM issue filed today were
+checked: neither contains 35.8, 40.7, or any other external figure. Every number in them --
+26.68 %, 150 records, 92 and 46 kernels, 2.37 GiB, 248320 x 5120 -- comes from this repository's
+own output or from source read at a pinned revision.
+
+One claim of this type was made in conversation and never written down: that #27342's Q4_K_M-to-
+Q8_0 span "works out near 10 % per bit and this is 10.1 % over one bit". That is exactly the
+error below, applied to the other external figure. It did not reach the record or the upstream
+threads, and it is noted here so it does not get re-derived.
+
 ### Why this is worth its own Correction
 
-The same word did the damage twice today. Correction 23 called a ratio a mechanism; this called
-an overlap a reproduction. Both are cases of a verdict stated more strongly than the evidence
-supports, in a direction that made the result more interesting. The measurements were fine both
-times.
+The same failure ran twice today. Correction 23 called a ratio a mechanism; this called an
+overlap a reproduction. Both are verdicts stated more strongly than the evidence supports, in
+the direction that made the result more interesting. The measurements were sound both times --
+what failed is the sentence written on top of them, and a sentence is what other people read.
