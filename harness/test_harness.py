@@ -2990,6 +2990,28 @@ class TestLadderTrendIdentifiesItsRungs(unittest.TestCase):
                          "the rung label is not derived from the arm names; a filename split "
                          "collapses UD-Q4_K_XL and UD-Q5_K_XL onto the same string")
 
+    def test_both_ladder_tools_name_rungs_the_same_way(self):
+        """cross_rung had the same defect in a different disguise.
+
+        It stripped the literal prefix "phase_q_", which is right for phase_q and silently wrong
+        for phase_qsmall, whose prefix is longer. Both rungs of a phase_qsmall comparison then
+        printed as "phase_qsma" and the two columns became indistinguishable -- in a report whose
+        entire content is a difference between those two columns.
+        """
+        import json as _json
+        p = self.ROOT / self.FIXTURE
+        if not p.exists():
+            self.skipTest(f"{self.FIXTURE} not present")
+        d = _json.loads(p.read_text(encoding="utf-8"))
+        self.assertEqual(CR.rung_view(d, str(p))["label"], LT.load_rung(str(p))["label"],
+                         "cross_rung and ladder_trend disagree about what to call a rung")
+        qs = self.ROOT / "results/phase_qsmall_Q4_K_M.json"
+        if qs.exists():
+            lbl = CR.rung_view(_json.loads(qs.read_text(encoding="utf-8")), str(qs))["label"]
+            self.assertEqual(lbl, "Q4_K_M",
+                             f"a phase_qsmall rung is labelled {lbl!r}; a prefix-strip that only "
+                             f"knows 'phase_q_' leaves the phase name in the label")
+
     def test_a_rung_with_no_recorded_size_has_no_x_value(self):
         """env.model_size_bytes is the x axis. Without it the rung cannot be placed."""
         a = self._load()

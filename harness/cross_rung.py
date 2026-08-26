@@ -65,6 +65,7 @@ def rung_view(result: dict, path: str) -> dict:
     """Everything about one rung that the comparison needs, plus what it needs to refuse."""
     rows = CM.collect(result)
     spec = [r for r in rows if r["spec_type"] and r["spec_type"] != "none"]
+    _named = {r["arm"].split("@", 1)[1] for r in spec if "@" in r["arm"]}
     mmvq_max, from_record = CM.recorded_mmvq_max(result)
     widths = sorted({r["width"] for r in spec})
     on_path = [w for w in widths if w <= mmvq_max]
@@ -86,9 +87,12 @@ def rung_view(result: dict, path: str) -> dict:
                  if not m.get("extra_args") and not m.get("expects_drafter")]
     return {
         "path": path,
-        # Trimmed: the label is printed in fixed-width columns and a long filename silently
-        # breaks every alignment below it.
-        "label": Path(path).stem.replace("phase_q_", "")[:18],
+        # From the ARMS, not the filename. `stem.replace("phase_q_", "")` works for phase_q and
+        # silently fails for phase_qsmall, whose prefix is longer: both rungs then print as
+        # "phase_qsma" and the two columns of the comparison become indistinguishable. Every arm
+        # here is `<method>@<rung>`, built by the matrix from the rung it was told to run, so the
+        # name is the run's own record of what it measured. Same fix as ladder_trend.py.
+        "label": ((sorted(_named)[0] if len(_named) == 1 else Path(path).stem)[:18]),
         "rows": spec,
         "on_path": on_path,
         "off_path": [w for w in widths if w > mmvq_max],
