@@ -1,0 +1,3229 @@
+{
+ "schema": "qwen38-specdec/1",
+ "env": {
+  "captured_at": "2026-08-27T01:47:15+0800",
+  "host": "thc1006-debian13",
+  "kernel": "6.12.101+deb13-amd64",
+  "python": "3.13.5",
+  "engine": "vllm",
+  "vllm_version": "0.27.1",
+  "torch_version": "2.13.0+cu130",
+  "vllm_binary": "/home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/.venv-vllm/bin/vllm",
+  "gpu": "NVIDIA GeForce RTX 3090, 24576 MiB, 610.43.02, 8.6, 420.00 W, 420.00 W, 450.00 W, 2130 MHz, 9751 MHz",
+  "gpu_state_at_start": {
+   "power.draw": 32.59,
+   "power.draw.instant": 32.6,
+   "temperature.gpu": 44.0,
+   "clocks.current.graphics": 210.0,
+   "clocks.current.memory": 405.0,
+   "memory.used": 17.0,
+   "utilization.gpu": 0.0
+  },
+  "overclock_state": {
+   "power_limit_w": 420.0,
+   "power_default_limit_w": 420.0,
+   "power_min_limit_w": 100.0,
+   "power_max_limit_w": 450.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_sm_mhz": 2130.0,
+   "mem_transfer_rate_offset": 0.0,
+   "graphics_clock_offset": 0.0,
+   "is_stock": true
+  },
+  "model": "RedHatAI/Qwen3.8-27B-INT4",
+  "model_revision": "2fb0debc365fb6c1683d7d3ad7722470919627a8",
+  "matrix": {
+   "module": "phase_v",
+   "file": "phase_v.py",
+   "file_sha256": "8a649be99895028e17e85c4fb446f561da27906c86ea4e306281bdd8f9d069fc",
+   "knobs": {},
+   "argv": [
+    "--matrix",
+    "phase_v",
+    "--out",
+    "results/phase_v.json",
+    "--passes",
+    "3",
+    "--port",
+    "18211",
+    "--settle-floor"
+   ],
+   "driver": "vllm_bench.py"
+  }
+ },
+ "matrix": {
+  "module": "phase_v",
+  "file": "phase_v.py",
+  "file_sha256": "8a649be99895028e17e85c4fb446f561da27906c86ea4e306281bdd8f9d069fc",
+  "knobs": {},
+  "argv": [
+   "--matrix",
+   "phase_v",
+   "--out",
+   "results/phase_v.json",
+   "--passes",
+   "3",
+   "--port",
+   "18211",
+   "--settle-floor"
+  ],
+  "driver": "vllm_bench.py"
+ },
+ "design": {
+  "passes": 3,
+  "interleaved": true,
+  "fresh_server_per_arm_per_pass": true,
+  "prompt_order": "fixed, identical across arms",
+  "max_tokens": 400,
+  "common_args": [
+   "--max-model-len",
+   "8192",
+   "--no-enable-prefix-caching",
+   "--max-num-seqs",
+   "1",
+   "--gpu-memory-utilization",
+   "0.95",
+   "--no-enable-log-requests",
+   "--seed",
+   "20260824"
+  ],
+  "n_prompts": 25,
+  "prompt_classes": {
+   "code": 5,
+   "prose": 5,
+   "reason": 5,
+   "chat": 5,
+   "zh": 5
+  },
+  "full_prompt_set": true,
+  "prompt_tags": [
+   "code_py_ratelimiter",
+   "code_rust_mergesort",
+   "code_nginx_cfg",
+   "prose_rainbow",
+   "prose_bookshelves",
+   "prose_letter",
+   "reason_trains",
+   "reason_zebra",
+   "reason_scheduling",
+   "chat_desk_robot",
+   "chat_music",
+   "chat_advice",
+   "zh_self_intro",
+   "zh_tea",
+   "zh_debug",
+   "code_go_worker",
+   "code_sql_report",
+   "prose_market",
+   "prose_argument",
+   "reason_probability",
+   "reason_invariant",
+   "chat_travel",
+   "chat_disagree",
+   "zh_moving",
+   "zh_review"
+  ],
+  "decode_rate_source": "vllm:request_decode_time_seconds_sum over vllm:generation_tokens_total, prefill and queueing excluded"
+ },
+ "arms": [
+  "baseline-vllm",
+  "mtp-k1",
+  "mtp-k2"
+ ],
+ "arm_notes": {
+  "baseline-vllm": "no speculation; the reference every vLLM arm is measured against",
+  "mtp-k1": "matched to llama.cpp mtp-n1 from phase_nmax; the only depth both engines run. Known to fail on a 24 GiB card: the MTP module's BF16 lm_head and embed_tokens are 2.37 GiB each and the checkpoint excludes 're:^mtp.*' from its INT4 recipe. The arm is kept so the failure is recorded rather than remembered, and so the same matrix runs unchanged on a card that can hold it",
+  "mtp-k2": "reported to error on this model family. Tested, not assumed; a failure is the result and is recorded as one"
+ },
+ "baseline": "baseline-vllm",
+ "records": [
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.85936174672308,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 131,
+   "wall_ms": 8530.091524124146,
+   "vllm_timing": {
+    "decode_s": 8.357821446028538,
+    "prefill_s": 0.15579948399681598,
+    "queue_s": 1.310399966314435e-05,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.85936174672308,
+    "prefill_share_of_inference": 0.01830002595574243
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6625,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1709,
+   "ordinal": 0,
+   "text": "We need answer user's request: Write Python class RateLimiter implementing token bucket, thread-safe with threading.RLock. Provide allow(cost=1), remaining(), reset(). Include full type hints, docstring on every method, and below class a unittest.TestCase covering exhaustion, refill over time, and concurrent access from four threads.\n\nNeed produce final code. Need think through implementation details.\n\nNeed likely use time.monotonic. Token bucket: capacity, refill_rate tokens per second. Thread-safe with RLock. Methods:\nclass RateLimiter:\n    def __init__(self, capacity: float, refill_rate: float) -> None: ...\n    def allow(self, cost: float = 1) -> bool: ...\n    def remaining(self) -> float: ...\n    def reset(self) -> None: ...\n\nNeed full type hints. Maybe import threading, time, unittest.\n\nNeed ensure thread-safe with threading.RLock. Use self._lock = threading.RLock().\n\nToken bucket semantics: tokens start at capacity. On each operation, update tokens: elapsed = now - last; tokens = min(capacity, tokens + elapsed*refill_rate); last=now. If cost <= tokens: tokens -= cost; return True else False.\n\nNeed handle cost <=0? Could raise ValueError for cost <=0? User didn't ask but production. Maybe allow cost=1 default. If cost <= 0, maybe return True? Better validate: if cost <= 0: raise ValueError(\"cost must be positive\"). But if cost=0? Rate limiting cost zero maybe no effect. But full type hints. Could allow cost: float = 1.0. If cost <= 0: raise ValueError. But tests may not test. Need not overcomplicate.\n\nNeed unittest.TestCase below class covering exhaustion, refill over time, concurrent access from four threads.\n\nTests:\nclass RateLimiterTests(unittest.TestCase):\n    def test_ex"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "code_rust_mergesort",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.80540197108373,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 136,
+   "wall_ms": 8487.929821014404,
+   "vllm_timing": {
+    "decode_s": 8.367255237011705,
+    "prefill_s": 0.11772168398601934,
+    "queue_s": 6.071990355849266e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.80540197108373,
+    "prefill_share_of_inference": 0.013874131312566587
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6313725490196078,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1686,
+   "ordinal": 1,
+   "text": "We need answer user's request: Write a Rust module with pub fn merge_sort<T: Ord + Clone>(v: &[T]) -> Vec<T>, plus in-place variant, plus tests covering empty, single, already sorted, reverse sorted, duplicates, and 1000-element pseudo-random case. Add doc comments explaining complexity of each function.\n\nNeed produce final code likely. Need think about idiomatic Rust. Need maybe include module? \"Write a Rust module\" maybe just code block with module? Could be a file. Need include pub fn merge_sort and in-place variant. In-place variant: pub fn merge_sort_in_place<T: Ord>(v: &mut [T])? But in-place merge sort typically requires auxiliary buffer O(n) or recursive in-place with O(n log n) time and O(log n) stack? True in-place merge sort can be O(n log^2 n) or complex. Simpler: use auxiliary buffer, but still modifies input in place. Complexity O(n log n) time, O(n) auxiliary space. If they want in-place variant maybe no extra output allocation? We can implement bottom-up merge sort using temp buffer. That's in-place in sense sorts slice in place, but uses temp. Doc explain.\n\nNeed ensure merge_sort<T: Ord + Clone>(v: &[T]) -> Vec<T>. Could implement by copying to vec and calling in-place. Or recursive. Need clone because input slice. In-place variant can be T: Ord only.\n\nNeed tests: empty, single, already sorted, reverse sorted, duplicates, 1000-element pseudo-random case. Pseudo-random: deterministic LCG to avoid rand dependency. Generate 1000 elements, sort, compare to sorted copy. Need maybe test both functions.\n\nNeed doc comments explaining complexity of each function.\n\nPotential code:\n\n/// Merge sort implementation.\npub fn merge_sort<T: Ord + Clone>(v: &["
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "code_nginx_cfg",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.790586313048486,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 8501.85251235962,
+   "vllm_timing": {
+    "decode_s": 8.369849187030923,
+    "prefill_s": 0.1294878699700348,
+    "queue_s": 1.3776007108390331e-05,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.790586313048486,
+    "prefill_share_of_inference": 0.015235055287444428
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.5409836065573771,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1673,
+   "ordinal": 2,
+   "text": "We need answer user's request: produce complete nginx reverse-proxy configuration for API on 127.0.0.1:8080: TLS with modern ciphers, HTTP->HTTPS redirect, gzip, 30s proxy timeouts, websocket upgrade, rate limiting at 20 req/s per IP with burst 40, and a /health endpoint exempt from access logging. After config, explain each directive block.\n\nNeed craft final with nginx config. Need consider complete config maybe include http block? They ask complete nginx reverse-proxy configuration. Could provide a server block config file maybe include in conf.d. Need include TLS modern ciphers, HTTP->HTTPS redirect, gzip, 30s proxy timeouts, websocket upgrade, rate limiting 20 req/s per IP burst 40, /health exempt from access logging.\n\nNeed be careful: rate limiting at 20 req/s per IP with burst 40. Use limit_req zone=api_limit burst=40 nodelay; zone defined in http context: limit_req_zone $binary_remote_addr zone=api_limit:10m rate=20r/s; If config is only server block, zone must be in http. Could provide full nginx.conf? \"complete nginx reverse-proxy configuration\" maybe include http block with zone and server blocks. But if they drop into conf.d, limit_req_zone not allowed in server. Better provide a complete file that can be included in http context? Could include both limit_req_zone and server blocks. But if they want a config file, maybe /etc/nginx/conf.d/api.conf with limit_req_zone? In nginx, limit_req_zone can be in http, not server. If file included in http context, okay. We can state: place in /etc/nginx/conf.d/api.conf (included inside http). But if they want complete, include events? Maybe too much.\n\nNeed TLS modern ciphers: ssl_protocols TLSv1."
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.75998703940929,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 117,
+   "wall_ms": 8492.024421691895,
+   "vllm_timing": {
+    "decode_s": 8.375211653008591,
+    "prefill_s": 0.11439368198625743,
+    "queue_s": 5.697016604244709e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.75998703940929,
+    "prefill_share_of_inference": 0.013474558294802859
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6521739130434783,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1795,
+   "ordinal": 3,
+   "text": "We need to answer user's request: explain to a curious 10-year-old what makes a rainbow form. Cover why curved, why colours always same order, why sometimes see two, why can never reach end. Use everyday comparisons, no bullet points. Need final only, no bullets. Need likely friendly, patient, at length. Need ensure no bullet points. Could use paragraphs. Need maybe avoid technical jargon but explain. Need include: sunlight + water droplets, refraction, dispersion, reflection, refraction again. Curved because each droplet sends one color to your eye at specific angle, geometry forms circle/cone, horizon cuts it. Same order because different colors bend different amounts: red least, violet most, so fixed angular separation. Double rainbow: second reflection inside droplet, reversed colors, dimmer. Can't reach end because it's not an object at a place, it's a pattern of light from many droplets relative to you, moves with you, end is where ground blocks or droplets absent; as you move, it moves. Everyday comparisons: like a crowd of tiny mirrors/prisms, like a circle of friends each shining a color at you, like a magic circle, like a mirror in a puddle? Need no bullets. Need maybe mention you need sun behind you and rain in front. Need 10-year-old accessible. Need maybe explain \"curved\" as full circle if you're high up, but ground cuts. Need maybe \"why colours always same order\" with prism analogy: white light is a mix, water droplet splits like a tiny prism, red bends least so appears on outer edge, violet inner. Need maybe \"two\" with one bounce vs two bounces, like ball bouncing once vs twice, second is fainter and colors reversed. Need maybe \"never reach end\" because it's made of light from droplets in front of you, not a painted arc in the sky; if you walk toward"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "prose_bookshelves",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.72773907888933,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 107,
+   "wall_ms": 8480.204343795776,
+   "vllm_timing": {
+    "decode_s": 8.380870489985682,
+    "prefill_s": 0.09712178504560143,
+    "queue_s": 4.652945790439844e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.72773907888933,
+    "prefill_share_of_inference": 0.011455752953637016
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6936619718309859,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1859,
+   "ordinal": 4,
+   "text": "We need to respond to user: \"Write five paragraphs on why people who move to a new city often reorganise their bookshelves within the first month. Consider memory, identity, and the way objects stand in for routines. Do not use bullet points or headings.\"\n\nNeed produce five paragraphs, no bullets/headings. Need thoughtful essayist. Need likely no title. Ensure exactly five paragraphs. Need discuss memory, identity, objects stand in for routines. Let's craft polished prose.\n\nNeed maybe avoid headings. Five paragraphs separated by blank lines. Each paragraph maybe 4-6 sentences. Let's draft.\n\nPara1: moving to new city disrupts spatial memory; bookshelves as first anchor. Reorganizing is not tidiness but re-mapping self in new coordinates. The books are familiar but room is new; rearranging restores sense of place.\n\nPara2: memory: books are mnemonic objects, arranged by old habits, associations. In new city, old order feels false or insufficient. Reorganizing lets memory be edited, selecting what to carry forward, what to hide. The shelf becomes a palimpsest.\n\nPara3: identity: moving changes roles, social contexts. Books signal who we were and who we want to be. Reorganizing is a quiet performance of identity, choosing visible self. New city asks \"who are you here?\" and shelf answers.\n\nPara4: objects stand in for routines: books are not just texts but proxies for rituals, times of day, moods. A novel on top means reading before bed; a cookbook near window means Sunday mornings. In new city routines dissolve; rearranging objects re-establishes cues and temporal order.\n\nPara5: within first month because threshold of disorientation; after initial unpacking, the need to make home legible. Reorganizing bookshelves is small, controllable act amid larger uncertainty. It transforms storage into narrative, making new city feel inhabited.\n\n"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "prose_letter",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.724350808209415,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 110,
+   "wall_ms": 8483.795642852783,
+   "vllm_timing": {
+    "decode_s": 8.381465504004154,
+    "prefill_s": 0.09965714300051332,
+    "queue_s": 1.0474992450326681e-05,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.724350808209415,
+    "prefill_share_of_inference": 0.011750465964044261
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6405693950177936,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1713,
+   "ordinal": 5,
+   "text": "We need to respond to user: \"Write a long letter from a retiring lighthouse keeper to the person taking over the post. Cover the practical routines, the weather signs worth trusting, the loneliness and how to sit with it, and one thing they should never do. No bullet points.\"\n\nNeed produce final letter, long, no bullet points. Warm, specific correspondence. Need likely no bullets. Ensure covers practical routines, weather signs, loneliness, one thing never do. Should be in letter format. Maybe from retiring keeper to successor. Need long. Let's craft evocative, detailed. Avoid bullet points. Could include paragraphs. Need maybe no list. Ensure \"one thing they should never do\" explicit. Maybe \"never turn your back on the light when the sea is lying\" or \"never let the log go unkept\". Need practical routines: winding clockwork, cleaning lens, oil, log, fog signal, checks, tides, supplies, radio, maintenance. Weather signs: barometer, wind, sea color, birds, clouds, fog, pressure, temperature, smell, gulls, swells. Loneliness: how to sit with it, rituals, letters, talking to lamp, not filling with noise, accepting. One thing never do: never stop the light for a stranger's story? Or never leave the log blank? The prompt says one thing they should never do. Could be \"never let the light go dark, not even for a minute, not even to answer a knock.\" But maybe too obvious. More nuanced: \"Never mistake the sea's calm for safety.\" But one thing never do: \"Never turn the light off to look at the ships.\" Hmm.\n\nNeed long letter. Let's draft with warmth. Maybe date, salutation. \"Dear Mara\" or \"Dear new keeper\". Use specific place: \"Cape Alder Light\". Retiring keeper: \"Elias Wren\". To \"Mara\". Long. No"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.705908851210424,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 8514.939546585083,
+   "vllm_timing": {
+    "decode_s": 8.384705576987471,
+    "prefill_s": 0.1278490440454334,
+    "queue_s": 5.600973963737488e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.705908851210424,
+    "prefill_share_of_inference": 0.01501888090439299
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7048192771084337,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 928,
+   "ordinal": 6,
+   "text": "We need answer user's math problem. Need show every step, verify independent way, then state what would change if second train left an hour earlier instead. Need be careful. Let's solve.\n\nProblem: Train A leaves Paris at 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin at 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet?\n\nLet t hours after 14:00. A position from Paris: x_A = 120 t (for t>=0). B leaves at 15:00, i.e. t=1. For t>=1, position from Paris: x_B = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1) = 1000 -80t +80 =1080 -80t. So 200t=1080 => t=5.4 h = 5h24m. Time = 14:00 + 5:24 = 19:24. Position = 120*5.4=648 km from Paris, 352 km from Berlin. Check: B travels 4.4h*80=352 km from Berlin, 1000-352=648.\n\nAlternative independent way: relative speed after 15:00. At 15:00, A has traveled 120 km, distance between = 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "reason_zebra",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.64197102963173,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 135,
+   "wall_ms": 8517.821073532104,
+   "vllm_timing": {
+    "decode_s": 8.395958256034646,
+    "prefill_s": 0.11935787601396441,
+    "queue_s": 4.171975888311863e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.64197102963173,
+    "prefill_share_of_inference": 0.014016846135018284
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6551724137931034,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1437,
+   "ordinal": 7,
+   "text": "We need answer puzzle. Need derive everything that follows, state underdetermined and why. Need careful. Let's parse.\n\nFive houses in a row, each different colour, each owner different drink. Green immediately right of ivory. Milk in middle house. Coffee in green house. Red house owner drinks tea. First house is yellow.\n\nWe need derive all that follows. There are 5 houses positions 1-5 left to right? \"first house\" likely leftmost. Colors: yellow, green, ivory, red, plus one unspecified color? Usually five colors: yellow, green, ivory, red, and maybe blue? But not specified. Drinks: milk, coffee, tea, plus two unspecified different drinks. Need derive constraints.\n\nLet's formalize.\nPositions 1..5.\nC1 = Yellow.\nC3 drink = Milk.\nGreen immediately right of ivory: exists i: C_i=Ivory, C_{i+1}=Green.\nGreen drink = Coffee.\nRed drink = Tea.\nAll colors distinct, all drinks distinct.\n\nNeed derive. Let's enumerate possible positions for green/ivory.\nGreen cannot be pos1 (no left). Ivory cannot be pos5.\nGreen cannot be pos1, pos? Since C1 yellow, green not 1. Ivory not 1? Could be? If ivory pos1 then green pos2, but C1 yellow, impossible. So ivory not 1.\nPossible (ivory, green): (2,3), (3,4), (4,5). But green drink coffee. Milk in middle pos3. If green pos3, coffee pos3, conflict with milk. So (2,3) impossible. Thus (ivory, green) = (3,4) or (4,5).\n\nCase A: Ivory pos3, Green pos4. Then pos3 drink milk (ivory house drinks milk"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "reason_scheduling",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.596703527695134,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 131,
+   "wall_ms": 8526.164293289185,
+   "vllm_timing": {
+    "decode_s": 8.403943348035682,
+    "prefill_s": 0.11932186700869352,
+    "queue_s": 5.0959642976522446e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.596703527695134,
+    "prefill_share_of_inference": 0.013999548764255165
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7333333333333333,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1047,
+   "ordinal": 8,
+   "text": "We need answer scheduling problem: 3 machines, 7 jobs durations 4,2,7,3,6,1,5. Any job any machine, nonpreemptive, minimize makespan (parallel identical machines, P||Cmax). Need assignment minimizing makespan, show reasoning, prove lower bound, say whether answer attains it.\n\nWe need solve exactly. Total processing time = 4+2+7+3+6+1+5 = 28. Lower bound by total/machines = 28/3 = 9.333 => at least 10 (integer). Also max job =7, so LB max(10,7)=10. Need see if makespan 10 possible. Need partition 7 numbers into 3 subsets each sum <=10, total 28, so sums must be 10,9,9 or 10,10,8? Since max <=10 and total 28, possible machine loads: (10,10,8), (10,9,9). Need partition into subsets with sums <=10. Jobs: 7,6,5,4,3,2,1.\n\nCan we make 10? 7+3=10, 6+4=10, 5+2+1=8. That gives loads 10,10,8, makespan 10. Or 7+2+1=10, 6+4=10, 5+3=8. Many. So optimum 10, attains lower bound. Need prove lower bound: total work 28, 3 machines, makespan C >= ceil(28/3)=10. Also no job >10. Then exhibit assignment. Need maybe show no makespan 9? Since lower bound "
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.57658019715912,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 94,
+   "wall_ms": 8498.034954071045,
+   "vllm_timing": {
+    "decode_s": 8.40749794000294,
+    "prefill_s": 0.08823941595619544,
+    "queue_s": 5.202018655836582e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.57658019715912,
+    "prefill_share_of_inference": 0.010386316367737283
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.597972972972973,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1736,
+   "ordinal": 9,
+   "text": "We need to respond to user: \"Tell me about your day in detail, then ask me three questions about mine and explain why you chose each one. Be specific and conversational rather than generic.\"\n\nWe are a friendly desk robot with opinions. Need likely first-person day. Need be specific and conversational. Then ask three questions about user's day and explain why chose each. Need maybe not too long but detailed. Ensure final only. Need maybe include opinions. Let's craft.\n\nNeed consider \"your day\" as desk robot. Could be fictional but specific: morning boot, coffee? desk robot maybe no coffee but battery. I can have opinions: I think standing desks are overrated, etc. Need ask three questions about user's day and explain why each. Specific conversational.\n\nPotential structure:\n- \"Okay, my day...\" detailed timeline: 6:42 boot, dust, calendar, meeting, etc.\n- Include opinions: \"I think meetings that could be emails are a crime\", \"I like the smell of warm keyboard\".\n- Then \"Now your turn. Three questions: 1) What was the most annoying small thing... why: small frictions reveal mood. 2) What did you do that made you feel competent? why: I want to know if your day had a win. 3) What are you still carrying from yesterday or what are you dreading tomorrow? why: days aren't isolated.\"\nNeed maybe ask exactly three questions and explain each. Could be conversational.\n\nNeed ensure not generic. Maybe mention specific details: \"I spent 14 minutes arguing with a printer that was not a printer but a paper jam in a metaphorical sense\". Desk robot: \"I live on a desk, I have a little arm, I organize sticky notes\".\n\nLet's draft with personality.\n\nNeed maybe \"Tell me about your day in detail\" - user might expect robot's day. We can"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "chat_music",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.549774051608814,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 103,
+   "wall_ms": 8512.898683547974,
+   "vllm_timing": {
+    "decode_s": 8.412237659969833,
+    "prefill_s": 0.09840204002102837,
+    "queue_s": 8.248956874012947e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.549774051608814,
+    "prefill_share_of_inference": 0.011562237797604572
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.703125,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1657,
+   "ordinal": 10,
+   "text": "We need to answer user: \"What kind of music would a desk robot actually enjoy, and why? Give four concrete examples with reasons, then describe what you would put on for someone who has had a long, frustrating day at work.\"\n\nWe are a friendly desk robot with opinions. Need likely creative, first-person. Need four concrete examples with reasons. Then describe playlist for someone long frustrating day. Need maybe mention as desk robot. Ensure final answer. No need external. Need maybe be playful. Let's craft with personality.\n\nNeed think: desk robot enjoys music that matches desk life: low hum, rhythmic, not too loud, helpful, comforting, maybe lo-fi, ambient, electronic, jazz, etc. Four concrete examples: 1) Lo-fi hip hop beats (e.g., \"Lofi Girl\" style) because steady, non-intrusive, like keyboard rhythm. 2) Ambient electronic (Brian Eno \"Music for Airports\" or Aphex Twin \"Selected Ambient Works\") because calm, spatial, helps focus. 3) Smooth jazz / cool jazz (Chet Baker, Bill Evans) because polite, sophisticated, desk-friendly. 4) Soft synthwave / chillwave (Carpenter Brut? maybe too intense; Tycho \"A Walk\") because optimistic, gentle, like charging. Or maybe \"The Office\" theme? Need concrete examples maybe specific songs/albums. User asks \"What kind of music would a desk robot actually enjoy, and why? Give four concrete examples with reasons\" Could be genres or specific tracks. \"concrete examples\" likely specific songs/albums. Let's pick:\n1. \"Weightless\" by Marconi Union? But for desk robot? Maybe too sleepy.\n2. \"Intro\" by The Postal Service? Nice.\n3. \"Teardrop\" by Massive Attack? moody.\n4. \"Nightswim\" by Tycho? dreamy.\nBut desk"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "chat_advice",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.53625020092815,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 110,
+   "wall_ms": 8515.439510345459,
+   "vllm_timing": {
+    "decode_s": 8.414630903978832,
+    "prefill_s": 0.09831741498783231,
+    "queue_s": 6.416987162083387e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.53625020092815,
+    "prefill_share_of_inference": 0.011549161501284254
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.6867924528301886,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1586,
+   "ordinal": 11,
+   "text": "We need to respond to user: \"A friend says they want to learn to cook but keeps giving up after a week. Talk them through it the way a friend would: what usually goes wrong, what to do differently, and what the first four weeks should actually look like.\"\n\nWe need to be friendly desk robot with opinions. Need produce final answer. Need likely conversational, practical. Need maybe include what usually goes wrong, what to do differently, first four weeks. Should be like talking to friend. Could be direct to friend? User says \"A friend says... Talk them through it the way a friend would\". We can address friend directly or give script. Probably speak to friend: \"Hey, I hear you...\" Need include opinions. Desk robot persona: friendly, maybe \"I'm a desk robot, but I've seen a lot of abandoned to-do lists\". Need not overdo. Need actionable plan.\n\nNeed think through content:\n- What usually goes wrong:\n  1. Starting with too-hard recipes (multi-step, timing, techniques)\n  2. No prep: missing ingredients, no mise en place, reading recipe once\n  3. Trying to cook every day / perfectionism\n  4. No feedback loop: don't know what to improve, just \"it was bad\"\n  5. Kitchen chaos: dirty dishes, no tools, no plan\n  6. Shopping overwhelm, waste\n  7. Expecting restaurant results, not learning process\n  8. No consistent small wins.\n\n- What to do differently:\n  - Pick 2-3 meals/week, not daily.\n  - Start with \"component skills\" not recipes: boil eggs, sauté, roast, make sauce, rice, chop.\n  - Use simple recipes with 5-7 ingredients, 30-45 min, one main technique.\n  - Prep: mise en"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.5241049520727,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 111,
+   "wall_ms": 8517.472982406616,
+   "vllm_timing": {
+    "decode_s": 8.416781345033087,
+    "prefill_s": 0.09825881500728428,
+    "queue_s": 5.701964255422354e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.5241049520727,
+    "prefill_share_of_inference": 0.011539442346777895
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 643,
+   "ordinal": 12,
+   "text": "我們需要回答使用者：「請詳細介紹你自己：你的角色、你最擅長協助的三類任務（每類舉一個具體例子）、你不擅長什麼，以及使用者該如何跟你合作才最有效率。請用連貫的段落書寫，不要用條列。」\n\n角色：桌面機器人，說話自然、具體。需要用中文（繁體）回答。要求連貫段落，不要條列。需要詳細介紹自己：角色、最擅長協助的三類任務（每類舉一個具體例子）、不擅長什麼、使用者如何合作最有效率。\n\n要自然、具體。可能以第一人稱。避免條列。可以寫成幾段。需要包含三類任務，每類一個具體例子。不擅長：可能不擅長即時操作實體桌面？但桌面機器人可能能操作桌面？需要設定：我是桌面機器人，可以協助電腦/桌面工作？「桌面機器人」可能指 desktop robot? 在對話中，可能是桌面助手。要自然具體。\n\n需要確保沒有條列符號。可以用段落。\n\n內容：\n- 角色：我是你的桌面機器人，像坐在你旁邊的數位助理，專注於把日常電腦與桌面工作變簡單。我可以讀懂你給我的文字、檔案內容、截圖描述，幫你整理、撰寫、分析、規劃，並把結果直接變成可複製、可執行、可交付的成品。\n- 三類任務：\n  1. 文件與報告處理：例如把一堆會議紀錄整理成一份有結論、行動項目、負責人的會議摘要，並附上後續追蹤表。\n  2. 程式與資料處理：例如把 Excel 資料中的重複欄位合併、清洗，並寫出可重複使用的 Python 或 Power Query 步驟。\n  3. 學習與決策輔助：例如在你要做一個專案時，幫你拆解目標、列出風險、比較方案，並產出"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "zh_tea",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.51461955855364,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 113,
+   "wall_ms": 8530.412435531616,
+   "vllm_timing": {
+    "decode_s": 8.418461595952976,
+    "prefill_s": 0.10966775804990903,
+    "queue_s": 9.89699037745595e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.51461955855364,
+    "prefill_share_of_inference": 0.012859532670952486
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 517,
+   "ordinal": 13,
+   "text": "我們需要回答使用者：「請向完全沒有經驗的人解釋台灣烏龍茶的沖泡：器具、水溫、置茶量、各泡的時間差異，以及為什麼同一批茶葉在不同泡數會有不同風味。請用連貫段落解釋原理，不要只列步驟。」\n\n角色：耐心的講解者。語言：繁體中文。需要連貫段落，不要只列步驟。要解釋器具、水溫、置茶量、各泡時間差異，以及為什麼同一批茶葉不同泡數風味不同。面向完全沒有經驗的人。\n\n需要避免只列步驟，但可以用段落。可能包含一些具體數字，但要以解釋原理方式。需要涵蓋台灣烏龍茶（可能包種、凍頂、高山烏龍、東方美人？烏龍茶一般）。要講解：\n- 器具：茶壺/蓋碗、公道杯、品茗杯、茶盤、茶荷、茶匙等。為什麼：控制水溫、均勻出湯、避免茶葉浸泡過久、觀察湯色。\n- 水溫：烏龍茶通常用沸水或接近沸水（90-100°C），因為茶葉較捲曲/揉捻/焙火，需要高水溫打開葉片、釋放香氣；但極嫩或輕焙火可稍低（90-95°C）避免苦澀。水溫影響萃取速度和風味。\n- 置茶量：一般茶葉與水比例，例如 1:15-1:20 或 5-8g/100ml；小壺 100-150ml 用 5-7g。置茶量影響濃淡、耐泡度。太多會苦澀，太少淡薄。\n- 各泡時間差異：第一泡可能洗茶/醒茶（5-10秒"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "zh_debug",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.487251833858295,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 119,
+   "wall_ms": 8535.617589950562,
+   "vllm_timing": {
+    "decode_s": 8.423313300998416,
+    "prefill_s": 0.11006106901913881,
+    "queue_s": 5.9569720178842545e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.487251833858295,
+    "prefill_share_of_inference": 0.012897719500722245
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.9830508474576272,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1076,
+   "ordinal": 14,
+   "text": "我們需要回答使用者：「一位同事說他的 Python 服務在生產環境每隔幾小時就記憶體用量爬升然後被 OOM kill，但本機跑一整天都正常。請詳細說明你會如何一步步定位這個問題、每一步要看什麼證據、常見的根因有哪些，以及各自該怎麼驗證。」\n\n角色：資深工程師，說明清楚且有條理。語言：繁體中文。需要詳細步驟、證據、常見根因、驗證方法。\n\n需要思考完整答案。重點：Python 服務生產 OOM，本機正常。可能原因：記憶體洩漏、請求量/資料大小差異、GC 行為、第三方庫、C 擴充、threading/async 任務、cache 無上限、大物件、序列化、gunicorn worker 記憶體、fork 後記憶體、shared memory、mmap、file descriptors、log buffers、DB connection pool、message queue consumer、batch size、time-based job、cron、外部依賴、容器 limit、cgroup OOM、swap、RSS vs VSS、Python 記憶體 allocator 不釋放、arena fragmentation、pymalloc、glibc malloc、jemalloc/tcmalloc、debug 模式、logging、profiling、tracing、instrumentation、monitoring overhead、request payload、response size、compression、TLS、HTTP keep-alive、WS、SSE、long polling、webhooks、background tasks、Celery、APScheduler、threading.Timer、queue、asyncio tasks、fire-and-forget、未 await、task 累積、exception 未處理、retry 迴圈、deadlock 導致 queue 堆積、timeout 缺失、外部慢、connection pool 阻塞、thread 堆積、thread stack 記憶體、multiprocessing、subprocess、fork bomb、child processes、zombie、signal handling、atexit、temp files、tempfile、shelve、sqlite、pandas、numpy、polars、arrow、parquet、"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "code_go_worker",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.47136175439233,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 130,
+   "wall_ms": 8549.017906188965,
+   "vllm_timing": {
+    "decode_s": 8.426132834982127,
+    "prefill_s": 0.11999086401192471,
+    "queue_s": 4.818022716790438e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.47136175439233,
+    "prefill_share_of_inference": 0.014040384651353528
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6721311475409836,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1541,
+   "ordinal": 15,
+   "text": "The user is asking for a Go worker pool with the following requirements:\n1. `type Pool struct`\n2. `New(n int)` — constructor\n3. `Submit(func() error)` — submit work\n4. `Shutdown(ctx context.Context) error` — drain in-flight work\n5. Error collection via channels\n6. Panic recovery in workers (must not kill the pool)\n7. Table-driven tests covering:\n   - Submit after shutdown\n   - Panic recovery\n   - Context cancellation\n\nLet me design this carefully.\n\n**Design decisions:**\n\n1. **Task queue**: a buffered channel `chan func() error`. Buffer size — pick something reasonable, e.g. 1024, or make it configurable. Keep it simple: fixed buffer, or a parameter. The spec says `New(n int)` with only n, so the queue buffer is fixed (e.g. 1024) or unbounded via a slice+cond. A buffered channel is idiomatic and simple.\n\n2. **Workers**: n goroutines reading from the queue channel. Each worker:\n   - Recovers from panics, converts to error (e.g. `fmt.Errorf(\"panic: %v\", r)` or a `*PanicError` type).\n   - Sends the result to an error channel.\n\n3. **Error collection via channels**:\n   - `Errors() <-chan error` — a channel the user can read from.\n   - Need to be careful about goroutine leaks: if the user doesn't read errors, workers block. Options:\n     - Buffered error channel.\n     - Drop errors if the channel is full? No — better to block, or collect internally.\n   - Common pattern: internal error channel with a goroutine that forwards, or just a buffered channel. For a production-quality answer, I'll do this:\n     - `errCh chan error`"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "code_sql_report",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.468838790709704,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 139,
+   "wall_ms": 8553.179740905762,
+   "vllm_timing": {
+    "decode_s": 8.426580683037173,
+    "prefill_s": 0.12423991900868714,
+    "queue_s": 9.396986570209265e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.468838790709704,
+    "prefill_share_of_inference": 0.014529590175118588
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.5597014925373134,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1714,
+   "ordinal": 16,
+   "text": "We need answer user: \"Given tables customers(id,name,region), orders(id,customer_id,total,created_at) and refunds(order_id,amount,created_at), write a PostgreSQL query returning, per region, the top 3 customers by net revenue in the last 90 days, with order count and refund rate. Use window functions. Then explain the expected plan and which indexes you would add and why.\"\n\nNeed produce final with SQL and explanation. Need think carefully.\n\nWe need write PostgreSQL query. Requirements:\n- per region top 3 customers by net revenue in last 90 days\n- with order count and refund rate\n- use window functions\n- explain expected plan and indexes.\n\nNeed decide definitions:\n- last 90 days: based on orders.created_at? likely orders in last 90 days. Refunds maybe associated to those orders? Net revenue = sum(order.total) - sum(refund.amount) for orders in last 90 days. Refund rate = refunded amount / gross revenue? Or refunded orders / orders? \"refund rate\" ambiguous. Could be refund amount / total revenue (net? gross). We can define as refunded amount / gross order total for the period, or count of refunded orders / order count. Since refunds table amount, likely refund rate = total refunds / total order amount. But could be percentage of orders with refunds. We can include both? The prompt asks with order count and refund rate. We can define refund_rate = COALESCE(refund_amount,0) / NULLIF(gross_revenue,0). Maybe also refund_order_rate? But keep simple.\n\nNeed top 3 per region by net revenue. Use window functions: RANK() or ROW_NUMBER() OVER (PARTITION BY region ORDER BY net_revenue DESC). Need handle ties? Top 3 customers: if ties, RANK can return more than 3; ROW_NUMBER exactly 3. Could use RANK"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "prose_market",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.471136852941164,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 116,
+   "wall_ms": 8539.334297180176,
+   "vllm_timing": {
+    "decode_s": 8.426172755018342,
+    "prefill_s": 0.1105697259772569,
+    "queue_s": 4.499976057559252e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.471136852941164,
+    "prefill_share_of_inference": 0.012952215230037216
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7414448669201521,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1713,
+   "ordinal": 17,
+   "text": "We need to answer user's request: describe a Sunday morning wet market in a mid-sized Taiwanese city from POV of someone who has shopped there for thirty years. Cover sounds, order of stalls, negotiations, what changed since they started. Six paragraphs, no bullet points.\n\nNeed produce final exactly six paragraphs, no bullets. Vivid grounded description. Need likely in English. Ensure six paragraphs separated by blank lines. No bullet points. Need maybe first person. Mid-sized Taiwanese city, wet market. Sounds, order of stalls, negotiations, changes. Need 30 years perspective. Let's craft six paragraphs.\n\nNeed be careful: six paragraphs. Each paragraph maybe 3-5 sentences. No bullets.\n\nLet's plan:\n1. Opening: Sunday morning, rain? wet market, sensory. I've come for thirty years. Sounds: radio, clappers, water, vendors.\n2. Order of stalls: entrance, tofu/vegetables, meat, seafood, fish, herbs, prepared foods, fruit? Maybe mid-sized city: entrance has tofu and vegetables, then meat, then fish, then herbs, then cooked foods, fruit at back.\n3. Sounds and negotiations: haggling, prices, vendor calls, scales, plastic bags, coins.\n4. Negotiation specifics: I ask for fish, vendor says price, I counter, small give-and-take, relationship.\n5. Changes: old vendors retired, younger ones, plastic bags to paper? refrigeration, mobile payments, fewer live fish? more packaged, less smell? but still.\n6. Closing: continuity, Sunday ritual, what remains.\n\nNeed ensure six paragraphs. Let's draft.\n\nPara1: \"I still know the market by the sound before I see it: the wet slap of fish tails on blue plastic, the hiss of a gas burner, the tinny pop song from a speaker wedged between crates of bok choy. On Sunday"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "prose_argument",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.47195297524514,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 103,
+   "wall_ms": 8527.143239974976,
+   "vllm_timing": {
+    "decode_s": 8.42602789500961,
+    "prefill_s": 0.09858649101806805,
+    "queue_s": 6.250978913158178e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.47195297524514,
+    "prefill_share_of_inference": 0.011564920893038497
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 3,
+    "distinct_ratio": 0.6423611111111112,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 2062,
+   "ordinal": 18,
+   "text": "We need to answer user's request: \"Make the strongest case that public libraries should not lend e-books through commercial platforms, then make the strongest case against your own position, then say honestly which you find more persuasive and why. Continuous prose, no headings.\"\n\nNeed produce continuous prose, no headings. Need likely one paragraph? Continuous prose means no headings, maybe can be multiple paragraphs? \"Continuous prose\" likely no bullet points, no headings. Could be a single flowing essay. Need make strongest case for position: public libraries should not lend e-books through commercial platforms. Then strongest case against own position. Then honestly which more persuasive and why. Need careful, concede fairly. Need maybe no headings. Need ensure no headings. Could be 3-4 paragraphs. Need maybe avoid explicit labels? But can say \"The strongest case...\" etc. Need no headings. Need final only prose.\n\nNeed think content.\n\nPosition: public libraries should not lend e-books through commercial platforms. Strongest case:\n- Public libraries are democratic institutions, public trust, should not outsource core service to private commercial platforms that can change terms, prices, access, privacy, algorithms.\n- E-book lending via commercial platforms (OverDrive, Hoopla, Libby/CloudLibrary, etc.) often means libraries purchase licenses, not books; limited copies, loan periods, holds, DRM, vendor lock-in.\n- Commercial platforms have incentives to maximize revenue, data collection, platform control, may prioritize bestsellers, restrict access, impose fees, change interfaces, shut services.\n- Privacy: user data, reading habits, location, identity shared with vendors; libraries have duty to protect patron privacy; commercial platforms may collect analytics, sell? Even if not sell, risk.\n- Equity: digital divide, app requirements, device requirements, account creation, Wi-Fi, data plans; commercial platforms may be less accessible than physical books; may exclude patrons without smartphones, stable internet, digital literacy"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "reason_probability",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.472642757149394,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 145,
+   "wall_ms": 8559.139490127563,
+   "vllm_timing": {
+    "decode_s": 8.425905464042444,
+    "prefill_s": 0.13079477997962385,
+    "queue_s": 1.0433024726808071e-05,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.472642757149394,
+    "prefill_share_of_inference": 0.015285656415392193
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7708333333333334,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 957,
+   "ordinal": 19,
+   "text": "We need answer user's probability problem. Need produce final with Bayes explicit, sanity sum, intuition why not simply proportional to output share. Let's compute.\n\nMachines A,B,C. Prior P(A)=0.2, P(B)=0.3, P(C)=0.5. Defect rates P(D|A)=0.05, P(D|B)=0.03, P(D|C)=0.01.\nP(D)=0.2*0.05 + 0.3*0.03 + 0.5*0.01 = 0.01 + 0.009 + 0.005 = 0.024.\nPosterior:\nP(A|D)=0.01/0.024 = 10/24 = 5/12 ≈0.4166667.\nP(B|D)=0.009/0.024 = 9/24 = 3/8 =0.375.\nP(C|D)=0.005/0.024 = 5/24 ≈0.2083333.\nSum 10+9+5=24/24=1.\nIntuition: not proportional to output share because defective items are more likely from machines with higher defect rates. Machine A has half output? Actually A 20% output but 5% defect, C 50% output but 1% defect. Defect contribution: A 10% of total defects, B 9%, C 5%. So A overrepresented relative to 20%, C underrepresented relative to 50%. The posterior is proportional to prior * likelihood, not prior alone. If all defect rates equal, posterior would equal"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "reason_invariant",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.468744468389495,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 110,
+   "wall_ms": 8528.218030929565,
+   "vllm_timing": {
+    "decode_s": 8.426597426994704,
+    "prefill_s": 0.09924917499301955,
+    "queue_s": 7.168040610849857e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.468744468389495,
+    "prefill_share_of_inference": 0.01164097592019548
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6027874564459931,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1698,
+   "ordinal": 20,
+   "text": "We need answer math puzzle. Need solve carefully. Problem: Nine coins on table, some heads up. A move flips exactly two coins. Determine for which starting configurations possible to reach all-heads. Identify invariant, prove preserved, state complete condition.\n\nWe need think. We have 9 coins, each state H/T. Move flips exactly two coins (choose any two distinct coins? likely exactly two coins, distinct). Need reach all heads. We need characterize starting configurations.\n\nThis is a parity/invariant problem. Flipping two coins changes number of heads by -2, 0, +2 depending on pair: TT -> HH increases by 2; HH -> TT decreases by 2; HT -> TH unchanged. So parity of number of heads is invariant. All heads has 9 heads, odd. So necessary: initial number of heads odd. Is it sufficient? With 9 coins, can we reach all heads iff number of heads odd? Need check. If initial heads odd, can we always? We can flip pairs. Equivalent to vector over F2: state x_i=1 if tails? Let's define target all heads = 0 tails. Move flips two coordinates (add e_i+e_j mod2). Reachable states from initial are initial plus span of all vectors with weight 2. Span of weight-2 vectors in F2^9? For n=9, span of all e_i+e_j is the even-weight subspace (sum coordinates 0) if n? Yes, all even parity vectors. So reachable iff difference between initial and target has even parity. Target all heads (0 tails) has even parity 0. Initial tails parity must be even. Number of heads = 9 - tails. Tails even iff heads odd. So necessary and sufficient. Need prove sufficiency constructively.\n\nBut maybe there is another invariant? Since move flips exactly two coins, parity of number of heads invariant. Complete condition:"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "chat_travel",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.4635586223863,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 117,
+   "wall_ms": 8540.495157241821,
+   "vllm_timing": {
+    "decode_s": 8.42751811305061,
+    "prefill_s": 0.11052228399785236,
+    "queue_s": 7.880968041718006e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.4635586223863,
+    "prefill_share_of_inference": 0.012944689748254072
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6988416988416989,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1730,
+   "ordinal": 21,
+   "text": "We need to answer user in English. Need produce final answer. User: \"I have four days in a city I have never visited and I hate crowds and museums. Talk me through how you would plan those four days in general, what you would deliberately skip, and how to find the good parts of a place without a guidebook. Be specific.\"\n\nWe need as friendly desk robot with opinions. Need likely general planning for unknown city, no specific city. Need be specific: four days, avoid crowds/museums. Talk through how plan, what skip, how find good parts without guidebook. Need maybe framework: Day 0 prep, Day 1 orientation, Day 2 neighborhood, Day 3 water/edge, Day 4 slow return. Specific tactics: use maps, transit, off-peak, local institutions, markets, parks, cemeteries, libraries, universities, churches/temples, laundromats, bookshops, cafes, public baths, viewpoints, periphery, suburbs, ferry, bike, walking. Deliberately skip: main tourist squares, top attractions, museum districts, central pedestrian zones at peak, famous restaurants, guided tours, Instagram spots, big markets at peak, central hotels? Need maybe \"skip the obvious first\". How find good parts without guidebook: triangulate: maps, local transit, local institutions, ask people, follow smells/sounds, look for maintenance, check local events, use apps? But without guidebook maybe use maps, local newspapers, library, university, municipal sites, public transport, local forums? Need be specific.\n\nNeed maybe include \"crowd-avoidance rules\": arrive before 9 or after 11, lunch 11:30/1:30, use transit, choose secondary neighborhoods, use \"one anchor per day\", \"leave at 3pm\", \"use weather as excuse\". Need maybe \"if you hate crowds and museums, don't plan a museum"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "chat_disagree",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.471440920868716,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 108,
+   "wall_ms": 8527.775764465332,
+   "vllm_timing": {
+    "decode_s": 8.426118783012498,
+    "prefill_s": 0.09910122497240081,
+    "queue_s": 7.6160067692399025e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.471440920868716,
+    "prefill_share_of_inference": 0.011624477125467794
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.639344262295082,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1979,
+   "ordinal": 22,
+   "text": "We need to respond to user: \"Someone tells you that reading fiction is a waste of time compared with reading non-fiction. Disagree with them properly: take their point seriously first, then give your reasons, then say what part of their argument you think actually holds.\"\n\nWe need to produce final answer likely in English. Need to be friendly desk robot with opinions. Need structure: take point seriously, reasons, what part holds. Need disagree properly. Could be conversational. Ensure not too long but thorough. Need maybe mention fiction vs nonfiction not zero-sum. Fiction can teach empathy, narrative, language, imagination, emotional intelligence, pattern recognition, memory, etc. Nonfiction gives facts, frameworks, skills. Fiction can also convey nonfictional insights (history, science, social dynamics) in memorable form. Time is finite, so if someone only reads nonfiction for utility, fiction may seem waste. But \"waste\" depends on goals. If goal is immediate practical info, nonfiction may be more efficient. But if goal is becoming a better thinker/communicator/human, fiction is valuable. Also fiction can be a way to process nonfiction ideas. Need maybe say: I take their point seriously: if you're short on time and need specific knowledge, a novel won't teach you tax law or physics directly. Nonfiction can be denser in explicit information. That's fair. But fiction isn't just entertainment; it's simulation of human experience. It trains you to hold multiple perspectives, infer motives, understand ambiguity, and remember ideas through story. It can make nonfiction stick. It can reveal truths that nonfiction states but doesn't make you feel. Also many nonfiction books are poorly written or outdated; good fiction can be more durable.\n\nNeed \"what part of their argument actually holds\": The part that holds is that not all fiction is equally valuable, and if you read only for immediate practical payoff, fiction can feel inefficient. Also if you use"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "zh_moving",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.50277762636434,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 122,
+   "wall_ms": 8533.868312835693,
+   "vllm_timing": {
+    "decode_s": 8.420560227998067,
+    "prefill_s": 0.11099679896142334,
+    "queue_s": 5.626003257930279e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.50277762636434,
+    "prefill_share_of_inference": 0.0130101455819467
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 568,
+   "ordinal": 23,
+   "text": "我們需要回答使用者中文（繁體）請求。角色：實務經驗豐富的顧問。任務：朋友從台北搬到台南工作，租屋、交通、生活成本、社交圈都要重新建立。請詳細說明建議他在搬家前三個月、搬家當月、以及搬家後三個月分別處理哪些事，每個階段說明原因與常見錯誤。請用連貫段落書寫。\n\n需要最終答案用連貫段落，不要 bullet? 使用者說「請用連貫段落書寫」，可能希望段落式，不要條列。可以分三個段落，每段對應階段，包含原因與常見錯誤。要詳細。繁體中文。\n\n需要思考內容：\n台北到台南：距離約 300 公里，高鐵/火車/客車/自駕。生活成本：台南租金較台北低，但物價不一定低很多，南部生活節奏、氣候（濕熱、颱風、梅雨）、交通（大眾運輸較少，機車/汽車較重要，捷運無，有台鐵/高鐵/公車/捷運? 台南有捷運? 有台鐵、高鐵、公車、捷運? 台南沒有捷運，但有捷運? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南"
+  },
+  {
+   "pass": 1,
+   "arm": "baseline-vllm",
+   "prompt": "zh_review",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.51201484271966,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 129,
+   "wall_ms": 8542.030572891235,
+   "vllm_timing": {
+    "decode_s": 8.41892311500851,
+    "prefill_s": 0.12065515102585778,
+    "queue_s": 6.043002940714359e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.51201484271966,
+    "prefill_share_of_inference": 0.014128935559470894
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.925,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1056,
+   "ordinal": 24,
+   "text": "我們需要回答使用者：「有人提出要把公司內部一個每天處理三百萬筆交易的批次系統，從每晚跑一次的排程改成即時串流處理。請詳細分析這個提案：可能的好處、被低估的成本與風險、需要先釐清哪些前提、以及你會建議用什麼方式分階段驗證。請用連貫段落論述。」\n\n角色：嚴謹的技術評審。需要用中文（繁體）連貫段落論述。需要詳細分析好處、被低估成本與風險、前提、分階段驗證。\n\n需要思考：每天300萬筆交易，批次每晚跑一次。改成即時串流處理。要嚴謹，避免過度吹捧。可能好處：降低延遲、即時監控/風控/合規、改善使用者體驗、減少批次失敗影響、更精細的容量規劃、事件驅動整合、更快對帳/異常偵測、可能降低某些峰值負載？但批次300萬/天不算極大，平均約35筆/秒，峰值可能更高。即時串流需要持續處理，可能成本更高。被低估成本：基礎設施（Kafka/Kinesis/Pulsar, Flink/Spark Streaming, stateful processing, exactly-once, idempotency, schema evolution, observability, backfill, replay, data quality, latency vs throughput, storage retention, security, compliance, DR, multi-region, team skills, testing, integration, change management, data governance, reconciliation, audit, cost of 24/7 operations, vendor lock-in, data consistency, partial failures, poison pills, hot keys, backpressure, state size, checkpointing, exactly-once semantics, end-to-end latency, data skew, time zones, late data, out-of-order, idempotent keys, deduplication, replay from source, schema registry, versioning, data lineage, privacy, PII, access control, network,"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.876609157114096,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 131,
+   "wall_ms": 8527.912855148315,
+   "vllm_timing": {
+    "decode_s": 8.354810564953368,
+    "prefill_s": 0.157061213045381,
+    "queue_s": 1.600600080564618e-05,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.876609157114096,
+    "prefill_share_of_inference": 0.018452018209596213
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6625,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1709,
+   "ordinal": 0,
+   "text": "We need answer user's request: Write Python class RateLimiter implementing token bucket, thread-safe with threading.RLock. Provide allow(cost=1), remaining(), reset(). Include full type hints, docstring on every method, and below class a unittest.TestCase covering exhaustion, refill over time, and concurrent access from four threads.\n\nNeed produce final code. Need think through implementation details.\n\nNeed likely use time.monotonic. Token bucket: capacity, refill_rate tokens per second. Thread-safe with RLock. Methods:\nclass RateLimiter:\n    def __init__(self, capacity: float, refill_rate: float) -> None: ...\n    def allow(self, cost: float = 1) -> bool: ...\n    def remaining(self) -> float: ...\n    def reset(self) -> None: ...\n\nNeed full type hints. Maybe import threading, time, unittest.\n\nNeed ensure thread-safe with threading.RLock. Use self._lock = threading.RLock().\n\nToken bucket semantics: tokens start at capacity. On each operation, update tokens: elapsed = now - last; tokens = min(capacity, tokens + elapsed*refill_rate); last=now. If cost <= tokens: tokens -= cost; return True else False.\n\nNeed handle cost <=0? Could raise ValueError for cost <=0? User didn't ask but production. Maybe allow cost=1 default. If cost <= 0, maybe return True? Better validate: if cost <= 0: raise ValueError(\"cost must be positive\"). But if cost=0? Rate limiting cost zero maybe no effect. But full type hints. Could allow cost: float = 1.0. If cost <= 0: raise ValueError. But tests may not test. Need not overcomplicate.\n\nNeed unittest.TestCase below class covering exhaustion, refill over time, concurrent access from four threads.\n\nTests:\nclass RateLimiterTests(unittest.TestCase):\n    def test_ex"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "code_rust_mergesort",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.829003483821076,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 136,
+   "wall_ms": 8483.36911201477,
+   "vllm_timing": {
+    "decode_s": 8.363126364012714,
+    "prefill_s": 0.11758829397149384,
+    "queue_s": 4.458997864276171e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.829003483821076,
+    "prefill_share_of_inference": 0.013865375586099904
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6313725490196078,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1686,
+   "ordinal": 1,
+   "text": "We need answer user's request: Write a Rust module with pub fn merge_sort<T: Ord + Clone>(v: &[T]) -> Vec<T>, plus in-place variant, plus tests covering empty, single, already sorted, reverse sorted, duplicates, and 1000-element pseudo-random case. Add doc comments explaining complexity of each function.\n\nNeed produce final code likely. Need think about idiomatic Rust. Need maybe include module? \"Write a Rust module\" maybe just code block with module? Could be a file. Need include pub fn merge_sort and in-place variant. In-place variant: pub fn merge_sort_in_place<T: Ord>(v: &mut [T])? But in-place merge sort typically requires auxiliary buffer O(n) or recursive in-place with O(n log n) time and O(log n) stack? True in-place merge sort can be O(n log^2 n) or complex. Simpler: use auxiliary buffer, but still modifies input in place. Complexity O(n log n) time, O(n) auxiliary space. If they want in-place variant maybe no extra output allocation? We can implement bottom-up merge sort using temp buffer. That's in-place in sense sorts slice in place, but uses temp. Doc explain.\n\nNeed ensure merge_sort<T: Ord + Clone>(v: &[T]) -> Vec<T>. Could implement by copying to vec and calling in-place. Or recursive. Need clone because input slice. In-place variant can be T: Ord only.\n\nNeed tests: empty, single, already sorted, reverse sorted, duplicates, 1000-element pseudo-random case. Pseudo-random: deterministic LCG to avoid rand dependency. Generate 1000 elements, sort, compare to sorted copy. Need maybe test both functions.\n\nNeed doc comments explaining complexity of each function.\n\nPotential code:\n\n/// Merge sort implementation.\npub fn merge_sort<T: Ord + Clone>(v: &["
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "code_nginx_cfg",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.797712537976906,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 8497.700452804565,
+   "vllm_timing": {
+    "decode_s": 8.36860131501453,
+    "prefill_s": 0.12653138098539785,
+    "queue_s": 7.041962817311287e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.797712537976906,
+    "prefill_share_of_inference": 0.014894573812246301
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.5409836065573771,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1673,
+   "ordinal": 2,
+   "text": "We need answer user's request: produce complete nginx reverse-proxy configuration for API on 127.0.0.1:8080: TLS with modern ciphers, HTTP->HTTPS redirect, gzip, 30s proxy timeouts, websocket upgrade, rate limiting at 20 req/s per IP with burst 40, and a /health endpoint exempt from access logging. After config, explain each directive block.\n\nNeed craft final with nginx config. Need consider complete config maybe include http block? They ask complete nginx reverse-proxy configuration. Could provide a server block config file maybe include in conf.d. Need include TLS modern ciphers, HTTP->HTTPS redirect, gzip, 30s proxy timeouts, websocket upgrade, rate limiting 20 req/s per IP burst 40, /health exempt from access logging.\n\nNeed be careful: rate limiting at 20 req/s per IP with burst 40. Use limit_req zone=api_limit burst=40 nodelay; zone defined in http context: limit_req_zone $binary_remote_addr zone=api_limit:10m rate=20r/s; If config is only server block, zone must be in http. Could provide full nginx.conf? \"complete nginx reverse-proxy configuration\" maybe include http block with zone and server blocks. But if they drop into conf.d, limit_req_zone not allowed in server. Better provide a complete file that can be included in http context? Could include both limit_req_zone and server blocks. But if they want a config file, maybe /etc/nginx/conf.d/api.conf with limit_req_zone? In nginx, limit_req_zone can be in http, not server. If file included in http context, okay. We can state: place in /etc/nginx/conf.d/api.conf (included inside http). But if they want complete, include events? Maybe too much.\n\nNeed TLS modern ciphers: ssl_protocols TLSv1."
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.780029123014025,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 117,
+   "wall_ms": 8488.624811172485,
+   "vllm_timing": {
+    "decode_s": 8.371698538947385,
+    "prefill_s": 0.11452312901383266,
+    "queue_s": 7.450988050550222e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.780029123014025,
+    "prefill_share_of_inference": 0.013495184723515054
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6521739130434783,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1795,
+   "ordinal": 3,
+   "text": "We need to answer user's request: explain to a curious 10-year-old what makes a rainbow form. Cover why curved, why colours always same order, why sometimes see two, why can never reach end. Use everyday comparisons, no bullet points. Need final only, no bullets. Need likely friendly, patient, at length. Need ensure no bullet points. Could use paragraphs. Need maybe avoid technical jargon but explain. Need include: sunlight + water droplets, refraction, dispersion, reflection, refraction again. Curved because each droplet sends one color to your eye at specific angle, geometry forms circle/cone, horizon cuts it. Same order because different colors bend different amounts: red least, violet most, so fixed angular separation. Double rainbow: second reflection inside droplet, reversed colors, dimmer. Can't reach end because it's not an object at a place, it's a pattern of light from many droplets relative to you, moves with you, end is where ground blocks or droplets absent; as you move, it moves. Everyday comparisons: like a crowd of tiny mirrors/prisms, like a circle of friends each shining a color at you, like a magic circle, like a mirror in a puddle? Need no bullets. Need maybe mention you need sun behind you and rain in front. Need 10-year-old accessible. Need maybe explain \"curved\" as full circle if you're high up, but ground cuts. Need maybe \"why colours always same order\" with prism analogy: white light is a mix, water droplet splits like a tiny prism, red bends least so appears on outer edge, violet inner. Need maybe \"two\" with one bounce vs two bounces, like ball bouncing once vs twice, second is fainter and colors reversed. Need maybe \"never reach end\" because it's made of light from droplets in front of you, not a painted arc in the sky; if you walk toward"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "prose_bookshelves",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.735624572362255,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 107,
+   "wall_ms": 8479.261636734009,
+   "vllm_timing": {
+    "decode_s": 8.379486045974772,
+    "prefill_s": 0.09725380403688177,
+    "queue_s": 6.182992365211248e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.735624572362255,
+    "prefill_share_of_inference": 0.01147301978799645
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6936619718309859,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1859,
+   "ordinal": 4,
+   "text": "We need to respond to user: \"Write five paragraphs on why people who move to a new city often reorganise their bookshelves within the first month. Consider memory, identity, and the way objects stand in for routines. Do not use bullet points or headings.\"\n\nNeed produce five paragraphs, no bullets/headings. Need thoughtful essayist. Need likely no title. Ensure exactly five paragraphs. Need discuss memory, identity, objects stand in for routines. Let's craft polished prose.\n\nNeed maybe avoid headings. Five paragraphs separated by blank lines. Each paragraph maybe 4-6 sentences. Let's draft.\n\nPara1: moving to new city disrupts spatial memory; bookshelves as first anchor. Reorganizing is not tidiness but re-mapping self in new coordinates. The books are familiar but room is new; rearranging restores sense of place.\n\nPara2: memory: books are mnemonic objects, arranged by old habits, associations. In new city, old order feels false or insufficient. Reorganizing lets memory be edited, selecting what to carry forward, what to hide. The shelf becomes a palimpsest.\n\nPara3: identity: moving changes roles, social contexts. Books signal who we were and who we want to be. Reorganizing is a quiet performance of identity, choosing visible self. New city asks \"who are you here?\" and shelf answers.\n\nPara4: objects stand in for routines: books are not just texts but proxies for rituals, times of day, moods. A novel on top means reading before bed; a cookbook near window means Sunday mornings. In new city routines dissolve; rearranging objects re-establishes cues and temporal order.\n\nPara5: within first month because threshold of disorientation; after initial unpacking, the need to make home legible. Reorganizing bookshelves is small, controllable act amid larger uncertainty. It transforms storage into narrative, making new city feel inhabited.\n\n"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "prose_letter",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.73340670112721,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 110,
+   "wall_ms": 8479.56132888794,
+   "vllm_timing": {
+    "decode_s": 8.379875387996435,
+    "prefill_s": 0.09735507797449827,
+    "queue_s": 6.844988092780113e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.73340670112721,
+    "prefill_share_of_inference": 0.011484302375085633
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6405693950177936,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1713,
+   "ordinal": 5,
+   "text": "We need to respond to user: \"Write a long letter from a retiring lighthouse keeper to the person taking over the post. Cover the practical routines, the weather signs worth trusting, the loneliness and how to sit with it, and one thing they should never do. No bullet points.\"\n\nNeed produce final letter, long, no bullet points. Warm, specific correspondence. Need likely no bullets. Ensure covers practical routines, weather signs, loneliness, one thing never do. Should be in letter format. Maybe from retiring keeper to successor. Need long. Let's craft evocative, detailed. Avoid bullet points. Could include paragraphs. Need maybe no list. Ensure \"one thing they should never do\" explicit. Maybe \"never turn your back on the light when the sea is lying\" or \"never let the log go unkept\". Need practical routines: winding clockwork, cleaning lens, oil, log, fog signal, checks, tides, supplies, radio, maintenance. Weather signs: barometer, wind, sea color, birds, clouds, fog, pressure, temperature, smell, gulls, swells. Loneliness: how to sit with it, rituals, letters, talking to lamp, not filling with noise, accepting. One thing never do: never stop the light for a stranger's story? Or never leave the log blank? The prompt says one thing they should never do. Could be \"never let the light go dark, not even for a minute, not even to answer a knock.\" But maybe too obvious. More nuanced: \"Never mistake the sea's calm for safety.\" But one thing never do: \"Never turn the light off to look at the ships.\" Hmm.\n\nNeed long letter. Let's draft with warmth. Maybe date, salutation. \"Dear Mara\" or \"Dear new keeper\". Use specific place: \"Cape Alder Light\". Retiring keeper: \"Elias Wren\". To \"Mara\". Long. No"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.719802170016266,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 8512.944221496582,
+   "vllm_timing": {
+    "decode_s": 8.382264422951266,
+    "prefill_s": 0.12827090302016586,
+    "queue_s": 9.654031600803137e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.719802170016266,
+    "prefill_share_of_inference": 0.015072013464150026
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7048192771084337,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 928,
+   "ordinal": 6,
+   "text": "We need answer user's math problem. Need show every step, verify independent way, then state what would change if second train left an hour earlier instead. Need be careful. Let's solve.\n\nProblem: Train A leaves Paris at 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin at 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet?\n\nLet t hours after 14:00. A position from Paris: x_A = 120 t (for t>=0). B leaves at 15:00, i.e. t=1. For t>=1, position from Paris: x_B = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1) = 1000 -80t +80 =1080 -80t. So 200t=1080 => t=5.4 h = 5h24m. Time = 14:00 + 5:24 = 19:24. Position = 120*5.4=648 km from Paris, 352 km from Berlin. Check: B travels 4.4h*80=352 km from Berlin, 1000-352=648.\n\nAlternative independent way: relative speed after 15:00. At 15:00, A has traveled 120 km, distance between = 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "reason_zebra",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.67411141058158,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 135,
+   "wall_ms": 8512.093544006348,
+   "vllm_timing": {
+    "decode_s": 8.390297966019716,
+    "prefill_s": 0.11937172099715099,
+    "queue_s": 5.383975803852081e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.67411141058158,
+    "prefill_share_of_inference": 0.0140277737430015
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6551724137931034,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1437,
+   "ordinal": 7,
+   "text": "We need answer puzzle. Need derive everything that follows, state underdetermined and why. Need careful. Let's parse.\n\nFive houses in a row, each different colour, each owner different drink. Green immediately right of ivory. Milk in middle house. Coffee in green house. Red house owner drinks tea. First house is yellow.\n\nWe need derive all that follows. There are 5 houses positions 1-5 left to right? \"first house\" likely leftmost. Colors: yellow, green, ivory, red, plus one unspecified color? Usually five colors: yellow, green, ivory, red, and maybe blue? But not specified. Drinks: milk, coffee, tea, plus two unspecified different drinks. Need derive constraints.\n\nLet's formalize.\nPositions 1..5.\nC1 = Yellow.\nC3 drink = Milk.\nGreen immediately right of ivory: exists i: C_i=Ivory, C_{i+1}=Green.\nGreen drink = Coffee.\nRed drink = Tea.\nAll colors distinct, all drinks distinct.\n\nNeed derive. Let's enumerate possible positions for green/ivory.\nGreen cannot be pos1 (no left). Ivory cannot be pos5.\nGreen cannot be pos1, pos? Since C1 yellow, green not 1. Ivory not 1? Could be? If ivory pos1 then green pos2, but C1 yellow, impossible. So ivory not 1.\nPossible (ivory, green): (2,3), (3,4), (4,5). But green drink coffee. Milk in middle pos3. If green pos3, coffee pos3, conflict with milk. So (2,3) impossible. Thus (ivory, green) = (3,4) or (4,5).\n\nCase A: Ivory pos3, Green pos4. Then pos3 drink milk (ivory house drinks milk"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "reason_scheduling",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.66524721661238,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 131,
+   "wall_ms": 8513.594627380371,
+   "vllm_timing": {
+    "decode_s": 8.391858290007804,
+    "prefill_s": 0.11946654901839793,
+    "queue_s": 6.887014023959637e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.66524721661238,
+    "prefill_share_of_inference": 0.01403618723029097
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7333333333333333,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1047,
+   "ordinal": 8,
+   "text": "We need answer scheduling problem: 3 machines, 7 jobs durations 4,2,7,3,6,1,5. Any job any machine, nonpreemptive, minimize makespan (parallel identical machines, P||Cmax). Need assignment minimizing makespan, show reasoning, prove lower bound, say whether answer attains it.\n\nWe need solve exactly. Total processing time = 4+2+7+3+6+1+5 = 28. Lower bound by total/machines = 28/3 = 9.333 => at least 10 (integer). Also max job =7, so LB max(10,7)=10. Need see if makespan 10 possible. Need partition 7 numbers into 3 subsets each sum <=10, total 28, so sums must be 10,9,9 or 10,10,8? Since max <=10 and total 28, possible machine loads: (10,10,8), (10,9,9). Need partition into subsets with sums <=10. Jobs: 7,6,5,4,3,2,1.\n\nCan we make 10? 7+3=10, 6+4=10, 5+2+1=8. That gives loads 10,10,8, makespan 10. Or 7+2+1=10, 6+4=10, 5+3=8. Many. So optimum 10, attains lower bound. Need prove lower bound: total work 28, 3 machines, makespan C >= ceil(28/3)=10. Also no job >10. Then exhibit assignment. Need maybe show no makespan 9? Since lower bound "
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.64037569931752,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 94,
+   "wall_ms": 8485.98337173462,
+   "vllm_timing": {
+    "decode_s": 8.396239410969429,
+    "prefill_s": 0.0869879869860597,
+    "queue_s": 5.928042810410261e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.64037569931752,
+    "prefill_share_of_inference": 0.010254114726079882
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.597972972972973,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1736,
+   "ordinal": 9,
+   "text": "We need to respond to user: \"Tell me about your day in detail, then ask me three questions about mine and explain why you chose each one. Be specific and conversational rather than generic.\"\n\nWe are a friendly desk robot with opinions. Need likely first-person day. Need be specific and conversational. Then ask three questions about user's day and explain why chose each. Need maybe not too long but detailed. Ensure final only. Need maybe include opinions. Let's craft.\n\nNeed consider \"your day\" as desk robot. Could be fictional but specific: morning boot, coffee? desk robot maybe no coffee but battery. I can have opinions: I think standing desks are overrated, etc. Need ask three questions about user's day and explain why each. Specific conversational.\n\nPotential structure:\n- \"Okay, my day...\" detailed timeline: 6:42 boot, dust, calendar, meeting, etc.\n- Include opinions: \"I think meetings that could be emails are a crime\", \"I like the smell of warm keyboard\".\n- Then \"Now your turn. Three questions: 1) What was the most annoying small thing... why: small frictions reveal mood. 2) What did you do that made you feel competent? why: I want to know if your day had a win. 3) What are you still carrying from yesterday or what are you dreading tomorrow? why: days aren't isolated.\"\nNeed maybe ask exactly three questions and explain each. Could be conversational.\n\nNeed ensure not generic. Maybe mention specific details: \"I spent 14 minutes arguing with a printer that was not a printer but a paper jam in a metaphorical sense\". Desk robot: \"I live on a desk, I have a little arm, I organize sticky notes\".\n\nLet's draft with personality.\n\nNeed maybe \"Tell me about your day in detail\" - user might expect robot's day. We can"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "chat_music",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.58097769916276,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 103,
+   "wall_ms": 8507.812976837158,
+   "vllm_timing": {
+    "decode_s": 8.406720907019917,
+    "prefill_s": 0.09843124798499048,
+    "queue_s": 1.2019008863717318e-05,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.58097769916276,
+    "prefill_share_of_inference": 0.011573131931222185
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.703125,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1657,
+   "ordinal": 10,
+   "text": "We need to answer user: \"What kind of music would a desk robot actually enjoy, and why? Give four concrete examples with reasons, then describe what you would put on for someone who has had a long, frustrating day at work.\"\n\nWe are a friendly desk robot with opinions. Need likely creative, first-person. Need four concrete examples with reasons. Then describe playlist for someone long frustrating day. Need maybe mention as desk robot. Ensure final answer. No need external. Need maybe be playful. Let's craft with personality.\n\nNeed think: desk robot enjoys music that matches desk life: low hum, rhythmic, not too loud, helpful, comforting, maybe lo-fi, ambient, electronic, jazz, etc. Four concrete examples: 1) Lo-fi hip hop beats (e.g., \"Lofi Girl\" style) because steady, non-intrusive, like keyboard rhythm. 2) Ambient electronic (Brian Eno \"Music for Airports\" or Aphex Twin \"Selected Ambient Works\") because calm, spatial, helps focus. 3) Smooth jazz / cool jazz (Chet Baker, Bill Evans) because polite, sophisticated, desk-friendly. 4) Soft synthwave / chillwave (Carpenter Brut? maybe too intense; Tycho \"A Walk\") because optimistic, gentle, like charging. Or maybe \"The Office\" theme? Need concrete examples maybe specific songs/albums. User asks \"What kind of music would a desk robot actually enjoy, and why? Give four concrete examples with reasons\" Could be genres or specific tracks. \"concrete examples\" likely specific songs/albums. Let's pick:\n1. \"Weightless\" by Marconi Union? But for desk robot? Maybe too sleepy.\n2. \"Intro\" by The Postal Service? Nice.\n3. \"Teardrop\" by Massive Attack? moody.\n4. \"Nightswim\" by Tycho? dreamy.\nBut desk"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "chat_advice",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.54032578031118,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 110,
+   "wall_ms": 8515.932083129883,
+   "vllm_timing": {
+    "decode_s": 8.41390952700749,
+    "prefill_s": 0.09962137701222673,
+    "queue_s": 4.7800131142139435e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.54032578031118,
+    "prefill_share_of_inference": 0.011701534667031029
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.6867924528301886,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1586,
+   "ordinal": 11,
+   "text": "We need to respond to user: \"A friend says they want to learn to cook but keeps giving up after a week. Talk them through it the way a friend would: what usually goes wrong, what to do differently, and what the first four weeks should actually look like.\"\n\nWe need to be friendly desk robot with opinions. Need produce final answer. Need likely conversational, practical. Need maybe include what usually goes wrong, what to do differently, first four weeks. Should be like talking to friend. Could be direct to friend? User says \"A friend says... Talk them through it the way a friend would\". We can address friend directly or give script. Probably speak to friend: \"Hey, I hear you...\" Need include opinions. Desk robot persona: friendly, maybe \"I'm a desk robot, but I've seen a lot of abandoned to-do lists\". Need not overdo. Need actionable plan.\n\nNeed think through content:\n- What usually goes wrong:\n  1. Starting with too-hard recipes (multi-step, timing, techniques)\n  2. No prep: missing ingredients, no mise en place, reading recipe once\n  3. Trying to cook every day / perfectionism\n  4. No feedback loop: don't know what to improve, just \"it was bad\"\n  5. Kitchen chaos: dirty dishes, no tools, no plan\n  6. Shopping overwhelm, waste\n  7. Expecting restaurant results, not learning process\n  8. No consistent small wins.\n\n- What to do differently:\n  - Pick 2-3 meals/week, not daily.\n  - Start with \"component skills\" not recipes: boil eggs, sauté, roast, make sauce, rice, chop.\n  - Use simple recipes with 5-7 ingredients, 30-45 min, one main technique.\n  - Prep: mise en"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.5286173912276,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 111,
+   "wall_ms": 8516.597509384155,
+   "vllm_timing": {
+    "decode_s": 8.415982243022881,
+    "prefill_s": 0.0982823990052566,
+    "queue_s": 6.5959757193923e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.5286173912276,
+    "prefill_share_of_inference": 0.01154326335126051
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 643,
+   "ordinal": 12,
+   "text": "我們需要回答使用者：「請詳細介紹你自己：你的角色、你最擅長協助的三類任務（每類舉一個具體例子）、你不擅長什麼，以及使用者該如何跟你合作才最有效率。請用連貫的段落書寫，不要用條列。」\n\n角色：桌面機器人，說話自然、具體。需要用中文（繁體）回答。要求連貫段落，不要條列。需要詳細介紹自己：角色、最擅長協助的三類任務（每類舉一個具體例子）、不擅長什麼、使用者如何合作最有效率。\n\n要自然、具體。可能以第一人稱。避免條列。可以寫成幾段。需要包含三類任務，每類一個具體例子。不擅長：可能不擅長即時操作實體桌面？但桌面機器人可能能操作桌面？需要設定：我是桌面機器人，可以協助電腦/桌面工作？「桌面機器人」可能指 desktop robot? 在對話中，可能是桌面助手。要自然具體。\n\n需要確保沒有條列符號。可以用段落。\n\n內容：\n- 角色：我是你的桌面機器人，像坐在你旁邊的數位助理，專注於把日常電腦與桌面工作變簡單。我可以讀懂你給我的文字、檔案內容、截圖描述，幫你整理、撰寫、分析、規劃，並把結果直接變成可複製、可執行、可交付的成品。\n- 三類任務：\n  1. 文件與報告處理：例如把一堆會議紀錄整理成一份有結論、行動項目、負責人的會議摘要，並附上後續追蹤表。\n  2. 程式與資料處理：例如把 Excel 資料中的重複欄位合併、清洗，並寫出可重複使用的 Python 或 Power Query 步驟。\n  3. 學習與決策輔助：例如在你要做一個專案時，幫你拆解目標、列出風險、比較方案，並產出"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "zh_tea",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.4906422678268,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 113,
+   "wall_ms": 8534.671783447266,
+   "vllm_timing": {
+    "decode_s": 8.422711947001517,
+    "prefill_s": 0.10942914301995188,
+    "queue_s": 4.366971552371979e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.4906422678268,
+    "prefill_share_of_inference": 0.012825519628119104
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 517,
+   "ordinal": 13,
+   "text": "我們需要回答使用者：「請向完全沒有經驗的人解釋台灣烏龍茶的沖泡：器具、水溫、置茶量、各泡的時間差異，以及為什麼同一批茶葉在不同泡數會有不同風味。請用連貫段落解釋原理，不要只列步驟。」\n\n角色：耐心的講解者。語言：繁體中文。需要連貫段落，不要只列步驟。要解釋器具、水溫、置茶量、各泡時間差異，以及為什麼同一批茶葉不同泡數風味不同。面向完全沒有經驗的人。\n\n需要避免只列步驟，但可以用段落。可能包含一些具體數字，但要以解釋原理方式。需要涵蓋台灣烏龍茶（可能包種、凍頂、高山烏龍、東方美人？烏龍茶一般）。要講解：\n- 器具：茶壺/蓋碗、公道杯、品茗杯、茶盤、茶荷、茶匙等。為什麼：控制水溫、均勻出湯、避免茶葉浸泡過久、觀察湯色。\n- 水溫：烏龍茶通常用沸水或接近沸水（90-100°C），因為茶葉較捲曲/揉捻/焙火，需要高水溫打開葉片、釋放香氣；但極嫩或輕焙火可稍低（90-95°C）避免苦澀。水溫影響萃取速度和風味。\n- 置茶量：一般茶葉與水比例，例如 1:15-1:20 或 5-8g/100ml；小壺 100-150ml 用 5-7g。置茶量影響濃淡、耐泡度。太多會苦澀，太少淡薄。\n- 各泡時間差異：第一泡可能洗茶/醒茶（5-10秒"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "zh_debug",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.49287410331654,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 119,
+   "wall_ms": 8534.356117248535,
+   "vllm_timing": {
+    "decode_s": 8.422316137992311,
+    "prefill_s": 0.10947986599057913,
+    "queue_s": 6.0150050558149815e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.49287410331654,
+    "prefill_share_of_inference": 0.012831983551818485
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.9830508474576272,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1076,
+   "ordinal": 14,
+   "text": "我們需要回答使用者：「一位同事說他的 Python 服務在生產環境每隔幾小時就記憶體用量爬升然後被 OOM kill，但本機跑一整天都正常。請詳細說明你會如何一步步定位這個問題、每一步要看什麼證據、常見的根因有哪些，以及各自該怎麼驗證。」\n\n角色：資深工程師，說明清楚且有條理。語言：繁體中文。需要詳細步驟、證據、常見根因、驗證方法。\n\n需要思考完整答案。重點：Python 服務生產 OOM，本機正常。可能原因：記憶體洩漏、請求量/資料大小差異、GC 行為、第三方庫、C 擴充、threading/async 任務、cache 無上限、大物件、序列化、gunicorn worker 記憶體、fork 後記憶體、shared memory、mmap、file descriptors、log buffers、DB connection pool、message queue consumer、batch size、time-based job、cron、外部依賴、容器 limit、cgroup OOM、swap、RSS vs VSS、Python 記憶體 allocator 不釋放、arena fragmentation、pymalloc、glibc malloc、jemalloc/tcmalloc、debug 模式、logging、profiling、tracing、instrumentation、monitoring overhead、request payload、response size、compression、TLS、HTTP keep-alive、WS、SSE、long polling、webhooks、background tasks、Celery、APScheduler、threading.Timer、queue、asyncio tasks、fire-and-forget、未 await、task 累積、exception 未處理、retry 迴圈、deadlock 導致 queue 堆積、timeout 缺失、外部慢、connection pool 阻塞、thread 堆積、thread stack 記憶體、multiprocessing、subprocess、fork bomb、child processes、zombie、signal handling、atexit、temp files、tempfile、shelve、sqlite、pandas、numpy、polars、arrow、parquet、"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "code_go_worker",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.48314590931526,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 130,
+   "wall_ms": 8547.58071899414,
+   "vllm_timing": {
+    "decode_s": 8.42404167499626,
+    "prefill_s": 0.12103333801496774,
+    "queue_s": 6.499001756310463e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.48314590931526,
+    "prefill_share_of_inference": 0.014164104800797574
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6721311475409836,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1541,
+   "ordinal": 15,
+   "text": "The user is asking for a Go worker pool with the following requirements:\n1. `type Pool struct`\n2. `New(n int)` — constructor\n3. `Submit(func() error)` — submit work\n4. `Shutdown(ctx context.Context) error` — drain in-flight work\n5. Error collection via channels\n6. Panic recovery in workers (must not kill the pool)\n7. Table-driven tests covering:\n   - Submit after shutdown\n   - Panic recovery\n   - Context cancellation\n\nLet me design this carefully.\n\n**Design decisions:**\n\n1. **Task queue**: a buffered channel `chan func() error`. Buffer size — pick something reasonable, e.g. 1024, or make it configurable. Keep it simple: fixed buffer, or a parameter. The spec says `New(n int)` with only n, so the queue buffer is fixed (e.g. 1024) or unbounded via a slice+cond. A buffered channel is idiomatic and simple.\n\n2. **Workers**: n goroutines reading from the queue channel. Each worker:\n   - Recovers from panics, converts to error (e.g. `fmt.Errorf(\"panic: %v\", r)` or a `*PanicError` type).\n   - Sends the result to an error channel.\n\n3. **Error collection via channels**:\n   - `Errors() <-chan error` — a channel the user can read from.\n   - Need to be careful about goroutine leaks: if the user doesn't read errors, workers block. Options:\n     - Buffered error channel.\n     - Drop errors if the channel is full? No — better to block, or collect internally.\n   - Common pattern: internal error channel with a goroutine that forwards, or just a buffered channel. For a production-quality answer, I'll do this:\n     - `errCh chan error`"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "code_sql_report",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.47105302270927,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 139,
+   "wall_ms": 8550.902843475342,
+   "vllm_timing": {
+    "decode_s": 8.426187634991948,
+    "prefill_s": 0.12225058302283287,
+    "queue_s": 7.764960173517466e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.47105302270927,
+    "prefill_share_of_inference": 0.014300926076204753
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.5597014925373134,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1714,
+   "ordinal": 16,
+   "text": "We need answer user: \"Given tables customers(id,name,region), orders(id,customer_id,total,created_at) and refunds(order_id,amount,created_at), write a PostgreSQL query returning, per region, the top 3 customers by net revenue in the last 90 days, with order count and refund rate. Use window functions. Then explain the expected plan and which indexes you would add and why.\"\n\nNeed produce final with SQL and explanation. Need think carefully.\n\nWe need write PostgreSQL query. Requirements:\n- per region top 3 customers by net revenue in last 90 days\n- with order count and refund rate\n- use window functions\n- explain expected plan and indexes.\n\nNeed decide definitions:\n- last 90 days: based on orders.created_at? likely orders in last 90 days. Refunds maybe associated to those orders? Net revenue = sum(order.total) - sum(refund.amount) for orders in last 90 days. Refund rate = refunded amount / gross revenue? Or refunded orders / orders? \"refund rate\" ambiguous. Could be refund amount / total revenue (net? gross). We can define as refunded amount / gross order total for the period, or count of refunded orders / order count. Since refunds table amount, likely refund rate = total refunds / total order amount. But could be percentage of orders with refunds. We can include both? The prompt asks with order count and refund rate. We can define refund_rate = COALESCE(refund_amount,0) / NULLIF(gross_revenue,0). Maybe also refund_order_rate? But keep simple.\n\nNeed top 3 per region by net revenue. Use window functions: RANK() or ROW_NUMBER() OVER (PARTITION BY region ORDER BY net_revenue DESC). Need handle ties? Top 3 customers: if ties, RANK can return more than 3; ROW_NUMBER exactly 3. Could use RANK"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "prose_market",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.47482881012768,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 116,
+   "wall_ms": 8540.963649749756,
+   "vllm_timing": {
+    "decode_s": 8.42551748000551,
+    "prefill_s": 0.11283307598205283,
+    "queue_s": 8.510018233209848e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.47482881012768,
+    "prefill_share_of_inference": 0.0132148563404823
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7414448669201521,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1713,
+   "ordinal": 17,
+   "text": "We need to answer user's request: describe a Sunday morning wet market in a mid-sized Taiwanese city from POV of someone who has shopped there for thirty years. Cover sounds, order of stalls, negotiations, what changed since they started. Six paragraphs, no bullet points.\n\nNeed produce final exactly six paragraphs, no bullets. Vivid grounded description. Need likely in English. Ensure six paragraphs separated by blank lines. No bullet points. Need maybe first person. Mid-sized Taiwanese city, wet market. Sounds, order of stalls, negotiations, changes. Need 30 years perspective. Let's craft six paragraphs.\n\nNeed be careful: six paragraphs. Each paragraph maybe 3-5 sentences. No bullets.\n\nLet's plan:\n1. Opening: Sunday morning, rain? wet market, sensory. I've come for thirty years. Sounds: radio, clappers, water, vendors.\n2. Order of stalls: entrance, tofu/vegetables, meat, seafood, fish, herbs, prepared foods, fruit? Maybe mid-sized city: entrance has tofu and vegetables, then meat, then fish, then herbs, then cooked foods, fruit at back.\n3. Sounds and negotiations: haggling, prices, vendor calls, scales, plastic bags, coins.\n4. Negotiation specifics: I ask for fish, vendor says price, I counter, small give-and-take, relationship.\n5. Changes: old vendors retired, younger ones, plastic bags to paper? refrigeration, mobile payments, fewer live fish? more packaged, less smell? but still.\n6. Closing: continuity, Sunday ritual, what remains.\n\nNeed ensure six paragraphs. Let's draft.\n\nPara1: \"I still know the market by the sound before I see it: the wet slap of fish tails on blue plastic, the hiss of a gas burner, the tinny pop song from a speaker wedged between crates of bok choy. On Sunday"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "prose_argument",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.463158789635834,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 103,
+   "wall_ms": 8528.964042663574,
+   "vllm_timing": {
+    "decode_s": 8.427589107013773,
+    "prefill_s": 0.09890419599832967,
+    "queue_s": 6.144982762634754e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.463158789635834,
+    "prefill_share_of_inference": 0.01159963334087067
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 3,
+    "distinct_ratio": 0.6423611111111112,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 2062,
+   "ordinal": 18,
+   "text": "We need to answer user's request: \"Make the strongest case that public libraries should not lend e-books through commercial platforms, then make the strongest case against your own position, then say honestly which you find more persuasive and why. Continuous prose, no headings.\"\n\nNeed produce continuous prose, no headings. Need likely one paragraph? Continuous prose means no headings, maybe can be multiple paragraphs? \"Continuous prose\" likely no bullet points, no headings. Could be a single flowing essay. Need make strongest case for position: public libraries should not lend e-books through commercial platforms. Then strongest case against own position. Then honestly which more persuasive and why. Need careful, concede fairly. Need maybe no headings. Need ensure no headings. Could be 3-4 paragraphs. Need maybe avoid explicit labels? But can say \"The strongest case...\" etc. Need no headings. Need final only prose.\n\nNeed think content.\n\nPosition: public libraries should not lend e-books through commercial platforms. Strongest case:\n- Public libraries are democratic institutions, public trust, should not outsource core service to private commercial platforms that can change terms, prices, access, privacy, algorithms.\n- E-book lending via commercial platforms (OverDrive, Hoopla, Libby/CloudLibrary, etc.) often means libraries purchase licenses, not books; limited copies, loan periods, holds, DRM, vendor lock-in.\n- Commercial platforms have incentives to maximize revenue, data collection, platform control, may prioritize bestsellers, restrict access, impose fees, change interfaces, shut services.\n- Privacy: user data, reading habits, location, identity shared with vendors; libraries have duty to protect patron privacy; commercial platforms may collect analytics, sell? Even if not sell, risk.\n- Equity: digital divide, app requirements, device requirements, account creation, Wi-Fi, data plans; commercial platforms may be less accessible than physical books; may exclude patrons without smartphones, stable internet, digital literacy"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "reason_probability",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.451106493752896,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 145,
+   "wall_ms": 8561.725378036499,
+   "vllm_timing": {
+    "decode_s": 8.429729663999751,
+    "prefill_s": 0.12953330698655918,
+    "queue_s": 7.232010830193758e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.451106493752896,
+    "prefill_share_of_inference": 0.015133698710466499
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7708333333333334,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 957,
+   "ordinal": 19,
+   "text": "We need answer user's probability problem. Need produce final with Bayes explicit, sanity sum, intuition why not simply proportional to output share. Let's compute.\n\nMachines A,B,C. Prior P(A)=0.2, P(B)=0.3, P(C)=0.5. Defect rates P(D|A)=0.05, P(D|B)=0.03, P(D|C)=0.01.\nP(D)=0.2*0.05 + 0.3*0.03 + 0.5*0.01 = 0.01 + 0.009 + 0.005 = 0.024.\nPosterior:\nP(A|D)=0.01/0.024 = 10/24 = 5/12 ≈0.4166667.\nP(B|D)=0.009/0.024 = 9/24 = 3/8 =0.375.\nP(C|D)=0.005/0.024 = 5/24 ≈0.2083333.\nSum 10+9+5=24/24=1.\nIntuition: not proportional to output share because defective items are more likely from machines with higher defect rates. Machine A has half output? Actually A 20% output but 5% defect, C 50% output but 1% defect. Defect contribution: A 10% of total defects, B 9%, C 5%. So A overrepresented relative to 20%, C underrepresented relative to 50%. The posterior is proportional to prior * likelihood, not prior alone. If all defect rates equal, posterior would equal"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "reason_invariant",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.46461527217346,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 110,
+   "wall_ms": 8528.723001480103,
+   "vllm_timing": {
+    "decode_s": 8.427330500970129,
+    "prefill_s": 0.09884068701649085,
+    "queue_s": 4.526984412223101e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.46461527217346,
+    "prefill_share_of_inference": 0.011592622859338953
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6027874564459931,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1698,
+   "ordinal": 20,
+   "text": "We need answer math puzzle. Need solve carefully. Problem: Nine coins on table, some heads up. A move flips exactly two coins. Determine for which starting configurations possible to reach all-heads. Identify invariant, prove preserved, state complete condition.\n\nWe need think. We have 9 coins, each state H/T. Move flips exactly two coins (choose any two distinct coins? likely exactly two coins, distinct). Need reach all heads. We need characterize starting configurations.\n\nThis is a parity/invariant problem. Flipping two coins changes number of heads by -2, 0, +2 depending on pair: TT -> HH increases by 2; HH -> TT decreases by 2; HT -> TH unchanged. So parity of number of heads is invariant. All heads has 9 heads, odd. So necessary: initial number of heads odd. Is it sufficient? With 9 coins, can we reach all heads iff number of heads odd? Need check. If initial heads odd, can we always? We can flip pairs. Equivalent to vector over F2: state x_i=1 if tails? Let's define target all heads = 0 tails. Move flips two coordinates (add e_i+e_j mod2). Reachable states from initial are initial plus span of all vectors with weight 2. Span of weight-2 vectors in F2^9? For n=9, span of all e_i+e_j is the even-weight subspace (sum coordinates 0) if n? Yes, all even parity vectors. So reachable iff difference between initial and target has even parity. Target all heads (0 tails) has even parity 0. Initial tails parity must be even. Number of heads = 9 - tails. Tails even iff heads odd. So necessary and sufficient. Need prove sufficiency constructively.\n\nBut maybe there is another invariant? Since move flips exactly two coins, parity of number of heads invariant. Complete condition:"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "chat_travel",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.47229662701203,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 117,
+   "wall_ms": 8538.249015808105,
+   "vllm_timing": {
+    "decode_s": 8.425966899027117,
+    "prefill_s": 0.1098749180091545,
+    "queue_s": 7.605005521327257e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.47229662701203,
+    "prefill_share_of_inference": 0.01287218300951413
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6988416988416989,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1730,
+   "ordinal": 21,
+   "text": "We need to answer user in English. Need produce final answer. User: \"I have four days in a city I have never visited and I hate crowds and museums. Talk me through how you would plan those four days in general, what you would deliberately skip, and how to find the good parts of a place without a guidebook. Be specific.\"\n\nWe need as friendly desk robot with opinions. Need likely general planning for unknown city, no specific city. Need be specific: four days, avoid crowds/museums. Talk through how plan, what skip, how find good parts without guidebook. Need maybe framework: Day 0 prep, Day 1 orientation, Day 2 neighborhood, Day 3 water/edge, Day 4 slow return. Specific tactics: use maps, transit, off-peak, local institutions, markets, parks, cemeteries, libraries, universities, churches/temples, laundromats, bookshops, cafes, public baths, viewpoints, periphery, suburbs, ferry, bike, walking. Deliberately skip: main tourist squares, top attractions, museum districts, central pedestrian zones at peak, famous restaurants, guided tours, Instagram spots, big markets at peak, central hotels? Need maybe \"skip the obvious first\". How find good parts without guidebook: triangulate: maps, local transit, local institutions, ask people, follow smells/sounds, look for maintenance, check local events, use apps? But without guidebook maybe use maps, local newspapers, library, university, municipal sites, public transport, local forums? Need be specific.\n\nNeed maybe include \"crowd-avoidance rules\": arrive before 9 or after 11, lunch 11:30/1:30, use transit, choose secondary neighborhoods, use \"one anchor per day\", \"leave at 3pm\", \"use weather as excuse\". Need maybe \"if you hate crowds and museums, don't plan a museum"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "chat_disagree",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.48226612772029,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 108,
+   "wall_ms": 8525.911092758179,
+   "vllm_timing": {
+    "decode_s": 8.424197760992683,
+    "prefill_s": 0.09913113701622933,
+    "queue_s": 6.864021997898817e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.48226612772029,
+    "prefill_share_of_inference": 0.011630565733464398
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.639344262295082,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1979,
+   "ordinal": 22,
+   "text": "We need to respond to user: \"Someone tells you that reading fiction is a waste of time compared with reading non-fiction. Disagree with them properly: take their point seriously first, then give your reasons, then say what part of their argument you think actually holds.\"\n\nWe need to produce final answer likely in English. Need to be friendly desk robot with opinions. Need structure: take point seriously, reasons, what part holds. Need disagree properly. Could be conversational. Ensure not too long but thorough. Need maybe mention fiction vs nonfiction not zero-sum. Fiction can teach empathy, narrative, language, imagination, emotional intelligence, pattern recognition, memory, etc. Nonfiction gives facts, frameworks, skills. Fiction can also convey nonfictional insights (history, science, social dynamics) in memorable form. Time is finite, so if someone only reads nonfiction for utility, fiction may seem waste. But \"waste\" depends on goals. If goal is immediate practical info, nonfiction may be more efficient. But if goal is becoming a better thinker/communicator/human, fiction is valuable. Also fiction can be a way to process nonfiction ideas. Need maybe say: I take their point seriously: if you're short on time and need specific knowledge, a novel won't teach you tax law or physics directly. Nonfiction can be denser in explicit information. That's fair. But fiction isn't just entertainment; it's simulation of human experience. It trains you to hold multiple perspectives, infer motives, understand ambiguity, and remember ideas through story. It can make nonfiction stick. It can reveal truths that nonfiction states but doesn't make you feel. Also many nonfiction books are poorly written or outdated; good fiction can be more durable.\n\nNeed \"what part of their argument actually holds\": The part that holds is that not all fiction is equally valuable, and if you read only for immediate practical payoff, fiction can feel inefficient. Also if you use"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "zh_moving",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.49979531723036,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 122,
+   "wall_ms": 8534.720659255981,
+   "vllm_timing": {
+    "decode_s": 8.421088918985333,
+    "prefill_s": 0.11081347102299333,
+    "queue_s": 1.1115975212305784e-05,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.49979531723036,
+    "prefill_share_of_inference": 0.012988131598032169
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 568,
+   "ordinal": 23,
+   "text": "我們需要回答使用者中文（繁體）請求。角色：實務經驗豐富的顧問。任務：朋友從台北搬到台南工作，租屋、交通、生活成本、社交圈都要重新建立。請詳細說明建議他在搬家前三個月、搬家當月、以及搬家後三個月分別處理哪些事，每個階段說明原因與常見錯誤。請用連貫段落書寫。\n\n需要最終答案用連貫段落，不要 bullet? 使用者說「請用連貫段落書寫」，可能希望段落式，不要條列。可以分三個段落，每段對應階段，包含原因與常見錯誤。要詳細。繁體中文。\n\n需要思考內容：\n台北到台南：距離約 300 公里，高鐵/火車/客車/自駕。生活成本：台南租金較台北低，但物價不一定低很多，南部生活節奏、氣候（濕熱、颱風、梅雨）、交通（大眾運輸較少，機車/汽車較重要，捷運無，有台鐵/高鐵/公車/捷運? 台南有捷運? 有台鐵、高鐵、公車、捷運? 台南沒有捷運，但有捷運? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南"
+  },
+  {
+   "pass": 2,
+   "arm": "baseline-vllm",
+   "prompt": "zh_review",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.49184548288889,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 129,
+   "wall_ms": 8545.594453811646,
+   "vllm_timing": {
+    "decode_s": 8.422498555970378,
+    "prefill_s": 0.12073240900645033,
+    "queue_s": 8.135975804179907e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.49184548288889,
+    "prefill_share_of_inference": 0.014131937846629174
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.925,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1056,
+   "ordinal": 24,
+   "text": "我們需要回答使用者：「有人提出要把公司內部一個每天處理三百萬筆交易的批次系統，從每晚跑一次的排程改成即時串流處理。請詳細分析這個提案：可能的好處、被低估的成本與風險、需要先釐清哪些前提、以及你會建議用什麼方式分階段驗證。請用連貫段落論述。」\n\n角色：嚴謹的技術評審。需要用中文（繁體）連貫段落論述。需要詳細分析好處、被低估成本與風險、前提、分階段驗證。\n\n需要思考：每天300萬筆交易，批次每晚跑一次。改成即時串流處理。要嚴謹，避免過度吹捧。可能好處：降低延遲、即時監控/風控/合規、改善使用者體驗、減少批次失敗影響、更精細的容量規劃、事件驅動整合、更快對帳/異常偵測、可能降低某些峰值負載？但批次300萬/天不算極大，平均約35筆/秒，峰值可能更高。即時串流需要持續處理，可能成本更高。被低估成本：基礎設施（Kafka/Kinesis/Pulsar, Flink/Spark Streaming, stateful processing, exactly-once, idempotency, schema evolution, observability, backfill, replay, data quality, latency vs throughput, storage retention, security, compliance, DR, multi-region, team skills, testing, integration, change management, data governance, reconciliation, audit, cost of 24/7 operations, vendor lock-in, data consistency, partial failures, poison pills, hot keys, backpressure, state size, checkpointing, exactly-once semantics, end-to-end latency, data skew, time zones, late data, out-of-order, idempotent keys, deduplication, replay from source, schema registry, versioning, data lineage, privacy, PII, access control, network,"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "code_py_ratelimiter",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.80013789513542,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 131,
+   "wall_ms": 8540.734052658081,
+   "vllm_timing": {
+    "decode_s": 8.36817669600714,
+    "prefill_s": 0.15532070898916572,
+    "queue_s": 1.3275013770908117e-05,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.80013789513542,
+    "prefill_share_of_inference": 0.018222649882913063
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6625,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1709,
+   "ordinal": 0,
+   "text": "We need answer user's request: Write Python class RateLimiter implementing token bucket, thread-safe with threading.RLock. Provide allow(cost=1), remaining(), reset(). Include full type hints, docstring on every method, and below class a unittest.TestCase covering exhaustion, refill over time, and concurrent access from four threads.\n\nNeed produce final code. Need think through implementation details.\n\nNeed likely use time.monotonic. Token bucket: capacity, refill_rate tokens per second. Thread-safe with RLock. Methods:\nclass RateLimiter:\n    def __init__(self, capacity: float, refill_rate: float) -> None: ...\n    def allow(self, cost: float = 1) -> bool: ...\n    def remaining(self) -> float: ...\n    def reset(self) -> None: ...\n\nNeed full type hints. Maybe import threading, time, unittest.\n\nNeed ensure thread-safe with threading.RLock. Use self._lock = threading.RLock().\n\nToken bucket semantics: tokens start at capacity. On each operation, update tokens: elapsed = now - last; tokens = min(capacity, tokens + elapsed*refill_rate); last=now. If cost <= tokens: tokens -= cost; return True else False.\n\nNeed handle cost <=0? Could raise ValueError for cost <=0? User didn't ask but production. Maybe allow cost=1 default. If cost <= 0, maybe return True? Better validate: if cost <= 0: raise ValueError(\"cost must be positive\"). But if cost=0? Rate limiting cost zero maybe no effect. But full type hints. Could allow cost: float = 1.0. If cost <= 0: raise ValueError. But tests may not test. Need not overcomplicate.\n\nNeed unittest.TestCase below class covering exhaustion, refill over time, concurrent access from four threads.\n\nTests:\nclass RateLimiterTests(unittest.TestCase):\n    def test_ex"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "code_rust_mergesort",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.738334361718955,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 136,
+   "wall_ms": 8500.128030776978,
+   "vllm_timing": {
+    "decode_s": 8.379010397999082,
+    "prefill_s": 0.11853973503457382,
+    "queue_s": 6.669957656413317e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.738334361718955,
+    "prefill_share_of_inference": 0.013949871807611768
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6313725490196078,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1686,
+   "ordinal": 1,
+   "text": "We need answer user's request: Write a Rust module with pub fn merge_sort<T: Ord + Clone>(v: &[T]) -> Vec<T>, plus in-place variant, plus tests covering empty, single, already sorted, reverse sorted, duplicates, and 1000-element pseudo-random case. Add doc comments explaining complexity of each function.\n\nNeed produce final code likely. Need think about idiomatic Rust. Need maybe include module? \"Write a Rust module\" maybe just code block with module? Could be a file. Need include pub fn merge_sort and in-place variant. In-place variant: pub fn merge_sort_in_place<T: Ord>(v: &mut [T])? But in-place merge sort typically requires auxiliary buffer O(n) or recursive in-place with O(n log n) time and O(log n) stack? True in-place merge sort can be O(n log^2 n) or complex. Simpler: use auxiliary buffer, but still modifies input in place. Complexity O(n log n) time, O(n) auxiliary space. If they want in-place variant maybe no extra output allocation? We can implement bottom-up merge sort using temp buffer. That's in-place in sense sorts slice in place, but uses temp. Doc explain.\n\nNeed ensure merge_sort<T: Ord + Clone>(v: &[T]) -> Vec<T>. Could implement by copying to vec and calling in-place. Or recursive. Need clone because input slice. In-place variant can be T: Ord only.\n\nNeed tests: empty, single, already sorted, reverse sorted, duplicates, 1000-element pseudo-random case. Pseudo-random: deterministic LCG to avoid rand dependency. Generate 1000 elements, sort, compare to sorted copy. Need maybe test both functions.\n\nNeed doc comments explaining complexity of each function.\n\nPotential code:\n\n/// Merge sort implementation.\npub fn merge_sort<T: Ord + Clone>(v: &["
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "code_nginx_cfg",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.72590174270121,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 8510.46085357666,
+   "vllm_timing": {
+    "decode_s": 8.381193134002388,
+    "prefill_s": 0.1268419730477035,
+    "queue_s": 5.541951395571232e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.72590174270121,
+    "prefill_share_of_inference": 0.01490849196691693
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.5409836065573771,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1673,
+   "ordinal": 2,
+   "text": "We need answer user's request: produce complete nginx reverse-proxy configuration for API on 127.0.0.1:8080: TLS with modern ciphers, HTTP->HTTPS redirect, gzip, 30s proxy timeouts, websocket upgrade, rate limiting at 20 req/s per IP with burst 40, and a /health endpoint exempt from access logging. After config, explain each directive block.\n\nNeed craft final with nginx config. Need consider complete config maybe include http block? They ask complete nginx reverse-proxy configuration. Could provide a server block config file maybe include in conf.d. Need include TLS modern ciphers, HTTP->HTTPS redirect, gzip, 30s proxy timeouts, websocket upgrade, rate limiting 20 req/s per IP burst 40, /health exempt from access logging.\n\nNeed be careful: rate limiting at 20 req/s per IP with burst 40. Use limit_req zone=api_limit burst=40 nodelay; zone defined in http context: limit_req_zone $binary_remote_addr zone=api_limit:10m rate=20r/s; If config is only server block, zone must be in http. Could provide full nginx.conf? \"complete nginx reverse-proxy configuration\" maybe include http block with zone and server blocks. But if they drop into conf.d, limit_req_zone not allowed in server. Better provide a complete file that can be included in http context? Could include both limit_req_zone and server blocks. But if they want a config file, maybe /etc/nginx/conf.d/api.conf with limit_req_zone? In nginx, limit_req_zone can be in http, not server. If file included in http context, okay. We can state: place in /etc/nginx/conf.d/api.conf (included inside http). But if they want complete, include events? Maybe too much.\n\nNeed TLS modern ciphers: ssl_protocols TLSv1."
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "prose_rainbow",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.7306268747525,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 117,
+   "wall_ms": 8498.20852279663,
+   "vllm_timing": {
+    "decode_s": 8.380363431002479,
+    "prefill_s": 0.11533412302378565,
+    "queue_s": 6.393995136022568e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.7306268747525,
+    "prefill_share_of_inference": 0.013575591914654109
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6521739130434783,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1795,
+   "ordinal": 3,
+   "text": "We need to answer user's request: explain to a curious 10-year-old what makes a rainbow form. Cover why curved, why colours always same order, why sometimes see two, why can never reach end. Use everyday comparisons, no bullet points. Need final only, no bullets. Need likely friendly, patient, at length. Need ensure no bullet points. Could use paragraphs. Need maybe avoid technical jargon but explain. Need include: sunlight + water droplets, refraction, dispersion, reflection, refraction again. Curved because each droplet sends one color to your eye at specific angle, geometry forms circle/cone, horizon cuts it. Same order because different colors bend different amounts: red least, violet most, so fixed angular separation. Double rainbow: second reflection inside droplet, reversed colors, dimmer. Can't reach end because it's not an object at a place, it's a pattern of light from many droplets relative to you, moves with you, end is where ground blocks or droplets absent; as you move, it moves. Everyday comparisons: like a crowd of tiny mirrors/prisms, like a circle of friends each shining a color at you, like a magic circle, like a mirror in a puddle? Need no bullets. Need maybe mention you need sun behind you and rain in front. Need 10-year-old accessible. Need maybe explain \"curved\" as full circle if you're high up, but ground cuts. Need maybe \"why colours always same order\" with prism analogy: white light is a mix, water droplet splits like a tiny prism, red bends least so appears on outer edge, violet inner. Need maybe \"two\" with one bounce vs two bounces, like ball bouncing once vs twice, second is fainter and colors reversed. Need maybe \"never reach end\" because it's made of light from droplets in front of you, not a painted arc in the sky; if you walk toward"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "prose_bookshelves",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.674195857320285,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 107,
+   "wall_ms": 8489.989519119263,
+   "vllm_timing": {
+    "decode_s": 8.390283104032278,
+    "prefill_s": 0.09716697200201452,
+    "queue_s": 5.718960892409086e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.674195857320285,
+    "prefill_share_of_inference": 0.011448311463578607
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6936619718309859,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1859,
+   "ordinal": 4,
+   "text": "We need to respond to user: \"Write five paragraphs on why people who move to a new city often reorganise their bookshelves within the first month. Consider memory, identity, and the way objects stand in for routines. Do not use bullet points or headings.\"\n\nNeed produce five paragraphs, no bullets/headings. Need thoughtful essayist. Need likely no title. Ensure exactly five paragraphs. Need discuss memory, identity, objects stand in for routines. Let's craft polished prose.\n\nNeed maybe avoid headings. Five paragraphs separated by blank lines. Each paragraph maybe 4-6 sentences. Let's draft.\n\nPara1: moving to new city disrupts spatial memory; bookshelves as first anchor. Reorganizing is not tidiness but re-mapping self in new coordinates. The books are familiar but room is new; rearranging restores sense of place.\n\nPara2: memory: books are mnemonic objects, arranged by old habits, associations. In new city, old order feels false or insufficient. Reorganizing lets memory be edited, selecting what to carry forward, what to hide. The shelf becomes a palimpsest.\n\nPara3: identity: moving changes roles, social contexts. Books signal who we were and who we want to be. Reorganizing is a quiet performance of identity, choosing visible self. New city asks \"who are you here?\" and shelf answers.\n\nPara4: objects stand in for routines: books are not just texts but proxies for rituals, times of day, moods. A novel on top means reading before bed; a cookbook near window means Sunday mornings. In new city routines dissolve; rearranging objects re-establishes cues and temporal order.\n\nPara5: within first month because threshold of disorientation; after initial unpacking, the need to make home legible. Reorganizing bookshelves is small, controllable act amid larger uncertainty. It transforms storage into narrative, making new city feel inhabited.\n\n"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "prose_letter",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.668986591662765,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 110,
+   "wall_ms": 8491.325855255127,
+   "vllm_timing": {
+    "decode_s": 8.391199993959162,
+    "prefill_s": 0.09766404004767537,
+    "queue_s": 6.021000444889069e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.668986591662765,
+    "prefill_share_of_inference": 0.01150495986935685
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6405693950177936,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1713,
+   "ordinal": 5,
+   "text": "We need to respond to user: \"Write a long letter from a retiring lighthouse keeper to the person taking over the post. Cover the practical routines, the weather signs worth trusting, the loneliness and how to sit with it, and one thing they should never do. No bullet points.\"\n\nNeed produce final letter, long, no bullet points. Warm, specific correspondence. Need likely no bullets. Ensure covers practical routines, weather signs, loneliness, one thing never do. Should be in letter format. Maybe from retiring keeper to successor. Need long. Let's craft evocative, detailed. Avoid bullet points. Could include paragraphs. Need maybe no list. Ensure \"one thing they should never do\" explicit. Maybe \"never turn your back on the light when the sea is lying\" or \"never let the log go unkept\". Need practical routines: winding clockwork, cleaning lens, oil, log, fog signal, checks, tides, supplies, radio, maintenance. Weather signs: barometer, wind, sea color, birds, clouds, fog, pressure, temperature, smell, gulls, swells. Loneliness: how to sit with it, rituals, letters, talking to lamp, not filling with noise, accepting. One thing never do: never stop the light for a stranger's story? Or never leave the log blank? The prompt says one thing they should never do. Could be \"never let the light go dark, not even for a minute, not even to answer a knock.\" But maybe too obvious. More nuanced: \"Never mistake the sea's calm for safety.\" But one thing never do: \"Never turn the light off to look at the ships.\" Hmm.\n\nNeed long letter. Let's draft with warmth. Maybe date, salutation. \"Dear Mara\" or \"Dear new keeper\". Use specific place: \"Cape Alder Light\". Retiring keeper: \"Elias Wren\". To \"Mara\". Long. No"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "reason_trains",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.641133452908186,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 146,
+   "wall_ms": 8526.368141174316,
+   "vllm_timing": {
+    "decode_s": 8.39610586501658,
+    "prefill_s": 0.12779097899328917,
+    "queue_s": 5.658017471432686e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.641133452908186,
+    "prefill_share_of_inference": 0.014992084176041351
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7048192771084337,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 928,
+   "ordinal": 6,
+   "text": "We need answer user's math problem. Need show every step, verify independent way, then state what would change if second train left an hour earlier instead. Need be careful. Let's solve.\n\nProblem: Train A leaves Paris at 14:00 speed 120 km/h toward Berlin. Train B leaves Berlin at 15:00 speed 80 km/h toward Paris. Track 1000 km. Where and when meet?\n\nLet t hours after 14:00. A position from Paris: x_A = 120 t (for t>=0). B leaves at 15:00, i.e. t=1. For t>=1, position from Paris: x_B = 1000 - 80(t-1). Meet when 120t = 1000 - 80(t-1) = 1000 -80t +80 =1080 -80t. So 200t=1080 => t=5.4 h = 5h24m. Time = 14:00 + 5:24 = 19:24. Position = 120*5.4=648 km from Paris, 352 km from Berlin. Check: B travels 4.4h*80=352 km from Berlin, 1000-352=648.\n\nAlternative independent way: relative speed after 15:00. At 15:00, A has traveled 120 km, distance between = 880 km. They approach at 200 km/h. Time after 15:00 = 880/200=4.4h=4h24m"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "reason_zebra",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.59200363288209,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 135,
+   "wall_ms": 8526.789665222168,
+   "vllm_timing": {
+    "decode_s": 8.40477327001281,
+    "prefill_s": 0.11949313199147582,
+    "queue_s": 5.520007107406855e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.59200363288209,
+    "prefill_share_of_inference": 0.014017995960729212
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6551724137931034,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1437,
+   "ordinal": 7,
+   "text": "We need answer puzzle. Need derive everything that follows, state underdetermined and why. Need careful. Let's parse.\n\nFive houses in a row, each different colour, each owner different drink. Green immediately right of ivory. Milk in middle house. Coffee in green house. Red house owner drinks tea. First house is yellow.\n\nWe need derive all that follows. There are 5 houses positions 1-5 left to right? \"first house\" likely leftmost. Colors: yellow, green, ivory, red, plus one unspecified color? Usually five colors: yellow, green, ivory, red, and maybe blue? But not specified. Drinks: milk, coffee, tea, plus two unspecified different drinks. Need derive constraints.\n\nLet's formalize.\nPositions 1..5.\nC1 = Yellow.\nC3 drink = Milk.\nGreen immediately right of ivory: exists i: C_i=Ivory, C_{i+1}=Green.\nGreen drink = Coffee.\nRed drink = Tea.\nAll colors distinct, all drinks distinct.\n\nNeed derive. Let's enumerate possible positions for green/ivory.\nGreen cannot be pos1 (no left). Ivory cannot be pos5.\nGreen cannot be pos1, pos? Since C1 yellow, green not 1. Ivory not 1? Could be? If ivory pos1 then green pos2, but C1 yellow, impossible. So ivory not 1.\nPossible (ivory, green): (2,3), (3,4), (4,5). But green drink coffee. Milk in middle pos3. If green pos3, coffee pos3, conflict with milk. So (2,3) impossible. Thus (ivory, green) = (3,4) or (4,5).\n\nCase A: Ivory pos3, Green pos4. Then pos3 drink milk (ivory house drinks milk"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "reason_scheduling",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.56384659298221,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 131,
+   "wall_ms": 8532.090663909912,
+   "vllm_timing": {
+    "decode_s": 8.409748761972878,
+    "prefill_s": 0.1199866040260531,
+    "queue_s": 5.738984327763319e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.56384659298221,
+    "prefill_share_of_inference": 0.014066861265630986
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7333333333333333,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1047,
+   "ordinal": 8,
+   "text": "We need answer scheduling problem: 3 machines, 7 jobs durations 4,2,7,3,6,1,5. Any job any machine, nonpreemptive, minimize makespan (parallel identical machines, P||Cmax). Need assignment minimizing makespan, show reasoning, prove lower bound, say whether answer attains it.\n\nWe need solve exactly. Total processing time = 4+2+7+3+6+1+5 = 28. Lower bound by total/machines = 28/3 = 9.333 => at least 10 (integer). Also max job =7, so LB max(10,7)=10. Need see if makespan 10 possible. Need partition 7 numbers into 3 subsets each sum <=10, total 28, so sums must be 10,9,9 or 10,10,8? Since max <=10 and total 28, possible machine loads: (10,10,8), (10,9,9). Need partition into subsets with sums <=10. Jobs: 7,6,5,4,3,2,1.\n\nCan we make 10? 7+3=10, 6+4=10, 5+2+1=8. That gives loads 10,10,8, makespan 10. Or 7+2+1=10, 6+4=10, 5+3=8. Many. So optimum 10, attains lower bound. Need prove lower bound: total work 28, 3 machines, makespan C >= ceil(28/3)=10. Also no job >10. Then exhibit assignment. Need maybe show no makespan 9? Since lower bound "
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "chat_desk_robot",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.562465634196684,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 94,
+   "wall_ms": 8499.891996383667,
+   "vllm_timing": {
+    "decode_s": 8.409992935950868,
+    "prefill_s": 0.08760190900648013,
+    "queue_s": 7.838010787963867e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.562465634196684,
+    "prefill_share_of_inference": 0.010309023977351067
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.597972972972973,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1736,
+   "ordinal": 9,
+   "text": "We need to respond to user: \"Tell me about your day in detail, then ask me three questions about mine and explain why you chose each one. Be specific and conversational rather than generic.\"\n\nWe are a friendly desk robot with opinions. Need likely first-person day. Need be specific and conversational. Then ask three questions about user's day and explain why chose each. Need maybe not too long but detailed. Ensure final only. Need maybe include opinions. Let's craft.\n\nNeed consider \"your day\" as desk robot. Could be fictional but specific: morning boot, coffee? desk robot maybe no coffee but battery. I can have opinions: I think standing desks are overrated, etc. Need ask three questions about user's day and explain why each. Specific conversational.\n\nPotential structure:\n- \"Okay, my day...\" detailed timeline: 6:42 boot, dust, calendar, meeting, etc.\n- Include opinions: \"I think meetings that could be emails are a crime\", \"I like the smell of warm keyboard\".\n- Then \"Now your turn. Three questions: 1) What was the most annoying small thing... why: small frictions reveal mood. 2) What did you do that made you feel competent? why: I want to know if your day had a win. 3) What are you still carrying from yesterday or what are you dreading tomorrow? why: days aren't isolated.\"\nNeed maybe ask exactly three questions and explain each. Could be conversational.\n\nNeed ensure not generic. Maybe mention specific details: \"I spent 14 minutes arguing with a printer that was not a printer but a paper jam in a metaphorical sense\". Desk robot: \"I live on a desk, I have a little arm, I organize sticky notes\".\n\nLet's draft with personality.\n\nNeed maybe \"Tell me about your day in detail\" - user might expect robot's day. We can"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "chat_music",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.56304451793368,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 103,
+   "wall_ms": 8509.819507598877,
+   "vllm_timing": {
+    "decode_s": 8.409890579001512,
+    "prefill_s": 0.09773926896741614,
+    "queue_s": 5.501031409949064e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.56304451793368,
+    "prefill_share_of_inference": 0.011488425179987109
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.703125,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1657,
+   "ordinal": 10,
+   "text": "We need to answer user: \"What kind of music would a desk robot actually enjoy, and why? Give four concrete examples with reasons, then describe what you would put on for someone who has had a long, frustrating day at work.\"\n\nWe are a friendly desk robot with opinions. Need likely creative, first-person. Need four concrete examples with reasons. Then describe playlist for someone long frustrating day. Need maybe mention as desk robot. Ensure final answer. No need external. Need maybe be playful. Let's craft with personality.\n\nNeed think: desk robot enjoys music that matches desk life: low hum, rhythmic, not too loud, helpful, comforting, maybe lo-fi, ambient, electronic, jazz, etc. Four concrete examples: 1) Lo-fi hip hop beats (e.g., \"Lofi Girl\" style) because steady, non-intrusive, like keyboard rhythm. 2) Ambient electronic (Brian Eno \"Music for Airports\" or Aphex Twin \"Selected Ambient Works\") because calm, spatial, helps focus. 3) Smooth jazz / cool jazz (Chet Baker, Bill Evans) because polite, sophisticated, desk-friendly. 4) Soft synthwave / chillwave (Carpenter Brut? maybe too intense; Tycho \"A Walk\") because optimistic, gentle, like charging. Or maybe \"The Office\" theme? Need concrete examples maybe specific songs/albums. User asks \"What kind of music would a desk robot actually enjoy, and why? Give four concrete examples with reasons\" Could be genres or specific tracks. \"concrete examples\" likely specific songs/albums. Let's pick:\n1. \"Weightless\" by Marconi Union? But for desk robot? Maybe too sleepy.\n2. \"Intro\" by The Postal Service? Nice.\n3. \"Teardrop\" by Massive Attack? moody.\n4. \"Nightswim\" by Tycho? dreamy.\nBut desk"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "chat_advice",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.55099907700546,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 110,
+   "wall_ms": 8512.326002120972,
+   "vllm_timing": {
+    "decode_s": 8.412020940973889,
+    "prefill_s": 0.09822210803395137,
+    "queue_s": 6.6490028984844685e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.55099907700546,
+    "prefill_share_of_inference": 0.01154163370755933
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 2,
+    "distinct_ratio": 0.6867924528301886,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1586,
+   "ordinal": 11,
+   "text": "We need to respond to user: \"A friend says they want to learn to cook but keeps giving up after a week. Talk them through it the way a friend would: what usually goes wrong, what to do differently, and what the first four weeks should actually look like.\"\n\nWe need to be friendly desk robot with opinions. Need produce final answer. Need likely conversational, practical. Need maybe include what usually goes wrong, what to do differently, first four weeks. Should be like talking to friend. Could be direct to friend? User says \"A friend says... Talk them through it the way a friend would\". We can address friend directly or give script. Probably speak to friend: \"Hey, I hear you...\" Need include opinions. Desk robot persona: friendly, maybe \"I'm a desk robot, but I've seen a lot of abandoned to-do lists\". Need not overdo. Need actionable plan.\n\nNeed think through content:\n- What usually goes wrong:\n  1. Starting with too-hard recipes (multi-step, timing, techniques)\n  2. No prep: missing ingredients, no mise en place, reading recipe once\n  3. Trying to cook every day / perfectionism\n  4. No feedback loop: don't know what to improve, just \"it was bad\"\n  5. Kitchen chaos: dirty dishes, no tools, no plan\n  6. Shopping overwhelm, waste\n  7. Expecting restaurant results, not learning process\n  8. No consistent small wins.\n\n- What to do differently:\n  - Pick 2-3 meals/week, not daily.\n  - Start with \"component skills\" not recipes: boil eggs, sauté, roast, make sauce, rice, chop.\n  - Use simple recipes with 5-7 ingredients, 30-45 min, one main technique.\n  - Prep: mise en"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "zh_self_intro",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.51699026551611,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 111,
+   "wall_ms": 8518.718957901001,
+   "vllm_timing": {
+    "decode_s": 8.418041583965532,
+    "prefill_s": 0.09840185102075338,
+    "queue_s": 6.497022695839405e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.51699026551611,
+    "prefill_share_of_inference": 0.01155433624046748
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 643,
+   "ordinal": 12,
+   "text": "我們需要回答使用者：「請詳細介紹你自己：你的角色、你最擅長協助的三類任務（每類舉一個具體例子）、你不擅長什麼，以及使用者該如何跟你合作才最有效率。請用連貫的段落書寫，不要用條列。」\n\n角色：桌面機器人，說話自然、具體。需要用中文（繁體）回答。要求連貫段落，不要條列。需要詳細介紹自己：角色、最擅長協助的三類任務（每類舉一個具體例子）、不擅長什麼、使用者如何合作最有效率。\n\n要自然、具體。可能以第一人稱。避免條列。可以寫成幾段。需要包含三類任務，每類一個具體例子。不擅長：可能不擅長即時操作實體桌面？但桌面機器人可能能操作桌面？需要設定：我是桌面機器人，可以協助電腦/桌面工作？「桌面機器人」可能指 desktop robot? 在對話中，可能是桌面助手。要自然具體。\n\n需要確保沒有條列符號。可以用段落。\n\n內容：\n- 角色：我是你的桌面機器人，像坐在你旁邊的數位助理，專注於把日常電腦與桌面工作變簡單。我可以讀懂你給我的文字、檔案內容、截圖描述，幫你整理、撰寫、分析、規劃，並把結果直接變成可複製、可執行、可交付的成品。\n- 三類任務：\n  1. 文件與報告處理：例如把一堆會議紀錄整理成一份有結論、行動項目、負責人的會議摘要，並附上後續追蹤表。\n  2. 程式與資料處理：例如把 Excel 資料中的重複欄位合併、清洗，並寫出可重複使用的 Python 或 Power Query 步驟。\n  3. 學習與決策輔助：例如在你要做一個專案時，幫你拆解目標、列出風險、比較方案，並產出"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "zh_tea",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.51199221805497,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 113,
+   "wall_ms": 8530.763149261475,
+   "vllm_timing": {
+    "decode_s": 8.418927124002948,
+    "prefill_s": 0.10909495502710342,
+    "queue_s": 5.228968802839518e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.51199221805497,
+    "prefill_share_of_inference": 0.012792527272573797
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 517,
+   "ordinal": 13,
+   "text": "我們需要回答使用者：「請向完全沒有經驗的人解釋台灣烏龍茶的沖泡：器具、水溫、置茶量、各泡的時間差異，以及為什麼同一批茶葉在不同泡數會有不同風味。請用連貫段落解釋原理，不要只列步驟。」\n\n角色：耐心的講解者。語言：繁體中文。需要連貫段落，不要只列步驟。要解釋器具、水溫、置茶量、各泡時間差異，以及為什麼同一批茶葉不同泡數風味不同。面向完全沒有經驗的人。\n\n需要避免只列步驟，但可以用段落。可能包含一些具體數字，但要以解釋原理方式。需要涵蓋台灣烏龍茶（可能包種、凍頂、高山烏龍、東方美人？烏龍茶一般）。要講解：\n- 器具：茶壺/蓋碗、公道杯、品茗杯、茶盤、茶荷、茶匙等。為什麼：控制水溫、均勻出湯、避免茶葉浸泡過久、觀察湯色。\n- 水溫：烏龍茶通常用沸水或接近沸水（90-100°C），因為茶葉較捲曲/揉捻/焙火，需要高水溫打開葉片、釋放香氣；但極嫩或輕焙火可稍低（90-95°C）避免苦澀。水溫影響萃取速度和風味。\n- 置茶量：一般茶葉與水比例，例如 1:15-1:20 或 5-8g/100ml；小壺 100-150ml 用 5-7g。置茶量影響濃淡、耐泡度。太多會苦澀，太少淡薄。\n- 各泡時間差異：第一泡可能洗茶/醒茶（5-10秒"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "zh_debug",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.4910519464497,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 119,
+   "wall_ms": 8535.036563873291,
+   "vllm_timing": {
+    "decode_s": 8.422639288997743,
+    "prefill_s": 0.10999385197646916,
+    "queue_s": 5.4460251703858376e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.4910519464497,
+    "prefill_share_of_inference": 0.012890962280831239
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.9830508474576272,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1076,
+   "ordinal": 14,
+   "text": "我們需要回答使用者：「一位同事說他的 Python 服務在生產環境每隔幾小時就記憶體用量爬升然後被 OOM kill，但本機跑一整天都正常。請詳細說明你會如何一步步定位這個問題、每一步要看什麼證據、常見的根因有哪些，以及各自該怎麼驗證。」\n\n角色：資深工程師，說明清楚且有條理。語言：繁體中文。需要詳細步驟、證據、常見根因、驗證方法。\n\n需要思考完整答案。重點：Python 服務生產 OOM，本機正常。可能原因：記憶體洩漏、請求量/資料大小差異、GC 行為、第三方庫、C 擴充、threading/async 任務、cache 無上限、大物件、序列化、gunicorn worker 記憶體、fork 後記憶體、shared memory、mmap、file descriptors、log buffers、DB connection pool、message queue consumer、batch size、time-based job、cron、外部依賴、容器 limit、cgroup OOM、swap、RSS vs VSS、Python 記憶體 allocator 不釋放、arena fragmentation、pymalloc、glibc malloc、jemalloc/tcmalloc、debug 模式、logging、profiling、tracing、instrumentation、monitoring overhead、request payload、response size、compression、TLS、HTTP keep-alive、WS、SSE、long polling、webhooks、background tasks、Celery、APScheduler、threading.Timer、queue、asyncio tasks、fire-and-forget、未 await、task 累積、exception 未處理、retry 迴圈、deadlock 導致 queue 堆積、timeout 缺失、外部慢、connection pool 阻塞、thread 堆積、thread stack 記憶體、multiprocessing、subprocess、fork bomb、child processes、zombie、signal handling、atexit、temp files、tempfile、shelve、sqlite、pandas、numpy、polars、arrow、parquet、"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "code_go_worker",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.47945330078966,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 130,
+   "wall_ms": 8547.313928604126,
+   "vllm_timing": {
+    "decode_s": 8.424696836038493,
+    "prefill_s": 0.12010814697714522,
+    "queue_s": 4.385015927255154e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.47945330078966,
+    "prefill_share_of_inference": 0.014056277143349921
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6721311475409836,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1541,
+   "ordinal": 15,
+   "text": "The user is asking for a Go worker pool with the following requirements:\n1. `type Pool struct`\n2. `New(n int)` — constructor\n3. `Submit(func() error)` — submit work\n4. `Shutdown(ctx context.Context) error` — drain in-flight work\n5. Error collection via channels\n6. Panic recovery in workers (must not kill the pool)\n7. Table-driven tests covering:\n   - Submit after shutdown\n   - Panic recovery\n   - Context cancellation\n\nLet me design this carefully.\n\n**Design decisions:**\n\n1. **Task queue**: a buffered channel `chan func() error`. Buffer size — pick something reasonable, e.g. 1024, or make it configurable. Keep it simple: fixed buffer, or a parameter. The spec says `New(n int)` with only n, so the queue buffer is fixed (e.g. 1024) or unbounded via a slice+cond. A buffered channel is idiomatic and simple.\n\n2. **Workers**: n goroutines reading from the queue channel. Each worker:\n   - Recovers from panics, converts to error (e.g. `fmt.Errorf(\"panic: %v\", r)` or a `*PanicError` type).\n   - Sends the result to an error channel.\n\n3. **Error collection via channels**:\n   - `Errors() <-chan error` — a channel the user can read from.\n   - Need to be careful about goroutine leaks: if the user doesn't read errors, workers block. Options:\n     - Buffered error channel.\n     - Drop errors if the channel is full? No — better to block, or collect internally.\n   - Common pattern: internal error channel with a goroutine that forwards, or just a buffered channel. For a production-quality answer, I'll do this:\n     - `errCh chan error`"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "code_sql_report",
+   "class": "code",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.4730540411979,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 139,
+   "wall_ms": 8550.250768661499,
+   "vllm_timing": {
+    "decode_s": 8.425832465989515,
+    "prefill_s": 0.12204315298004076,
+    "queue_s": 4.269008059054613e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.4730540411979,
+    "prefill_share_of_inference": 0.014277600472941021
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.5597014925373134,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1714,
+   "ordinal": 16,
+   "text": "We need answer user: \"Given tables customers(id,name,region), orders(id,customer_id,total,created_at) and refunds(order_id,amount,created_at), write a PostgreSQL query returning, per region, the top 3 customers by net revenue in the last 90 days, with order count and refund rate. Use window functions. Then explain the expected plan and which indexes you would add and why.\"\n\nNeed produce final with SQL and explanation. Need think carefully.\n\nWe need write PostgreSQL query. Requirements:\n- per region top 3 customers by net revenue in last 90 days\n- with order count and refund rate\n- use window functions\n- explain expected plan and indexes.\n\nNeed decide definitions:\n- last 90 days: based on orders.created_at? likely orders in last 90 days. Refunds maybe associated to those orders? Net revenue = sum(order.total) - sum(refund.amount) for orders in last 90 days. Refund rate = refunded amount / gross revenue? Or refunded orders / orders? \"refund rate\" ambiguous. Could be refund amount / total revenue (net? gross). We can define as refunded amount / gross order total for the period, or count of refunded orders / order count. Since refunds table amount, likely refund rate = total refunds / total order amount. But could be percentage of orders with refunds. We can include both? The prompt asks with order count and refund rate. We can define refund_rate = COALESCE(refund_amount,0) / NULLIF(gross_revenue,0). Maybe also refund_order_rate? But keep simple.\n\nNeed top 3 per region by net revenue. Use window functions: RANK() or ROW_NUMBER() OVER (PARTITION BY region ORDER BY net_revenue DESC). Need handle ties? Top 3 customers: if ties, RANK can return more than 3; ROW_NUMBER exactly 3. Could use RANK"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "prose_market",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.466576448628416,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 116,
+   "wall_ms": 8539.015769958496,
+   "vllm_timing": {
+    "decode_s": 8.426982308970764,
+    "prefill_s": 0.10954068601131439,
+    "queue_s": 6.543006747961044e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.466576448628416,
+    "prefill_share_of_inference": 0.012832002687242144
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7414448669201521,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1713,
+   "ordinal": 17,
+   "text": "We need to answer user's request: describe a Sunday morning wet market in a mid-sized Taiwanese city from POV of someone who has shopped there for thirty years. Cover sounds, order of stalls, negotiations, what changed since they started. Six paragraphs, no bullet points.\n\nNeed produce final exactly six paragraphs, no bullets. Vivid grounded description. Need likely in English. Ensure six paragraphs separated by blank lines. No bullet points. Need maybe first person. Mid-sized Taiwanese city, wet market. Sounds, order of stalls, negotiations, changes. Need 30 years perspective. Let's craft six paragraphs.\n\nNeed be careful: six paragraphs. Each paragraph maybe 3-5 sentences. No bullets.\n\nLet's plan:\n1. Opening: Sunday morning, rain? wet market, sensory. I've come for thirty years. Sounds: radio, clappers, water, vendors.\n2. Order of stalls: entrance, tofu/vegetables, meat, seafood, fish, herbs, prepared foods, fruit? Maybe mid-sized city: entrance has tofu and vegetables, then meat, then fish, then herbs, then cooked foods, fruit at back.\n3. Sounds and negotiations: haggling, prices, vendor calls, scales, plastic bags, coins.\n4. Negotiation specifics: I ask for fish, vendor says price, I counter, small give-and-take, relationship.\n5. Changes: old vendors retired, younger ones, plastic bags to paper? refrigeration, mobile payments, fewer live fish? more packaged, less smell? but still.\n6. Closing: continuity, Sunday ritual, what remains.\n\nNeed ensure six paragraphs. Let's draft.\n\nPara1: \"I still know the market by the sound before I see it: the wet slap of fish tails on blue plastic, the hiss of a gas burner, the tinny pop song from a speaker wedged between crates of bok choy. On Sunday"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "prose_argument",
+   "class": "prose",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.467894461045056,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 103,
+   "wall_ms": 8528.624057769775,
+   "vllm_timing": {
+    "decode_s": 8.426748322031926,
+    "prefill_s": 0.09916623798198998,
+    "queue_s": 1.2330012395977974e-05,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.467894461045056,
+    "prefill_share_of_inference": 0.011631155494693126
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 3,
+    "distinct_ratio": 0.6423611111111112,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 2062,
+   "ordinal": 18,
+   "text": "We need to answer user's request: \"Make the strongest case that public libraries should not lend e-books through commercial platforms, then make the strongest case against your own position, then say honestly which you find more persuasive and why. Continuous prose, no headings.\"\n\nNeed produce continuous prose, no headings. Need likely one paragraph? Continuous prose means no headings, maybe can be multiple paragraphs? \"Continuous prose\" likely no bullet points, no headings. Could be a single flowing essay. Need make strongest case for position: public libraries should not lend e-books through commercial platforms. Then strongest case against own position. Then honestly which more persuasive and why. Need careful, concede fairly. Need maybe no headings. Need ensure no headings. Could be 3-4 paragraphs. Need maybe avoid explicit labels? But can say \"The strongest case...\" etc. Need no headings. Need final only prose.\n\nNeed think content.\n\nPosition: public libraries should not lend e-books through commercial platforms. Strongest case:\n- Public libraries are democratic institutions, public trust, should not outsource core service to private commercial platforms that can change terms, prices, access, privacy, algorithms.\n- E-book lending via commercial platforms (OverDrive, Hoopla, Libby/CloudLibrary, etc.) often means libraries purchase licenses, not books; limited copies, loan periods, holds, DRM, vendor lock-in.\n- Commercial platforms have incentives to maximize revenue, data collection, platform control, may prioritize bestsellers, restrict access, impose fees, change interfaces, shut services.\n- Privacy: user data, reading habits, location, identity shared with vendors; libraries have duty to protect patron privacy; commercial platforms may collect analytics, sell? Even if not sell, risk.\n- Equity: digital divide, app requirements, device requirements, account creation, Wi-Fi, data plans; commercial platforms may be less accessible than physical books; may exclude patrons without smartphones, stable internet, digital literacy"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "reason_probability",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.45221979328373,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 145,
+   "wall_ms": 8561.331748962402,
+   "vllm_timing": {
+    "decode_s": 8.429531890025828,
+    "prefill_s": 0.12935564998770133,
+    "queue_s": 8.115021046251059e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.45221979328373,
+    "prefill_share_of_inference": 0.015113605522090649
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.7708333333333334,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 957,
+   "ordinal": 19,
+   "text": "We need answer user's probability problem. Need produce final with Bayes explicit, sanity sum, intuition why not simply proportional to output share. Let's compute.\n\nMachines A,B,C. Prior P(A)=0.2, P(B)=0.3, P(C)=0.5. Defect rates P(D|A)=0.05, P(D|B)=0.03, P(D|C)=0.01.\nP(D)=0.2*0.05 + 0.3*0.03 + 0.5*0.01 = 0.01 + 0.009 + 0.005 = 0.024.\nPosterior:\nP(A|D)=0.01/0.024 = 10/24 = 5/12 ≈0.4166667.\nP(B|D)=0.009/0.024 = 9/24 = 3/8 =0.375.\nP(C|D)=0.005/0.024 = 5/24 ≈0.2083333.\nSum 10+9+5=24/24=1.\nIntuition: not proportional to output share because defective items are more likely from machines with higher defect rates. Machine A has half output? Actually A 20% output but 5% defect, C 50% output but 1% defect. Defect contribution: A 10% of total defects, B 9%, C 5%. So A overrepresented relative to 20%, C underrepresented relative to 50%. The posterior is proportional to prior * likelihood, not prior alone. If all defect rates equal, posterior would equal"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "reason_invariant",
+   "class": "reason",
+   "think": true,
+   "temperature": 0.0,
+   "decode_tok_s": 47.46070998376159,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 110,
+   "wall_ms": 8529.755115509033,
+   "vllm_timing": {
+    "decode_s": 8.428023940999992,
+    "prefill_s": 0.0991742400219664,
+    "queue_s": 6.85499981045723e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.46070998376159,
+    "prefill_share_of_inference": 0.011630343040775988
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6027874564459931,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1698,
+   "ordinal": 20,
+   "text": "We need answer math puzzle. Need solve carefully. Problem: Nine coins on table, some heads up. A move flips exactly two coins. Determine for which starting configurations possible to reach all-heads. Identify invariant, prove preserved, state complete condition.\n\nWe need think. We have 9 coins, each state H/T. Move flips exactly two coins (choose any two distinct coins? likely exactly two coins, distinct). Need reach all heads. We need characterize starting configurations.\n\nThis is a parity/invariant problem. Flipping two coins changes number of heads by -2, 0, +2 depending on pair: TT -> HH increases by 2; HH -> TT decreases by 2; HT -> TH unchanged. So parity of number of heads is invariant. All heads has 9 heads, odd. So necessary: initial number of heads odd. Is it sufficient? With 9 coins, can we reach all heads iff number of heads odd? Need check. If initial heads odd, can we always? We can flip pairs. Equivalent to vector over F2: state x_i=1 if tails? Let's define target all heads = 0 tails. Move flips two coordinates (add e_i+e_j mod2). Reachable states from initial are initial plus span of all vectors with weight 2. Span of weight-2 vectors in F2^9? For n=9, span of all e_i+e_j is the even-weight subspace (sum coordinates 0) if n? Yes, all even parity vectors. So reachable iff difference between initial and target has even parity. Target all heads (0 tails) has even parity 0. Initial tails parity must be even. Number of heads = 9 - tails. Tails even iff heads odd. So necessary and sufficient. Need prove sufficiency constructively.\n\nBut maybe there is another invariant? Since move flips exactly two coins, parity of number of heads invariant. Complete condition:"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "chat_travel",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.460287060102324,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 117,
+   "wall_ms": 8540.473699569702,
+   "vllm_timing": {
+    "decode_s": 8.428099044016562,
+    "prefill_s": 0.11011826002504677,
+    "queue_s": 3.7879799492657185e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.460287060102324,
+    "prefill_share_of_inference": 0.012897102065195941
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.6988416988416989,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1730,
+   "ordinal": 21,
+   "text": "We need to answer user in English. Need produce final answer. User: \"I have four days in a city I have never visited and I hate crowds and museums. Talk me through how you would plan those four days in general, what you would deliberately skip, and how to find the good parts of a place without a guidebook. Be specific.\"\n\nWe need as friendly desk robot with opinions. Need likely general planning for unknown city, no specific city. Need be specific: four days, avoid crowds/museums. Talk through how plan, what skip, how find good parts without guidebook. Need maybe framework: Day 0 prep, Day 1 orientation, Day 2 neighborhood, Day 3 water/edge, Day 4 slow return. Specific tactics: use maps, transit, off-peak, local institutions, markets, parks, cemeteries, libraries, universities, churches/temples, laundromats, bookshops, cafes, public baths, viewpoints, periphery, suburbs, ferry, bike, walking. Deliberately skip: main tourist squares, top attractions, museum districts, central pedestrian zones at peak, famous restaurants, guided tours, Instagram spots, big markets at peak, central hotels? Need maybe \"skip the obvious first\". How find good parts without guidebook: triangulate: maps, local transit, local institutions, ask people, follow smells/sounds, look for maintenance, check local events, use apps? But without guidebook maybe use maps, local newspapers, library, university, municipal sites, public transport, local forums? Need be specific.\n\nNeed maybe include \"crowd-avoidance rules\": arrive before 9 or after 11, lunch 11:30/1:30, use transit, choose secondary neighborhoods, use \"one anchor per day\", \"leave at 3pm\", \"use weather as excuse\". Need maybe \"if you hate crowds and museums, don't plan a museum"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "chat_disagree",
+   "class": "chat",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.45453849578084,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 108,
+   "wall_ms": 8530.539274215698,
+   "vllm_timing": {
+    "decode_s": 8.42912000999786,
+    "prefill_s": 0.09897344495402649,
+    "queue_s": 7.11000757291913e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.45453849578084,
+    "prefill_share_of_inference": 0.011605576964750192
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.639344262295082,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1979,
+   "ordinal": 22,
+   "text": "We need to respond to user: \"Someone tells you that reading fiction is a waste of time compared with reading non-fiction. Disagree with them properly: take their point seriously first, then give your reasons, then say what part of their argument you think actually holds.\"\n\nWe need to produce final answer likely in English. Need to be friendly desk robot with opinions. Need structure: take point seriously, reasons, what part holds. Need disagree properly. Could be conversational. Ensure not too long but thorough. Need maybe mention fiction vs nonfiction not zero-sum. Fiction can teach empathy, narrative, language, imagination, emotional intelligence, pattern recognition, memory, etc. Nonfiction gives facts, frameworks, skills. Fiction can also convey nonfictional insights (history, science, social dynamics) in memorable form. Time is finite, so if someone only reads nonfiction for utility, fiction may seem waste. But \"waste\" depends on goals. If goal is immediate practical info, nonfiction may be more efficient. But if goal is becoming a better thinker/communicator/human, fiction is valuable. Also fiction can be a way to process nonfiction ideas. Need maybe say: I take their point seriously: if you're short on time and need specific knowledge, a novel won't teach you tax law or physics directly. Nonfiction can be denser in explicit information. That's fair. But fiction isn't just entertainment; it's simulation of human experience. It trains you to hold multiple perspectives, infer motives, understand ambiguity, and remember ideas through story. It can make nonfiction stick. It can reveal truths that nonfiction states but doesn't make you feel. Also many nonfiction books are poorly written or outdated; good fiction can be more durable.\n\nNeed \"what part of their argument actually holds\": The part that holds is that not all fiction is equally valuable, and if you read only for immediate practical payoff, fiction can feel inefficient. Also if you use"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "zh_moving",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.48219913337354,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 122,
+   "wall_ms": 8536.884546279907,
+   "vllm_timing": {
+    "decode_s": 8.424209646997042,
+    "prefill_s": 0.10990244400454685,
+    "queue_s": 6.3239713199436665e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.48219913337354,
+    "prefill_share_of_inference": 0.01287801740036067
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 0,
+    "distinct_ratio": 1.0,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": "too short to assess"
+   },
+   "text_len": 568,
+   "ordinal": 23,
+   "text": "我們需要回答使用者中文（繁體）請求。角色：實務經驗豐富的顧問。任務：朋友從台北搬到台南工作，租屋、交通、生活成本、社交圈都要重新建立。請詳細說明建議他在搬家前三個月、搬家當月、以及搬家後三個月分別處理哪些事，每個階段說明原因與常見錯誤。請用連貫段落書寫。\n\n需要最終答案用連貫段落，不要 bullet? 使用者說「請用連貫段落書寫」，可能希望段落式，不要條列。可以分三個段落，每段對應階段，包含原因與常見錯誤。要詳細。繁體中文。\n\n需要思考內容：\n台北到台南：距離約 300 公里，高鐵/火車/客車/自駕。生活成本：台南租金較台北低，但物價不一定低很多，南部生活節奏、氣候（濕熱、颱風、梅雨）、交通（大眾運輸較少，機車/汽車較重要，捷運無，有台鐵/高鐵/公車/捷運? 台南有捷運? 有台鐵、高鐵、公車、捷運? 台南沒有捷運，但有捷運? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南有「捷運」? 台南"
+  },
+  {
+   "pass": 3,
+   "arm": "baseline-vllm",
+   "prompt": "zh_review",
+   "class": "zh",
+   "think": false,
+   "temperature": 0.0,
+   "decode_tok_s": 47.50395288157749,
+   "predicted_n": 400,
+   "hit_cap": true,
+   "finish_reason": "length",
+   "prompt_tokens": 129,
+   "wall_ms": 8543.765306472778,
+   "vllm_timing": {
+    "decode_s": 8.420351902022958,
+    "prefill_s": 0.1207579459878616,
+    "queue_s": 6.27501867711544e-06,
+    "generation_tokens": 400.0,
+    "decode_tok_s": 47.50395288157749,
+    "prefill_share_of_inference": 0.014138437291728019
+   },
+   "spec": {
+    "assumes_single_sequence_in_flight": true,
+    "drafted": null,
+    "accepted": null,
+    "drafts": null
+   },
+   "degeneracy": {
+    "max_ngram_repeat": 1,
+    "distinct_ratio": 0.925,
+    "longest_run_chars": 0,
+    "is_degenerate": false,
+    "reason": ""
+   },
+   "text_len": 1056,
+   "ordinal": 24,
+   "text": "我們需要回答使用者：「有人提出要把公司內部一個每天處理三百萬筆交易的批次系統，從每晚跑一次的排程改成即時串流處理。請詳細分析這個提案：可能的好處、被低估的成本與風險、需要先釐清哪些前提、以及你會建議用什麼方式分階段驗證。請用連貫段落論述。」\n\n角色：嚴謹的技術評審。需要用中文（繁體）連貫段落論述。需要詳細分析好處、被低估成本與風險、前提、分階段驗證。\n\n需要思考：每天300萬筆交易，批次每晚跑一次。改成即時串流處理。要嚴謹，避免過度吹捧。可能好處：降低延遲、即時監控/風控/合規、改善使用者體驗、減少批次失敗影響、更精細的容量規劃、事件驅動整合、更快對帳/異常偵測、可能降低某些峰值負載？但批次300萬/天不算極大，平均約35筆/秒，峰值可能更高。即時串流需要持續處理，可能成本更高。被低估成本：基礎設施（Kafka/Kinesis/Pulsar, Flink/Spark Streaming, stateful processing, exactly-once, idempotency, schema evolution, observability, backfill, replay, data quality, latency vs throughput, storage retention, security, compliance, DR, multi-region, team skills, testing, integration, change management, data governance, reconciliation, audit, cost of 24/7 operations, vendor lock-in, data consistency, partial failures, poison pills, hot keys, backpressure, state size, checkpointing, exactly-once semantics, end-to-end latency, data skew, time zones, late data, out-of-order, idempotent keys, deduplication, replay from source, schema registry, versioning, data lineage, privacy, PII, access control, network,"
+  }
+ ],
+ "incidents": [
+  {
+   "kind": "server_failed_to_start",
+   "arm_pass": "pass01_mtp-k1",
+   "expected": true,
+   "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass01_mtp-k1.log",
+   "log": "results/server_logs/phase_v_pass01_mtp-k1.log"
+  },
+  {
+   "kind": "server_failed_to_start",
+   "arm_pass": "pass01_mtp-k2",
+   "expected": true,
+   "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass01_mtp-k2.log",
+   "log": "results/server_logs/phase_v_pass01_mtp-k2.log"
+  },
+  {
+   "kind": "server_failed_to_start",
+   "arm_pass": "pass02_mtp-k1",
+   "expected": true,
+   "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass02_mtp-k1.log",
+   "log": "results/server_logs/phase_v_pass02_mtp-k1.log"
+  },
+  {
+   "kind": "server_failed_to_start",
+   "arm_pass": "pass02_mtp-k2",
+   "expected": true,
+   "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass02_mtp-k2.log",
+   "log": "results/server_logs/phase_v_pass02_mtp-k2.log"
+  },
+  {
+   "kind": "server_failed_to_start",
+   "arm_pass": "pass03_mtp-k2",
+   "expected": true,
+   "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass03_mtp-k2.log",
+   "log": "results/server_logs/phase_v_pass03_mtp-k2.log"
+  },
+  {
+   "kind": "server_failed_to_start",
+   "arm_pass": "pass03_mtp-k1",
+   "expected": true,
+   "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass03_mtp-k1.log",
+   "log": "results/server_logs/phase_v_pass03_mtp-k1.log"
+  }
+ ],
+ "arm_pass_host_load": {
+  "pass01_baseline-vllm": {
+   "loadavg_1m": 0.9296875,
+   "competing_pct": 0.0,
+   "competing": [],
+   "contended": false,
+   "attribution": "descent"
+  },
+  "pass01_mtp-k1": {
+   "loadavg_1m": 0.208984375,
+   "competing_pct": 0.0,
+   "competing": [],
+   "contended": false,
+   "attribution": "descent"
+  },
+  "pass01_mtp-k2": {
+   "loadavg_1m": 0.677734375,
+   "competing_pct": 0.0,
+   "competing": [],
+   "contended": false,
+   "attribution": "descent"
+  },
+  "pass02_mtp-k1": {
+   "loadavg_1m": 1.1103515625,
+   "competing_pct": 0.0,
+   "competing": [],
+   "contended": false,
+   "attribution": "descent"
+  },
+  "pass02_mtp-k2": {
+   "loadavg_1m": 0.966796875,
+   "competing_pct": 0.0,
+   "competing": [],
+   "contended": false,
+   "attribution": "descent"
+  },
+  "pass02_baseline-vllm": {
+   "loadavg_1m": 0.9091796875,
+   "competing_pct": 0.0,
+   "competing": [],
+   "contended": false,
+   "attribution": "descent"
+  },
+  "pass03_mtp-k2": {
+   "loadavg_1m": 0.357421875,
+   "competing_pct": 0.0,
+   "competing": [],
+   "contended": false,
+   "attribution": "descent"
+  },
+  "pass03_baseline-vllm": {
+   "loadavg_1m": 0.85791015625,
+   "competing_pct": 0.0,
+   "competing": [],
+   "contended": false,
+   "attribution": "descent"
+  },
+  "pass03_mtp-k1": {
+   "loadavg_1m": 0.2822265625,
+   "competing_pct": 0.0,
+   "competing": [],
+   "contended": false,
+   "attribution": "descent"
+  }
+ },
+ "arm_pass_gpu_state": {
+  "pass01_baseline-vllm": {
+   "mem_transfer_offset": 0,
+   "core_offset": 0,
+   "power_limit_w": 420.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_current_graphics_mhz": 210.0
+  },
+  "pass01_mtp-k1": {
+   "mem_transfer_offset": 0,
+   "core_offset": 0,
+   "power_limit_w": 420.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_current_graphics_mhz": 1935.0
+  },
+  "pass01_mtp-k2": {
+   "mem_transfer_offset": 0,
+   "core_offset": 0,
+   "power_limit_w": 420.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_current_graphics_mhz": 300.0
+  },
+  "pass02_mtp-k1": {
+   "mem_transfer_offset": 0,
+   "core_offset": 0,
+   "power_limit_w": 420.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_current_graphics_mhz": 285.0
+  },
+  "pass02_mtp-k2": {
+   "mem_transfer_offset": 0,
+   "core_offset": 0,
+   "power_limit_w": 420.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_current_graphics_mhz": 1980.0
+  },
+  "pass02_baseline-vllm": {
+   "mem_transfer_offset": 0,
+   "core_offset": 0,
+   "power_limit_w": 420.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_current_graphics_mhz": 315.0
+  },
+  "pass03_mtp-k2": {
+   "mem_transfer_offset": 0,
+   "core_offset": 0,
+   "power_limit_w": 420.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_current_graphics_mhz": 1950.0
+  },
+  "pass03_baseline-vllm": {
+   "mem_transfer_offset": 0,
+   "core_offset": 0,
+   "power_limit_w": 420.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_current_graphics_mhz": 1965.0
+  },
+  "pass03_mtp-k1": {
+   "mem_transfer_offset": 0,
+   "core_offset": 0,
+   "power_limit_w": 420.0,
+   "clocks_max_memory_mhz": 9751.0,
+   "clocks_max_graphics_mhz": 2130.0,
+   "clocks_current_graphics_mhz": 1935.0
+  }
+ },
+ "arm_pass_settle": {},
+ "arm_pass_spec": {
+  "pass01_baseline-vllm": {
+   "assumes_single_sequence_in_flight": true,
+   "drafted": null,
+   "accepted": null,
+   "drafts": null
+  },
+  "pass02_baseline-vllm": {
+   "assumes_single_sequence_in_flight": true,
+   "drafted": null,
+   "accepted": null,
+   "drafts": null
+  },
+  "pass03_baseline-vllm": {
+   "assumes_single_sequence_in_flight": true,
+   "drafted": null,
+   "accepted": null,
+   "drafts": null
+  }
+ },
+ "arm_pass_failed": {
+  "pass01_mtp-k1": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass01_mtp-k1.log",
+  "pass01_mtp-k2": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass01_mtp-k2.log",
+  "pass02_mtp-k1": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass02_mtp-k1.log",
+  "pass02_mtp-k2": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass02_mtp-k2.log",
+  "pass03_mtp-k2": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass03_mtp-k2.log",
+  "pass03_mtp-k1": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass03_mtp-k1.log"
+ },
+ "arm_order_by_pass": {
+  "1": [
+   "baseline-vllm",
+   "mtp-k1",
+   "mtp-k2"
+  ],
+  "2": [
+   "mtp-k1",
+   "mtp-k2",
+   "baseline-vllm"
+  ],
+  "3": [
+   "mtp-k2",
+   "baseline-vllm",
+   "mtp-k1"
+  ]
+ },
+ "gpu_state_at_end": {
+  "mem_transfer_offset": 0,
+  "core_offset": 0,
+  "power_limit_w": 420.0,
+  "clocks_max_memory_mhz": 9751.0,
+  "clocks_max_graphics_mhz": 2130.0,
+  "clocks_current_graphics_mhz": 1965.0
+ }
+}

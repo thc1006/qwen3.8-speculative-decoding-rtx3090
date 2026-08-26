@@ -345,6 +345,11 @@ def run(arms: list[dict], *, binary: str, model: str, common_args: list[str], ba
 
     result["gpu_state_at_end"] = G.read_state(gpu_index)
     _atomic_write_json(out_path, result)
+    # Released here, not left for the next run to take over as stale. acquire_lock does handle a
+    # dead owner, but a lock file outliving its process makes `test -f .gpu-in-use.lock` -- which
+    # is how a human and every guard in this repository check whether a measurement is running --
+    # answer yes when nothing is.
+    G.release_lock()
     return result
 
 
