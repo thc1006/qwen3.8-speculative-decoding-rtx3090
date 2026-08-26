@@ -426,7 +426,7 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         ident = sum(1 for d in ds if d["identical"])
         fr = [d["common_prefix_frac"] for d in ds if not d["identical"]]
         med = f"{statistics.median(fr):.3f}" if fr else "-"
-        print(f"  {a:26s} byte-identical {ident}/{len(ds)}   "
+        print(f"  {a:26s} no divergence through cap {ident}/{len(ds)}   "
               f"median shared prefix when forked: {med}")
 
     print("\n--- determinism (greedy, same arm/prompt across passes) ---")
