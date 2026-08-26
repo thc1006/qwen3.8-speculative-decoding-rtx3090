@@ -492,7 +492,12 @@ def cross_check_against_log(result: dict, rows: list[dict]) -> bool:
     """
     acc_by = result.get("arm_pass_acceptance", {})
     if not acc_by:
-        return
+        # True, not None. This function's return value now gates whether report() prints k at
+        # all, and a bare `return` here made every result without server acceptance logs -- every
+        # synthetic fixture in the test suite among them -- read as a failed integrity check.
+        # No log to compare against is "not checked", which is the state this study has always
+        # been in for those files; it is not "checked and wrong".
+        return True
     checked = mismatched = 0
     skipped: list[tuple] = []
     ml_checked: list[float] = []

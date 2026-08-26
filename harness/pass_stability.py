@@ -180,6 +180,13 @@ def report(result: dict) -> None:
         elif hl:
             print(f"      the host was NOT contended at arm entry "
                   f"({hl.get('competing_pct', 0):.0f}% competing), so the scatter is the arm's own.")
+        else:
+            # Third branch of the HOST-LOAD chain. It used to be the else of the power-correlation
+            # test below, so any arm-pass whose scatter did not track power was told that nothing
+            # was recorded about the host -- two lines after this same function had named the
+            # process that contended for it. A tool contradicting itself in consecutive sentences.
+            print(f"      this file predates arm_pass_host_load, so there is nothing recorded "
+                  f"about the host and the cause cannot be settled from the result alone.")
         if (d.get("r_power") or 0) > 0.7 and abs(d.get("r_clock") or 0) < 0.5:
             # r_clock is None when the clock never moved -- which phase_r2 arranges deliberately
             # with nvidia-smi -lgc. That is the stronger case, not a missing one, so it gets a
@@ -189,9 +196,6 @@ def report(result: dict) -> None:
             print(f"      the scatter tracks POWER (r={d['r_power']:+.2f}) and {clk}. Identical "
                   f"work at the same clock drawing more watts is the GPU idling less, which the "
                   f"thermal gate cannot see.")
-        else:
-            print(f"      this file predates arm_pass_host_load, so there is nothing recorded "
-                  f"about the host and the cause cannot be settled from the result alone.")
     print("\n  An outlier is a candidate, not a verdict. What settles it is another pass: an "
           "arm-pass that\n  is noisy under known-clean conditions was noisy for its own reasons.")
 

@@ -1563,33 +1563,53 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
         self.assertIsNotNone(row, "the README no longer has a phase Q row")
         text = row.group(0)
         stated = set()
-        for m in re.finditer(r"\b(one|two|three|four|\d+) rungs? of four", text):
-            g = m.group(1)
+        # Case-insensitive: the count opens a sentence in the current row, so it is capitalised,
+        # and a guard that only reads lowercase reports "the README no longer states a count".
+        for m in re.finditer(r"\b(one|two|three|four|\d+) rungs? of four", text, re.I):
+            g = m.group(1).lower()
             stated.add(words.get(g, int(g) if g.isdigit() else 0))
         self.assertTrue(stated, "the README no longer states a rung count out of four")
         self.assertEqual(stated, {complete},
                          f"{complete} phase_q rungs hold 300 records; the README says "
                          f"{sorted(stated)}")
 
-    def test_reproduce_pins_the_commits_the_trees_are_actually_at(self):
-        """A reproduce block that clones a moving branch reproduces something else."""
-        import re
+    def test_the_lock_file_pins_the_commits_the_trees_are_actually_at(self):
+        """A reproduce procedure that clones a moving branch reproduces something else.
+
+        The pins used to be shell variables in the README's reproduce block, and were checked
+        with `rev-parse --short`, which compares an abbreviation to the same abbreviation. They
+        now live in repro/phase_a.lock.json, are full 40-character objects, and are compared in
+        full against what the trees are at.
+        """
         import subprocess
-        text = self._readme()
-        pins = dict(re.findall(r"^(LLAMA_MASTER_COMMIT|DFLASH2_COMMIT)=([0-9a-f]{7,40})",
-                               text, re.M))
-        self.assertEqual(set(pins), {"LLAMA_MASTER_COMMIT", "DFLASH2_COMMIT"},
-                         "the reproduce block does not pin both trees")
-        for var, tree in (("LLAMA_MASTER_COMMIT", "llamacpp-master"),
-                          ("DFLASH2_COMMIT", "llamacpp-dflash2")):
+        lock = self.ROOT / "repro" / "phase_a.lock.json"
+        if not lock.exists():
+            self.fail("repro/phase_a.lock.json is missing; the reproduce procedure reads it")
+        pins = json.loads(lock.read_text(encoding="utf-8"))
+        for key, tree in (("llama_master_commit", "llamacpp-master"),
+                          ("dflash2_commit", "llamacpp-dflash2")):
+            sha = pins.get(key)
+            self.assertIsNotNone(sha, f"the lock file does not pin {key}")
+            self.assertRegex(sha, r"^[0-9a-f]{40}$",
+                             f"{key} is not a full 40-character object; a prefix can resolve to "
+                             f"a different commit as a repository grows")
             d = self.ROOT / tree
             if not (d / ".git").exists():
                 continue
-            head = subprocess.run(["git", "-C", str(d), "rev-parse", "--short", "HEAD"],
+            head = subprocess.run(["git", "-C", str(d), "rev-parse", "HEAD"],
                                   capture_output=True, text=True).stdout.strip()
             if head:
-                self.assertEqual(pins[var], head,
-                                 f"{tree} is at {head} but the README pins {pins[var]}")
+                self.assertEqual(sha, head, f"{tree} is at {head}, the lock file pins {sha}")
+
+    def test_the_readme_quotes_the_same_commits_the_lock_file_pins(self):
+        lock = self.ROOT / "repro" / "phase_a.lock.json"
+        if not lock.exists():
+            self.skipTest("no lock file")
+        pins = json.loads(lock.read_text(encoding="utf-8"))
+        text = self._readme()
+        for key in ("llama_master_commit", "dflash2_commit"):
+            self.assertIn(pins[key], text,
+                          f"the README does not quote the {key} the runner will use")
 
 
 class TestAnchorEstimatorMatchesBand(unittest.TestCase):
@@ -2514,17 +2534,43 @@ class TestHostContentionIsRecorded(unittest.TestCase):
             self.assertFalse(c["comm"].startswith("python"),
                              f"the run's own harness is being counted against it: {c}")
 
+    # A ps table with a compiler two levels below pid 100, an rsync belonging to nobody, and
+    # two processes under the 5 % floor.
+    PS = ("  100     1  0.5 bash\n"
+          "  200   100  0.3 python3\n"
+          "  300   200 310.0 cc1plus\n"
+          "  400     1 290.0 rsync\n"
+          "  500     1  2.0 sshd")
+
     def test_a_busy_host_is_flagged(self):
+        """Fed a table, not measured on the machine running the suite.
+
+        This used to pass own_names=() so the harness's own python counted against it, which is
+        how the threshold was exercised. Descent attribution makes that impossible: the harness
+        is always its own descendant. Burning CPU to make a real busy host would put load on a
+        machine that may be measuring, which is the one thing this module exists to prevent.
+        """
         import telemetry as T
-        # own_names is emptied, so the harness and server that ARE running count as competition.
-        # That is the only way to exercise the threshold without starting a load on a machine
-        # that may be mid-measurement.
-        load = T.host_load(own_names=())
-        if load.get("note"):
-            self.skipTest(load["note"])
-        self.assertGreater(load["competing_pct"], 0.0,
-                           "nothing at all was seen, so the probe cannot detect a busy host")
+        load = T.host_load(own_names=(), _ps_output=self.PS, _self_pid=999)
+        self.assertAlmostEqual(load["competing_pct"], 600.0)
+        self.assertEqual({c["comm"] for c in load["competing"]}, {"cc1plus", "rsync"})
+        self.assertTrue(load["contended"])
         self.assertEqual(load["contended"], load["competing_pct"] >= 25.0)
+
+    def test_a_descendant_however_deep_is_not_competition(self):
+        import telemetry as T
+        load = T.host_load(own_names=(), _ps_output=self.PS, _self_pid=100)
+        self.assertAlmostEqual(load["competing_pct"], 290.0,
+                               msg="cc1plus is a grandchild of 100 and must not be counted")
+        self.assertEqual({c["comm"] for c in load["competing"]}, {"rsync"})
+
+    def test_a_quiet_host_is_not_flagged_and_the_floor_holds(self):
+        import telemetry as T
+        quiet = "  100     1  0.5 bash\n  500     1  2.0 sshd\n  600     1  4.9 cron"
+        load = T.host_load(own_names=(), _ps_output=quiet, _self_pid=999)
+        self.assertEqual(load["competing_pct"], 0.0,
+                         "everything here is under the 5 % floor")
+        self.assertFalse(load["contended"])
 
     def test_the_gate_is_wired_into_arm_entry(self):
         # Shaped as a source check on purpose: the defect this guards against is the call being

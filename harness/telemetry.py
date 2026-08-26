@@ -287,7 +287,7 @@ def _descendants_of(pid: int, ppid_of: dict[int, int]) -> set[int]:
     return seen
 
 
-def host_load(own_names=("llama-server",)):
+def host_load(own_names=("llama-server",), *, _ps_output=None, _self_pid=None):
     """What else is competing for the CPU at arm entry.
 
     The GPU is gated on temperature and clock; the host was not gated on anything. On 2026-08-26 a
@@ -320,16 +320,26 @@ def host_load(own_names=("llama-server",)):
         out["loadavg_1m"] = os.getloadavg()[0]
     except OSError:
         pass
-    try:
-        ps = subprocess.run(["ps", "-eo", "pid,ppid,pcpu,comm", "--no-headers"],
-                            capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        out["note"] = "ps unavailable; contention not checked"
-        return out
+    # `_ps_output` and `_self_pid` are a test seam and nothing else. Before descent attribution
+    # a test could exercise the 25 % threshold by passing own_names=() so the harness's own
+    # python counted against it; descent makes that impossible by construction, because the
+    # harness is always its own descendant. Without a seam the threshold and the descent rule
+    # could only be checked by burning CPU on the machine running the suite, which is the one
+    # thing this module exists to keep off a measuring host.
+    if _ps_output is None:
+        try:
+            ps = subprocess.run(["ps", "-eo", "pid,ppid,pcpu,comm", "--no-headers"],
+                                capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            out["note"] = "ps unavailable; contention not checked"
+            return out
+        ps_text = ps.stdout
+    else:
+        ps_text = _ps_output
 
     rows = []
     ppid_of: dict[int, int] = {}
-    for line in ps.stdout.splitlines():
+    for line in ps_text.splitlines():
         parts = line.split(None, 3)
         if len(parts) != 4:
             continue
@@ -340,7 +350,7 @@ def host_load(own_names=("llama-server",)):
         ppid_of[pid] = ppid
         rows.append((pid, pct, parts[3].strip()))
 
-    mine = _descendants_of(os.getpid(), ppid_of)
+    mine = _descendants_of(os.getpid() if _self_pid is None else _self_pid, ppid_of)
     for pid, pct, name in rows:
         if pct < 5.0 or pid in mine or any(o in name for o in own_names):
             continue
