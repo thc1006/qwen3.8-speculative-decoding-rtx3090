@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import analyze as A  # noqa: E402
 import bench  # noqa: E402
 import cost_model as CM  # noqa: E402
+import cross_rung as CR  # noqa: E402
 import stats as ST  # noqa: E402
 import telemetry as T  # noqa: E402
 
@@ -1289,11 +1290,18 @@ class TestRungDriverGates(unittest.TestCase):
             if not f.exists():
                 continue
             src = f.read_text(encoding="utf-8")
-            self.assertIn("EXPECTED", src, f"{name}: no expected count at all")
+            # Asserted as a PROPERTY, not as a variable name. run_phase_q.sh's gate was rewritten
+            # to check the shape of a result against the matrix rather than compare one integer,
+            # so the count it guards is now N_PROMPTS rather than EXPECTED. What has to survive
+            # any such rewrite is that whatever python-derived count the gate rests on is
+            # rejected when it comes back empty, non-numeric or zero -- those are the values that
+            # make `got >= count` true for a run that measured nothing.
             self.assertRegex(
-                src, r'case\s+"\$\{EXPECTED\}"\s+in',
-                f"{name}: the expected record count is used without being checked first. "
-                f"An empty or zero value makes every completeness gate pass.")
+                src, r"""case\s+"\$\{[A-Z_]+\}"\s+in\s*\n\s*''\|\*\[!0-9\]\*\|0\)""",
+                f"{name}: the count the completeness gate rests on is used without being "
+                f"checked for empty / non-numeric / zero first. Any of those makes the gate "
+                f"pass for a run that measured nothing, and this driver deletes weights on a "
+                f"passing gate.")
             self.assertIn("exit 1", src, f"{name}: the guard does not stop the run")
             checked += 1
         if checked == 0:
@@ -2586,6 +2594,213 @@ class TestPassStabilityFindsTheNoisyArmPass(unittest.TestCase):
         out = self._run(self._result(noisy_arm="b"))
         self.assertIn("predates arm_pass_host_load", out,
                       "a result with no host record implied the cause was known")
+
+
+class TestCrossRungRefusesWhatItCannotCompare(unittest.TestCase):
+    """The first run of cross_rung.py compared a finished rung against a one-pass rung.
+
+    It printed a paired interval, then took the ONE rung that had three passes, called its
+    pass-to-pass spread the within-rung drift for both, and concluded the difference was "several
+    times the within-rung drift". The half-finished rung had entered that maximum as a spread of
+    0.0000, because one value has a range of zero -- which reads as "no drift" when it means "no
+    estimate". A completeness guard had been in the design and was left out of the code.
+
+    Every case below is that failure or one of its neighbours.
+    """
+
+    ROOT = Path(__file__).parent.parent
+    FIXTURE = "results/phase_q_UD-Q4_K_XL.json"
+
+    def _load(self, mutate=None):
+        p = self.ROOT / self.FIXTURE
+        if not p.exists():
+            self.skipTest(f"{self.FIXTURE} not present")
+        d = json.loads(p.read_text(encoding="utf-8"))
+        if mutate is not None:
+            mutate(d)
+        return CR.rung_view(d, str(p))
+
+    def _other(self):
+        """A second view that differs only in the fields the guards key on."""
+        p = self.ROOT / self.FIXTURE
+        d = json.loads(p.read_text(encoding="utf-8"))
+        d["env"]["model"] = "/somewhere/else/other.gguf"
+        d["env"]["model_sha256"] = "ffffffffffff0000"
+        return CR.rung_view(d, str(p).replace("Q4", "Q9"))
+
+    def test_a_rung_that_stopped_after_one_pass_is_refused(self):
+        def truncate(d):
+            d["records"] = [r for r in d["records"] if r["pass"] == 1]
+        short = self._load(truncate)
+        full = self._other()
+        why = " | ".join(CR.guards(short, full))
+        self.assertIn("not finished", why,
+                      "a rung missing whole arm-passes was accepted for comparison")
+        self.assertIn("no within-rung estimate of session drift", why,
+                      "a one-pass rung was accepted, so the drift confound has nothing to bound it")
+
+    def test_one_pass_yields_no_drift_estimate_rather_than_a_spread_of_zero(self):
+        def truncate(d):
+            d["records"] = [r for r in d["records"] if r["pass"] == 1]
+        short = self._load(truncate)
+        per_pass = CR.per_pass_c(short, short["on_path"])
+        self.assertEqual(len(per_pass), 1,
+                         "one pass should produce one fit, not a fabricated second one")
+        src = inspect.getsource(CR.report)
+        self.assertIn("len(spreads) >= 2", src,
+                      "the drift verdict must require a spread from BOTH rungs; with one rung's "
+                      "spread standing in for both, a rung with no drift estimate silently "
+                      "borrows the other's")
+        self.assertNotIn("(not spreads) or", src,
+                         "an empty spread set must not satisfy the drift check")
+
+    def test_a_ragged_arm_pass_is_refused(self):
+        def drop_one(d):
+            for i, r in enumerate(d["records"]):
+                if r["pass"] == 2 and "mtp-n3" in r["arm"]:
+                    del d["records"][i]
+                    return
+            raise AssertionError("fixture has no mtp-n3 pass-2 record to drop")
+        ragged = self._load(drop_one)
+        why = " | ".join(CR.guards(ragged, self._other()))
+        self.assertIn("wrong prompt count", why,
+                      "an arm-pass short by a prompt was accepted; the total record count alone "
+                      "cannot see it")
+
+    def test_rungs_measured_with_different_binaries_are_refused(self):
+        a = self._load()
+        b = self._other()
+        b["binaries"] = {"master": {"llama-server": "0000000000000000"}}
+        why = " | ".join(CR.guards(a, b))
+        self.assertIn("different binaries", why,
+                      "two rungs built from different binaries are not a quantization contrast")
+
+    def test_the_same_weights_compared_against_themselves_are_refused(self):
+        a = self._load()
+        b = self._load()
+        why = " | ".join(CR.guards(a, b))
+        self.assertTrue("same weights" in why or "same model file" in why,
+                        f"comparing a rung with itself was allowed: {why}")
+
+    def test_expected_shape_comes_from_intent_not_from_what_survived(self):
+        """Inferring the pass count from the passes present makes every truncation look complete."""
+        src = inspect.getsource(CR.rung_view)
+        self.assertIn('design.get("passes")', src,
+                      "the expected pass count must come from the design block bench.py wrote "
+                      "before the run, not from the records that happen to exist")
+        self.assertIn('design.get("n_prompts")', src)
+
+
+class TestRungDriverDeletesOnPathNotOnProvenance(unittest.TestCase):
+    """Four defects in run_phase_q.sh, all of which had already fired or were one retry away.
+
+    The rung driver deletes 20 GB of weights on a passing gate, so each of these is a case where
+    the wrong thing gets deleted, the right thing gets kept forever, or a rung is skipped that
+    could have run.
+    """
+
+    ROOT = Path(__file__).parent.parent
+
+    def _src(self):
+        f = self.ROOT / "run_phase_q.sh"
+        if not f.exists():
+            self.skipTest("run_phase_q.sh not present")
+        return f.read_text(encoding="utf-8")
+
+    def test_deletion_is_decided_by_path_not_by_whether_this_run_downloaded_it(self):
+        """DOWNLOADED=0 on exactly the retry path, which is where cleanup matters most.
+
+        A rung that dies mid-run keeps its weights on purpose. The next invocation finds them
+        already staged, takes the reuse branch, sets DOWNLOADED=0 -- and then, having succeeded,
+        declines to delete them. 20 GB stays on a disk that had to be cleared by hand to start
+        the rung in the first place.
+        """
+        src = self._src()
+        delete = [ln for ln in src.splitlines() if "rm -f" in ln and "SRC" in ln]
+        self.assertTrue(delete, "no deletion of the staged file at all")
+        guard = [ln for ln in src.splitlines()
+                 if 'KEEP' in ln and '$SRC' in ln and ln.strip().startswith("if")]
+        self.assertTrue(guard, "the deletion is not guarded by KEEP and a path test")
+        self.assertNotIn("DOWNLOADED", " ".join(guard),
+                         "deletion still depends on whether THIS invocation downloaded the file; "
+                         "that is false on the retry path, where the staged copy is exactly the "
+                         "one that should be cleaned up")
+
+    def test_disk_and_vram_are_separate_tables(self):
+        """One table used for both is how UD-Q5_K_XL was skipped with enough disk to run it.
+
+        23.1 is a VRAM figure in decimal GB. The guard added 10 and compared it against `df -BG`,
+        which answers in GiB, so a 19.44 GiB file was refused into 28 GiB of free space and a
+        night of measurement was lost.
+        """
+        src = self._src()
+        self.assertIn("NEED_VRAM_GB", src, "no VRAM table")
+        self.assertIn("NEED_DISK_GIB", src, "no separate on-disk-size table")
+        dl = src.index("hf download")
+        disk_use = src.index("NEED_DISK_GIB[$RUNG]", src.index("free_gb="))
+        self.assertLess(disk_use, dl, "the disk guard does not consult the on-disk table")
+        head = src[:src.index("hf download")]
+        self.assertNotIn("NEED_VRAM_GB[$RUNG]} + 10", head,
+                         "a VRAM figure is still being used as a disk requirement")
+
+    def test_the_completeness_gate_reads_the_arm_list_from_the_matrix(self):
+        """A hardcoded arm count silently truncates a matrix that grows a width.
+
+        With N_ARMS=4 baked into the driver, adding a fifth width to phase_q.py makes a complete
+        run 375 records; the driver calls it done at 300 and deletes the weights.
+        """
+        src = self._src()
+        self.assertIn("matrices.phase_q", src,
+                      "the gate does not consult the matrix for the arm list")
+        self.assertNotIn("N_ARMS=", src,
+                         "an arm count is still hardcoded in the driver")
+        self.assertIn("arm_source", src,
+                      "the gate binds itself to the matrix with no fallback; the matrix refuses "
+                      "to import once the rung's weights are gone, which is the state every "
+                      "skip decision runs in")
+
+    def test_the_gate_survives_a_matrix_that_cannot_be_imported(self):
+        """A finished rung failed its own gate and started re-downloading 20 GB.
+
+        harness/matrices/phase_q.py raises at import time when its target gguf is absent, and
+        run_phase_q.sh deletes that gguf as soon as the rung is verified complete. So every
+        later invocation asks the gate about a rung whose matrix will not import. Binding the
+        gate to the matrix without a fallback turned "already complete, skip" into "partial,
+        archive it and re-stage 20 GB". Observed 2026-08-26; the old driver had a comment
+        warning about exactly this and the rewrite reintroduced it anyway.
+
+        QWEN_Q_TARGET is set to a value the matrix rejects outright, so the import failure is
+        guaranteed regardless of which ggufs happen to be on disk when this runs.
+        """
+        import os, re, subprocess, tempfile
+        f = self.ROOT / "run_phase_q.sh"
+        if not f.exists():
+            self.skipTest("run_phase_q.sh not present")
+        src = f.read_text(encoding="utf-8")
+        m = re.search(r"^gate\(\) \{.*?^\}", src, re.S | re.M)
+        self.assertIsNotNone(m, "no gate() function to test")
+        result = self.ROOT / "results/phase_q_UD-Q5_K_XL.json"
+        if not result.exists():
+            self.skipTest("no complete rung result to gate")
+        # Built as a line list: embedding newlines in the literals is what broke this once.
+        lines = ["set -u", "cd " + str(self.ROOT), "N_PROMPTS=25", "PASSES=3",
+                 m.group(0), 'gate "' + str(result) + '" NOT_A_REAL_RUNG']
+        with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as th:
+            th.write("\n".join(lines) + "\n")
+            tmp = th.name
+        self.addCleanup(lambda: os.unlink(tmp))
+        out = subprocess.run(["bash", tmp], capture_output=True, text=True, timeout=120).stdout
+        self.assertTrue(out.startswith("OK"),
+                        f"a complete rung was rejected because the matrix would not import: {out!r}")
+
+    def test_deleting_a_rung_also_removes_its_staging_sidecars(self):
+        """`rm -f $SRC` leaves a .sha256 naming a file that no longer exists."""
+        src = self._src()
+        line = [ln for ln in src.splitlines() if "rm -f" in ln and "SRC" in ln]
+        self.assertTrue(any(".sha256" in ln for ln in line),
+                        "the sha256 sidecar outlives the weights it describes")
+        self.assertIn(".cache/huggingface/download", src,
+                      "the downloader's per-file cache entry is never cleaned up")
 
 
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
