@@ -2261,3 +2261,88 @@ baseline arm ends up with (2.37 against 1.38 GiB).
 
 `docs/PHASE_V_DESIGN.md` is left as written rather than silently corrected; this Correction is the
 record that its arithmetic was tested and found short.
+
+
+## Correction 24, 2026-08-26 20:08: Correction 23's root cause was wrong, and the real one is a duplicated embedding
+
+Correction 23 said the MTP head loads unquantized because `vllm/config/speculative.py`'s
+`qwen3_5` branch does not pass `quantization_config` to the draft, the way the `step3p5` branch
+does -- and that a 0.79 GiB head therefore costs 2.37 GiB, "the factor of three INT4-to-unquantized
+implies". That reasoning was pattern-matching on a ratio and it does not survive testing.
+
+### What refuted it
+
+**A patch of the fix that account predicts changes nothing.** vLLM PR #49553 (open, fixes
+#49552) addresses exactly "MTP draft model ignores checkpoint per-layer quantization config ...
+every MTP layer silently falls back to an Unquantized method". Its fix is one line: expose
+`hf_to_vllm_mapper` on the registered `Qwen3_5MTP` class, because `configure_quant_config` reads
+it off the registered class while it lived only on the inner `Qwen3_5MultiTokenPredictor`.
+Applied locally to `.venv-vllm`, the OOM is **unchanged**: sixth attempt, same 2.37 GiB request,
+same 2.25 GiB free.
+
+**The decoder layers were quantized all along.** The server log carries
+`[compressed_tensors_wNa16.py:137] Using MarlinLinearKernel for CompressedTensorsWNA16`. The head
+is not falling back to unquantized.
+
+**The allocation is not in a decoder layer.** The failing stack is
+
+    vllm/model_executor/layers/vocab_parallel_embedding.py:325  __init__
+    vllm/model_executor/layers/vocab_parallel_embedding.py:50   create_weights
+
+which is `UnquantizedEmbeddingMethod` -- embeddings are never quantized, by design.
+
+**The arithmetic is exact.** `config.json` gives `vocab_size` 248,320 and `hidden_size` 5,120:
+
+    248320 x 5120 x 2 bytes (bf16) = 2.37 GiB
+
+That is the request, to two decimal places, in all six failures. The 0.79 GiB file size and the
+2.37 GiB allocation are unrelated quantities and their ratio being near three was a coincidence.
+
+### The actual defect
+
+`qwen3_5_mtp.py:82` builds the draft's own embedding unconditionally:
+
+```python
+self.embed_tokens = VocabParallelEmbedding(self.vocab_size, config.hidden_size)
+```
+
+The checkpoint ships **no** MTP embedding. `model.safetensors.index.json` lists 15 MTP tensors --
+`mtp.fc`, `mtp.layers.0.*`, `mtp.pre_fc_norm_embedding` -- and none of `mtp.embed_tokens` or
+`mtp.lm_head`. What fills that buffer is the TARGET's embedding, remapped by the loader:
+
+```python
+elif any(key in name for key in ["embed_tokens", "lm_head"]):
+    if "embed_tokens" in name:
+        name = name.replace("language_model.", "")
+```
+
+So the draft shares the target's embedding **in weights** and duplicates it **in memory**: the
+same 2.37 GiB tensor is resident twice. The same file already has the machinery for the other
+direction -- `lm_head` is aliased when tied:
+
+```python
+if config.tie_word_embeddings:
+    self.lm_head = self.model.embed_tokens
+```
+
+`tie_word_embeddings` is `false` for this checkpoint, so that path is not taken, but it shows
+aliasing is an expected pattern here rather than an exotic one.
+
+### What this changes
+
+- Phase V is still blocked, and the blocker is still real, but it is **not** a hardware shortfall.
+  The target's embedding is already resident; the second copy is redundant. 0.12 GiB short of
+  loading, against a 2.37 GiB duplicate.
+- It is **not** a duplicate of #49552/#49553: those concern INC/AutoRound `block_name_to_quantize`
+  prefix mapping, this checkpoint is compressed-tensors, its decoder layers quantize correctly,
+  and applying that fix changes nothing here. Tested, not assumed.
+- Correction 23's other findings stand: decode is separable from prefill via
+  `vllm:request_decode_time_seconds`, and `--disable-log-requests` is gone in 0.27.1. Only the
+  root-cause paragraph is withdrawn.
+
+### The general lesson, since this is the second time
+
+A ratio that lands near a familiar number is not a mechanism. 0.79 x 3 = 2.37 was arithmetically
+true and causally empty; the real check was reading the allocation's own stack frame and
+multiplying out the shape it names. Correction 13 was withdrawn for the same species of error --
+a quantity that looked like it explained something, adopted without testing what it predicted.
