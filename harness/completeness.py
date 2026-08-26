@@ -23,13 +23,22 @@ def completeness(result):
     design = result.get("design") or {}
     passes = design.get("passes")
     arms = len(result.get("arms") or {}) or len({r["arm"] for r in recs})
-    prompts = len({r["prompt"] for r in recs})
+    seen_prompts = len({r["prompt"] for r in recs})
     seen_passes = len({r["pass"] for r in recs})
+    notes = []
+    # Declared, not observed. Deriving the expected count from what is in the file makes the
+    # check circular: a run that died in pass 1 after ten prompts has ten distinct prompts, and
+    # 1 arm x 10 prompts x 1 pass is exactly what it holds, so it reports complete. bench.py
+    # writes design.n_prompts from the matrix, which is what the run set out to do.
+    prompts = (result.get("design") or {}).get("n_prompts") or seen_prompts
+    if not (result.get("design") or {}).get("n_prompts"):
+        notes.append("prompt count not recorded; taken from the records, so a run that stopped "
+                     "inside its first pass cannot be detected")
     if not passes:
         passes = seen_passes
-        note = "passes not recorded; taken from the records, so this can only detect a short pass"
-    else:
-        note = ""
+        notes.append("passes not recorded; taken from the records, so this can only detect a "
+                     "short pass")
+    note = "; ".join(notes)
     expected = arms * prompts * passes
     return len(recs), expected, note
 

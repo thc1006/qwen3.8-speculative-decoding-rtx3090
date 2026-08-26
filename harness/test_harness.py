@@ -3788,6 +3788,40 @@ class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
         self.assertNotIn("no quantization anywhere in the target", self.readme)
 
 
+class TestCompletenessIsNotDerivedFromWhatIsThere(unittest.TestCase):
+    """An expected count computed from the records always equals the records.
+
+    `completeness()` multiplied arms by the number of DISTINCT PROMPTS SEEN by passes. A run that
+    died inside its first pass after ten prompts has ten distinct prompts and one pass, so
+    1 x 10 x 1 is exactly what the file holds and it reported complete -- the check that exists
+    to catch a truncated file passing it. bench.py writes `design.n_prompts` from the matrix,
+    which is what the run set out to do rather than what it managed.
+    """
+
+    def test_a_run_that_died_in_its_first_pass_is_not_complete(self):
+        import completeness as C
+        recs = [{"arm": "a", "prompt": f"p{i}", "pass": 1} for i in range(10)]
+        n, expected, _ = C.completeness(
+            {"records": recs, "arms": {"a": {}}, "design": {"passes": 3, "n_prompts": 25}})
+        self.assertEqual(n, 10)
+        self.assertEqual(expected, 75)
+        self.assertLess(n, expected)
+
+    def test_a_file_without_the_declared_count_says_so(self):
+        import completeness as C
+        recs = [{"arm": "a", "prompt": f"p{i}", "pass": 1} for i in range(10)]
+        _, _, note = C.completeness({"records": recs, "arms": {"a": {}}, "design": {"passes": 3}})
+        self.assertIn("prompt count not recorded", note)
+
+    def test_a_finished_phase_still_reads_as_finished(self):
+        import completeness as C
+        f = Path(__file__).parent.parent / "results" / "phase_a.json"
+        if not f.exists():
+            self.skipTest("no results/phase_a.json")
+        n, expected, _ = C.completeness(json.loads(f.read_text(encoding="utf-8")))
+        self.assertEqual(n, expected)
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 
