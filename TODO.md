@@ -247,40 +247,20 @@ second-host addendum in `PREREGISTRATION.md`.
 
       `cost_model.py` REFUSES to report `k`, `c` or `k0` for this phase: the `mean_len` derivation
       fails its integrity check here too, mean gap -0.3151 and worst 1.1471 over 450 requests.
-- [ ] **Phase V** - the run loop exists now (`harness/vllm_bench.py`); it never did before, and
-      that rather than VRAM is why the phase had not run. What this card can produce is one
-      working arm and two documented failures: `baseline-vllm` starts and serves, and both MTP
-      arms cannot load. Five starts, every one dying on the same 2.37 GiB allocation, which is
-      exactly `vocab_size 248320 * hidden_size 5120 * 2 bytes` - the MTP module builds its own
-      BF16 `lm_head` and `embed_tokens` because the checkpoint's quantization recipe ignores
-      `re:^mtp.*`, and `tie_word_embeddings` is False so nothing is shared. Correction 28.
+- [x] **Phase V** - run 2026-08-27, 75 records, and what this card can produce is one arm plus
+      six recorded failures. `baseline-vllm` serves at 47.52 / 47.53 / 47.52 tok/s across three
+      passes, a 0.02 % spread, and that is the cross-engine anchor this study has not had: a
+      decode-only rate from `vllm:request_decode_time_seconds` over
+      `vllm:generation_tokens_total`, not completion tokens over wall time. Prefill is 1.29 % of
+      inference here, which is the size of the error a wall-clock rate would have carried.
 
----
-
-## Upstream
-
-> `ggml-org/llama.cpp` ships an `AGENTS.md` that binds contributions there. It forbids AI-written PR **descriptions, commit messages and reviewer responses**, and forbids an agent running `git push` or `gh pr create` on the author's behalf; the stated penalty is a contributor ban. Prepare the branch and the body, then run the submit step by hand. Comment rules it enforces: 1-2 lines, no hard-wrapping, never split a sentence across lines, ASCII only.
-
-| item | state | next |
-|---|---|---|
-| **SGLang #36201** | open, CI gated on `run-ci` | body rewritten; four lookup sites and both kernels fixed; test covers 3 mask modes x 5 outputs; real-op sanitizer clean. Needs someone to trigger CI. |
-| **SGLang sampler walk** | not filed | `TreeSpeculativeSamplingTargetOnly` hangs and reads out of bounds on sm_86, both shown. Separate PR: bound the walk **and** range-check `cur_index` and `draft_token_id` - a bound alone does not fix the candidate-id case. Warning must come from one thread; the walk runs on all 1024. |
-| **llama.cpp #25618** | commented | the width partition, and the forced-warp result when it lands. Reply on the existing thread rather than opening a new "not lossless" issue. |
-| **llama.cpp #27572** | commented | the extended sweep decides whether the CUDA negative holds. Do not claim graph-copy alternation as the root cause. |
-| **llama.cpp [#27676](https://github.com/ggml-org/llama.cpp/pull/27676)** | open | the verification-step counter. One line in `server_slot_stats::to_json()` plus assertions in `tools/server/tests/unit/test_speculative.py`. Verified both ways on a CPU-only build of `c060ca9`: unpatched `KeyError: 'draft_n_verif_steps'`, patched `1 passed`. Motivation is exact accounting, not benchmark convenience. |
-| **llama.cpp `output_reorder()` gate** | verified, not filed | the `embd_nextn` swap is unconditional but the buffer is token-indexed when `embeddings_nextn_masked` is off. One line, plus a masked/unmasked regression. Does not claim to fix #27572. |
-| **llama.cpp #25618 / #27407 / #27623** | tracked | comment counts in `docs/UPSTREAM_CONTRIBUTIONS.md` are dated; re-read before quoting. |
-
----
-
-## Audit response, opened 2026-08-25 07:10
-
-An external source-and-inference audit graded the repo A- on discipline and throughput, and C- to
-D on mechanism attribution. Every item below was checked against the data before being accepted;
-two of its claims did not hold and are recorded as such. The user authorised full re-runs where
-the fix needs them.
-
-### A. Truthfulness of what is already written
+      Both MTP arms failed to start on all three passes, six incidents, every one the same
+      2.37 GiB allocation at `qwen3_5_mtp.py:244`. The matrix marks them `may_fail` and
+      `vllm_bench.py` records a failed start as the arm's result rather than aborting, so the
+      failure is in the result file with its server log beside it. Reported as vllm#53887, and
+      the attribution in that issue was corrected on 2026-08-26 (comment 5427886687): the
+      allocation that fails is the head at `:244`, not the embedding at `:82`, which succeeds --
+      the module makes two 2.37 GiB allocations, not one.
 
 - [x] **A1** `c` no longer attributed to target verification. It is the whole cycle - verification,
       the drafter's own forwards, sampling, launch, synchronisation, output extraction, state

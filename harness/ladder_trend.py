@@ -230,7 +230,7 @@ def paired_mean_slope(rungs: list[dict], per_rung: list[dict], prompt_class: dic
                       *, n_boot: int = 4000, alpha: float = 0.05, seed: int = 20260826):
     """Slope of a per-prompt mean against file size, one prompt draw shared by every rung.
 
-    Used for acceptance and for byte-identical rate, neither of which is fitted: both are already
+    Used for acceptance and for share with no divergence observed through the token cap, neither of which is fitted: both are already
     a number per (prompt, pass), so the replicate redraws prompts and re-averages rather than
     refitting a line through widths.
     """
@@ -417,7 +417,7 @@ def report(rungs: list[dict]) -> int:
 
     # ---------------------------------------------------------------- 3. divergence, H9
     print("\n" + "-" * W)
-    print("3. BYTE-IDENTICAL vs SIZE -- llama.cpp #25618 and H9.")
+    print("3. NO DIVERGENCE OBSERVED THROUGH THE TOKEN CAP, vs SIZE -- llama.cpp #25618 and H9.")
     print("   #25618 says greedy speculative output diverges on quantized targets and stays")
     print("   identical on bf16. On a ladder that is a positive slope, and the bf16 rung is the")
     print("   only place the claim's own control exists.")
