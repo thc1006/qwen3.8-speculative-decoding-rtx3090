@@ -202,7 +202,12 @@ class TestAlgebraicInvariants(unittest.TestCase):
     def test_kernel_facts_reads_the_generic_table_rather_than_assuming_it(self):
         import kernel_facts as KF
         import os
-        tree = "llamacpp-master"
+        # Absolute, from this file. A relative path made the guard depend on the working
+        # directory: `python3 harness/test_harness.py` found the tree and `cd harness &&
+        # python3 test_harness.py` did not, so the same suite skipped or ran the same check
+        # depending on where it was started from, and reported "not present" about a directory
+        # that is present.
+        tree = str(Path(__file__).parent.parent / "llamacpp-master")
         if not os.path.isdir(tree):
             self.skipTest("the master tree is not present")
         f = KF.mmvq_facts(tree)
