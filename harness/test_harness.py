@@ -3614,6 +3614,60 @@ class TestMechanismBRecoversAKnownTruth(unittest.TestCase):
         self.assertEqual(M.rows(r), [])
 
 
+class TestEveryDocumentLinkPointsAtSomethingAClonWouldHave(unittest.TestCase):
+    """A link that resolves on this disk and not in the repository is a broken link.
+
+    Twice now. `analysis/plot_phase_m.png` was untracked on purpose while the run it drew was
+    incomplete, and the README kept the <img> tag. `models/SHA256SUMS.phase_a` was written,
+    linked from the Reproduce section, and silently refused by `models/*` in .gitignore. Both
+    render correctly for the author and 404 for everyone else, which is the failure mode a check
+    against the filesystem cannot see.
+
+    Checked against `git ls-files`, not against `Path.exists()`.
+    """
+
+    ROOT = Path(__file__).parent.parent
+    DOCS = ("README.md", "TODO.md", "PREREGISTRATION.md")
+
+    def _tracked(self):
+        import subprocess
+        out = subprocess.run(["git", "-C", str(self.ROOT), "ls-files"],
+                             capture_output=True, text=True, timeout=60)
+        if out.returncode != 0:
+            self.skipTest("not a git checkout")
+        return set(out.stdout.split("\n")) - {""}
+
+    def test_no_document_links_at_an_untracked_path(self):
+        import re
+        tracked = self._tracked()
+        dirs = {d for t in tracked for d in _parents_of(t)}
+        broken = []
+        for name in self.DOCS:
+            f = self.ROOT / name
+            if not f.exists():
+                continue
+            text = f.read_text(encoding="utf-8")
+            targets = [t for _, t in re.findall(r"\[([^\]]+)\]\(([^)#][^)]*)\)", text)]
+            targets += re.findall(r'src="([^"]+)"', text)
+            targets += re.findall(r'srcset="([^"]+)"', text)
+            for t in targets:
+                if t.startswith(("http://", "https://", "mailto:")):
+                    continue
+                path = t.split("#")[0].rstrip("/")
+                if not path or path in tracked or path in dirs:
+                    continue
+                broken.append(f"{name} -> {path}")
+        self.assertFalse(broken,
+                         "these paths are linked from a committed document and are not in the "
+                         "repository, so they resolve for the author and 404 for a reader: "
+                         + ", ".join(broken))
+
+
+def _parents_of(path):
+    parts = path.split("/")
+    return {"/".join(parts[:i]) for i in range(1, len(parts))}
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 
