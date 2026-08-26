@@ -29,7 +29,7 @@ EXPECTED=$(( N_ARMS * PROMPTS * PASSES ))
 N_RUNGS=$(set -- $DEPTHS; echo $#)
 RUNG_I=0
 
-# `bash run_phase_l.sh` fixes QWEN_L_BUDGET_S at exec time, and the rung that decides whether the
+# `bash scripts/run_phase_l.sh` fixes QWEN_L_BUDGET_S at exec time, and the rung that decides whether the
 # cliff reproduces does not start for hours after that. Reading a file at each rung boundary as
 # well keeps the choice available for as long as there is a boundary left to stop at. With neither
 # the variable nor the file set, nothing here runs and the ladder is unchanged.

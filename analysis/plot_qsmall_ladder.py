@@ -13,7 +13,10 @@ Three panels, stacked, in the order the argument needs them and not in order of 
   2. `c`, the marginal cost of a verified position, in the arm's own decode steps. The
      millisecond figure is printed beside each point rather than plotted, because `c` is
      denominated in each rung's own step and on Phase Q the two denominations disagreed in SIGN.
-  3. byte-identical output against the non-speculative baseline. This is what H9 turns on, and
+  3. share with NO DIVERGENCE OBSERVED against the non-speculative baseline through the token
+     cap. Not "byte-identical": every request stops at the cap and none reaches EOS, so a
+     match inside the window is right-censored rather than identity to the end of an answer.
+     This is what H9 turns on, and
      the bf16 rung is the only place #25618's own control exists.
 
 The x axis is measured, not labelled: bits per weight, file size over parameter count, with the
@@ -68,6 +71,11 @@ def build(rungs, shared, bpw):
     ax.set_ylabel("acceptance\n(accepted / drafted)")
     ax.set_title("1.  The drafter must hold still, or panel 2 is not a cost",
                  loc="left", fontsize=10.5, color=P.C("fg"))
+    # Headroom first, legend second. A one-row legend at "upper left" sat exactly on the
+    # highest series -- mtp-n2 runs flat across the top of this panel -- so the line passed
+    # through the legend text. Reserving the space is what keeps them apart at any data range.
+    _lo, _hi = ax.get_ylim()
+    ax.set_ylim(_lo, _hi + (_hi - _lo) * 0.22)
     ax.legend(frameon=False, fontsize=8.5, ncol=len(families), loc="upper left")
     P._despine(ax)
     ax.grid(axis="y", color=P.C("grid"), lw=0.6, zorder=0)
@@ -86,11 +94,20 @@ def build(rungs, shared, bpw):
                         yerr=[[c - ci["c"].lo], [ci["c"].hi - c]],
                         fmt="none", ecolor=P.C("mut"), elinewidth=1.1, capsize=3, zorder=2)
     _panel_points(ax, x, cs, "c over shared widths " + str(shared), P.WONG["blue"], "o")
-    for xi, c, m, v in zip(x, cs, ms, rungs):
+    # Labels sit ABOVE their point and the last one sits to its left. This series descends
+    # left to right, so a label placed below and to the right lands on the segment leaving the
+    # point, and the rightmost one ran into the frame. Above-and-right clears the descending
+    # segment; flipping the last one keeps it inside the axes without widening them.
+    _last = len(x) - 1
+    for i, (xi, c, m, v) in enumerate(zip(x, cs, ms, rungs)):
+        right = i != _last
         ax.annotate(f"{v['label']}\n{m:.2f} ms", (xi, c), textcoords="offset points",
-                    xytext=(7, -2), fontsize=8.2, color=P.C("mut"), linespacing=1.15)
+                    xytext=(7 if right else -7, 8), ha="left" if right else "right",
+                    va="bottom", fontsize=8.2, color=P.C("mut"), linespacing=1.15)
+    _lo2, _hi2 = ax.get_ylim()
+    ax.set_ylim(_lo2, _hi2 + (_hi2 - _lo2) * 0.18)
     ax.set_ylabel("c  (decode steps of this\nrung's own baseline)")
-    ax.set_title("2.  Marginal cost of a verified position. Wall-time value beside each point --"
+    ax.set_title("2.  Cost chord per verified position. Wall-time value beside each point --"
                  " the two can disagree in sign",
                  loc="left", fontsize=10.5, color=P.C("fg"))
     P._despine(ax)
@@ -104,7 +121,7 @@ def build(rungs, shared, bpw):
             continue
         ys = [100.0 * sum(sum(d[p]) for p in d) / max(1, sum(len(d[p]) for p in d)) for d in per]
         _panel_points(ax, x, ys, fam, colors[i % len(colors)], marks[i % len(marks)])
-    ax.set_ylabel("byte-identical to the\nnon-speculative baseline (%)")
+    ax.set_ylabel("no divergence observed\nthrough the token cap (%)")
     ax.set_xlabel("bits per weight  (file size / parameter count, measured)")
     ax.set_title("3.  llama.cpp #25618 says bf16 preserves parity. This is the only ladder that "
                  "can ask", loc="left", fontsize=10.5, color=P.C("fg"))

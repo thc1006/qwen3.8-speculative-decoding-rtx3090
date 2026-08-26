@@ -33,7 +33,7 @@ if [ "$left" -lt "$NEED" ]; then
 fi
 
 log "shipping and running the corrected build"
-scp -q -o BatchMode=yes run_warp_down2_hostb.sh "$HB:~/qwen38-remote/" || { log "scp failed"; exit 1; }
+scp -q -o BatchMode=yes "$(dirname "$0")/run_warp_down2_hostb.sh" "$HB:~/qwen38-remote/" || { log "scp failed"; exit 1; }
 # NOT through rsh(): that wrapper carries a 120 s timeout for short status queries, and this
 # job builds and then runs 150 records. Sending it through rsh killed the ssh at 120 s and
 # reported rc=124 as if the run had failed, while the remote job carried on regardless and its

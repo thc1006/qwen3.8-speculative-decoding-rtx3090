@@ -49,7 +49,7 @@ existing 24 GB card with `unsloth/Qwen3.5-9B-MTP-GGUF` (BF16 18.41 GB), which is
 model used in llama.cpp #26750. See `phase_qsmall.py`.
 
 Disk, not VRAM, is the binding constraint for the ladder: the four target files total ~93 GB.
-The runner stages them one at a time -- see `run_phase_q.sh`.
+The runner stages them one at a time -- see `scripts/run_phase_q.sh`.
 
 Selection is by environment variable so one matrix file serves every rung and the rung is
 recorded in the result:
@@ -91,7 +91,7 @@ if MODEL is None:
         f"\nStage it with:\n"
         f"  .venv/bin/hf download unsloth/Qwen3.8-27B-GGUF {_fname} "
         f"--local-dir models/quant_ladder\n"
-        f"The four rungs total ~93 GB, so run_phase_q.sh stages one at a time.")
+        f"The four rungs total ~93 GB, so scripts/run_phase_q.sh stages one at a time.")
 
 TREES = {"master": REPO / "llamacpp-master"}
 BINARIES = {k: v / "build/bin/llama-server" for k, v in TREES.items()}

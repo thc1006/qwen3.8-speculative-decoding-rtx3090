@@ -1280,7 +1280,7 @@ class TestRungDriverGates(unittest.TestCase):
 
     Both rung drivers compute an expected record count in python and then gate on
     `got >= EXPECTED`. If that python fails for any reason the count is empty, the gate is
-    `0 >= 0`, and run_phase_q.sh goes on to delete the rung's weights: 20 to 30 GB removed for a
+    `0 >= 0`, and scripts/run_phase_q.sh goes on to delete the rung's weights: 20 to 30 GB removed for a
     run that measured nothing. Found by dry-running the driver from the wrong directory.
     """
 
@@ -1288,12 +1288,13 @@ class TestRungDriverGates(unittest.TestCase):
 
     def test_both_drivers_refuse_an_unusable_expected_count(self):
         checked = 0
-        for name in ("run_phase_q.sh", "run_phase_qsmall.sh"):
+        for name in ("scripts/run_phase_q.sh", "scripts/run_phase_qsmall.sh"):
             f = self.ROOT / name
-            if not f.exists():
-                continue
+            # Not `if not f.exists(): continue`. A guard test that skips when its subject moves
+            # goes green while checking nothing, which is how a rename turns a gate off.
+            self.assertTrue(f.exists(), f"{name} is missing; this guard has no subject")
             src = f.read_text(encoding="utf-8")
-            # Asserted as a PROPERTY, not as a variable name. run_phase_q.sh's gate was rewritten
+            # Asserted as a PROPERTY, not as a variable name. scripts/run_phase_q.sh's gate was rewritten
             # to check the shape of a result against the matrix rather than compare one integer,
             # so the count it guards is now N_PROMPTS rather than EXPECTED. What has to survive
             # any such rewrite is that whatever python-derived count the gate rests on is
@@ -1307,8 +1308,7 @@ class TestRungDriverGates(unittest.TestCase):
                 f"passing gate.")
             self.assertIn("exit 1", src, f"{name}: the guard does not stop the run")
             checked += 1
-        if checked == 0:
-            self.skipTest("no rung driver present")
+        self.assertGreater(checked, 0, "no rung driver was checked; the guard has no subject")
 
 
     def test_a_rung_checks_free_disk_before_downloading_it(self):
@@ -1320,10 +1320,9 @@ class TestRungDriverGates(unittest.TestCase):
         does not merely fail the download: the harness is writing results and server logs to the
         same disk, and _atomic_write_json would fail mid-run.
         """
-        for name in ("run_phase_q.sh", "run_phase_qsmall.sh"):
+        for name in ("scripts/run_phase_q.sh", "scripts/run_phase_qsmall.sh"):
             path = self.ROOT / name
-            if not path.exists():
-                continue
+            self.assertTrue(path.exists(), f"{name} is missing; this guard has no subject")
             src = path.read_text(encoding="utf-8")
             if "hf download" not in src:
                 continue
@@ -1596,7 +1595,7 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
 class TestAnchorEstimatorMatchesBand(unittest.TestCase):
     """The Phase M anchor must be judged by the estimator its band was calibrated on.
 
-    The gate first shipped inline in run_remaining.sh and compared a POOLED MEDIAN against a band
+    The gate first shipped inline in scripts/run_remaining.sh and compared a POOLED MEDIAN against a band
     calibrated on a CLASS-STRATIFIED figure. Its own header names both predecessor numbers,
     "-10.8 % raw, -21.5 % class-stratified", and the band -12 % to -32 % brackets only the second:
     a perfect replication of the raw figure would have failed the gate it was written for. On the
@@ -1739,7 +1738,7 @@ class TestAnchorEstimatorMatchesBand(unittest.TestCase):
         self.assertIn("half-widths", v["reason"])
 
     def test_the_chain_uses_the_module_and_not_an_inline_copy(self):
-        """run_remaining.sh had its own anchor, and it was a different one.
+        """scripts/run_remaining.sh had its own anchor, and it was a different one.
 
         The inline block computed a pooled median and compared it against a band calibrated on a
         class-stratified figure. Its own header named both predecessor numbers, -10.8 % raw and
@@ -1750,11 +1749,11 @@ class TestAnchorEstimatorMatchesBand(unittest.TestCase):
         A second copy of an analysis is the defect, not the formula it used, so this checks that
         the chain calls the module rather than that the old arithmetic is gone.
         """
-        src = (Path(__file__).parent.parent / "run_remaining.sh").read_text(encoding="utf-8")
+        src = (Path(__file__).parent.parent / "scripts" / "run_remaining.sh").read_text(encoding="utf-8")
         self.assertIn("harness/anchor_verdict.py", src,
                       "the chain no longer runs the anchor it gates the MoE deletion on")
         self.assertNotIn("REPLICATION ANCHOR (0.8B", src,
-                         "run_remaining.sh still carries its own copy of the anchor")
+                         "scripts/run_remaining.sh still carries its own copy of the anchor")
         # the deletion gate must still read the marker the module writes
         self.assertIn("results/phase_m_anchor_ok", src)
 
@@ -1773,7 +1772,7 @@ class TestAnchorEstimatorMatchesBand(unittest.TestCase):
             self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
             self.assertFalse(marker.exists(),
                              "a failing anchor left the previous run's marker in place, which "
-                             "would let run_remaining.sh delete the MoE target it needs to "
+                             "would let scripts/run_remaining.sh delete the MoE target it needs to "
                              "chase the failure")
 
 
@@ -2740,9 +2739,11 @@ class TestRungDriverDeletesOnPathNotOnProvenance(unittest.TestCase):
     ROOT = Path(__file__).parent.parent
 
     def _src(self):
-        f = self.ROOT / "run_phase_q.sh"
-        if not f.exists():
-            self.skipTest("run_phase_q.sh not present")
+        # Not a skip. These four guards exist because each defect had already fired once, and a
+        # guard that skips when its subject is renamed is a guard that turns itself off: moving
+        # the drivers into scripts/ silently disabled all five of them, green, on 2026-08-27.
+        f = self.ROOT / "scripts" / "run_phase_q.sh"
+        self.assertTrue(f.exists(), "scripts/run_phase_q.sh is missing; this guard has no subject")
         return f.read_text(encoding="utf-8")
 
     def test_deletion_is_decided_by_path_not_by_whether_this_run_downloaded_it(self):
@@ -2811,9 +2812,8 @@ class TestRungDriverDeletesOnPathNotOnProvenance(unittest.TestCase):
         guaranteed regardless of which ggufs happen to be on disk when this runs.
         """
         import os, re, subprocess, tempfile
-        f = self.ROOT / "run_phase_q.sh"
-        if not f.exists():
-            self.skipTest("run_phase_q.sh not present")
+        f = self.ROOT / "scripts" / "run_phase_q.sh"
+        self.assertTrue(f.exists(), "scripts/run_phase_q.sh is missing; this guard has no subject")
         src = f.read_text(encoding="utf-8")
         m = re.search(r"^gate\(\) \{.*?^\}", src, re.S | re.M)
         self.assertIsNotNone(m, "no gate() function to test")
@@ -2844,7 +2844,7 @@ class TestRungDriverDeletesOnPathNotOnProvenance(unittest.TestCase):
 class TestDriverTablesMatchTheirMatrix(unittest.TestCase):
     """A driver that names its files differently from the matrix downloads the wrong thing.
 
-    run_phase_qsmall.sh listed `Qwen3.5-9B-MTP-Q4_K_M.gguf` for every rung. The repository is
+    scripts/run_phase_qsmall.sh listed `Qwen3.5-9B-MTP-Q4_K_M.gguf` for every rung. The repository is
     named `unsloth/Qwen3.5-9B-MTP-GGUF` but the files inside it are `Qwen3.5-9B-Q4_K_M.gguf`, so
     each rung would have 404'd -- and had it not, the matrix, which had the names right, would
     then have failed to import against the file that landed. Two tables for one fact, and nothing
@@ -2855,8 +2855,8 @@ class TestDriverTablesMatchTheirMatrix(unittest.TestCase):
     """
 
     ROOT = Path(__file__).parent.parent
-    PAIRS = [("run_phase_q.sh", "harness/matrices/phase_q.py"),
-             ("run_phase_qsmall.sh", "harness/matrices/phase_qsmall.py")]
+    PAIRS = [("scripts/run_phase_q.sh", "harness/matrices/phase_q.py"),
+             ("scripts/run_phase_qsmall.sh", "harness/matrices/phase_qsmall.py")]
 
     @staticmethod
     def _matrix_files(path):
@@ -2902,8 +2902,8 @@ class TestDriverTablesMatchTheirMatrix(unittest.TestCase):
                     f"{driver} would download {fname!r} for rung {rung} but {matrix} looks for "
                     f"{m[rung]!r}; one of them is wrong and the download is the expensive half")
             checked += 1
-        if checked == 0:
-            self.skipTest("no driver/matrix pair present")
+        self.assertGreater(checked, 0, "no driver/matrix pair was checked; the guard has no "
+                                        "subject")
 
     def test_no_driver_hardcodes_how_many_arms_its_matrix_defines(self):
         """N_ARMS=4 against a matrix defining five is a gate that passes on a truncated run.

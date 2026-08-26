@@ -475,7 +475,16 @@ def collect(result: dict) -> list[dict]:
     return rows
 
 
-def cross_check_against_log(result: dict, rows: list[dict]) -> None:
+# The docstring on collect() bounds the derivation's bias at under 1 % of mean_len. 0.02 is that
+# bound in absolute terms at the mean lengths this study measures, and it is the same number the
+# check has always used to decide whether the gap is systematic. What is new is that exceeding it
+# now stops the report instead of captioning it: Phase M exceeded it by more than an order of
+# magnitude -- mean gap -0.3494, worst 2.9054 over 1425 requests -- and the tool printed
+# "The derivation is wrong, not the counters" and then printed k0, c and a rollback model anyway.
+MEAN_LEN_TOLERANCE = 0.02
+
+
+def cross_check_against_log(result: dict, rows: list[dict]) -> bool:
     """Independent confirmation that the API counters and llama.cpp's own log agree.
 
     Not used to compute anything -- purely a data-integrity check that two separate sources
@@ -512,13 +521,15 @@ def cross_check_against_log(result: dict, rows: list[dict]) -> None:
             lg_ml = lg.get("mean_len") or lg.get("mean_draft_len")
             if lg_ml:
                 ml_checked.append(r["mean_len"] - lg_ml)
+    mean_len_sound = True
     if ml_checked:
         import statistics as _st
         bias = _st.fmean(ml_checked)
         worst = max(abs(x) for x in ml_checked)
         print(f"[integrity] derived mean_len vs the server's printed mean len: "
               f"{len(ml_checked)} requests, mean gap {bias:+.4f}, worst {worst:.4f}")
-        if abs(bias) > 0.02:
+        if abs(bias) > MEAN_LEN_TOLERANCE:
+            mean_len_sound = False
             print(f"            the gap is systematic, not rounding. The derivation is wrong, "
                   f"not the counters. See collect()'s docstring.")
         else:
@@ -534,6 +545,7 @@ def cross_check_against_log(result: dict, rows: list[dict]) -> None:
         print(f"\n[integrity] API counters vs llama.cpp log lines: {checked} requests compared, "
               f"{mismatched} mismatched"
               f"{'  -- two independent sources agree to the token' if not mismatched else ''}")
+    return mean_len_sound
 
 
 def report(result: dict) -> None:
@@ -547,7 +559,23 @@ def report(result: dict) -> None:
     print("  mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)   [derived; the API has")
     print("            no verification-step count, and this is low by <1 %. See the docstring.]")
     print("=" * 100)
-    cross_check_against_log(result, rows)
+    sound = cross_check_against_log(result, rows)
+    if not sound:
+        print()
+        print("=" * 100)
+        print("REFUSING TO REPORT k, c OR k0 FOR THIS RESULT.")
+        print("=" * 100)
+        print("Every quantity below k is a function of mean_len, and the check above says this")
+        print("phase's mean_len derivation is wrong by more than the bound collect() documents.")
+        print("A number that is systematically wrong still fits a line, still produces a tight")
+        print("bootstrap interval, and still reads as a mechanism. Printing it with a caption")
+        print("saying it is wrong is how it ends up quoted without the caption.")
+        print()
+        print("What would make this reportable: llama.cpp exposing the exact verification-step")
+        print("count. `server_slot_stats` already holds it in `n_draft_verif_steps` and does not")
+        print("put it in `to_json()`; the one-line patch is in upstream/. Until then this phase")
+        print("supports throughput and acceptance results, and no cost decomposition.")
+        return
 
     print("\n--- k by arm (pooled over classes and passes) ---")
     print(f"{'arm':16s} {'spec':14s} {'w':>3s} {'n':>4s} {'k mean':>8s} {'k sd':>7s} "

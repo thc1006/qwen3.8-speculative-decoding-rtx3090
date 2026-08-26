@@ -5,7 +5,7 @@ Phase M swaps the target for the 35B-A3B MoE so that the predecessor study's hea
 be re-measured on this harness. Nothing else in Phase M means anything about the predecessor
 until that one arm is shown to reproduce, so the check is a gate rather than a line in a report.
 
-WHY THIS IS A SEPARATE FILE. The gate first shipped inline in `run_remaining.sh` as a heredoc,
+WHY THIS IS A SEPARATE FILE. The gate first shipped inline in `scripts/run_remaining.sh` as a heredoc,
 and it compared a POOLED MEDIAN against a band calibrated on a CLASS-STRATIFIED figure. The two
 are not the same quantity. On the first pass of the 2026-08-26 run they differ by 6.6 points
 (-73.0 % pooled-median against -66.4 % class-stratified), and the inline gate's own header names

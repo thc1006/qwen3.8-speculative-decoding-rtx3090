@@ -275,7 +275,12 @@ def fig_cost_model(result):
             ax_k.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
                           color=col, fontsize=10, va="center", fontweight="bold")
     ax_k.set_ylabel("cost of one target pass,\nin plain decode steps")
-    ax_k.set_title("The cost is linear: each extra verified position costs a fixed c", pad=8)
+    # "linear ... fixed c" was the old title. The completed ladder shows curvature -- k(w) is
+    # concave for draft-mtp on the dense target and the residuals are several times
+    # prompt-to-prompt scatter -- so c is a chord across the widths fitted, not a constant
+    # marginal cost. See cost_model.py and PREREGISTRATION.md.
+    ax_k.set_title("Cost rises with width: c is the average chord over the widths fitted",
+                   pad=8)
 
     ax_s.set_ylim(0.96, 1.92)   # headroom for the labels that sit above the best points
     ax_s.axhline(1.0, color=C("mut"), ls=":", lw=1.1)
@@ -307,7 +312,7 @@ def fig_cost_model(result):
     fig.subplots_adjust(left=0.165, right=0.895, top=0.945, hspace=0.30)
     _save(fig, "plot_cost_model", bottom=0.105,
           note=PHASE_A_N + " k is recovered per request as mean_len / speedup, then averaged over 125 requests "
-               "per arm. draft-dflash has two widths here, so its dashed line is determined "
+               "per arm. draft-dflash has two widths here, so its line is determined "
                "rather than fitted. Phase A tests draft-dflash at w = 5 and 8 only, so its best "
                "point here is the better of two. The completed n-max ladder supersedes both "
                "coefficients and both optima: it fits c = 0.2904 for draft-mtp over widths 2-8 and "
@@ -372,11 +377,14 @@ def fig_dispatch_boundary(result_nmax):
     lo, hi = ax.get_ylim()
     ax.set_ylim(lo, hi + (hi - lo) * 0.10)
 
-    # One label per drop, stacked by which is higher, placed to the right of the marker rather
-    # than on top of the other one.
-    for i, (w, k, pred, pct, col) in enumerate(sorted(drops, key=lambda d: -d[1])):
+    # Anchored on the MARKER, not on the midpoint of its arrow. Anchoring on the midpoint put
+    # each label at a height neither marker sits at, and with both drops at the same width the
+    # blue label landed beside the orange marker: the figure said draft-dflash was the -26 % one
+    # when the footer and the data say it is draft-mtp. A label belongs next to its referent.
+    ordered = sorted(drops, key=lambda d: -d[1])
+    for i, (w, k, pred, pct, col) in enumerate(ordered):
         ax.annotate(f"{pct:+.0f} % against the line",
-                    xy=(w, (k + pred) / 2), xytext=(14, 6 if i == 0 else -14),
+                    xy=(w, k), xytext=(14, 9 if i == 0 else -9),
                     textcoords="offset points", fontsize=9, color=col, va="center", ha="left")
 
     ax.axvline(mmvq_max + 0.5, color=C("mut"), lw=1.0, alpha=0.55, zorder=0)
@@ -500,7 +508,9 @@ def fig_bound_by(res):
                    "further right = responds more to the memory clock")
     ax1.set_ylabel("SM-clock elasticity\nd(ln tok/s) / d(ln SM clock)\n"
                    "higher = responds more to the SM clock")
-    ax1.set_title("The baseline and the speculative arms respond to opposite clocks.\n"
+    # Not "opposite clocks": both respond to both. What reverses is the ORDERING of the two
+    # elasticities, which is the claim the panel can carry.
+    ax1.set_title("Baseline and speculative arms reverse the ordering of the two elasticities.\n"
                   "A response measurement, not a roofline", pad=10)
     ax1.grid(alpha=0.5); _despine(ax1)
 

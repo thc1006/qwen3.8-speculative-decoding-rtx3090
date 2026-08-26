@@ -11,7 +11,7 @@
 # retried without downloading again.
 #
 # Two numbers, two meanings, kept in separate tables because merging them is what broke
-# run_phase_q.sh:
+# scripts/run_phase_q.sh:
 #   NEED_VRAM_GB   what the rung costs on the card, from the matrix's own table
 #   NEED_DISK_GIB  what the GGUF costs on disk, in GiB because that is the unit `df -BG` answers
 #                  in. Measured from the repo's file metadata, not converted from the VRAM figure.
@@ -29,7 +29,9 @@
 #   RUNGS="..."  subset of rungs, in order
 #   KEEP=1       never delete weights
 set -u
-cd "$(dirname "$0")" || exit 1
+# The repo root, not this script's directory: the drivers moved into scripts/ and every
+# path below -- harness/, models/, results/, logs/ -- is written relative to the root.
+cd "$(dirname "$0")/.." || exit 1
 
 GPU="${GPU:-0}"
 PASSES="${PASSES:-3}"

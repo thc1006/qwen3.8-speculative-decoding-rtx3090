@@ -361,17 +361,31 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         print("  and understates the speculative arms, so an energy saving read off the averaged")
         print("  field is larger than the instantaneous field supports, by about this much.")
 
-    ref_e = statistics.fmean(e_by[default_baseline]) if e_by.get(default_baseline) else None
-    ref_j = statistics.fmean(j_by[default_baseline]) if j_by.get(default_baseline) else None
+    # Per arm, against ITS OWN baseline. A single reference taken from default_baseline was
+    # what this did, and the throughput table three blocks up has always used baseline_map: on
+    # Phase M, which runs a dense target and an MoE target in one matrix, that divided every
+    # dense arm's energy by the MoE baseline's. 143 tok/s against 41, so the error is not
+    # subtle in the throughput domain and it was not visible here because energy has no
+    # familiar scale to check it against.
+    def _ref(arm, table):
+        b = baseline_map.get(arm, default_baseline)
+        return (statistics.fmean(table[b]) if table.get(b) else None), b
+
     for a in present:
         e = statistics.fmean(e_by[a]) if e_by.get(a) else None
         j = statistics.fmean(j_by[a]) if j_by.get(a) else None
+        ref_e, _rb = _ref(a, e_by)
+        ref_j, _rb = _ref(a, j_by)
         de = f"{(e/ref_e-1)*100:+8.1f}%" if (e and ref_e) else "        -"
         dj = f"{(j/ref_j-1)*100:+8.1f}%" if (j and ref_j) else "        -"
         acc = f"{statistics.fmean(a_by[a]):7.3f}" if a_by.get(a) else "      -"
         ln = f"{statistics.fmean(l_by[a]):10.2f}" if l_by.get(a) else "         -"
         print(f"{a:22s} {(f'{e:.4f}' if e else '-'):>10s} {de} "
               f"{(f'{j:.0f}' if j else '-'):>10s} {dj} {acc} {ln}")
+
+    if len({baseline_map.get(a, default_baseline) for a in present}) > 1:
+        print("  Each arm is measured against its own baseline from baseline_map, not against a "
+              "single\n  reference: this matrix holds more than one.")
 
     print("\n--- losslessness (greedy arms vs baseline text, same prompt+pass) ---")
     div: dict[str, list[dict]] = defaultdict(list)

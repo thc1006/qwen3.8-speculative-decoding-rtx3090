@@ -172,9 +172,15 @@ def fig_phase_m(result, series, prompt_class):
             if w is not None and abs(w - (n + 1)) > 0.25:
                 bits.append(f"w {w:.1f}")
             if bits:
+                # The offset places these under the interval, and at this y-scale that lands
+                # some of them on the zero reference line -- "65 %" in the MoE panel and "37 %"
+                # in the dense one were struck through by it. The line is a decoration and the
+                # number is data, so the number gets the background rather than being moved to
+                # an inconsistent side of its own point.
                 ax.annotate("\n".join(bits), (pos[n], iv.lo), textcoords="offset points",
                             xytext=(0, -13), ha="center", va="top", fontsize=8.2,
-                            color=P.C("mut"), linespacing=1.15)
+                            color=P.C("mut"), linespacing=1.15, zorder=4,
+                            bbox=dict(facecolor=P.C("bg"), edgecolor="none", pad=0.8))
         rate = _baseline_rate(series, prompt_class, base)
         ax.set_title(f"{title}     baseline {rate:.0f} tok/s", loc="left", pad=8)
         ax.set_ylabel("net effect vs own baseline (%)")
@@ -193,8 +199,14 @@ def fig_phase_m(result, series, prompt_class):
     axes[-1].set_xticks(list(pos.values()))
     axes[-1].set_xticklabels([str(n) for n in xs_all])
     axes[-1].set_xlim(-0.6, len(xs_all) - 0.4)
-    fig.suptitle("Same session, same prompts: the sign belongs to the drafter, not the "
-                 "architecture", y=0.995, fontsize=12.5, ha="center")
+    # The title states what the panels show and nothing beyond it. It used to read "the sign
+    # belongs to the drafter, not the architecture", which is a causal claim this phase does not
+    # support: its preregistered replication anchor failed, 33 early-stop records are excluded
+    # from the per-protocol series, and the mean_len derivation these panels' companions rest on
+    # fails its own integrity check here. Readers fixate on the title longer than on anything
+    # else in a figure, so an assertive title has to be one the data carries.
+    fig.suptitle("Same session, same prompts: MTP is positive and the 0.8B draft-simple arms "
+                 "are negative on both targets", y=0.995, fontsize=12.5, ha="center")
     fig.subplots_adjust(top=0.90, hspace=0.30)
     n_rec = len(result["records"])
     P._save(fig, "plot_phase_m", bottom=0.16, provenance=PROVENANCE,

@@ -158,7 +158,7 @@ run_phase phase_c 3 18220 results/phase_c.json || exit 1
 # Phase L is a ladder, not a matrix: context depth sets `-c`, which is a server property, so each
 # rung is its own run. Its driver handles the per-rung gating and skips a rung that cannot fit.
 log "starting the Phase L depth ladder"
-GPU=0 PASSES=3 bash run_phase_l.sh >> logs/phase_l_chain.log 2>&1
+GPU=0 PASSES=3 bash scripts/run_phase_l.sh >> logs/phase_l_chain.log 2>&1
 log "Phase L ladder returned rc=$? (a rung that does not fit is expected at the top)"
 python3 harness/analyze_depth.py > analysis/phase_l_ladder.txt 2>&1
 log "wrote analysis/phase_l_ladder.txt"
@@ -175,7 +175,7 @@ run_phase phase_m 3 18240 results/phase_m.json || exit 1
 python3 harness/anchor_verdict.py results/phase_m.json | tee -a analysis/phase_m_anchor.txt
 
 # Phase Q needs disk that Phase M's 22 GB MoE target is sitting on, so the deletion happens here
-# rather than inside run_phase_q.sh, and only against a Phase M result that is actually complete.
+# rather than inside scripts/run_phase_q.sh, and only against a Phase M result that is actually complete.
 if [ -f results/phase_m.json ]; then
   mrec=$(records_in results/phase_m.json); mwant=$(expect_for phase_m 3)
   # Deleting the target while the anchor is unresolved throws away the model needed to chase it.
@@ -192,7 +192,7 @@ fi
 # The 24 GB card reaches only the first two rungs of the target ladder, and the second sits at
 # 96 % of the card. The driver auto-selects what fits and says what it skipped.
 log "starting the Phase Q target-quantization ladder"
-GPU=0 PASSES=3 bash run_phase_q.sh >> logs/phase_q_chain.log 2>&1
+GPU=0 PASSES=3 bash scripts/run_phase_q.sh >> logs/phase_q_chain.log 2>&1
 log "Phase Q returned rc=$?"
 
 log "chain complete. Phase V is next and is not chained: it needs its own virtualenv"

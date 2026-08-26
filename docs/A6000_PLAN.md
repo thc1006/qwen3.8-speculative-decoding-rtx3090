@@ -59,7 +59,7 @@ What differs is the resource mix: more memory, less bandwidth, less power.
 | `harness/devices.py` | device enumeration, per-device stock state, measured idle floor, VRAM capacity guard, ECC state, neighbour-GPU recording |
 | `harness/matrices/phase_q.py` | 27B quantization ladder, rung chosen by `QWEN_Q_TARGET`, declares `REQUIRES_VRAM_GB` |
 | `harness/matrices/phase_qsmall.py` | 9B ladder **including BF16**, runs on the existing 24 GB card, rung chosen by `QWEN_QS_TARGET` |
-| `run_phase_q.sh` | disk-staged driver: auto-selects the rungs the card can hold, verifies completeness before deleting weights, never touches `models/target` |
+| `scripts/run_phase_q.sh` | disk-staged driver: auto-selects the rungs the card can hold, verifies completeness before deleting weights, never touches `models/target` |
 | `harness/analyze_cross_device.py` | comparison restricted to dimensionless quantities, with the two identity controls |
 
 `phase_a.py` needs no A6000 variant: it names no device, so mirroring Phase A is
@@ -112,7 +112,7 @@ python3 -u harness/bench.py --matrix phase_a --passes 5 --gpu 1 --settle-floor \
 python3 harness/analyze_cross_device.py results/phase_a.json results/phase_a_a6000.json
 
 # 2. the quantization ladder, the thing 24 GB cannot do
-GPU=1 PASSES=3 bash run_phase_q.sh
+GPU=1 PASSES=3 bash scripts/run_phase_q.sh
 
 # 3. the bf16 anchor, on EITHER card (9B fits both)
 for R in Q4_K_M Q6_K Q8_0 BF16; do
@@ -127,7 +127,7 @@ device is varying and steps 2 and 3 should not be interpreted until that is unde
 
 ## Disk
 
-The 27B ladder is ~93 GB of weights and `run_phase_q.sh` stages one rung at a time, reusing the
+The 27B ladder is ~93 GB of weights and `scripts/run_phase_q.sh` stages one rung at a time, reusing the
 `UD-Q4_K_XL` this repo already holds. The 9B ladder is 41.8 GB and fits at once, but it competes
 with the 21 GB MoE target needed for the dense-vs-MoE phase, so those two cannot both be resident
 on the current volume. Sequence them.

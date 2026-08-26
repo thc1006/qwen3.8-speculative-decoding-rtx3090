@@ -5,7 +5,7 @@ promised -- and it answers it from the file itself, which is the right scope for
 use it inline. It cannot see three failure modes this repository has hit:
 
   SHAPE      A count is not a design. 375 records is also one arm repeated fifteen times, and
-             the rung gates delete 20 GB of weights on a passing count. run_phase_q.sh's gate was
+             the rung gates delete 20 GB of weights on a passing count. scripts/run_phase_q.sh's gate was
              rewritten in August to compare against the explicit product of arms and passes after
              a fabricated result satisfied the old one.
 

@@ -36,7 +36,7 @@ second-host addendum in `PREREGISTRATION.md`.
       reports use, sized for GitHub's column, light and dark.
 - [x] **`--settle-floor` fixed** - it measured the device's idle floor, printed it, and never
       passed it to `settle_gpu`, so the flag raised on every card it was meant for.
-      `run_phase_q.sh` and the whole A6000 plan depend on it.
+      `scripts/run_phase_q.sh` and the whole A6000 plan depend on it.
 
 ## Running now
 

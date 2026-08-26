@@ -1304,7 +1304,7 @@ class-stratified estimand this repo uses throughout, `docs/METHODOLOGY_AUDIT.md`
 data at **-21.5 %**. A faithful replication should therefore land near -21.5 %, which is inside
 the region the registered gate calls a failure.
 
-The gate moves to a band of -12 % to -32 % around the stratified figure. `run_remaining.sh` is
+The gate moves to a band of -12 % to -32 % around the stratified figure. `scripts/run_remaining.sh` is
 updated with it, and now writes `results/phase_m_anchor_ok` only when the band is met; the 22 GB
 MoE target is no longer deleted while the anchor is unresolved, since that is exactly when the
 model is needed.
@@ -1375,7 +1375,7 @@ make it fittable, which is what H6b needs.
 parameter neither study had noticed.
 
 The matrix goes from 9 arms to 14 and from 675 records to 1050, about three hours rather than two.
-`expect_for` in `run_remaining.sh` derives the count from `len(ARMS)` and needs no change.
+`expect_for` in `scripts/run_remaining.sh` derives the count from `len(ARMS)` and needs no change.
 
 None of this is registered as a new hypothesis. H6, H6a and H6b are unchanged in content; what
 changes is that the matrix can now address them. H6a keeps the -12 % to -32 % band from
@@ -1439,7 +1439,7 @@ put the model on the same axis as the run order.
 arms and 3 passes the dense arms sat at positions 11-20, 10-19 and 9-18 and never once ran in the
 first nine. Whatever varies with position in a four-hour session - card temperature, the clock
 drift this repo has measured at 1.8 % across a ladder, page cache - would have varied with the
-model, which is the one thing the phase is comparing. The invocation in `run_remaining.sh` passes
+model, which is the one thing the phase is comparing. The invocation in `scripts/run_remaining.sh` passes
 no `--settle-floor`, so there is no thermal gate absorbing it either, and that script cannot be
 edited while the chain is reading it.
 
