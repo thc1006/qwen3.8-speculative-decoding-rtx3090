@@ -1947,3 +1947,87 @@ Nothing measured is lost:
 `models/dflash2` (6.6 GB) was considered and **kept**. Releasing the MoE alone clears every
 remaining rung, so deleting more would be gratuitous, and five completed phases load those files.
 `models/target` (18 GB) is used by every phase in the study and is not a candidate.
+
+## Correction 21, registered 2026-08-26 14:42, BEFORE the BF16 rung and before any acceptance figure is read: `phase_qsmall`'s hypotheses
+
+`phase_qsmall` began running at 14:30 today and no hypothesis for it had been registered. This
+repository registers before it measures, and that did not happen here; the honest repair is to
+register now and to state exactly what had been seen when this was written, rather than to
+back-date or to leave the phase unregistered.
+
+**State at the moment of writing.** 75 records, arms seen: ['baseline@Q4_K_M', 'mtp-n2@Q4_K_M', 'mtp-n3@Q4_K_M']
+Of the four rungs only `Q4_K_M` has any records at all; `Q6_K`, `Q8_0` and `BF16` have none and
+have not been downloaded. What has been read from those records: mean `decode_tok_s` per arm,
+nothing else. What has NOT been read, by anyone, at the time of writing: any acceptance figure,
+any `draft_n`, any divergence or byte-identical count, any `k` or `c`, and any record from the
+`mtp-n6` arm, which had not yet run. Every hypothesis below turns on one of those.
+
+**H9 (bf16 preserves parity; the anchor the 27B ladder cannot reach).** llama.cpp #25618 scopes
+its finding as: greedy speculative output diverges from the non-speculative baseline on a
+**quantized** target and stays byte-identical on a **bf16** one. Qwen3.8-27B's BF16 is 50 GB and
+fits on neither card here, so Phase Q could only test the quantized half; `Qwen3.5-9B`'s BF16 is
+17.14 GiB and fits. H9 is that the BF16 rung's byte-identical rate is materially higher than
+every quantized rung's.
+
+- Falsified if BF16's identical rate is not the highest of the four rungs, or if its interval is
+  not clear of the quantized rungs' intervals.
+- **Power is the binding problem and is stated in advance.** Byte-identical is one bit per
+  (prompt, pass). Phase Q's two rungs gave paired intervals spanning **32 percentage points** on
+  25 prompts and 3 passes, so anything short of a very large effect will land as UNMEASURED
+  rather than as a refutation. A null here is weak evidence and will be reported as weak.
+- If #25618 is right in the strong form, the BF16 rung should be at or near 100 % identical,
+  which this design CAN resolve. It is the intermediate outcomes it cannot.
+
+**H9a (the dose-response is monotone in bit width).** Identical rate rises monotonically
+Q4_K_M < Q6_K < Q8_0 < BF16.
+
+- Weaker than H9 and can fail while H9 holds: #25618's claim is about the bf16 endpoint, not
+  about ordering among quantized levels.
+- Phase Q found the **opposite** direction between UD-Q4_K_XL and UD-Q5_K_XL -- 24.0 % identical
+  falling to 12.0 % at the lighter quantization -- on intervals covering zero. That is the
+  registered expectation this phase is testing against, and it is registered as a reason to doubt
+  H9a rather than as support for it.
+
+**H10 (acceptance on sm_86, against llama.cpp #26750).** #26750 reports MTP acceptance of
+**35.8-40.7 % on CUDA against ~92 % on Vulkan** for exactly this model and quant. The
+`mtp-n6@Q4_K_M` arm is the matched configuration on a second CUDA architecture (sm_86 Ampere
+against their sm_120 Blackwell).
+
+- Registered before any acceptance number from this phase has been read, and before the
+  `mtp-n6` arm ran at all.
+- Three outcomes, all recorded as results: **35-41 %** reproduces their CUDA figure on a second
+  CUDA architecture and makes it an architecture-independent CUDA property; **near 92 %** says
+  their CUDA figure is build- or architecture-specific; **between** says the CUDA/Vulkan gap is
+  real and smaller than reported.
+- No prediction is registered between the three. The point of running it is that the public
+  record contains one CUDA datapoint and this study can supply a second; guessing which way it
+  falls would add nothing.
+
+**H10a (acceptance falls with verification width).** Within a rung, mean acceptance falls
+monotonically from n-max 2 to n-max 6.
+
+- Registered as the boring control. Every other phase in this study shows it, so a violation
+  here would mean something is wrong with the run rather than something interesting about the
+  model.
+
+**H11 (`c` moves with quantization on a second model and a wider bit range).** Phase Q measured
+`c` falling **10.1 %** between UD-Q4_K_XL and UD-Q5_K_XL on Qwen3.8-27B, about one bit, with the
+drafter demonstrably holding still. If that is a property of quantization rather than of that
+model, the same direction should appear on Qwen3.5-9B across roughly four times the bit range.
+
+- Falsified if `c` does not fall with bit width, or if the total change from Q4_K_M to BF16 is
+  smaller than the within-rung pass drift that `harness/cross_rung.py` prints beside it.
+- `c` here is fitted over widths {3, 4, 6, 7} -- four points, two residual degrees of freedom,
+  against Phase Q's three points and one. The lack-of-fit check is therefore better powered here
+  than it was there, and `c` remains a **chord** over the widths fitted, so every cross-rung
+  comparison is restricted to the shared range.
+- H11 is NOT a prediction that the wall-time cost falls. Phase Q found the dimensionless slope
+  and the millisecond slope disagreeing in sign, because `c` is denominated in each target's own
+  decode step. Both denominations will be reported here for the same reason.
+
+**What this phase cannot do.** The model is not this study's headline model, so nothing here
+transfers to Qwen3.8-27B by itself; it supplies an anchor the 27B ladder structurally cannot
+reach and a second CUDA datapoint for #26750. The rungs are one uniform-quantization family
+(`Q4_K_M`, `Q6_K`, `Q8_0`, `BF16`), so unlike Phase Q's UD-* rungs, bit width is **not**
+confounded with quantization scheme here. That makes this ladder the cleaner of the two on that
+axis, and it is the reason the bit-width plot belongs on this phase rather than on Phase Q.

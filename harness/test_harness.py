@@ -1554,7 +1554,12 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
         if complete == 0:
             self.skipTest("no complete phase_q rungs")
         words = {"one": 1, "two": 2, "three": 3, "four": 4}
+        # Scoped to the phase Q row. Phase Q-small is a four-rung ladder too, and its prose in
+        # the same table would otherwise be collected here and reported as a disagreement.
         text = self._readme()
+        row = re.search(r"^\| \*\*Q\*\* \|.*$", text, re.M)
+        self.assertIsNotNone(row, "the README no longer has a phase Q row")
+        text = row.group(0)
         stated = set()
         for m in re.finditer(r"\b(one|two|three|four|\d+) rungs? of four", text):
             g = m.group(1)
