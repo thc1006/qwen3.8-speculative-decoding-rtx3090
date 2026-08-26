@@ -303,7 +303,7 @@ from the source.
 
 | what | where | state |
 |---|---|---|
-| Ancestor walk bounded, and stopped when the ancestor is absent | [sglang#36201](https://github.com/sgl-project/sglang/pulls/36201), +297/-32 | **open**, awaiting a maintainer to apply `run-ci`, which [#31478](https://github.com/sgl-project/sglang/issues/31478) is also waiting on |
+| Ancestor walk bounded, and stopped when the ancestor is absent | [sglang#36201](https://github.com/sgl-project/sglang/pull/36201), +297/-32 | **open**, awaiting a maintainer to apply `run-ci`, which [#31478](https://github.com/sgl-project/sglang/issues/31478) is also waiting on |
 | Sibling walks bounded, with a range check and a vocabulary check | `upstream/sglang/0002-bound-sibling-walks.patch` | **held back on purpose**: [#35771](https://github.com/sgl-project/sglang/issues/35771) is already open against that kernel's accept condition, and a second change to the same lines would collide |
 
 One thing worth repeating from `upstream/sglang/FINDINGS.md`, because it is the kind of error a
