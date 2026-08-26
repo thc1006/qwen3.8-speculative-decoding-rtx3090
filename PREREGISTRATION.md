@@ -2031,3 +2031,130 @@ reach and a second CUDA datapoint for #26750. The rungs are one uniform-quantiza
 (`Q4_K_M`, `Q6_K`, `Q8_0`, `BF16`), so unlike Phase Q's UD-* rungs, bit width is **not**
 confounded with quantization scheme here. That makes this ladder the cleaner of the two on that
 axis, and it is the reason the bit-width plot belongs on this phase rather than on Phase Q.
+
+
+## Correction 22, 2026-08-26 18:29: scoring `phase_qsmall` against Correction 21
+
+Correction 21 registered five hypotheses at 14:42 today, after the phase had started and before
+any acceptance figure, any divergence count, or any record from a rung other than Q4_K_M existed.
+All four rungs are now complete: 375 records each, 1500 in total, 0 incidents.
+
+**One rung was measured twice.** The first Q4_K_M run was complete and contaminated: a
+`sha256sum` on a 17.5 GB model file took 57 % of the CPU during `pass02_baseline@Q4_K_M`, which
+is the divisor for every speculative arm in that pass, and left that baseline 0.49 % slow against
+pass 1 where the speculative arms move 0.04-0.10 % between passes. The gate refused it on the
+presence of an incident, not on the size of the effect -- deciding after the fact that 0.49 % was
+tolerable would have made the rule a function of the result. The driver kept the weights, the
+rung was re-run from the staged copy, and the contaminated file is archived as
+`results/phase_qsmall_Q4_K_M.partial.1787737418.json`, unpublished.
+
+### H9 (bf16 preserves parity) -- SUPPORTED as an effect, and #25618's wording is REFUTED
+
+Byte-identical rate against each rung's own non-speculative baseline, 75 requests per cell:
+
+| arm | Q4_K_M | Q6_K | Q8_0 | **BF16** |
+|---|---:|---:|---:|---:|
+| mtp-n2 | 16.0 % | 8.0 % | 4.0 % | **52.0 %** |
+| mtp-n3 | 12.0 % | 8.0 % | 4.0 % | **52.0 %** |
+| mtp-n5 | 8.0 % | 4.0 % | 4.0 % | **52.0 %** |
+| mtp-n6 | 8.0 % | 4.0 % | 4.0 % | **52.0 %** |
+
+Paired over the same 25 prompts, Q4_K_M against BF16 is **+36.0 pp [+16.0, +52.0]** at mtp-n2 and
+**+40.0 pp [+24.0, +56.0]** at mtp-n3, both clear of zero. The bf16 rung is between three and
+thirteen times every quantized rung.
+
+Correction 21 registered in advance that this design could resolve the strong form of #25618 --
+bf16 at or near 100 % identical -- and could not resolve the intermediate outcomes. bf16 came in
+at **52 %**. That is unambiguously the strong form's territory and unambiguously not parity:
+**36 of 75 requests still diverge from the non-speculative baseline with no quantization anywhere
+in the target**. #25618 scopes its finding as "diverges on quantized targets, stays bit-identical
+on bf16". The first half holds here. The second half, as written, does not.
+
+The honest statement of what was found: bf16 makes greedy speculative output agree with vanilla
+far more often, and does not make it agree.
+
+### H9a (the dose-response is monotone in bit width) -- REFUTED
+
+Within the quantized rungs the identical rate FALLS as bit width rises: 16 -> 8 -> 4 % at mtp-n2,
+and the same ordering in all four arm families. The registered prediction was the opposite.
+
+Correction 21 registered the reason to doubt it: Phase Q had already seen 24 % fall to 12 %
+between UD-Q4_K_XL and UD-Q5_K_XL, on intervals covering zero. Here it is four families agreeing,
+on a uniform-quantization family where bit width is not confounded with scheme.
+
+So bf16 is not the endpoint of the trend the quantized rungs lie on. It is off that line.
+Whatever bf16 changes is not more of what Q8_0 has more of than Q4_K_M.
+
+### H10 (acceptance on sm_86 against #26750) -- their CUDA figure REPRODUCES
+
+`mtp-n6@Q4_K_M` is the matched configuration: same model, same quant, same n-max, second CUDA
+architecture (sm_86 Ampere against their sm_120).
+
+    measured on sm_86   35.0 %  [32.9, 37.3]   class-stratified cluster bootstrap, 25 prompts
+    #26750 on CUDA      35.8 - 40.7 %          intervals overlap
+    #26750 on Vulkan    ~92 %                  57 percentage points away
+
+Correction 21 registered three outcomes and deliberately predicted none of them, because the
+public record held one CUDA datapoint and the point was to supply a second rather than to guess.
+The second one landed on the first branch: the CUDA figure is not specific to their build or
+their architecture. Two CUDA generations, two prompt sets, the same place.
+
+Note also #26750's own thread: an independent reproduction on GB10 Grace Blackwell (SM121) with a
+different model family, still present 250 commits later, with the control that switching
+speculation off makes the two builds identical. That is a third CUDA architecture.
+
+### H10a (acceptance falls with verification width) -- SUPPORTED
+
+Monotone in every rung, no exceptions:
+
+    Q4_K_M  0.6462 > 0.5305 > 0.4034 > 0.3497
+    Q6_K    0.6444 > 0.5453 > 0.4038 > 0.3593
+    Q8_0    0.6384 > 0.5377 > 0.3982 > 0.3463
+    BF16    0.6405 > 0.5405 > 0.3980 > 0.3516
+
+Registered as the boring control, and it behaves. Note the columns: acceptance at a given width
+is the same across the whole ladder, which is the identification result H11 needs.
+
+### H11 (`c` moves with quantization) -- direction SUPPORTED, linearity REFUTED, wall time ABSENT
+
+The precondition first. The MTP head lives inside the target gguf, so quantizing the target
+quantizes the drafter; a moving `c` would otherwise be a mixture. Acceptance slopes against file
+size, per arm family: -0.00038, +0.00038, -0.00045, -0.00010 per GB, **every interval covering
+zero**. Realised width likewise. The drafter does not move across this ladder.
+
+    rung      bpw       c        step ms   c in ms
+    Q4_K_M   5.101   0.4126       8.246     3.402
+    Q6_K     6.680   0.3036      10.149     3.081
+    Q8_0     8.506   0.1962      11.900     2.335
+    BF16    16.000   0.1662      20.126     3.345
+
+Paired slope **-0.01648 per GB [-0.01658, -0.01639]**, clear of zero, **-0.01896 per bit**. So
+`c` does move with quantization, in the direction Phase Q found on Qwen3.8-27B (-10.1 % over one
+bit) and in the direction H2' requires.
+
+But r2 is **0.666**, and the shape is why: `c` drops 0.216 over the 3.4 bits from Q4_K_M to Q8_0
+and 0.030 over the 7.5 bits from Q8_0 to bf16. It **saturates**. A linear coefficient is a poor
+summary and is reported here with the four points it was fitted through rather than instead of
+them. Phase Q's three rungs could not have seen this; four points and two residual degrees of
+freedom can.
+
+In wall time there is **no trend at all**: 3.402, 3.081, 2.335, 3.345 ms, r2 **0.019**. bf16's
+decode step is 2.44x Q4_K_M's, which cancels the fall in the dimensionless slope and then some.
+H2' is stated as a relative per-extra-token cost, so the dimensionless figure is the one that
+bears on it -- but a deployment choosing a quantization does not get a cheaper verified position
+in milliseconds by moving up this ladder, and reporting only the dimensionless slope would imply
+that it does.
+
+### What this phase does not establish
+
+- One model (Qwen3.5-9B-MTP), one card (sm_86), one build. The 52 % bf16 figure is not claimed to
+  transfer to Qwen3.8-27B, whose bf16 remains unobtainable on any card here.
+- The four rungs are one uniform-quantization family, so bit width is **not** confounded with
+  quantization scheme -- unlike Phase Q's UD-* rungs. That is why the bits-per-weight axis belongs
+  to this phase. The parameter count on that axis is derived from the bf16 rung as size/2 and
+  over-estimates by whatever metadata the file carries, identically for every rung, so it shifts
+  the axis and not any slope.
+- Rungs ran hours apart in one session each. Prompt pairing removes prompt difficulty and nothing
+  else; the within-rung pass spread bounds run-to-run drift and is a lower bound on what separates
+  two rungs.
+- Nothing here identifies WHICH operator diverges, or why bf16 sits off the quantized rungs' line.
