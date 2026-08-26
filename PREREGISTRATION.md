@@ -2905,3 +2905,47 @@ with no residual withdrawn claim, and the card at stock. The one result that is 
 B, whose two host-contention incidents stand as recorded -- one a false positive from the run's
 own `nvidia-smi` power sampler, one a `git` command of mine during `pass03_mtp-n7-p.75`. Neither
 is going to be edited out of a result file.
+
+
+## Correction 32, 2026-08-27 03:07: reviewing the benchmark I had just run
+
+The rebase and benchmark for llama.cpp #27705 were done in this repository's working style, so the
+review of them belongs here. Two of the findings are cases where I would have reported a number
+that meant nothing.
+
+**`-t 8` on an 8-vCPU guest is not a measurement.** The first `llama-bench` run gave
+`pp512 328.61 +- 104.62` -- a 32 % relative scatter. The host is eight vCPUs carved out of an
+i9-13900, and filling all eight leaves nothing for the guest or the hypervisor. A null experiment,
+the same binary run three times, put `-t 4` at 1.0 % run-to-run and `-t 8` at 8-10 %, with token
+generation actually SLOWER at eight threads (45.7 against 62.8 t/s). Establishing the noise floor
+before comparing anything is what caught this; without it the first table would have been
+published.
+
+**Blocked measurement confounded the binary with the session.** Three parent reps, then three head
+reps, gave head faster on all three tests: +0.61 %, +2.18 %, +1.86 %. The change only ADDS work --
+one `tok_ids.push_back()` per decode token -- so a consistent speed-up is impossible, and the
+consistency of the sign was the tell. This is the same error `bench.py` rotates arm order to
+avoid, made in a benchmark I wrote by hand an hour after quoting that rotation. Rerun interleaved,
+four pairs alternating, the paired differences on `tg128` are -0.40 %, +0.24 %, +1.47 %, -1.02 %:
+mean +0.07 %, sign flipping between pairs.
+
+**My interval on those four pairs was 60 % too narrow.** I wrote mean +- 2 se and got
+[-0.99 %, +1.14 %]. Four pairs is t(3) = 3.182, giving **[-1.62 %, +1.77 %]**. The conclusion does
+not move -- both cover zero -- but the resolution does: this benchmark excludes effects larger
+than about 1.8 %, not 1 %. Writing 2 se for a four-sample interval is the same shape of error as
+the percentile bootstrap's undercoverage that Corrections 27 and 30 are about, committed by hand
+rather than by a library.
+
+**I rebased and went straight to benchmarking without re-running the tests.** Eleven master
+commits, and the last test run was from before them. Re-running found no breakage -- and found
+something better than that: T5 passes on the CPU backend, and T5 is one of the five architectures
+the suite calls `llama_encode` on, so the `encode()` change IS exercised by an architecture that
+takes that path. What is still absent is a test that fails without the fix, which needs an
+architecture with an encoder that also populates a token-indexed buffer, and none exists.
+
+**Two smaller things, recorded rather than fixed.** The nearest-reference matcher now requires the
+best distance to beat the second by a factor of four; four is a number I chose, and passing at
+five seeds is evidence rather than justification. And `telemetry.host_load` now carries
+`_ps_output` / `_self_pid` parameters that exist only so a test can exercise the threshold without
+burning CPU on a machine that may be measuring -- production code carrying a test seam, which is a
+trade rather than a free improvement.
