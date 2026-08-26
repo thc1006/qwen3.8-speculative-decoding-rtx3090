@@ -405,6 +405,46 @@ def report(result: dict) -> None:
                   "above instead.")
 
     print()
+    print("  WHY THIS SURVIVES A FORWARD-PASS COUNT THAT cost_model.py REFUSES TO USE.")
+    print("  F comes from the same derivation whose integrity check fails on this phase, and")
+    print("  cost_model.py now refuses to print k, c or k0 when it does. It does not follow that")
+    print("  this comparison fails with it, and the difference is worth stating rather than")
+    print("  asserting: `drafted` and `rejected` are exact counters, and F enters only through")
+    print("  the offset F*tau0, so a systematic error in F moves the offset and not the")
+    print("  regressors. Refitting with F shifted, which is the direction and size the")
+    print("  derivation is known to be wrong by:")
+    print(f"    {'F shift':>8s} {'one-parameter winner':>22s} {'ms/step':>9s} {'ms/token':>9s}")
+    flipped = False
+    for shift in (-2, -1, 0, 1):
+        moved = []
+        for x in rs:
+            f = x["forwards"] + shift
+            if f <= 0:
+                continue
+            y = dict(x)
+            y["forwards"] = f
+            y["excess_ms"] = x["ms"] - f * x["tau0"]
+            moved.append(y)
+        if not moved:
+            continue
+        a = _fit1([(x["excess_ms"], x["drafted"]) for x in moved])
+        b = _fit1([(x["excess_ms"], x["rejected"]) for x in moved])
+        ra = sum((x["excess_ms"] - a * x["drafted"]) ** 2 for x in moved)
+        rb = sum((x["excess_ms"] - b * x["rejected"]) ** 2 for x in moved)
+        f2 = _fit2([(x["excess_ms"], float(x["forwards"]), float(x["drafted"])) for x in moved])
+        winner = "drafted" if ra < rb else "REJECTED"
+        if winner != "drafted":
+            flipped = True
+        print(f"    {shift:+8d} {winner:>22s} {f2[0]:9.3f} {f2[1]:9.3f}")
+    if flipped:
+        print("  THE VERDICT FLIPS under a shift the derivation is known to be capable of. Read")
+        print("  nothing above as settled until the exact count is available.")
+    else:
+        print("  The winner does not change and the coefficients move by about a percent, so the")
+        print("  comparison does not rest on F being exact. What it would still take from an exact")
+        print("  count is the ABSOLUTE ms/step and ms/token, which are offsets away from it.")
+
+    print()
     print("-" * 96)
     print("4. JOINT FIT, reported last because it is the part that is NOT identified")
     print("-" * 96)

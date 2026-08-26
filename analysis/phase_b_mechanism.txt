@@ -73,6 +73,23 @@ H2   cost per rejected             10.1835 1176732389.79        0.8242
 
     RSS(step+rejected) - RSS(step+drafted) = +150852554.01 [+117785290.18, +183815059.03]   clears zero by 3.57 half-widths
 
+  WHY THIS SURVIVES A FORWARD-PASS COUNT THAT cost_model.py REFUSES TO USE.
+  F comes from the same derivation whose integrity check fails on this phase, and
+  cost_model.py now refuses to print k, c or k0 when it does. It does not follow that
+  this comparison fails with it, and the difference is worth stating rather than
+  asserting: `drafted` and `rejected` are exact counters, and F enters only through
+  the offset F*tau0, so a systematic error in F moves the offset and not the
+  regressors. Refitting with F shifted, which is the direction and size the
+  derivation is known to be wrong by:
+     F shift   one-parameter winner   ms/step  ms/token
+          -2                drafted     4.481     6.140
+          -1                drafted     4.355     6.126
+          +0                drafted     4.229     6.112
+          +1                drafted     4.105     6.098
+  The winner does not change and the coefficients move by about a percent, so the
+  comparison does not rest on F being exact. What it would still take from an exact
+  count is the ABSOLUTE ms/step and ms/token, which are offsets away from it.
+
 ------------------------------------------------------------------------------------------------
 4. JOINT FIT, reported last because it is the part that is NOT identified
 ------------------------------------------------------------------------------------------------
