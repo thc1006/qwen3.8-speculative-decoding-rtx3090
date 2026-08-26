@@ -1,0 +1,146 @@
+====================================================================================================
+Phase Q -- marginal cost of a verified position, across the quantization ladder
+====================================================================================================
+
+UD-Q4_K_XL
+  model        /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf
+  sha256       3f227079003a...    captured 2026-08-26T04:36:56+0800    host thc1006-debian13
+  records      300   passes [1, 2, 3]   prompts 25   baseline arm ['baseline@UD-Q4_K_XL']
+  widths       on-path [3, 4, 6]   (MMVQ limit 8, read from this run's own record)
+  baseline     41.59 tok/s  ->  one serial decode step 24.046 ms
+
+UD-Q5_K_XL
+  model        /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090/models/quant_ladder/Qwen3.8-27B-UD-Q5_K_XL.gguf
+  sha256       8601193d3d57...    captured 2026-08-26T12:36:57+0800    host thc1006-debian13
+  records      300   passes [1, 2, 3]   prompts 25   baseline arm ['baseline@UD-Q5_K_XL']
+  widths       on-path [3, 4, 6]   (MMVQ limit 8, read from this run's own record)
+  baseline     35.86 tok/s  ->  one serial decode step 27.886 ms
+
+----------------------------------------------------------------------------------------------------
+Both fits restricted to the shared widths [3, 4, 6]. k(w) is curved -- cost_model.py's
+own fit reports a 6.7x lack of fit against prompt scatter on this data -- so `c` is a
+CHORD over the widths fitted, and two chords over different arcs are not estimates of
+the same quantity.
+
+----------------------------------------------------------------------------------------------------
+IDENTIFICATION. The MTP head is inside the target gguf, so quantizing the target also
+quantizes the drafter. Before a difference in `c` can be read as a difference in what
+a verified position COSTS, the drafter has to be shown to behave the same on both
+rungs -- otherwise the slope is a mixture of cost and drafting behaviour.
+
+  acceptance (accepted/drafted)
+  arm family       UD-Q4_K_XL   UD-Q5_K_XL       delta         95 % interval
+  mtp-n2               0.6645       0.6725     +0.0079    [-0.0050, +0.0210]
+  mtp-n3               0.5579       0.5644     +0.0065    [-0.0054, +0.0186]
+  mtp-n5               0.4125       0.4138     +0.0013    [-0.0122, +0.0145]
+  (flagged when the interval excludes zero AND |delta| > 0.02; that cut is a convention of this file, not a measured threshold)
+
+  realised width (drafted/forward + 1)
+  arm family       UD-Q4_K_XL   UD-Q5_K_XL       delta         95 % interval
+  mtp-n2               2.9926       2.9913     -0.0013    [-0.0041, +0.0015]
+  mtp-n3               3.9854       3.9827     -0.0027    [-0.0075, +0.0030]
+  mtp-n5               5.9614       5.9626     +0.0013    [-0.0093, +0.0116]
+  (flagged when the interval excludes zero AND |delta| > 0.05; that cut is a convention of this file, not a measured threshold)
+
+  Nothing moved materially. The drafter produces and lands the same draft on both
+  rungs, so a difference in `c` below is not a difference in drafting behaviour.
+
+  UD-Q4_K_XL   k0 = 0.8879 [0.8852, 0.8906]   c = 0.2842 [0.2834, 0.2849]   (25 prompts)
+               c in wall time = 6.833 ms per verified position  [6.815, 6.850]
+
+  UD-Q5_K_XL   k0 = 0.8999 [0.8957, 0.9043]   c = 0.2554 [0.2540, 0.2568]   (25 prompts)
+               c in wall time = 7.122 ms per verified position  [7.084, 7.162]
+
+----------------------------------------------------------------------------------------------------
+PAIRED DIFFERENCE. One draw of prompts, both rungs refitted on it, the difference
+taken inside the replicate. Two marginal intervals cannot answer this: the rungs are
+estimated on the same prompts and move together, and treating a shared component as
+independent noise is the error that produced and then retracted Correction 13.
+
+  c(UD-Q4_K_XL) - c(UD-Q5_K_XL) = +0.0288  [+0.0271, +0.0303]   nominal 95 %, 25 shared prompts
+  as a fraction of c(UD-Q4_K_XL): +10.1 %
+
+  Shape check on the DIFFERENCE across widths [3, 4, 6]: residuals +0.00101 -0.00151 +0.00050, se(slope) 0.00087 on 1 dof.
+  The two k(w) curves differ by a straight line to within 0.00151, so whatever curvature
+  they carry is shared and cancels; the interval above decides.
+
+----------------------------------------------------------------------------------------------------
+THE SAME DIFFERENCE IN WALL TIME. This is a different question, not a unit change of
+the answer above: `c` is denominated in each target's own decode step, and these two
+steps differ.
+  UD-Q4_K_XL   step 24.046 ms   c 0.2842  ->  6.833 ms
+  UD-Q5_K_XL   step 27.886 ms   c 0.2554  ->  7.122 ms
+  dimensionless: UD-Q4_K_XL is higher by 0.0288 (10.1 %)
+  wall time    : UD-Q4_K_XL is lower by 0.289 ms (4.1 %)
+  THE TWO DISAGREE IN SIGN. The decode steps differ by 13.8 %, which is larger than the difference in the
+  dimensionless slope, so the target that pays less relative to itself still pays
+  more per position in wall time. H2' is stated as a relative cost, so the
+  dimensionless line is the one that bears on it; the wall-time line is what a
+  deployment feels. Reporting either alone would be a half-truth.
+  (No interval on the millisecond figures: it would need each baseline's uncertainty
+   propagated through a ratio across sessions, which this design cannot pair.)
+
+----------------------------------------------------------------------------------------------------
+INTERNAL YARDSTICK. `c` refitted from each pass alone, every pass using all prompts,
+so this spread is NOT prompt sampling -- the bootstrap above already covers that. Each
+arm-pass gets a fresh server (design.fresh_server_per_arm_per_pass), so it does bound
+server startup, allocation and cache state.
+  It is a LOWER BOUND on what separates the rungs, not an estimate of it. The three
+  passes of a rung run minutes apart inside one invocation, on one thermal trajectory;
+  the rungs here ran hours apart. Whatever drifts on the scale of hours is invisible
+  to this yardstick, so clearing it is necessary and not sufficient.
+
+  UD-Q4_K_XL   pass1: 0.2832  pass2: 0.2831  pass3: 0.2862
+               spread 0.0030   sd 0.0017   (1.1 % of the mean)
+
+  UD-Q5_K_XL   pass1: 0.2555  pass2: 0.2558  pass3: 0.2549
+               spread 0.0009   sd 0.0005   (0.4 % of the mean)
+
+  widest within-rung pass spread 0.0030   against a cross-rung difference of 0.0288   (9.5x)
+  The difference is several times the within-rung drift, so drift of the size
+  this instrument shows on its own does not account for it.
+
+----------------------------------------------------------------------------------------------------
+DIVERGENCE DOSE-RESPONSE. Each arm against ITS OWN rung's baseline text, so the only
+thing that moves between the two columns is the target's quantization. #25618 states
+this as a binary (quantized diverges, bf16 does not); two rungs one bit apart make it
+a two-point dose-response with no bf16 anchor -- suggestive at best, and phase_qsmall
+is where the bf16 leg actually is.
+
+  arm family           UD-Q4_K_XL       UD-Q5_K_XL    delta pp         95 % interval
+  mtp-n2            18/75 (24.0%)     9/75 (12.0%)       -12.0         [-28.0, +4.0]
+  mtp-n3            18/75 (24.0%)     9/75 (12.0%)       -12.0         [-28.0, +4.0]
+  mtp-n5            15/75 (20.0%)    12/75 (16.0%)        -4.0         [-16.0, +8.0]
+
+  Widest interval above spans 32.0 percentage points. A binary
+  outcome over 25 prompts resolves very little: any dose-response smaller than
+  that is invisible here regardless of whether it is real. Treat a delta whose
+  interval covers zero as UNMEASURED, not as absent.
+
+  Median shared prefix when the output DID fork (fraction of the baseline text):
+  mtp-n2         UD-Q4_K_XL   0.240      UD-Q5_K_XL   0.153
+  mtp-n3         UD-Q4_K_XL   0.240      UD-Q5_K_XL   0.153
+  mtp-n5         UD-Q4_K_XL   0.228      UD-Q5_K_XL   0.347
+  A rate that moves without the fork depth moving says divergence became more or less
+  FREQUENT; both moving together says it also became earlier or later in the text.
+
+----------------------------------------------------------------------------------------------------
+CONFOUNDS. Not folded into any interval above, because nothing in this design
+separates them from the effect.
+  Sessions      UD-Q4_K_XL captured 2026-08-26T04:36:56+0800
+                UD-Q5_K_XL captured 2026-08-26T12:36:57+0800
+                Prompt pairing removes prompt difficulty. It does not remove anything
+                that differs between these two moments.
+  UD-Q4_K_XL   entry temp 56-64 C   loadavg 0.72-1.25   contended arm-passes 0   end SM clock 1665-1785 MHz
+  UD-Q5_K_XL   entry temp 40-48 C   loadavg 0.19-0.71   contended arm-passes 0   end SM clock 1665-1755 MHz
+  Scheme        both UD-* rungs are unsloth dynamic quants, so bit width is confounded
+                with quantization scheme; a Q8_0 rung would break that pairing but
+                needs a 48 GB card. Plot against measured bits per weight, not labels.
+
+----------------------------------------------------------------------------------------------------
+VERDICT: the marginal costs differ, and by more than this instrument's own
+  session-to-session drift. Everything about the speculative cycle is held except
+  the target's quantization, so part of what a verified position costs moves with
+  it. Direction and rough size still have to be checked against H2' by hand: that
+  account is a different estimator and no derivation relates the two.
+====================================================================================================

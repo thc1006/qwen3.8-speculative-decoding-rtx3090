@@ -1,0 +1,74 @@
+
+[selection] the per-protocol series holds 294 records and the intention-to-treat series 300.
+            6 were excluded. Speculation moves where a request stops, so excluding
+            requests that stopped early selects on a post-treatment variable. Both series are
+            reported below where they differ.
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@UD-Q5_K_XL                35.86      35.86      75  zh_self_intro=0.4%
+mtp-n2@UD-Q5_K_XL                  59.86      60.18      72  reason_trains=0.4%
+mtp-n3@UD-Q5_K_XL                  57.52      57.95      72  code_sql_report=0.4%
+mtp-n5@UD-Q5_K_XL                  50.39      50.39      75  code_py_ratelimiter=0.4%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2@UD-Q5_K_XL            baseline@UD-Q5_K_XL    +66.81 [+63.01, +70.73]  FASTER
+mtp-n3@UD-Q5_K_XL            baseline@UD-Q5_K_XL    +60.27 [+55.05, +65.75]  FASTER
+mtp-n5@UD-Q5_K_XL            baseline@UD-Q5_K_XL    +40.38 [+34.84, +46.19]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2@UD-Q5_K_XL          chat: +51.5%  code:+100.9%  prose: +57.3%  reason: +78.4%  zh: +45.9%
+  mtp-n3@UD-Q5_K_XL          chat: +40.4%  code:+107.2%  prose: +44.0%  reason: +77.5%  zh: +32.2%
+  mtp-n5@UD-Q5_K_XL          chat:  +9.8%  code:+104.9%  prose: +12.8%  reason: +67.9%  zh:  +6.5%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 6 / 300
+    mtp-n2@UD-Q5_K_XL: 3
+        zh_self_intro/p1: early stop (n=377)
+        zh_self_intro/p2: early stop (n=377)
+        zh_self_intro/p3: early stop (n=377)
+    mtp-n3@UD-Q5_K_XL: 3
+        zh_self_intro/p1: early stop (n=377)
+        zh_self_intro/p2: early stop (n=377)
+        zh_self_intro/p3: early stop (n=377)
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+
+--- energy window coverage: 99.3 % of wall time (min 97.9 %) ---
+  Energy outside the first and last sample is not in the figure above.
+
+--- averaged against instantaneous power, per arm ---
+  baseline@UD-Q5_K_XL     +0.49 %   n=75
+  mtp-n2@UD-Q5_K_XL       +1.30 %   n=72
+  mtp-n3@UD-Q5_K_XL       +1.38 %   n=72
+  mtp-n5@UD-Q5_K_XL       +1.30 %   n=75
+  Positive means power.draw integrated low. It leaves the baselines nearly alone
+  and understates the speculative arms, so an energy saving read off the averaged
+  field is larger than the instantaneous field supports, by about this much.
+baseline@UD-Q5_K_XL        0.0868     +0.0%       4597     +0.0%       -          -
+mtp-n2@UD-Q5_K_XL          0.1485    +71.1%       2738    -40.4%   0.680       2.35
+mtp-n3@UD-Q5_K_XL          0.1431    +64.9%       2896    -37.0%   0.572       2.70
+mtp-n5@UD-Q5_K_XL          0.1244    +43.3%       3488    -24.1%   0.414       3.05
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  mtp-n2@UD-Q5_K_XL          byte-identical 9/75   median shared prefix when forked: 0.153
+  mtp-n3@UD-Q5_K_XL          byte-identical 9/75   median shared prefix when forked: 0.153
+  mtp-n5@UD-Q5_K_XL          byte-identical 12/75   median shared prefix when forked: 0.347
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@UD-Q5_K_XL        reproducible 50/50
+  mtp-n2@UD-Q5_K_XL          reproducible 50/50
+  mtp-n3@UD-Q5_K_XL          reproducible 50/50
+  mtp-n5@UD-Q5_K_XL          reproducible 50/50
