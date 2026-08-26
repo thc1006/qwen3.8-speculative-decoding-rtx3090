@@ -3748,6 +3748,40 @@ class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
                              f"the README says {claim!r}; Correction 25 established that zero "
                              f"drafts is ngram-mod's designed behaviour at its default n_min=48")
 
+    def test_no_committed_document_still_carries_a_withdrawn_claim(self):
+        """The same sentence lives in six files, and a retraction lands in one of them.
+
+        PREREGISTRATION.md is exempt: a Correction has to quote the wording it withdraws. So is
+        any line that marks itself as a withdrawal, for the same reason.
+        """
+        import subprocess
+        out = subprocess.run(["git", "-C", str(self.ROOT), "ls-files", "*.md"],
+                             capture_output=True, text=True, timeout=60)
+        if out.returncode != 0:
+            self.skipTest("not a git checkout")
+        claims = ("not the architecture", "sign belongs to the drafting method",
+                  "rules out a large architecture effect", "flag was accepted and did nothing",
+                  "flag was ignored", "no quantization anywhere", "the cost is linear",
+                  "costs a fixed c", "rules out warp count")
+        marks = ("withdraw", "Withdraw", "used to read", "an earlier version", "earlier draft",
+                 "no longer", "retract")
+        found = []
+        for name in out.stdout.split("\n"):
+            if not name or "PREREGISTRATION" in name or name.startswith(("upstream/", "llamacpp")):
+                continue
+            f = self.ROOT / name
+            if not f.exists():
+                continue
+            for i, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                if any(m in line for m in marks):
+                    continue
+                for c in claims:
+                    if c in line:
+                        found.append(f"{name}:{i} {c!r}")
+        self.assertFalse(found,
+                         "these lines assert something this study has withdrawn, and do not mark "
+                         "themselves as quoting it: " + "; ".join(found))
+
     def test_the_capped_window_is_not_called_byte_identical(self):
         """Every request stops at the token cap, so a match inside it is right-censored."""
         self.assertNotIn("Byte-identical output against each rung's own baseline", self.readme)

@@ -157,14 +157,21 @@ second-host addendum in `PREREGISTRATION.md`.
       larger than the quantization effect: code +117 %, reason +90 %, zh +0.8 %. Both baselines
       agree to 0.01 tok/s across the two trees.
 
-      The three n-gram arms are three different failures and the drafting counters separate them.
-      `ngram-mod` has `t_draft_n = 0` on all 75 records and output byte-identical to baseline on
-      all 75: the flag was accepted and did nothing, which is the predecessor's
-      `draft-qwen3-0.6b` failure exactly, caught this time because the guard records instead of
-      asserting. `ngram-map-k` drafts on 6 of 75, 288 tokens for 24 accepted. `ngram-cache` drafts
-      on 63 of 75, 9699 tokens, and accepts none of them, so its -8.3 % is drafting cost with no
-      return. For contrast DFlash2 accepts 41.1 % and draft08b-n8 21.0 %, the latter below n4's
-      35.2 % and slower for it. That `ngram-mod` is silently inert is worth an upstream issue.
+      The three n-gram arms are activation diagnostics, not three comparable efficacy
+      measurements, and the drafting counters separate them. `ngram-mod` has `t_draft_n = 0` on
+      all 75 records and matches the baseline on all 75. An earlier version of this entry read
+      that as a flag accepted and ignored, the predecessor's `draft-qwen3-0.6b` failure repeating;
+      Correction 25 established it is the method working as designed. Its default `n_min` is 48
+      and `draft_one` discards the whole draft on hitting an empty table entry before that, so it
+      needs 48 consecutive matched tokens to emit anything, and a 400-token general writing, code
+      and reasoning suite does not produce one. Its -0.20 % is the cost of entering the
+      speculative path and drafting nothing, and its 75/75 baseline match is the absence of
+      speculation rather than lossless speculation. `ngram-map-k` drafts on 6 of 75, 288 tokens
+      for 24 accepted. `ngram-cache` is the only active n-gram method here: it drafts on 63 of 75,
+      9699 tokens, accepts none of them, so its -8.3 % is drafting cost with no return, and it is
+      the only one of the three that supports a workload-level negative result. For contrast
+      DFlash2 accepts 41.1 % and draft08b-n8 21.0 %, the latter below n4's 35.2 % and slower for
+      it.
 - [x] **Phase L** - complete, five rungs, 900 records. The collapse does not appear, and the
       ladder now reaches past the depth the report's own worked example measures at, so the
       verdict is no longer withheld.
