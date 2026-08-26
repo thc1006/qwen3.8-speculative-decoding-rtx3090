@@ -55,7 +55,17 @@ class Interval:
         heavy-tailed mixture, against a nominal 95 %; at 50 prompts it recovers to 92.4 %. A t
         interval on the same draws reaches 94.1 %. The error is one-sided, the intervals come out
         too narrow, so the verdicts that can move are the ones whose interval nearly touches zero
-        already. Restoring the missing coverage is worth roughly a 1.15 to 1.25 times wider
+        already.
+
+        Those three numbers had no reproducible source until 2026-08-27. `harness/coverage_sim.py`
+        is that source now, and it also covers the process this study actually scores its
+        divergence verdicts on, which is BINARY and whose cluster mean over three passes takes one
+        of four values. At 300 replications it puts the binary case at 91.7 % for 25 prompts and
+        94.0 % for 50 -- inside the band the continuous processes occupy, so this threshold applies
+        to a binary outcome with about the same force. The same run reads 93.7 %, 92.3 % and 86.3 %
+        for normal, uniform and heavy-tailed at 25, which agrees with the figures above to within
+        roughly one Monte Carlo standard error for two of the three. See PREREGISTRATION.md
+        Correction 30. Restoring the missing coverage is worth roughly a 1.15 to 1.25 times wider
         interval, so a margin under about 1.3 is a verdict that should not be leaned on.
 
         Zero when the interval already spans zero.

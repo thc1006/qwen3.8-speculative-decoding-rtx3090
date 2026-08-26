@@ -2825,3 +2825,46 @@ README may not assert an architecture effect; if `phase_m_cost.txt` says the der
 the Phase M row must say its cost interpretation is withheld; if `phase_c`'s `ngram-mod` drafted
 zero tokens, the README may not call it an ignored flag. Each guard was verified to fail when the
 retracted sentence is put back.
+
+
+## Correction 30, 2026-08-27 01:41: the coverage figures, reproduced and extended to the binary case
+
+Correction 27 said the 1.3 half-width threshold rests on a calibration measured on three
+continuous data-generating processes, that `identical` is binary and its cluster mean over three
+passes takes one of four values, and that whether the percentile bootstrap covers at 95 % on that
+distribution had never been measured. `harness/coverage_sim.py` now measures it, through
+`stats.paired_cluster_bootstrap` itself rather than a reimplementation, on this study's own design
+of five classes of five prompts with three passes.
+
+300 replications x 2000 resamples, against a nominal 95 %:
+
+| process | n = 25 | n = 50 | recorded in stats.py at n = 25 |
+|---|---:|---:|---:|
+| normal | 93.7 % | 93.3 % | 90.9 % |
+| uniform | 92.3 % | 92.3 % | 90.6 % |
+| heavy-tailed | 86.3 % | 91.0 % | 88.0 % |
+| **binary** | **91.7 %** | **94.0 %** | never measured |
+
+**The binary case undercovers, and by about as much as the continuous ones.** 91.7 % at 25
+prompts sits inside the 86-94 % band the three continuous processes occupy, so the reason the 1.3
+threshold exists applies to a binary outcome with roughly the same force. It is neither excused
+by the four-valued cluster mean nor made more urgent by it. Correction 27's open question is
+closed in the direction of "the rule still applies", which is the answer that changes nothing
+about how H9, H10 and H11 were scored and is worth having as a number rather than as an analogy.
+
+Two things this does not say.
+
+**It is not an exact reproduction of the recorded figures.** At 300 replications the Monte Carlo
+standard error on a coverage near 0.92 is about 1.6 points, so uniform (92.3 against 90.6) and
+heavy-tailed (86.3 against 88.0) agree within one, and normal (93.7 against 90.9) is about 1.8
+away. The recorded run used 800 replications and its seed is not known here. The figures are
+consistent, not confirmed, and `stats.py` now cites the reproducible simulation alongside them.
+
+**The margin distribution is the part that bears on verdicts.** Of the binary intervals that
+cleared zero at n = 25, **20.0 % cleared it by under 1.3 half-widths** -- quartiles 1.43, 2.00,
+2.62 -- so one verdict in five at this sample size lands in the region the rule marks. At n = 50
+that share is **zero** and the quartiles move to 2.44, 2.85, 3.42. The remedy for a near-zero
+binary verdict is prompts, and the simulation says how many.
+
+The run is `analysis/bootstrap_coverage.txt` and reproduces with
+`python3 harness/coverage_sim.py --replications 300 --n-boot 2000 --n-prompts 25,50`.
