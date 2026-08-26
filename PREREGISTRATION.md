@@ -2346,3 +2346,67 @@ A ratio that lands near a familiar number is not a mechanism. 0.79 x 3 = 2.37 wa
 true and causally empty; the real check was reading the allocation's own stack frame and
 multiplying out the shape it names. Correction 13 was withdrawn for the same species of error --
 a quantity that looked like it explained something, adopted without testing what it predicted.
+
+
+## Correction 25, 2026-08-26 20:16: `phase_c`'s n-gram arms measure the baseline, and that is the method's design
+
+`harness/audit_results.py` flagged one FAIL across all 33 result files: `phase_c`'s `ngram-mod`
+arm is declared speculative and its `t_draft_n` sums to **zero** over 75 requests, against 9,699
+for `ngram-cache` and 288 for `ngram-map-k`. Its output is 75/75 byte-identical to the baseline
+where every other arm diverges under greedy, and its decode rate is 41.48 tok/s against the
+baseline's 41.55.
+
+The first reading was that a `--spec-type` had been accepted and silently ignored. That is wrong,
+and the source says so.
+
+### Why zero is correct here
+
+`common/common.h:351` gives `common_params_speculative_ngram_mod` defaults of `n_match = 24`,
+`n_min = 48`, `n_max = 64`. In `common/speculative.cpp`,
+`common_speculative_impl_ngram_mod::draft_one` walks up to `n_max` positions and, on hitting an
+empty table entry before `n_min`, returns without emitting anything at all -- the whole draft is
+discarded, not truncated.
+
+So the method must continue a match for at least **48 consecutive tokens** or it produces
+nothing. It is built for long verbatim repetition: rewriting, translation, large copied code
+blocks. `phase_c` runs 25 general writing / code / reasoning prompts at `max_tokens 400`, where a
+48-token verbatim repeat is not expected to occur. Zero drafts is the designed behaviour.
+
+`ngram-cache` and `ngram-map-k` fire because their thresholds are far lower, and `ngram-map-k`'s
+288 tokens against `ngram-cache`'s 9,699 puts it closer to the same situation than to a working
+comparison.
+
+### What has to change, and what does not
+
+**No upstream report.** There is no llama.cpp defect here; the prompt set is unsuited to the
+method. Filing it would spend maintainer time on a configuration error, which CONTRIBUTING asks
+contributors not to do.
+
+**The audit check is now split.** An n-gram arm that never fired is reported as a note naming the
+method's own threshold; a non-n-gram arm that drafted nothing remains a FAIL, because for
+`draft-mtp` or `draft-simple` it does mean the spec-type did not run. With that split, the audit
+is **33 of 33 clean**.
+
+**The reporting is the real problem and is now recorded.** `analysis/phase_c_report.txt` puts
+these three rows in one table:
+
+    ngram-cache   -8.27 % [-9.17, -7.39]   9,699 draft tokens
+    ngram-mod     -0.20 % [-0.22, -0.17]       0 draft tokens
+    ngram-map-k   -0.19 % [-0.29, -0.09]     288 draft tokens
+
+Read as a comparison of three methods, it says ngram-mod costs almost nothing and ngram-cache
+costs 8 %. What it actually says is that ngram-mod never ran, so its -0.20 % is the harness
+overhead of a speculative code path that produces no drafts, and its 75/75 byte-identical rate is
+the trivial consequence of never speculating rather than evidence about determinism. Only
+`ngram-cache` supports a statement about an n-gram method on this workload.
+
+The `phase_c` numbers are not withdrawn -- they are correct measurements of what was configured.
+What is withdrawn is any reading of the `ngram-mod` row as a property of the method.
+
+### The general point
+
+An arm's effect size is only interpretable together with evidence that the arm did what its name
+says. `t_draft_n` is that evidence for speculative arms and this study already records it per
+request; nothing was looking at it until the audit did. Two arms in one phase turn out to measure
+something other than what their row implies, and neither would have been caught by a completeness
+count, an incident log, or an interval that excludes zero.

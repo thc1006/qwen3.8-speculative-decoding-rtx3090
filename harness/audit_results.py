@@ -124,7 +124,22 @@ def audit(path: Path) -> dict:
         if not drafted:
             silent.append(a)
     if silent:
-        out["fails"].append(f"arms declared speculative that drafted nothing: {silent}")
+        # An n-gram method that never fires is not the same defect as a spec-type that was
+        # accepted and ignored. `ngram-mod` defaults to n_min 48: it must predict at least 48
+        # consecutive tokens from its table or it discards the whole draft
+        # (common/speculative.cpp, draft_one). On a 25-prompt general writing/code/reasoning set
+        # at 400 max_tokens, a 48-token verbatim repeat is not expected to occur, so zero drafts
+        # is the designed behaviour rather than a fault. Reported as a note so it stays visible.
+        ngram = [a for a in silent if "ngram" in a.lower()]
+        other = [a for a in silent if a not in ngram]
+        if other:
+            out["fails"].append(f"arms declared speculative that drafted nothing: {other}")
+        if ngram:
+            out["notes"].append(
+                f"n-gram arms that never drafted: {ngram}. Check the method's own threshold "
+                f"before reading this as a defect -- ngram-mod needs n_min consecutive matched "
+                f"tokens (default 48) and emits nothing below it. Such an arm measures the "
+                f"baseline, so its speedup and divergence figures are not about the method.")
 
     return out
 
