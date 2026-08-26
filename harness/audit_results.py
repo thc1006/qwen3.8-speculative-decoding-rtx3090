@@ -84,7 +84,17 @@ def audit(path: Path) -> dict:
                                 f"{sorted(ragged.items())[:2]}")
         out["shape"] = f"{len(shape)}/{len(want)}"
     else:
-        out["notes"].append("design does not declare arms/passes/n_prompts; shape unchecked")
+        # A result that declares no arms cannot have its shape checked against intent, and
+        # `completeness()` falls back to counting arms in the records -- which is self-certifying.
+        # Silence here would let a truncated or edited file pass every check, which is the exact
+        # hole the rung drivers' gates were rewritten to close. Missing arms is a FAIL when there
+        # are records to check; only a design block predating the field is a note.
+        if recs and not declared:
+            out["fails"].append(
+                "records present but the result declares no arms, so shape cannot be checked "
+                "against intent and any permutation would pass")
+        else:
+            out["notes"].append("design does not declare arms/passes/n_prompts; shape unchecked")
         out["shape"] = f"{len(shape)}/?"
 
     inc = d.get("incidents") or []

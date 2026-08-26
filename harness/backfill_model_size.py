@@ -48,6 +48,15 @@ def sizes_by_hash() -> dict[str, tuple[int, str]]:
             continue
         parts = line.split()
         if len(parts) == 2 and re.fullmatch(r"[0-9a-f]{64}", parts[0]) and pending is not None:
+            prev = out.get(parts[0])
+            if prev is not None and prev[0] != pending:
+                # One hash cannot have two sizes. Silently keeping the last one would write a
+                # number of unknown correctness into a measurement file, which is worse than
+                # having no size at all.
+                raise ValueError(
+                    f"{SUMS}: hash {parts[0][:16]}... is recorded with two different sizes, "
+                    f"{prev[0]} ({prev[1]}) and {pending} ({parts[1]}). One of them is wrong; "
+                    f"refusing to guess which.")
             out[parts[0]] = (pending, parts[1])
         pending = None
     return out

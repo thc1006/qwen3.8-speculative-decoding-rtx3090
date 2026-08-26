@@ -19,6 +19,7 @@ import analyze as A  # noqa: E402
 import bench  # noqa: E402
 import cost_model as CM  # noqa: E402
 import cross_rung as CR  # noqa: E402
+import audit_results as AR  # noqa: E402
 import backfill_model_size as BMS  # noqa: E402
 import ladder_trend as LT  # noqa: E402
 import stats as ST  # noqa: E402
@@ -3101,6 +3102,26 @@ class TestSizeBackfillCannotInventANumber(unittest.TestCase):
             if "UD-Q5_K_XL" in stem:
                 self.assertEqual(size, 20876938144, "UD-Q5_K_XL took another rung's size")
 
+    def test_one_hash_with_two_sizes_is_refused_rather_than_resolved(self):
+        """The same weights cannot have two sizes; keeping the last one writes an unknown number.
+
+        The parser built a dict keyed on hash, so a second entry overwrote the first in silence.
+        Whichever came last would then be written into a measurement file as the size of the
+        weights that produced it -- and both cannot be right.
+        """
+        text = ("# 111111111 bytes\n" + "a" * 64 + "  models/x.gguf\n"
+                "# 222222222 bytes\n" + "a" * 64 + "  models/y.gguf\n")
+        with self.assertRaises(ValueError) as cm:
+            self._table(text)
+        self.assertIn("two different sizes", str(cm.exception))
+
+    def test_the_same_hash_twice_with_the_same_size_is_fine(self):
+        """A repeated line is not a contradiction, only a duplicate."""
+        text = ("# 111111111 bytes\n" + "b" * 64 + "  models/x.gguf\n"
+                "# 111111111 bytes\n" + "b" * 64 + "  models/x.gguf\n")
+        t = self._table(text)
+        self.assertEqual(t[("b" * 64)][0], 111111111)
+
     def test_a_result_whose_hash_is_not_in_the_table_is_refused(self):
         src = inspect.getsource(BMS.main)
         self.assertIn("refusing to invent one", src)
@@ -3143,6 +3164,56 @@ class TestPhaseVFlagsExistInTheInstalledVllm(unittest.TestCase):
             f"phase_v.COMMON_ARGS names flags this vLLM does not have: {missing}. An unknown "
             f"flag stops the server during argument parsing, so the phase fails at startup and "
             f"the message is about argparse rather than about the measurement.")
+
+
+class TestAuditCannotBeSilencedByAnEmptyArmList(unittest.TestCase):
+    """A result that declares no arms was passing every shape check.
+
+    audit_results compares the (arm, pass) grid against `result["arms"]`, which bench.py writes
+    from the matrix -- intent, not outcome. With that list empty the comparison has nothing to
+    compare and the file was reported ok with a note. Any permutation of records would have
+    passed: one arm repeated, half the passes missing, anything. completeness() has the same
+    blind spot, since it falls back to counting distinct arms in the records, which is the file
+    certifying itself. This is the hole the rung drivers' gates were rewritten to close, left
+    open in the tool that audits their output.
+    """
+
+    ROOT = Path(__file__).parent.parent
+    FIXTURE = "results/phase_q_UD-Q4_K_XL.json"
+
+    def _audit_with(self, mutate):
+        import tempfile, os
+        p = self.ROOT / self.FIXTURE
+        if not p.exists():
+            self.skipTest(f"{self.FIXTURE} not present")
+        d = json.loads(p.read_text(encoding="utf-8"))
+        mutate(d)
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as th:
+            json.dump(d, th)
+            tmp = th.name
+        self.addCleanup(lambda: os.unlink(tmp))
+        return AR.audit(Path(tmp))
+
+    def test_records_with_no_declared_arms_is_a_fail(self):
+        r = self._audit_with(lambda d: d.update(arms={}))
+        self.assertTrue(r["fails"],
+                        "a result with records but no declared arms passed the audit; the shape "
+                        "check has nothing to compare against and any permutation would pass")
+        self.assertIn("declares no arms", " ".join(r["fails"]))
+
+    def test_the_unmodified_fixture_still_passes(self):
+        """The guard must not fire on a healthy file."""
+        r = self._audit_with(lambda d: None)
+        self.assertFalse(r["fails"], f"a clean result was failed: {r['fails']}")
+
+    def test_a_repeated_arm_reaching_the_right_total_is_still_caught(self):
+        """The shape check's original purpose, re-asserted against this fixture."""
+        def one_arm(d):
+            first = d["records"][0]["arm"]
+            keep = [r for r in d["records"] if r["arm"] == first and r["pass"] == 1]
+            d["records"] = [dict(r, **{"pass": p}) for p in range(1, 13) for r in keep]
+        r = self._audit_with(one_arm)
+        self.assertTrue(r["fails"], "one arm repeated to the right record count passed the audit")
 
 
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
