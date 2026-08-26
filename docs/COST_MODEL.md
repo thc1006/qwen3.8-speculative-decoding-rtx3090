@@ -81,9 +81,18 @@ So the comparison now restricts both fits to the shared widths, uses the prompt 
 sampling uncertainty, and checks shape on the difference rather than on each fit. Where the
 curvature does *not* cancel it says so and the shape bound binds: Phase M's two targets share all
 five widths, their difference is `+0.0029 [-0.0007, +0.0064]`, and their curves are *not* parallel
--- residuals up to 0.15 -- so the bound is +/-0.0775 and the comparison is **not resolved**. That
-rules out a large architecture effect, against an expert-saturation account predicting the MoE's
-marginal cost per verified position should be clearly the larger. It does not establish equality.
+-- residuals up to 0.15 -- so the bound is +/-0.0775 and the comparison is **not resolved**.
+
+> **Withdrawn, 2026-08-27.** That paragraph continued "which rules out a large architecture
+> effect, against an expert-saturation account predicting the MoE's marginal cost per verified
+> position should be clearly the larger". Phase M cannot support it. Every `c` above rests on
+> `mean_len`, and `cost_model.py`'s integrity check fails on this phase -- mean gap -0.3494,
+> worst 2.9054 over 1425 requests, against a documented bound under 1 % -- so the comparison's
+> inputs are systematically wrong, not merely uncertain. The tool now refuses to print `k`, `c`
+> or `k0` for a result that fails that check, and nothing in this repository currently bounds a
+> difference in marginal cost between the two targets. What would close it is llama.cpp
+> returning `n_draft_verif_steps`, which `server_slot_stats` holds and `to_json()` omits; the
+> patch is in `upstream/`. See PREREGISTRATION.md Correction 29.
 
 What does not depend on any of this is what `c` is a cost *of*. `k` is the whole speculative cycle
 -- target verification, the drafter's own forward passes, sampling, launch and synchronisation,
