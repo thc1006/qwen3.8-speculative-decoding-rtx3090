@@ -2833,6 +2833,96 @@ class TestRungDriverDeletesOnPathNotOnProvenance(unittest.TestCase):
                       "the downloader's per-file cache entry is never cleaned up")
 
 
+class TestDriverTablesMatchTheirMatrix(unittest.TestCase):
+    """A driver that names its files differently from the matrix downloads the wrong thing.
+
+    run_phase_qsmall.sh listed `Qwen3.5-9B-MTP-Q4_K_M.gguf` for every rung. The repository is
+    named `unsloth/Qwen3.5-9B-MTP-GGUF` but the files inside it are `Qwen3.5-9B-Q4_K_M.gguf`, so
+    each rung would have 404'd -- and had it not, the matrix, which had the names right, would
+    then have failed to import against the file that landed. Two tables for one fact, and nothing
+    comparing them.
+
+    Parsed rather than imported: a matrix raises at import time when its target gguf is absent,
+    which is the state a checkout is normally in.
+    """
+
+    ROOT = Path(__file__).parent.parent
+    PAIRS = [("run_phase_q.sh", "harness/matrices/phase_q.py"),
+             ("run_phase_qsmall.sh", "harness/matrices/phase_qsmall.py")]
+
+    @staticmethod
+    def _matrix_files(path):
+        """{rung: filename} from the matrix's RUNGS literal, without executing the module."""
+        import ast
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign):
+                continue
+            if not any(getattr(t, "id", None) == "RUNGS" for t in node.targets):
+                continue
+            out = {}
+            for k, v in zip(node.value.keys, node.value.values):
+                name = v.elts[0].value if isinstance(v, ast.Tuple) else None
+                if name is not None:
+                    out[k.value] = name
+            return out
+        return {}
+
+    @staticmethod
+    def _driver_files(path):
+        """{rung: filename} from the driver's `declare -A FILE=(...)` block."""
+        import re
+        src = path.read_text(encoding="utf-8")
+        m = re.search(r"declare -A FILE=\((.*?)\)", src, re.S)
+        if not m:
+            return {}
+        return dict(re.findall(r"\[([^\]]+)\]=(\S+)", m.group(1)))
+
+    def test_every_driver_names_the_files_its_matrix_names(self):
+        checked = 0
+        for driver, matrix in self.PAIRS:
+            dp, mp = self.ROOT / driver, self.ROOT / matrix
+            if not (dp.exists() and mp.exists()):
+                continue
+            d, m = self._driver_files(dp), self._matrix_files(mp)
+            self.assertTrue(d, f"{driver}: no FILE table found")
+            self.assertTrue(m, f"{matrix}: no RUNGS table found")
+            for rung, fname in d.items():
+                self.assertIn(rung, m, f"{driver} defines rung {rung}, {matrix} does not")
+                self.assertEqual(
+                    fname, m[rung],
+                    f"{driver} would download {fname!r} for rung {rung} but {matrix} looks for "
+                    f"{m[rung]!r}; one of them is wrong and the download is the expensive half")
+            checked += 1
+        if checked == 0:
+            self.skipTest("no driver/matrix pair present")
+
+    def test_no_driver_hardcodes_how_many_arms_its_matrix_defines(self):
+        """N_ARMS=4 against a matrix defining five is a gate that passes on a truncated run.
+
+        phase_qsmall defines baseline plus n-max 2, 3, 5 and 6. With four written into the
+        driver, a run that lost every n-max 6 arm-pass lands on exactly the expected count and
+        has its weights deleted -- and n-max 6 is the arm that matches llama.cpp #26750.
+        """
+        for driver, matrix in self.PAIRS:
+            dp = self.ROOT / driver
+            if not dp.exists():
+                continue
+            src = dp.read_text(encoding="utf-8")
+            # Comments only, stripped: these drivers explain in prose why the old hardcoded count
+            # was wrong, and that prose necessarily contains the token being banned. assertFalse
+            # rather than assertNotIn so a failure prints the reason and not the whole script.
+            code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
+            self.assertFalse("N_ARMS=" in code,
+                             f"{driver} hardcodes an arm count instead of asking the matrix")
+            self.assertTrue(Path(matrix).stem in code,
+                            f"{driver} never consults {matrix} for the arm list")
+            self.assertTrue("arm_source" in code,
+                            f"{driver} binds to the matrix with no fallback; the matrix refuses "
+                            f"to import once a rung's weights are staged out, which is the state "
+                            f"every skip decision runs in")
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 
