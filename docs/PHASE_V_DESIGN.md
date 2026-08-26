@@ -59,10 +59,47 @@ The alternative is `SergiioB/Qwen3.8-27B-GPTQ-Int4-sym-G128-MTP-BF16`, whose
 That is a cleaner MTP head but a different target quantisation, so it is a fallback rather than
 the first choice.
 
-Fit on 24 GiB: 18.14 for weights, leaving about 3.4 GiB for KV at vLLM's default
-`gpu_memory_utilization` of 0.9. This model holds KV on only 16 of its 64 layers, at 4 KV heads
-and 256+256 key and value length, so fp16 KV costs about 65.5 KB per token and 3.4 GiB buys
-roughly 55 000 tokens. An 8192 context, matching every other phase, is not close to the limit.
+Fit on 24 GiB, as budgeted before the run: 18.14 for weights, leaving about 3.4 GiB for KV at
+vLLM's default `gpu_memory_utilization` of 0.9. This model holds KV on only 16 of its 64 layers,
+at 4 KV heads and 256+256 key and value length, so fp16 KV costs about 65.5 KB per token and
+3.4 GiB buys roughly 55 000 tokens. An 8192 context, matching every other phase, is not close to
+the limit.
+
+**That budget was wrong for the speculative arms, and the error was not KV.** Measured
+2026-08-26 on this card, five starts, every one dying identically:
+
+    torch.OutOfMemoryError: Tried to allocate 2.37 GiB. GPU 0 has a total capacity of
+    23.56 GiB of which 2.25 GiB is free ... this process has 21.28 GiB memory in use
+
+The 0.79 GiB above is the size of `model_mtp.safetensors` on disk. It is not what the MTP module
+costs in memory. Read straight out of the safetensors headers, without downloading either file:
+
+| file | tensors | holds `lm_head`? | holds `embed_tokens`? | size |
+|---|---:|---|---|---:|
+| `model.safetensors` | many | yes, BF16 `[248320, 5120]`, 2.37 GiB | yes, BF16, 2.37 GiB | 17.33 GiB |
+| `model_mtp.safetensors` | 15 | **no** | **no** | 0.79 GiB |
+
+vLLM builds both anyway. `qwen3_5_mtp.py:82` gives the predictor its own
+`VocabParallelEmbedding(vocab_size, hidden_size)` and `:244` gives the wrapper its own
+`ParallelLMHead(...)`, and `load_weights` then re-feeds the TARGET's tables into them -- the
+`elif any(key in name for key in ["embed_tokens", "lm_head"])` branch exists for exactly that.
+So the head allocates 2 x 2.37 = 4.74 GiB of BF16 to hold copies of two tensors that are already
+resident, on a card where the target alone is 17.33.
+
+The head is BF16 rather than INT4 by the checkpoint's own instruction: `config.json`'s
+`quantization_config.ignore` ends with `lm_head` and `re:^mtp.*`. `tie_word_embeddings` is
+`False`, so nothing is shared by configuration either.
+
+`--gpu-memory-utilization` cannot rescue it in either direction. The drafter is loaded BEFORE the
+KV cache is sized -- "Loading drafter model..." then the OOM one second later, with no "Available
+KV cache memory" line anywhere in the log -- and that flag governs the KV budget. Raising it to
+0.95 was tried and failed with the same allocation, as did `--enforce-eager`, cutting the draft's
+`max_model_len` to 2048, and forcing `quantization: compressed-tensors` onto the speculative
+config. Logs for all five are in `logs/vllm_mtp_*.log` and `logs/vllm_probe_mtp*.log`.
+
+What this card can therefore produce is one working arm, `baseline-vllm`, and two recorded
+failures. The matrix marks both MTP arms `may_fail` and `harness/vllm_bench.py` records a failed
+start as a result rather than aborting the phase.
 
 ## Disk, and why this phase runs last
 
