@@ -2928,6 +2928,33 @@ class TestDriverTablesMatchTheirMatrix(unittest.TestCase):
                             f"every skip decision runs in")
 
 
+class TestModelSizeSurvivesTheWeightsBeingDeleted(unittest.TestCase):
+    """The ladders delete their weights, and a label is not a number.
+
+    phase_q and phase_qsmall stage a rung, measure it, verify it and delete it. A plot of `c`
+    against quantization has to be against measured bits per weight -- file size over parameter
+    count -- because UD-Q5_K_XL is a name, not a quantity. env recorded the path and the hash,
+    which say WHICH file ran, and nothing that says how big it was. After deletion the figure was
+    recoverable only from a download log or by re-fetching 20 GB.
+    """
+
+    def test_environment_snapshot_records_the_model_size(self):
+        from pathlib import Path as P
+        e = bench.environment_snapshot({}, P(__file__))
+        self.assertIn("model_size_bytes", e,
+                      "env does not record the model's size, so bits per weight cannot be "
+                      "computed once the weights are staged out")
+        self.assertEqual(e["model_size_bytes"], P(__file__).stat().st_size)
+
+    def test_the_size_probe_never_raises(self):
+        """A snapshot that dies takes the whole run with it, before a single record is written."""
+        from pathlib import Path as P
+        self.assertIsNone(bench._size(P("/nonexistent/never/here.gguf")))
+        self.assertIsNone(bench._size(P("/")))  # a directory: stat succeeds, but not a file size
+        e = bench.environment_snapshot({}, P("/nonexistent/never/here.gguf"))
+        self.assertIsNone(e["model_size_bytes"])
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 

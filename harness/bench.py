@@ -167,6 +167,19 @@ def _sha256(path: Path) -> str:
     return h
 
 
+def _size(path: Path) -> int | None:
+    """Bytes of a regular file, or None. Never raises: a snapshot that dies takes the run with it.
+
+    Regular files only. stat() on a directory succeeds and returns 4096, which as a model size
+    produces a bits-per-weight figure that is absurd but still a number -- the shape of error
+    that gets plotted rather than caught.
+    """
+    try:
+        return path.stat().st_size if path.is_file() else None
+    except OSError:
+        return None
+
+
 def environment_snapshot(trees: dict[str, Path], model: Path) -> dict:
     def _cmd(*c) -> str:
         try:
@@ -187,6 +200,12 @@ def environment_snapshot(trees: dict[str, Path], model: Path) -> dict:
         "llama_cpp_revisions": {k: _rev(v) for k, v in trees.items()},
         "model": str(model),
         "model_sha256": _sha256(model),
+        # Recorded because the quantization ladders DELETE their weights once a rung verifies,
+        # and bits per weight -- the axis those ladders should be plotted against, since a label
+        # like UD-Q5_K_XL is not a number -- is file size over parameter count. The hash proves
+        # which file ran; the size is what makes it quantitative. Without this the figure is
+        # recoverable only from a download log or by re-fetching 20 GB.
+        "model_size_bytes": _size(model),
     }
 
 
