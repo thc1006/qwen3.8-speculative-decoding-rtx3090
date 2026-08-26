@@ -1,0 +1,86 @@
+================================================================================================
+PHASE B -- IS THE COST PER DRAFTED TOKEN, OR PER REJECTED TOKEN?
+================================================================================================
+450 speculative requests over 6 arms, 25 prompts, 3 passes.
+forward-pass counts are DERIVED, not exact, on 450 of 450 requests (the server does not expose draft_n_verif_steps); see cost_model.collect() for the bias this leaves and its size.
+
+------------------------------------------------------------------------------------------------
+1. IDENTIFICATION: can these arms tell the two regressors apart?
+------------------------------------------------------------------------------------------------
+arm                       n  drafted/fwd  rejected/fwd   accept    ms/fwd    excess
+mtp-n3-p.00              75        2.985         1.320    0.558    42.335   +18.123
+mtp-n3-p.50              75        2.067         0.601    0.683    39.868   +15.655
+mtp-n3-p.75              75        1.343         0.174    0.848    36.613   +12.400
+mtp-n7-p.00              75        6.930         4.689    0.323    72.029   +47.816
+mtp-n7-p.50              75        3.567         1.581    0.526    52.233   +28.020
+mtp-n7-p.75              75        1.911         0.422    0.768    41.534   +17.321
+
+drafted-to-rejected ratio per arm, which is what tells the two one-parameter models apart:
+    mtp-n7-p.00              1.48
+    mtp-n7-p.50              2.26
+    mtp-n3-p.00              2.26
+    mtp-n3-p.50              3.44
+    mtp-n7-p.75              4.53
+    mtp-n3-p.75              7.71
+  ratio spans 5.22x across arms.
+  The gate sweep moves the mix by more than the depth sweep moves the totals, which is
+  exactly what makes a like-for-like comparison of the two models possible.
+
+corr(drafted/fwd, rejected/fwd) across arm means = +0.9963. High correlation is
+expected here and does NOT block the comparison below: a one-parameter model is identified
+by the ratio spread above, not by the regressors being uncorrelated. It does block the JOINT
+fit at the end of this report, which is why that section is reported last and hedged.
+
+------------------------------------------------------------------------------------------------
+2. MATCHED PAIRS: one regressor moves, the other barely does
+------------------------------------------------------------------------------------------------
+mtp-n3-p.50 -> mtp-n7-p.75
+    drafted/fwd  2.067 ->  1.911 (-0.155), rejected/fwd  0.601 ->  0.422 (-0.180)
+    rejected moves, drafted held. ms/fwd change: +1.67 [+0.84, +2.56]  <-- clears zero by only 0.97 half-widths
+
+------------------------------------------------------------------------------------------------
+3. MODEL COMPARISON: two one-parameter models, fitted and scored separately
+------------------------------------------------------------------------------------------------
+H2' says the excess is proportional to drafted tokens; H2 says rejected tokens. Each is a
+single free parameter, so each is identified whatever the two regressors' correlation is.
+
+Fitted on the extensive form: excess_ms = coefficient * count, where excess_ms is
+total decode time minus what the same number of plain forwards cost on that prompt.
+model                         ms per token           RSS   R2 (origin)
+H2'  cost per drafted               7.2083  146740745.43        0.9781
+H2   cost per rejected             10.1835 1176732389.79        0.8242
+
+  RSS(rejected model) - RSS(drafted model) = +1029991644.36 [+976369690.50, +1081965484.35]   clears zero by 18.49 half-widths
+  Positive means the drafted-token model fits better.
+
+  per-arm mean residual, so a reader can see WHERE each model fails:
+    arm                        obs ms    H2 pred  H2-prime pred
+    mtp-n3-p.00                2818.2     2243.6         3344.1
+    mtp-n3-p.50                2606.8     1084.3         2414.5
+    mtp-n3-p.75                2311.4      347.1         1701.1
+    mtp-n7-p.00                6544.4     6989.5         6836.9
+    mtp-n7-p.50                3801.3     2268.1         3395.1
+    mtp-n7-p.75                2727.8      657.0         2022.3
+
+  A one-token model cannot be the whole story: the drafter runs its own forward pass every
+  step whether or not the gate lets it extend, so part of the excess is per STEP, not per
+  token. Both models above under-predict the heavily gated arms, which is what that looks
+  like. Adding the step term to each:
+
+    model                                ms/step   ms/token             RSS       R2
+    step + drafted   (H2-prime)            4.229      6.112     58599877.53   0.9912
+    step + rejected  (H2)                 10.740      6.889    209452431.54   0.9687
+
+    RSS(step+rejected) - RSS(step+drafted) = +150852554.01 [+117785290.18, +183815059.03]   clears zero by 3.57 half-widths
+
+------------------------------------------------------------------------------------------------
+4. JOINT FIT, reported last because it is the part that is NOT identified
+------------------------------------------------------------------------------------------------
+  beta_drafted : +7.57 [+7.42, +7.74]  ms per token per forward
+  beta_rejected: -0.87 [-1.12, -0.68]  ms per token per forward
+
+  One coefficient is NEGATIVE. Rejecting a draft cannot save time and neither can drafting
+  one, so this is not a measurement: it is what least squares does when two regressors point
+  in nearly the same direction and it splits one effect into a large positive and a small
+  negative. The split is an artefact. The SUM is what the data constrains, and section 3
+  is where the answer is.

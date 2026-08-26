@@ -214,13 +214,39 @@ second-host addendum in `PREREGISTRATION.md`.
       `UD-Q5_K_XL`. `UD-Q6_K_XL` and `Q8_0` do not fit in 24 GB and 29 GB of free disk is not
       enough to stage `Q8_0` either, so the ladder stops there by hardware and not by choice.
       Phase Q-small is the instrument that covers the rest of the bit span.
-- [ ] **Phase B** - running, 21 arm-passes, `--spec-draft-n-max` in {3,7} against
-      `--spec-draft-p-min` in {0,.50,.75}. The gate demonstrably works: at n-max 7 it takes
-      drafted tokens from 23 719 to 7 016 and acceptance from 0.276 to 0.770 over one pass, and
-      `mtp-n7-p.00` is SLOWER than no speculation at all (37.70 against 41.54 tok/s) while the
-      gated arms recover to 52. `harness/mechanism_b.py` is the analyser and did not exist before
-      this phase; on pass 1 it puts the cost on drafted tokens rather than rejected ones, by 3.29
-      half-widths once the drafter's own per-step forward pass is in the model.
+- [x] **Phase B** - complete 2026-08-27, 525 records, 7 arms, 3 passes, `--spec-draft-n-max` in
+      {3,7} crossed with `--spec-draft-p-min` in {0,.50,.75}. Two incidents, both host contention
+      and both recorded: `nvidia-smi 50 %` on pass 2, which is this run's own power sampler and a
+      false positive that motivated the descent-attribution fix, and `git 162 %` on pass 3, which
+      was real and was mine. `pass_stability.py` puts the second arm-pass at 0.63 % within-pass
+      scatter against a phase median of 0.74 %, so it is quieter than typical; the incident stands
+      recorded either way.
+
+      The gate works and it works hard: at n-max 7 it takes drafted tokens from 23 719 to 7 016
+      and acceptance from 0.276 to 0.770.
+
+      **The cost tracks tokens DRAFTED, not tokens REJECTED.** `harness/mechanism_b.py` is the
+      analyser and did not exist before this phase. The gate sweep spreads the drafted-to-rejected
+      ratio 5.22x across the six arms, which is what makes two one-parameter models comparable
+      whatever their regressors' correlation. Fitting each separately on the extensive form:
+      7.208 ms per drafted token at r2 0.978 against 10.184 ms per rejected token at r2 0.824, and
+      the RSS difference clears zero by 18.5 half-widths. Adding the drafter's own per-step
+      forward pass -- which runs whether or not the gate lets it extend -- gives 4.229 ms/step
+      plus 6.112 ms/drafted token at r2 0.991 against 10.740 plus 6.889 at r2 0.969, and the
+      margin narrows to 3.57 half-widths. That supports H2' over H2 on this target.
+
+      The joint two-coefficient fit is NOT identified and is reported as such: corr(drafted/fwd,
+      rejected/fwd) is +0.996 and the fit answers with a negative coefficient for rejection, which
+      is what least squares does when it splits one direction in two.
+
+      On throughput, `mtp-n7-p.00` is **+8.91 % [+3.55, +14.36]** on the class-stratified endpoint,
+      which `analyze.py` flags as clearing zero by only 0.66 half-widths. That single number hides
+      a sign change: +68.0 % on code and +29.3 % on reason against -16.0 % chat, -16.2 % prose and
+      -20.5 % zh. Its pooled median is 37.77 tok/s against the baseline's 41.39, which is the same
+      data read on a statistic this study does not use as its endpoint.
+
+      `cost_model.py` REFUSES to report `k`, `c` or `k0` for this phase: the `mean_len` derivation
+      fails its integrity check here too, mean gap -0.3151 and worst 1.1471 over 450 requests.
 - [ ] **Phase V** - the run loop exists now (`harness/vllm_bench.py`); it never did before, and
       that rather than VRAM is why the phase had not run. What this card can produce is one
       working arm and two documented failures: `baseline-vllm` starts and serves, and both MTP

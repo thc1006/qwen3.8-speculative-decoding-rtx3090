@@ -1,0 +1,23 @@
+====================================================================================================
+VERIFICATION-STEP COST MODEL     speedup = mean_len / k
+  mean_len = (predicted_n - 1) / (predicted_n - accepted - 1)   [derived; the API has
+            no verification-step count, and this is low by <1 %. See the docstring.]
+====================================================================================================
+[integrity] derived mean_len vs the server's printed mean len: 450 requests, mean gap -0.3151, worst 1.1471
+            the gap is systematic, not rounding. The derivation is wrong, not the counters. See collect()'s docstring.
+
+[integrity] API counters vs llama.cpp log lines: 450 requests compared, 0 mismatched  -- two independent sources agree to the token
+
+====================================================================================================
+REFUSING TO REPORT k, c OR k0 FOR THIS RESULT.
+====================================================================================================
+Every quantity below k is a function of mean_len, and the check above says this
+phase's mean_len derivation is wrong by more than the bound collect() documents.
+A number that is systematically wrong still fits a line, still produces a tight
+bootstrap interval, and still reads as a mechanism. Printing it with a caption
+saying it is wrong is how it ends up quoted without the caption.
+
+What would make this reportable: llama.cpp exposing the exact verification-step
+count. `server_slot_stats` already holds it in `n_draft_verif_steps` and does not
+put it in `to_json()`; the one-line patch is in upstream/. Until then this phase
+supports throughput and acceptance results, and no cost decomposition.

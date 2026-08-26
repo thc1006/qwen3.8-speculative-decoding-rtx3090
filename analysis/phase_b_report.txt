@@ -1,0 +1,95 @@
+
+[selection] per-protocol and intention-to-treat hold the same 525 records; the exclusion rule does no work here.
+
+====================================================================================================
+metric: decode_tok_s   passes: 3   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@master                    41.30      41.30      75  prose_bookshelves=1.4%
+mtp-n3-p.00                        63.01      63.01      75  zh_tea=1.4%
+mtp-n3-p.50                        61.35      61.35      75  chat_music=1.8%
+mtp-n3-p.75                        58.36      58.36      75  chat_music=2.7%
+mtp-n7-p.00                        45.01      45.01      75  prose_bookshelves=1.9%
+mtp-n7-p.50                        55.40      55.40      75  prose_bookshelves=2.0%
+mtp-n7-p.75                        57.76      57.76      75  zh_moving=1.1%
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n3-p.00                  baseline@master        +52.48 [+48.52, +56.72]  FASTER
+mtp-n3-p.50                  baseline@master        +48.48 [+44.51, +52.44]  FASTER
+mtp-n3-p.75                  baseline@master        +41.25 [+37.56, +45.14]  FASTER
+mtp-n7-p.00                  baseline@master         +8.91 [+3.55, +14.36]  FASTER  (margin 0.66 half-widths, see below)
+mtp-n7-p.50                  baseline@master        +34.07 [+30.38, +37.87]  FASTER
+mtp-n7-p.75                  baseline@master        +39.80 [+35.83, +43.89]  FASTER
+
+  COVERAGE NOTE. The interval above is a percentile bootstrap, which is not
+  second-order accurate and undercovers at this sample size. Measured on 25
+  prompts with 800 replications: 90.9 % for a normal draw, 90.6 % uniform, 88.0 %
+  heavy-tailed, against a nominal 95 %. A t interval on the same draws reaches
+  94.1 %. The intervals are therefore too narrow, and putting the missing
+  coverage back is worth roughly 1.15 to 1.25 times the width. These verdicts sit
+  inside that margin and should not be leaned on:
+    mtp-n7-p.00               +8.91 [+3.55, +14.36]   margin 0.66 half-widths
+  Everything not listed clears zero by more than the correction is worth.
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n3-p.00                chat: +31.2%  code: +99.3%  prose: +37.4%  reason: +71.3%  zh: +23.1%
+  mtp-n3-p.50                chat: +29.0%  code: +92.8%  prose: +30.2%  reason: +66.5%  zh: +24.0%
+  mtp-n3-p.75                chat: +22.3%  code: +87.6%  prose: +22.3%  reason: +53.0%  zh: +21.0%
+  mtp-n7-p.00                chat: -16.0%  code: +68.0%  prose: -16.2%  reason: +29.3%  zh: -20.6%
+  mtp-n7-p.50                chat: +18.7%  code: +76.9%  prose: +19.0%  reason: +43.6%  zh: +12.1%
+  mtp-n7-p.75                chat: +24.9%  code: +88.0%  prose: +21.5%  reason: +46.1%  zh: +18.5%
+
+--- integrity ---
+  incidents recorded: 2
+    host_contended: 2
+  requests excluded from aggregates: 0 / 525
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+
+--- energy window coverage: 99.3 % of wall time (min 97.6 %) ---
+  Energy outside the first and last sample is not in the figure above.
+
+--- averaged against instantaneous power, per arm ---
+  baseline@master         +0.55 %   n=75
+  mtp-n3-p.00             +1.44 %   n=75
+  mtp-n3-p.50             +1.31 %   n=75
+  mtp-n3-p.75             +1.29 %   n=75
+  mtp-n7-p.00             +0.95 %   n=75
+  mtp-n7-p.50             +1.32 %   n=75
+  mtp-n7-p.75             +1.29 %   n=75
+  Positive means power.draw integrated low. It leaves the baselines nearly alone
+  and understates the speculative arms, so an energy saving read off the averaged
+  field is larger than the instantaneous field supports, by about this much.
+baseline@master            0.1001     +0.0%       3987     +0.0%       -          -
+mtp-n3-p.00                0.1550    +54.9%       2681    -32.7%   0.558       2.67
+mtp-n3-p.50                0.1515    +51.4%       2729    -31.6%   0.683       2.47
+mtp-n3-p.75                0.1447    +44.5%       2861    -28.3%   0.848       2.17
+mtp-n7-p.00                0.1102    +10.1%       4044     +1.4%   0.323       3.24
+mtp-n7-p.50                0.1366    +36.5%       3024    -24.2%   0.526       2.99
+mtp-n7-p.75                0.1431    +42.9%       2894    -27.4%   0.768       2.49
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  mtp-n3-p.00                byte-identical 18/75   median shared prefix when forked: 0.240
+  mtp-n3-p.50                byte-identical 18/75   median shared prefix when forked: 0.232
+  mtp-n3-p.75                byte-identical 9/75   median shared prefix when forked: 0.251
+  mtp-n7-p.00                byte-identical 15/75   median shared prefix when forked: 0.228
+  mtp-n7-p.50                byte-identical 12/75   median shared prefix when forked: 0.253
+  mtp-n7-p.75                byte-identical 21/75   median shared prefix when forked: 0.329
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@master            reproducible 50/50
+  mtp-n3-p.00                reproducible 50/50
+  mtp-n3-p.50                reproducible 50/50
+  mtp-n3-p.75                reproducible 50/50
+  mtp-n7-p.00                reproducible 50/50
+  mtp-n7-p.50                reproducible 50/50
+  mtp-n7-p.75                reproducible 50/50
