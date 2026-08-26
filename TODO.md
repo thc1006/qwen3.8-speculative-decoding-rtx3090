@@ -172,9 +172,10 @@ second-host addendum in `PREREGISTRATION.md`.
       Baseline decode over realised depths of 8195, 32772, 65538, 81921 and 98300 filler tokens:
       39.67, 35.14, 30.27, 28.31, 26.53 tok/s. That is 1.50x across the whole ladder where
       llama.cpp #27623 describes 25x. The two trees agree at the deepest rung, so it is not one
-      build, and part of even that 1.50x is not depth: the SM clock drifts 1.87 % across the
-      ladder as deeper rungs take power from the core, worth 0.50 % of throughput at the compute
-      elasticity Phase R2 measured.
+      build, and part of even that 1.50x is not depth: the SM clock falls 1.60 % across the ladder
+      as deeper rungs take power from the core, worth 0.43 points of throughput at the compute
+      elasticity Phase R2 measured. Those two figures are `analysis/phase_l_ladder.txt` line 26,
+      not a fresh derivation; 1.87 % and 0.50 appeared here and came from the four-rung partial.
 
       Speculation survives it intact. mtp-n2 against its own baseline is +54.6 %, +53.9 %,
       +51.7 %, +53.5 % and +53.4 % (the 8 K rung's paired class-stratified interval is
