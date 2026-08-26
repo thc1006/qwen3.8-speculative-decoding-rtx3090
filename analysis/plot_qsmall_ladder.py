@@ -69,7 +69,11 @@ def build(rungs, shared, bpw):
               for d in per]
         _panel_points(ax, x, ys, fam, colors[i % len(colors)], marks[i % len(marks)])
     ax.set_ylabel("acceptance\n(accepted / drafted)")
-    ax.set_title("1.  The drafter must hold still, or panel 2 is not a cost",
+    # States what the panel shows. "The drafter must hold still, or panel 2 is not a cost" was
+    # the design argument, and it claims more than acceptance can deliver: the MTP head is
+    # embedded in the target gguf and is quantized with it, so stable acceptance shows the
+    # drafter proposing the same way, not its forward pass costing the same.
+    ax.set_title("1.  Acceptance holds still, so panel 2 is not the drafter proposing differently",
                  loc="left", fontsize=10.5, color=P.C("fg"))
     # Headroom first, legend second. A one-row legend at "upper left" sat exactly on the
     # highest series -- mtp-n2 runs flat across the top of this panel -- so the line passed

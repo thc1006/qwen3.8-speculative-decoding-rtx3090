@@ -205,8 +205,11 @@ def fig_phase_m(result, series, prompt_class):
     # from the per-protocol series, and the mean_len derivation these panels' companions rest on
     # fails its own integrity check here. Readers fixate on the title longer than on anything
     # else in a figure, so an assertive title has to be one the data carries.
-    fig.suptitle("Same session, same prompts: MTP is positive and the 0.8B draft-simple arms "
-                 "are negative on both targets", y=0.995, fontsize=12.5, ha="center")
+    # 78 characters. The one it replaced was 103 and overflowed the figure at this font size,
+    # losing the first and last letter -- checked by rendering and reading the PNG, which is the
+    # only way a title's width is ever actually known.
+    fig.suptitle("Same session, same prompts: MTP positive on both targets, draft-simple "
+                 "negative", y=0.995, fontsize=12.5, ha="center")
     fig.subplots_adjust(top=0.90, hspace=0.30)
     n_rec = len(result["records"])
     P._save(fig, "plot_phase_m", bottom=0.16, provenance=PROVENANCE,

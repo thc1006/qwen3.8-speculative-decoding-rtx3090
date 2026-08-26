@@ -286,7 +286,7 @@ def fig_cost_model(result):
     ax_s.axhline(1.0, color=C("mut"), ls=":", lw=1.1)
     ax_s.text(2.65, 1.005, "break-even", fontsize=9, color=C("mut"), va="bottom")
     ax_s.set_ylabel("speedup\n= tokens / cost")
-    ax_s.set_title("Saturating benefit over linear cost: the best width is a small one", pad=8)
+    ax_s.set_title("Saturating benefit over rising cost: the best width is a small one", pad=8)
     ax_s.set_xlabel("verification width  w = n-max + 1 as configured\n"
                     "(a drafter that does not fill its budget verifies fewer columns than this)")
     # below and to the right of the best point, with a leader, so the text never crosses a curve
