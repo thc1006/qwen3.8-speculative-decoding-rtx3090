@@ -116,7 +116,9 @@ second-host addendum in `PREREGISTRATION.md`.
       forced_up edit would not execute at width 8 there and the intervention would fail silently.
       The card this ran on is part of what the result means.
 
-- [ ] **forced_down2** (host C now, host B after its chain) - forced-down was void because its
+- [x] **forced_down2** - done on both hosts and in the v2 four-build set:
+      `phase_warp_forced_down2.json`, `phase_warp_forced_down2_hostB.json` and
+      `phase_warp_v2_forced_down2.json`, 150 records each. forced-down was void because its
       1-4 row includes width 1, and a drafter decodes one token at a time, so it perturbed every
       arm through its drafter. SASS hashing shows both original edits were surgical in the binary
       (1-4 identical for forced-up, 5-8 identical for forced-down), which is what forced the
@@ -163,62 +165,61 @@ second-host addendum in `PREREGISTRATION.md`.
       on 63 of 75, 9699 tokens, and accepts none of them, so its -8.3 % is drafting cost with no
       return. For contrast DFlash2 accepts 41.1 % and draft08b-n8 21.0 %, the latter below n4's
       35.2 % and slower for it. That `ngram-mod` is silently inert is worth an upstream issue.
-- [ ] **Phase L** - the context-depth ladder to 96 K, against llama.cpp #27623. Three rungs
-      complete, the fourth at 60 of 180 and provisional.
+- [x] **Phase L** - complete, five rungs, 900 records. The collapse does not appear, and the
+      ladder now reaches past the depth the report's own worked example measures at, so the
+      verdict is no longer withheld.
 
-      The collapse does not appear. The baseline runs 39.7, 35.1, 30.3 and 28.3 tok/s at realised
-      depths of 8195, 32772, 65538 and 81921 filler tokens, a smooth 1.40x over the whole ladder
-      where the report describes 25x. The two trees agree at the deepest rung to 0.10 %, 28.31
-      against 28.34, so it is not one build. Part of that decline is not depth: the SM clock
-      drifts 1.87 % across the ladder as deeper rungs take power from the core, worth 0.50 % of
-      throughput at the compute elasticity Phase R2 measured.
+      Baseline decode over realised depths of 8195, 32772, 65538, 81921 and 98300 filler tokens:
+      39.67, 35.14, 30.27, 28.31, 26.53 tok/s. That is 1.50x across the whole ladder where
+      llama.cpp #27623 describes 25x. The two trees agree at the deepest rung, so it is not one
+      build, and part of even that 1.50x is not depth: the SM clock drifts 1.87 % across the
+      ladder as deeper rungs take power from the core, worth 0.50 % of throughput at the compute
+      elasticity Phase R2 measured.
 
-      Speculation survives it, and improves. mtp-n2 is +46.6 %, +48.6 %, +50.2 % and +50.7 % as
-      depth grows, with accepted tokens per verification step at 2.178, 2.208, 2.239 and 2.239.
-      The drafter holds while the baseline slows, so the same absolute advantage is a larger
-      relative one. That is the opposite of what the phase was designed to catch.
+      Speculation survives it intact. mtp-n2 against its own baseline is +54.6 %, +53.9 %,
+      +51.7 %, +53.5 % and +53.4 % (the 8 K rung's paired class-stratified interval is
+      [+52.1, +57.3]), with accepted tokens per verification step at 2.294, 2.297, 2.255, 2.280
+      and 2.281. The drafter holds while the baseline slows.
 
-      The verdict stays withheld. The report puts the collapse past about 80 K but its worked
-      example measures it at 91 K, and the deepest rung here is 81 921. Rung 5 at 98 304 clears
-      that, and `harness/analyze_depth.py` refuses the verdict until a rung above the threshold
-      has finished. Started 10:43:24;
-      rung 1 of 5 at 11.9 s/record. Rungs 8192, 32768 and 65536 sit below the reported ~80 K
-      cliff, so the fourth rung is what decides whether the ladder takes four hours or thirteen.
-      `.ladder_budget_s` holds a seconds count that stops it at a rung boundary.
-- [ ] **Phase M** - dense against MoE in one run, 21 arms, 1575 records, about 4.8 h, with
-      matched width ladders on both models so `c` can be compared and not just the levels. Anchored
-      on -21.5 % class-stratified, not the -44.6 % that belongs to the predecessor's DFlash arm.
-      Phase C already measured that configuration at -29.8 % on the DENSE target, so the phase is
-      not described as identifying MoE routing. Corrections 9 and 10.
-- [ ] **Phase Q-small** - `run_phase_qsmall.sh` is written and unrun. It is the better instrument
-      for the quantization question on this card: Q4_K_M to BF16 on Qwen3.5-9B-MTP is about four
-      times the bit span the 27B ladder can reach here, it supplies the bf16 anchor the 27B
-      ladder structurally cannot, and its Q4_K_M is the exact file llama.cpp #26750 reports on.
-      ~42 GB of downloads, staged and deleted one rung at a time against 29 GB of free disk.
+      An earlier version of this entry reported +46.6 %, +48.6 %, +50.2 % and +50.7 % over four
+      rungs. Those were computed while the fourth rung stood at 60 of 180 records and are
+      superseded; the ratio of class-stratified means and the paired bootstrap agree to 0.02
+      points on the completed data, so the gap was the partial run, not the estimator.
+- [x] **Phase M** - complete, 1575 records, 21 arms, dense against MoE in one session with
+      matched width ladders so `c` is comparable and not just the levels. The sign belongs to the
+      drafting method rather than the architecture: the built-in MTP head wins on both targets and
+      a 0.8B `draft-simple` drafter loses on both. The registered replication anchor does NOT
+      hold, so none of it is a statement about the predecessor's numbers. Corrections 9 and 10.
+- [x] **Phase Q-small** - complete, four rungs, 1500 records: Q4_K_M, Q6_K, Q8_0 and BF16 on
+      Qwen3.5-9B-MTP. It supplies the bf16 anchor the 27B ladder structurally cannot reach, and
+      its Q4_K_M is the exact file llama.cpp #26750 reports on.
 
-      Audited before it runs, since the n-gram guard already showed one bad arm can stop a phase.
-      Two risks checked, one cleared and one open.
+      The open risk logged before the run - three `moe-draft08b-*` arms putting a second model on
+      the card with about 0.57 GiB of headroom - did not fire. The cleared one held: the MoE's
+      `blk.40.nextn.*` set matches the dense target's `blk.64`, so the `moe-mtp-*` arms were not
+      silent baseline duplicates the way `ngram-mod` was.
 
-      Cleared: the MoE carries a real MTP block. `blk.40.nextn.{eh_proj,enorm,hnorm,
-      shared_head_norm}` matches the dense target's `blk.64` set exactly, so the five `moe-mtp-*`
-      arms will not repeat `ngram-mod` and come out as silent baseline duplicates.
-
-      Open: the three `moe-draft08b-*` arms put a second model on the card with `-ngld 99`, and
-      the margin is thin. llama.cpp ignores the MTP block's attention and expert tensors - the
-      server log says so for the dense model, `blk.64.attn_q.weight ... ignoring` - which for this
-      MoE is 0.48 GiB of `blk.40` never reaching VRAM, so the load is 20.79 rather than 21.27 GiB.
-      With the 0.50 GiB drafter and 0.34 GiB of q8_0 KV at 8192 that leaves about 0.57 GiB for the
-      compute buffer at 1.8 GiB, and nothing fits above about 2.4 GiB. It cannot be settled
-      without the card: no server log here records a buffer allocation, and the MoE has never been
-      loaded on this host. `assert_capacity` compares against total VRAM, 24.0 against the
-      matrix's 23.8, so it passes and will not pre-empt an OOM at load.
-
-      If it does OOM, `run_phase phase_m ... || exit 1` stops the chain, the 22 GB MoE is never
-      deleted, and Phase Q never gets the disk it needs. The monitor greps server logs for `out of
-      memory`, so it surfaces immediately rather than being found in the morning.
-- [ ] **Phase Q** - the target-quantization ladder. Needs host C to itself; `UD-Q6_K_XL` and
-      `Q8_0` do not fit on 24 GB, and 29 GB free is not enough for `Q8_0` either.
-- [ ] **Phase V** - vLLM, matched at K=1, so it waits on the n-max ladder.
+      H9 is supported as an effect and #26750's specific claim is refuted: bf16 diverges on 52 %
+      of requests, not the parity the report describes. See Corrections 22, 26 and 27, the last
+      of which marks the one arm whose interval does not clear the study's own margin.
+- [x] **Phase Q** - complete for the two rungs this card can hold, 600 records: `UD-Q4_K_XL` and
+      `UD-Q5_K_XL`. `UD-Q6_K_XL` and `Q8_0` do not fit in 24 GB and 29 GB of free disk is not
+      enough to stage `Q8_0` either, so the ladder stops there by hardware and not by choice.
+      Phase Q-small is the instrument that covers the rest of the bit span.
+- [ ] **Phase B** - running, 21 arm-passes, `--spec-draft-n-max` in {3,7} against
+      `--spec-draft-p-min` in {0,.50,.75}. The gate demonstrably works: at n-max 7 it takes
+      drafted tokens from 23 719 to 7 016 and acceptance from 0.276 to 0.770 over one pass, and
+      `mtp-n7-p.00` is SLOWER than no speculation at all (37.70 against 41.54 tok/s) while the
+      gated arms recover to 52. `harness/mechanism_b.py` is the analyser and did not exist before
+      this phase; on pass 1 it puts the cost on drafted tokens rather than rejected ones, by 3.29
+      half-widths once the drafter's own per-step forward pass is in the model.
+- [ ] **Phase V** - the run loop exists now (`harness/vllm_bench.py`); it never did before, and
+      that rather than VRAM is why the phase had not run. What this card can produce is one
+      working arm and two documented failures: `baseline-vllm` starts and serves, and both MTP
+      arms cannot load. Five starts, every one dying on the same 2.37 GiB allocation, which is
+      exactly `vocab_size 248320 * hidden_size 5120 * 2 bytes` - the MTP module builds its own
+      BF16 `lm_head` and `embed_tokens` because the checkpoint's quantization recipe ignores
+      `re:^mtp.*`, and `tie_word_embeddings` is False so nothing is shared. Correction 28.
 
 ---
 
@@ -422,7 +423,8 @@ there was omission, not misstatement.
       regenerates `flags.make` for every target, all eleven `ggml-base` sources recompiled, and
       `libggml-base.so` came out different - `.text` and `.rodata`, 8813 bytes, not metadata.
       Six full rebuilds of the unchanged tree give one hash, the control's. See Correction 8.
-- [ ] **D1b** the intervention re-run with all four builds from one configure, running on host C.
+- [x] **D1b** done: the four builds from one configure all produced results --
+      `phase_warp_v2_control`, `_control2`, `_forced_up` and `_forced_down2`, 150 records each.
       control, forced-up, forced_down2 and a second control, built back to back and run back to
       back. Three build gates stop it before it can produce numbers: no build may reconfigure,
       `libggml-base.so` must be identical across all four, and the two controls must be
@@ -479,7 +481,11 @@ there was omission, not misstatement.
       `sum(H) == steps` and `sum(j*H[j]) == accepted` as reconciliation. An opt-in verbose field
       is the other way to answer it. The AIPerf adapter comes after, against the existing
       `SpecDecodeAcceptanceRecord` schema, not a new one.
-- [ ] **E4** `embd_layer_inp` index-space reproducer before any claim is made about it.
+- [x] **E4** done before the claim was made: `repro/output_reorder_ordering/` holds the probe and
+      its README. 400 randomly generated batches, upstream fails 210 of them, removing the swap
+      alone fails 231 (worse than upstream), permuting by token index fails 0; rerun at four more
+      seeds for 2000 further cases, 0 failures. The four fixed cases that name the mechanism are
+      tabulated there, including the one where upstream is correct and removal alone is not.
 - [ ] **E5** quantized batch-invariance conformance harness across backend, quant, width, context,
       flash attention and parallelism.
 
