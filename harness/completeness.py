@@ -47,6 +47,18 @@ def completeness(result):
                      "short pass")
     note = "; ".join(notes)
     expected = arms * prompts * passes
+
+    # An arm the matrix marked may_fail, whose failure the driver recorded, produced no records
+    # on purpose. Counting those as missing reads a recorded result as a truncated run -- Phase V
+    # has six such arm-passes and read as 75 of 225. audit_results.py already knew this; this
+    # function did not, so the two disagreed about the same file.
+    arms_meta = result.get("arms") or {}
+    may_fail = {a for a, m in arms_meta.items() if isinstance(m, dict) and m.get("may_fail")}
+    if may_fail:
+        failed = [t for t in (result.get("arm_pass_failed") or {})
+                  if "_" in t and t.split("_", 1)[1] in may_fail]
+        expected -= len(failed) * prompts
+
     return len(recs), expected, note
 
 
