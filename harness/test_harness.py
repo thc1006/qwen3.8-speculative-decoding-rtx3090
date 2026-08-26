@@ -1534,6 +1534,36 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
         self.assertEqual(stated, {complete},
                          f"{complete} rungs hold 180 records; the README says {sorted(stated)}")
 
+    def test_phase_q_rung_count_matches_the_files_on_disk(self):
+        """'N rungs of four' against the result files that actually hold 300 records.
+
+        This row has already drifted once: it said one rung of four and gave the reason as disk,
+        which was the driver mistaking a VRAM figure for a download size. A count in prose that
+        nothing checks is a count that goes stale the next time a rung lands.
+        """
+        import re
+        complete = 0
+        for f in sorted((self.ROOT / "results").glob("phase_q_*.json")):
+            if ".partial." in f.name:
+                continue
+            try:
+                if len(json.loads(f.read_text())["records"]) >= 300:
+                    complete += 1
+            except Exception:
+                pass
+        if complete == 0:
+            self.skipTest("no complete phase_q rungs")
+        words = {"one": 1, "two": 2, "three": 3, "four": 4}
+        text = self._readme()
+        stated = set()
+        for m in re.finditer(r"\b(one|two|three|four|\d+) rungs? of four", text):
+            g = m.group(1)
+            stated.add(words.get(g, int(g) if g.isdigit() else 0))
+        self.assertTrue(stated, "the README no longer states a rung count out of four")
+        self.assertEqual(stated, {complete},
+                         f"{complete} phase_q rungs hold 300 records; the README says "
+                         f"{sorted(stated)}")
+
     def test_reproduce_pins_the_commits_the_trees_are_actually_at(self):
         """A reproduce block that clones a moving branch reproduces something else."""
         import re
