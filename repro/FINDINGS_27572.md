@@ -27,6 +27,37 @@ ordering is there.
 
 What follows is therefore a non-reproduction on this hardware and software, stated as that.
 
+## 2026-08-26: the objection above has been answered upstream, and not by this study
+
+Both reasons this file gave for keeping the write-after-read account open have since been closed
+by evidence in llama.cpp #27311, "Scheduler UMA ring buffer", which touches the same call site
+with a different remedy -- a ring of two graph-input buffers that rotates, instead of making the
+`ggml_backend_sched_synchronize` unconditional.
+
+`ByungHyun21`, the reporter, ran three builds on the affected hardware (gfx1151, ROCm 7.2.2, the
+same `-np 4` x ~19 k reproducer attached to #27572):
+
+| variant | empty replies | acceptance |
+|---|---|---|
+| master + the six-line sync fix | 0/8 | 0.467-0.590 |
+| PR #27311 | 0/8 | 0.467-0.591 |
+| stock master (control) | 4/8 | 0.000-0.714, three of four slots collapsed in round 1 |
+
+and reports prefill and generation within 1-4 % and 0-1 % between the first two, so the ring
+costs nothing measurable on a single-GPU speculative workload.
+
+That closes the first objection: **a targeted fix works, so the symptom's removal is no longer
+attributable to a global fence.** `nabe2030` closed the second, that symptom removal does not
+single out the input write, by counting the writes directly with the PR's sanitizer under
+`--parallel 8` with MTP off: **0 races with the ring on, 3597 with it off, every one a
+`RACE (write-after-read)` on the HIP host buffer.** They also report multi-slot output corruption
+at 20/20 with the ring off and 0/20 with it on, independent of speculative decoding.
+
+None of that changes the CUDA result below, which remains a non-reproduction on sm_86 across
+every configuration this study could construct. What it changes is the standing of the mechanism:
+the account this file declined to endorse now has direct evidence behind it on the hardware where
+the symptom appears, produced by the reporter and by a third party rather than here.
+
 ## Tested, and no collapse in any of them
 
 | configuration | requests | acceptance | exactly zero |

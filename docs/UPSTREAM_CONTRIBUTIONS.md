@@ -278,7 +278,7 @@ affected at all. They tested only `draft-dflash`.
 |---|---|---|
 | [#25618](https://github.com/ggml-org/llama.cpp/issues/25618) divergence | the CUDA width boundary (see section 1) | Phase A + Phase N |
 | [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) ~25x decode cliff past ~80 K, 1 comment | reproduction on sm_86, and whether speculation survives it | Phase L |
-| [#27572](https://github.com/ggml-org/llama.cpp/issues/27572) acceptance -> 0 under `-np N`, 3 comments (this study's among them) | sm_86 confirmation; also closes the predecessor repo's own untested concurrency caveat | Phase X |
+| [#27572](https://github.com/ggml-org/llama.cpp/issues/27572) acceptance -> 0 under `-np N`, 10 comments, 3 of them this study's | sm_86 confirmation; also closes the predecessor repo's own untested concurrency caveat | Phase X |
 | [vLLM #52475 / #53180](https://github.com/vllm-project/vllm/issues/52475) degenerate output on hybrid GDN | the baseline-relative degeneracy screen used here is the methodology those reports need | Phase V |
 
 ---
