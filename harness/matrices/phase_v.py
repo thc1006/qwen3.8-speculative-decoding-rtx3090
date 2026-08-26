@@ -23,8 +23,25 @@ COMMON_ARGS = [
     "--max-model-len", "8192",
     "--no-enable-prefix-caching",
     "--max-num-seqs", "1",
-    "--gpu-memory-utilization", "0.90",
-    "--disable-log-requests",
+    # 0.90 is vLLM's default and it is NOT enough here, measured 2026-08-26. The baseline arm
+    # loads fine at 0.90 (19,469 MiB resident), but adding the MTP head asks for a further
+    # 2.37 GiB at load time and the run dies with `torch.OutOfMemoryError: Tried to allocate
+    # 2.37 GiB ... 2.25 GiB is free` -- short by 0.12 GiB. The design note in
+    # docs/PHASE_V_DESIGN.md budgeted 18.14 GiB of weights plus KV and did not budget the head's
+    # runtime allocation at all.
+    #   0.95 of 23.56 GiB = 22.4 GiB; weights 18.12 + head 2.37 = 20.49, leaving 1.9 GiB.
+    #   8192 tokens of KV costs about 0.54 GiB on this model (16 of 64 layers hold KV, 4 heads,
+    #   256+256 key/value, ~65.5 KB per token), so the context this phase pins still fits.
+    # Both arms use the same value, so the baseline is not given headroom the speculative arm
+    # lacks -- that would put the comparison's thumb on the scale.
+    "--gpu-memory-utilization", "0.95",
+    # vLLM 0.27.1 renamed this. `--disable-log-requests` no longer exists and an unknown flag
+    # stops the server before it serves anything, so the whole phase would have failed at
+    # startup with a message about argparse rather than about speculation. The new pair is
+    # `--enable-log-requests` / `--no-enable-log-requests`, defaulting to False -- the explicit
+    # negative is used anyway, for the same reason every sampler here is pinned: a default is a
+    # thing that changes between versions without the result file showing it.
+    "--no-enable-log-requests",
     "--seed", "20260824",
 ]
 

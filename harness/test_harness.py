@@ -3108,6 +3108,43 @@ class TestSizeBackfillCannotInventANumber(unittest.TestCase):
                       "the tool must not overwrite a size recorded from the file itself")
 
 
+class TestPhaseVFlagsExistInTheInstalledVllm(unittest.TestCase):
+    """A matrix written before its engine was installed is a list of guesses.
+
+    phase_v.py was authored months before vLLM went on this box. One of its six flags,
+    `--disable-log-requests`, does not exist in vLLM 0.27.1 -- it was renamed to the
+    `--enable-log-requests` / `--no-enable-log-requests` pair. An unknown flag stops the server
+    during argument parsing, so the entire phase would have failed at startup with an argparse
+    message, after 18 GiB of weights and a CUDA-graph compile, and the failure would have said
+    nothing about speculation.
+
+    Skips when vLLM is not installed, so a checkout without it still runs green.
+    """
+
+    ROOT = Path(__file__).parent.parent
+
+    def test_every_common_arg_is_a_flag_this_vllm_accepts(self):
+        import subprocess
+        vllm = self.ROOT / ".venv-vllm/bin/vllm"
+        if not vllm.exists():
+            self.skipTest("vLLM not installed in .venv-vllm")
+        sys.path.insert(0, str(self.ROOT / "harness"))
+        from matrices import phase_v
+        try:
+            # `--help` alone prints only config-group names; the flags are behind --help=all.
+            out = subprocess.run([str(vllm), "serve", "--help=all"],
+                                 capture_output=True, text=True, timeout=600).stdout
+        except Exception as e:
+            self.skipTest(f"could not query vllm: {e.__class__.__name__}")
+        self.assertGreater(len(out), 10000, "vllm --help=all returned too little to check against")
+        missing = [a for a in phase_v.COMMON_ARGS if a.startswith("--") and a not in out]
+        self.assertFalse(
+            missing,
+            f"phase_v.COMMON_ARGS names flags this vLLM does not have: {missing}. An unknown "
+            f"flag stops the server during argument parsing, so the phase fails at startup and "
+            f"the message is about argparse rather than about the measurement.")
+
+
 class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
     """A class appended after the `__main__` guard is defined too late to be collected.
 

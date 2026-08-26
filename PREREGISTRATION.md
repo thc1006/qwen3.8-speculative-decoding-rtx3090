@@ -2158,3 +2158,106 @@ that it does.
   else; the within-rung pass spread bounds run-to-run drift and is a lower bound on what separates
   two rungs.
 - Nothing here identifies WHICH operator diverges, or why bf16 sits off the quantized rungs' line.
+
+
+## Correction 23, 2026-08-26 19:52: Phase V is blocked by a vLLM defect, and the design note's capacity budget was wrong
+
+`docs/PHASE_V_DESIGN.md` states: "Fit on 24 GiB: 18.14 for weights, leaving about 3.4 GiB for KV
+at vLLM's default `gpu_memory_utilization` of 0.9 ... An 8192 context, matching every other phase,
+is not close to the limit."
+
+That budget omits an item, and the phase does not run because of it.
+
+### What was measured
+
+vLLM 0.27.1 installed into `.venv-vllm` (torch 2.13.0+cu130, CUDA 13.0, 7.7 GB on disk), weights
+`RedHatAI/Qwen3.8-27B-INT4` (18.12 GiB, includes `model_mtp.safetensors` at 0.79 GiB).
+
+The **baseline arm starts**: 19,469 MiB resident, `Available KV cache memory: 1.38 GiB`,
+`GPU KV cache size: 16,384 tokens`, a request completes in 2,233 ms for 104 tokens.
+
+The **MTP arm does not**, and fails identically under five different configurations:
+
+| attempt | free at failure | requested |
+|---|---|---|
+| `--gpu-memory-utilization 0.90` | 2.25 GiB | 2.37 GiB |
+| `--gpu-memory-utilization 0.95` | 2.25 GiB | 2.37 GiB |
+| `0.95 --enforce-eager` | 2.25 GiB | 2.37 GiB |
+| `0.95` + draft `max_model_len 2048` | 2.25 GiB | 2.37 GiB |
+| `0.95` + speculative `quantization: compressed-tensors` | 2.25 GiB | 2.37 GiB |
+
+`torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.37 GiB. GPU 0 has a total
+capacity of 23.56 GiB of which 2.25 GiB is free.` Short by **0.12 GiB, about 5 %**.
+
+The free figure is byte-identical across all five because none of those flags touches the
+allocation that fails. `gpu_memory_utilization` sizes the KV pool, `enforce_eager` controls CUDA
+graph capture, `max_model_len` sizes the draft context, and all three happen AFTER the weights
+load. The failure is `Failed to load model`.
+
+### Root cause, located in vLLM's source
+
+`model_mtp.safetensors` is 0.79 GiB on disk and vLLM asks for 2.37 GiB -- a factor of three,
+which is what INT4 weights expanded to an unquantized dtype cost. In
+`.venv-vllm/lib/python3.13/site-packages/vllm/config/speculative.py`, quantization inheritance for
+the draft model is hardcoded per model family:
+
+```python
+# line 516, the qwen3_5 branch -- what this target uses
+if hf_config.model_type in ("qwen3_5", "qwen3_5_moe"):
+    hf_config.model_type = "qwen3_5_mtp"
+    n_predict = getattr(hf_config, "mtp_num_hidden_layers", None)
+    hf_config.update({"n_predict": n_predict, "architectures": [...]})
+    # no quantization_config
+
+# line 544, the step3p5 branch -- what a correct one looks like
+if hf_config.model_type in ("step3p5", "step3p7") or ...:
+    quantization_config = getattr(hf_config, "quantization_config", None)
+    ...
+    hf_config.update({"quantization_config": quantization_config})
+```
+
+`step3p5` and `step3p7` pass the target's `quantization_config` to the MTP head; the Qwen branch
+does not. The head therefore loads unquantized. The `quantization` field of
+`--speculative-config` does not reach this: quantization is decided at the `hf_config` level,
+which is why attempt five failed like the others.
+
+This is a vLLM defect with a specific location and a working counter-example in the same file. A
+search of vLLM issues for MTP plus memory returns 15 results, all of a different failure --
+`#44740` and its relatives are KV-cache OVER-allocation from a negative CUDA-graph estimate,
+whose workaround is to LOWER utilization. Nothing matches a load-time OOM on the draft head.
+
+### Consequence for Phase V
+
+The phase cannot run on this card until vLLM fixes the inheritance or the head is patched
+locally. The fallback target named in the design note,
+`SergiioB/Qwen3.8-27B-GPTQ-Int4-sym-G128-MTP-BF16`, is 18.22 GiB -- larger than the current one,
+and its head is BF16 by construction, so it is worse rather than better.
+
+What the probe established before hitting this is kept, because it is what a run loop needs:
+
+- **Decode IS separable from prefill.** `vllm:request_decode_time_seconds`,
+  `vllm:request_prefill_time_seconds` and `vllm:request_queue_time_seconds` are separate
+  per-request histograms. `harness/vllm_server.decode_rate()` now uses them, so the vLLM side can
+  report the same quantity as llama.cpp's `timings.predicted_per_second`. The alternative,
+  `completion_tokens / wall_ms`, carries prefill inside it and does NOT cancel when each engine is
+  divided by its own baseline -- a speculative arm decodes faster, so prefill is a larger share of
+  its wall time and the speedup comes out too small. That is exactly the error whose author
+  withdrew llama.cpp #27623's reported 25x decode collapse on 2026-08-26 after re-measuring with
+  eval-only timings.
+- **`--disable-log-requests` no longer exists** in 0.27.1; it is now the
+  `--enable-log-requests` / `--no-enable-log-requests` pair. An unknown flag stops the server
+  during argument parsing, so `phase_v.py` as written would have failed at startup with an
+  argparse message rather than anything about speculation.
+  `TestPhaseVFlagsExistInTheInstalledVllm` now checks every `COMMON_ARGS` entry against
+  `vllm serve --help=all`.
+
+### What this says about the design note
+
+The sentence "An 8192 context is not close to the limit" is true and irrelevant: context is not
+what fails. The budget counted the MTP head as 0.79 GiB of weights on disk and did not count its
+runtime allocation at all. A capacity estimate for a speculative configuration has to include the
+draft model's own load, and on this card that item alone is larger than the entire KV budget the
+baseline arm ends up with (2.37 against 1.38 GiB).
+
+`docs/PHASE_V_DESIGN.md` is left as written rather than silently corrected; this Correction is the
+record that its arithmetic was tested and found short.

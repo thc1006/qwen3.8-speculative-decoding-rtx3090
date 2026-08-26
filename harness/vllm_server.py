@@ -118,6 +118,69 @@ def assert_speculation_observed(delta: dict, arm_name: str) -> None:
             f"{sorted(delta['counters'])}")
 
 
+# Confirmed against vLLM 0.27.1 on 2026-08-26 by harness/vllm_probe.py: these exist and are
+# per-request histograms, so decode time is separable from prefill and from queueing. That
+# matters because the obvious alternative -- completion_tokens over wall time -- silently
+# includes prompt processing, and is exactly the error that made llama.cpp #27623 report a 25x
+# decode collapse that its author withdrew on 2026-08-26 once he measured eval-only timings.
+DECODE_TIME = "vllm:request_decode_time_seconds"
+PREFILL_TIME = "vllm:request_prefill_time_seconds"
+QUEUE_TIME = "vllm:request_queue_time_seconds"
+GEN_TOKENS = "vllm:generation_tokens_total"
+
+
+def timing_counters(port: int) -> dict[str, float]:
+    """The request-timing series, so a decode rate can exclude prefill and queueing.
+
+    Returned raw rather than reduced: `_sum` and `_count` are what a difference across one
+    request needs, and which of them a caller wants depends on whether it is after a total or a
+    mean. Reducing here would decide that for them and hide the counters that prove it.
+    """
+    try:
+        body = _get(port, "/metrics")
+    except (urllib.error.URLError, OSError) as e:
+        raise VllmError(f"/metrics unreachable on port {port}: {e}") from e
+    want = (DECODE_TIME, PREFILL_TIME, QUEUE_TIME, GEN_TOKENS)
+    out: dict[str, float] = {}
+    for line in body.splitlines():
+        if line.startswith("#") or not line.strip():
+            continue
+        name, _, rest = line.partition(" ")
+        if not name.split("{", 1)[0].startswith(want):
+            continue
+        try:
+            out[name] = float(rest.strip())
+        except ValueError:
+            continue
+    return out
+
+
+def decode_rate(before: dict[str, float], after: dict[str, float]) -> dict:
+    """tok/s over the decode phase alone, as llama.cpp's timings.predicted_per_second means it.
+
+    Both engines then report the same quantity. Without this the vLLM side carries prefill
+    inside its rate, which does NOT cancel when each engine is divided by its own baseline: a
+    speculative arm decodes faster, so prefill is a larger share of its wall time and the
+    speedup comes out too small.
+    """
+    def delta(prefix, suffix):
+        k = prefix + suffix
+        return after.get(k, 0.0) - before.get(k, 0.0)
+
+    dec = delta(DECODE_TIME, "_sum")
+    pre = delta(PREFILL_TIME, "_sum")
+    que = delta(QUEUE_TIME, "_sum")
+    toks = delta(GEN_TOKENS, "")
+    out = {"decode_s": dec, "prefill_s": pre, "queue_s": que, "generation_tokens": toks}
+    if dec > 0 and toks > 0:
+        out["decode_tok_s"] = toks / dec
+    if (dec + pre) > 0:
+        # How wrong a wall-clock rate would have been on this request, stated rather than left
+        # for a reader to wonder about.
+        out["prefill_share_of_inference"] = pre / (dec + pre)
+    return out
+
+
 def start(binary: str, model: str, port: int, extra_args: list[str], log_path: Path,
           *, gpu_index: int = 0, startup_timeout_s: float = 900.0) -> subprocess.Popen:
     """Launch `vllm serve` and wait until it answers.
