@@ -283,6 +283,36 @@ affected at all. They tested only `draft-dflash`.
 
 ---
 
+## 7. SGLang: two unbounded device-side walks, one of them submitted
+
+Not llama.cpp, and not in this table until now, which was an omission: the work exists in
+`upstream/sglang/` as two patches, two findings write-ups and a reproducer set, and one of the two
+changes has been open upstream since 2026-08-24.
+
+The entry point was [sglang#35822](https://github.com/sgl-project/sglang/issues/35822), a hang in
+`tree_speculative_sampling_target_only` with native Qwen3.5/3.8 MTP. The first guess -- that it
+duplicates the known EAGLE tensor-parallel divergence -- is wrong, and the versions say so: that
+bug is in the **greedy** branch, and on the reporter's v0.5.17 the **sampling** branch, which is
+what their py-spy stack names, already broadcasts.
+
+What is actually there is two `while (cur_index != -1)` walks over `retrive_next_sibling` with no
+other exit and no check that `cur_index` is a position in the request's row before it is used as
+one. `VerifyTreeGreedy` in `eagle_utils.cu` and `TreeSpeculativeSamplingTargetOnly` in
+`speculative_sampling.cuh`. Both were confirmed non-terminating on sm_86 rather than argued for
+from the source.
+
+| what | where | state |
+|---|---|---|
+| Ancestor walk bounded, and stopped when the ancestor is absent | [sglang#36201](https://github.com/sgl-project/sglang/pulls/36201), +297/-32 | **open**, awaiting a maintainer to apply `run-ci`, which [#31478](https://github.com/sgl-project/sglang/issues/31478) is also waiting on |
+| Sibling walks bounded, with a range check and a vocabulary check | `upstream/sglang/0002-bound-sibling-walks.patch` | **held back on purpose**: [#35771](https://github.com/sgl-project/sglang/issues/35771) is already open against that kernel's accept condition, and a second change to the same lines would collide |
+
+One thing worth repeating from `upstream/sglang/FINDINGS.md`, because it is the kind of error a
+test suite does not catch. A `PARENT_VALID` fixture for the second request was copied from the
+first without accounting for its `selected_index` being `[2, 4, 0]` rather than `[4, 2, 0]`, so
+its ancestor resolved to itself: `test_valid_chain` was testing a third looping tree, and the PR
+body would have claimed a before-equals-after result that does not hold. Caught in the last check
+before opening.
+
 ## What this study CANNOT contribute, stated so nobody spends time on it
 
 - **The quantization axis of the divergence.** #25618 establishes that a bf16 target preserves
