@@ -2709,3 +2709,26 @@ baseline gives a vLLM decode rate measured the way llama.cpp's `predicted_per_se
 reproducible result with logs rather than a remembered one. The matrix already says this is how it
 wants a failure treated. The DFlash2 arms stay gated at 40 GB and stay unrun here.
 
+
+
+### Correction 28a: the issue I filed about this named the wrong line
+
+vllm-project/vllm#53887 was filed on 2026-08-26 with the failing allocation attributed to
+`qwen3_5_mtp.py:82`, the predictor's `embed_tokens`. It is not that line. The traceback names
+`qwen3_5_mtp.py:244`, `self.lm_head = ParallelLMHead(...)`, and the frame below it is
+`vocab_parallel_embedding.py:552`, which is `ParallelLMHead.__init__` and is what identifies the
+object. `:82` runs first, allocates its own 2.37 GiB, and succeeds.
+
+The cause of the error is visible in what I wrote: I quoted the stack as two frames,
+`vocab_parallel_embedding.py:325` and `:50`, and those two are common to both objects. Trimming a
+stack to the frames that look like the mechanism removed the frames that identified it.
+
+The diagnosis is unchanged and the correction makes it worse rather than better: the module makes
+TWO vocab-sized bf16 allocations, 2 x 2.37 = 4.74 GiB, on a card whose target weights are already
+17.33 GiB. Both are filled with the target's own tensors through the remap at `:307`, because
+neither exists in the checkpoint -- `model.safetensors.index.json` maps 1999 tensors, exactly 15
+of them `mtp.*`, and none of those 15 is an embedding or a head.
+
+Posted as a follow-up comment rather than an edit to the body, so that the error and its
+correction both stay visible: issue 53887, comment 5427886687, verified present by reading it
+back.
