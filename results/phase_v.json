@@ -126,15 +126,46 @@
   ],
   "decode_rate_source": "vllm:request_decode_time_seconds_sum over vllm:generation_tokens_total, prefill and queueing excluded"
  },
- "arms": [
-  "baseline-vllm",
-  "mtp-k1",
-  "mtp-k2"
- ],
- "arm_notes": {
-  "baseline-vllm": "no speculation; the reference every vLLM arm is measured against",
-  "mtp-k1": "matched to llama.cpp mtp-n1 from phase_nmax; the only depth both engines run. Known to fail on a 24 GiB card: the MTP module's BF16 lm_head and embed_tokens are 2.37 GiB each and the checkpoint excludes 're:^mtp.*' from its INT4 recipe. The arm is kept so the failure is recorded rather than remembered, and so the same matrix runs unchanged on a card that can hold it",
-  "mtp-k2": "reported to error on this model family. Tested, not assumed; a failure is the result and is recorded as one"
+ "arms": {
+  "baseline-vllm": {
+   "extra_args": [],
+   "tree": "vllm",
+   "expects_drafter": false,
+   "temperature": 0.0,
+   "note": "no speculation; the reference every vLLM arm is measured against",
+   "may_fail": false,
+   "requires_vram_gb": null,
+   "model": null,
+   "gpu_state": null
+  },
+  "mtp-k1": {
+   "extra_args": [
+    "--speculative-config",
+    "{\"method\":\"mtp\",\"num_speculative_tokens\":1}"
+   ],
+   "tree": "vllm",
+   "expects_drafter": true,
+   "temperature": 0.0,
+   "note": "matched to llama.cpp mtp-n1 from phase_nmax; the only depth both engines run. Known to fail on a 24 GiB card: the MTP module's BF16 lm_head and embed_tokens are 2.37 GiB each and the checkpoint excludes 're:^mtp.*' from its INT4 recipe. The arm is kept so the failure is recorded rather than remembered, and so the same matrix runs unchanged on a card that can hold it",
+   "may_fail": true,
+   "requires_vram_gb": null,
+   "model": null,
+   "gpu_state": null
+  },
+  "mtp-k2": {
+   "extra_args": [
+    "--speculative-config",
+    "{\"method\":\"mtp\",\"num_speculative_tokens\":2}"
+   ],
+   "tree": "vllm",
+   "expects_drafter": true,
+   "temperature": 0.0,
+   "note": "reported to error on this model family. Tested, not assumed; a failure is the result and is recorded as one",
+   "may_fail": true,
+   "requires_vram_gb": null,
+   "model": null,
+   "gpu_state": null
+  }
  },
  "baseline": "baseline-vllm",
  "records": [
@@ -2995,42 +3026,54 @@
    "arm_pass": "pass01_mtp-k1",
    "expected": true,
    "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass01_mtp-k1.log",
-   "log": "results/server_logs/phase_v_pass01_mtp-k1.log"
+   "log": "results/server_logs/phase_v_pass01_mtp-k1.log",
+   "pass": 1,
+   "arm": "mtp-k1"
   },
   {
    "kind": "server_failed_to_start",
    "arm_pass": "pass01_mtp-k2",
    "expected": true,
    "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass01_mtp-k2.log",
-   "log": "results/server_logs/phase_v_pass01_mtp-k2.log"
+   "log": "results/server_logs/phase_v_pass01_mtp-k2.log",
+   "pass": 1,
+   "arm": "mtp-k2"
   },
   {
    "kind": "server_failed_to_start",
    "arm_pass": "pass02_mtp-k1",
    "expected": true,
    "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass02_mtp-k1.log",
-   "log": "results/server_logs/phase_v_pass02_mtp-k1.log"
+   "log": "results/server_logs/phase_v_pass02_mtp-k1.log",
+   "pass": 2,
+   "arm": "mtp-k1"
   },
   {
    "kind": "server_failed_to_start",
    "arm_pass": "pass02_mtp-k2",
    "expected": true,
    "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass02_mtp-k2.log",
-   "log": "results/server_logs/phase_v_pass02_mtp-k2.log"
+   "log": "results/server_logs/phase_v_pass02_mtp-k2.log",
+   "pass": 2,
+   "arm": "mtp-k2"
   },
   {
    "kind": "server_failed_to_start",
    "arm_pass": "pass03_mtp-k2",
    "expected": true,
    "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass03_mtp-k2.log",
-   "log": "results/server_logs/phase_v_pass03_mtp-k2.log"
+   "log": "results/server_logs/phase_v_pass03_mtp-k2.log",
+   "pass": 3,
+   "arm": "mtp-k2"
   },
   {
    "kind": "server_failed_to_start",
    "arm_pass": "pass03_mtp-k1",
    "expected": true,
    "error": "vllm exited with 1 during startup; see results/server_logs/phase_v_pass03_mtp-k1.log",
-   "log": "results/server_logs/phase_v_pass03_mtp-k1.log"
+   "log": "results/server_logs/phase_v_pass03_mtp-k1.log",
+   "pass": 3,
+   "arm": "mtp-k1"
   }
  ],
  "arm_pass_host_load": {

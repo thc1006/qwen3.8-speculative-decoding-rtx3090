@@ -55,6 +55,12 @@ def audit(path: Path) -> dict:
         return out
 
     got, expected, note = CP.completeness(d)
+    _mf = {a for a, m in (d.get("arms") or {}).items()
+           if isinstance(m, dict) and m.get("may_fail")}
+    _rf = len(d.get("arm_pass_failed") or {})
+    if expected and _mf and _rf:
+        # the records an arm-pass would have produced had it started
+        expected -= _rf * ((d.get("design") or {}).get("n_prompts") or 0)
     out["expected"] = expected
     if expected and got < expected:
         out["fails"].append(f"{got}/{expected} records")
@@ -70,9 +76,30 @@ def audit(path: Path) -> dict:
     n_prompts = design.get("n_prompts")
     declared = sorted(d.get("arms") or {})
     shape = collections.Counter((r.get("arm"), r.get("pass")) for r in recs)
+    # An arm the matrix declared may_fail, whose failure the driver recorded, is not a missing
+    # arm-pass: it is the phase's result for that arm. Phase V's two vLLM MTP arms cannot load on
+    # a 24 GiB card and are marked may_fail for that reason; without this the audit reads a
+    # correctly recorded failure as a broken run and says 75 of 225 records.
+    arms_meta_all = d.get("arms") or {}
+    may_fail = {a for a, m in arms_meta_all.items() if isinstance(m, dict) and m.get("may_fail")}
+    recorded_failures = set()
+    for tag in (d.get("arm_pass_failed") or {}):
+        # "passNN_armname"
+        if "_" in tag and tag.startswith("pass"):
+            head, _, arm_name = tag.partition("_")
+            try:
+                recorded_failures.add((arm_name, int(head[4:])))
+            except ValueError:
+                pass
+
     if declared and passes and n_prompts:
         want = {(a, p) for a in declared for p in range(1, passes + 1)}
         missing, extra = want - set(shape), set(shape) - want
+        declared_missing = {x for x in missing if x[0] in may_fail and x in recorded_failures}
+        missing -= declared_missing
+        if declared_missing:
+            out["notes"].append(f"{len(declared_missing)} arm-passes are recorded failures of "
+                                f"arms the matrix marked may_fail, not missing data")
         if missing:
             out["fails"].append(f"{len(missing)}/{len(want)} arm-passes missing, "
                                 f"e.g. {sorted(missing)[:2]}")
@@ -102,14 +129,29 @@ def audit(path: Path) -> dict:
     for i in inc:
         kind = i.get("kind", "?") if isinstance(i, dict) else "?"
         where = f"{i.get('arm')} pass {i.get('pass')}" if isinstance(i, dict) else ""
-        out["fails"].append(f"incident {kind} at {where}: {str(i.get('detail', ''))[:70]}"
-                            if isinstance(i, dict) else f"incident {str(i)[:70]}")
+        detail = str(i.get("detail") or i.get("error") or "")[:70] if isinstance(i, dict) else ""
+        # A start that failed on an arm the matrix marked may_fail is the phase's result for that
+        # arm, recorded rather than hidden, and is a note. On any other arm it is a FAIL: a
+        # baseline that did not start is a broken run whatever else the file says.
+        expected_failure = (isinstance(i, dict)
+                            and kind == "server_failed_to_start"
+                            and i.get("arm") in may_fail)
+        line = (f"incident {kind} at {where}: {detail}" if isinstance(i, dict)
+                else f"incident {str(i)[:70]}")
+        (out["notes"] if expected_failure else out["fails"]).append(line)
 
     env = d.get("env") or {}
-    out["sha"] = bool(env.get("model_sha256")) and env.get("model_sha256") != "unknown"
+    # A gguf is one file and a sha256 identifies it. A vLLM run loads a Hugging Face repo id --
+    # a directory of shards resolved through a cache -- and what identifies those weights is the
+    # commit the cache resolved to. Either one is provenance; neither being present is not.
+    _sha = env.get("model_sha256")
+    _rev = env.get("model_revision")
+    out["sha"] = ((bool(_sha) and _sha != "unknown")
+                  or (bool(_rev) and _rev != "unknown"))
     out["size"] = env.get("model_size_bytes")
     if not out["sha"]:
-        out["fails"].append("env.model_sha256 missing or 'unknown'; the weights are unidentified")
+        out["fails"].append("neither env.model_sha256 nor env.model_revision is present; the "
+                            "weights are unidentified")
     if out["size"] is None:
         out["notes"].append("env.model_size_bytes absent (predates the field); a ladder cannot "
                             "place this rung -- backfill_model_size.py if it is one")

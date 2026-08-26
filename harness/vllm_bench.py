@@ -188,8 +188,18 @@ def run(arms: list[dict], *, binary: str, model: str, common_args: list[str], ba
             "decode_rate_source": "vllm:request_decode_time_seconds_sum over "
                                   "vllm:generation_tokens_total, prefill and queueing excluded",
         },
-        "arms": [a["name"] for a in arms],
-        "arm_notes": {a["name"]: a.get("note", "") for a in arms},
+        # Keyed by arm name, the same shape bench.py writes. A list here was a schema divergence:
+        # every reader in this repository does arms.get(name) to reach an arm's metadata, and
+        # audit_results.py crashed on the first result that used the other form.
+        "arms": {a["name"]: {"extra_args": list(a["args"]),
+                             "tree": "vllm",
+                             "expects_drafter": bool(a.get("expects_drafter")),
+                             "temperature": 0.0,
+                             "note": a.get("note", ""),
+                             "may_fail": bool(a.get("may_fail")),
+                             "requires_vram_gb": a.get("requires_vram_gb"),
+                             "model": None,
+                             "gpu_state": None} for a in arms},
         "baseline": baseline,
         "records": [],
         "incidents": [],
@@ -219,7 +229,10 @@ def run(arms: list[dict], *, binary: str, model: str, common_args: list[str], ba
             result["arm_pass_host_load"][tag] = load
             if load.get("contended"):
                 result["incidents"].append({
+                    # arm and pass as well as the tag: audit_results.py and every other reader
+                    # names an incident by those two, and printed "at None pass None" without them
                     "kind": "host_contended_at_arm_entry", "arm_pass": tag,
+                    "arm": arm["name"], "pass": p_idx,
                     "competing_pct": load["competing_pct"],
                     "competing": load["competing"],
                     "note": "another workload held the CPU when this arm started; its timings "
@@ -236,6 +249,7 @@ def run(arms: list[dict], *, binary: str, model: str, common_args: list[str], ba
                 # the result for that arm and the rest of the matrix still runs.
                 result["incidents"].append({
                     "kind": "server_failed_to_start", "arm_pass": tag,
+                    "arm": arm["name"], "pass": p_idx,
                     "expected": bool(arm.get("may_fail")), "error": str(e),
                     "log": str(log_path),
                 })
@@ -284,6 +298,7 @@ def run(arms: list[dict], *, binary: str, model: str, common_args: list[str], ba
                         # is the shape that gets averaged over without anyone noticing.
                         result["incidents"].append({
                             "kind": "decode_rate_unavailable", "arm_pass": tag,
+                            "arm": arm["name"], "pass": p_idx,
                             "prompt": pr.tag, "timing_series_seen": sorted(tim_after)[:8],
                         })
                     result["records"].append(rec)
@@ -314,12 +329,14 @@ def run(arms: list[dict], *, binary: str, model: str, common_args: list[str], ba
                     except V.VllmError as e:
                         result["incidents"].append({
                             "kind": "declared_speculative_but_never_drafted",
-                            "arm_pass": tag, "error": str(e),
+                            "arm_pass": tag, "arm": arm["name"], "pass": p_idx,
+                            "error": str(e),
                         })
                         result["arm_pass_failed"][tag] = str(e)
                 elif arm_spec.get("drafted"):
                     result["incidents"].append({
                         "kind": "baseline_drafted_tokens", "arm_pass": tag,
+                        "arm": arm["name"], "pass": p_idx,
                         "drafted": arm_spec["drafted"],
                         "note": "the arm that defines the non-speculative reference ran a "
                                 "drafter; every speedup measured against it is understated",
