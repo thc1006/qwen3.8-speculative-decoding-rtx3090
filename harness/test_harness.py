@@ -2530,14 +2530,38 @@ class TestHostContentionIsRecorded(unittest.TestCase):
     turns that into a lookup.
     """
 
-    def test_own_processes_are_not_counted_as_competition(self):
+    def test_no_descendant_of_this_process_is_counted_as_competition(self):
+        """The contract, checked against the live host rather than a name list.
+
+        This asserted that nothing starting with "python" appears in `competing`, which was true
+        while python3 was on own_names and became both wrong and flaky when attribution moved to
+        descent: another python on the host IS competition now, and whether one happens to be
+        alive decides whether the assertion holds. What does hold, always, is that nothing the
+        caller started is counted.
+        """
+        import os
+        import subprocess
         import telemetry as T
         load = T.host_load()
+        if load.get("note"):
+            self.skipTest(load["note"])
         for c in load["competing"]:
             self.assertNotIn("llama-server", c["comm"],
                              "the run's own server is being counted against it")
-            self.assertFalse(c["comm"].startswith("python"),
-                             f"the run's own harness is being counted against it: {c}")
+        ps = subprocess.run(["ps", "-eo", "pid,ppid", "--no-headers"],
+                            capture_output=True, text=True, timeout=30)
+        ppid_of = {}
+        for line in ps.stdout.splitlines():
+            f = line.split()
+            if len(f) == 2:
+                try:
+                    ppid_of[int(f[0])] = int(f[1])
+                except ValueError:
+                    pass
+        mine = T._descendants_of(os.getpid(), ppid_of)
+        for c in load["competing"]:
+            self.assertNotIn(c.get("pid"), mine,
+                             f"a process this one started is being counted against it: {c}")
 
     # A ps table with a compiler two levels below pid 100, an rsync belonging to nobody, and
     # two processes under the 5 % floor.

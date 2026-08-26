@@ -21,7 +21,16 @@ if [ -f .gpu-in-use.lock ]; then
 fi
 
 hdr "1. the harness's own tests"
-python3 harness/test_harness.py 2>&1 | tail -3 || bad "test suite"
+# The verdict line, not the last three lines of output. unittest writes "Ran N tests" and
+# "OK"/"FAILED" to stderr while tests print to stdout, so `| tail -3` showed whatever a fixture
+# happened to print last and never showed whether anything passed. A check that does not report
+# its own verdict is the shape of defect this script exists to find.
+if python3 harness/test_harness.py > /tmp/verify_tests.log 2>&1; then
+  grep -E '^(Ran |OK|FAILED)' /tmp/verify_tests.log | sed 's/^/   /'
+else
+  grep -E '^(Ran |OK|FAILED|FAIL:|ERROR:)' /tmp/verify_tests.log | sed 's/^/   /'
+  bad "test suite; full output in /tmp/verify_tests.log"
+fi
 
 hdr "2. every committed result, audited"
 python3 harness/audit_results.py || bad "audit_results reported a problem"
