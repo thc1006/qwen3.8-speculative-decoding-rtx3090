@@ -266,6 +266,33 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
             print(f"    {a:24s} {str(iv):>22s}   margin {iv.margin_half_widths:.2f} half-widths")
         print("  Everything not listed clears zero by more than the correction is worth.")
 
+    # The intention-to-treat table the [selection] note above promises. It was computing
+    # itt_series and never printing it, so the note said "both series are reported below where
+    # they differ" while only one was: a statement the tool made about itself that was false.
+    if n_itt != n_pp:
+        print("\n--- INTENTION TO TREAT: the same effect over every record, none excluded ---")
+        print("  The per-protocol table above drops requests that stopped before the token cap.")
+        print("  Speculation moves where a request stops, so that is an exclusion decided by an")
+        print("  outcome. This table keeps them. Where the two agree, the exclusion rule did no")
+        print("  work; where they differ, the per-protocol number is the one that needs the")
+        print("  argument.")
+        print(f"{'arm':28s} {'vs':22s} {'delta % (ITT)':>22s}  {'delta % (PP)':>22s}")
+        for a in present:
+            b = baseline_map.get(a, default_baseline)
+            if a == b or b not in itt_series or a in baseline_arms:
+                continue
+            arm_i, base_i = _balanced(itt_series[a], itt_series[b])
+            if not arm_i:
+                continue
+            iv_i = ST.paired_cluster_bootstrap(base_i, arm_i, prompt_class, relative=True)
+            pp = ""
+            if b in series and a in series:
+                arm_p, base_p = _balanced(series[a], series[b])
+                if arm_p:
+                    pp = str(ST.paired_cluster_bootstrap(base_p, arm_p, prompt_class,
+                                                         relative=True))
+            print(f"{a:28s} {b:22s} {str(iv_i):>22s}  {pp:>22s}")
+
     print("\n--- SECONDARY (exploratory): per-class effect ---")
     for a in present:
         b = baseline_map.get(a, default_baseline)
