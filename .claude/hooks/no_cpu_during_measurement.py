@@ -56,7 +56,11 @@ HEAVY = [
     # as though it were running the analyser, and `cat scripts/verify_everything.sh` with it.
     # Reading a file is not what costs CPU; a guard that cannot tell the two apart is one you
     # start overriding out of habit, which is worse than not having it.
-    (r"(\b(bash|sh|source)\s+\S*|\./\S*)verify_everything\.sh\b",
+    # `\b` is too weak a boundary for an interpreter name, because filenames end in the same
+    # letters. `git add reproduce_phase_a.sh scripts/verify_everything.sh` matched: `\bsh` found
+    # the tail of `_a.sh`, and the rest of the pattern did the work. A lookbehind that also
+    # excludes `.` and `-` is what distinguishes the command `sh` from the suffix `.sh`.
+    (r"((?<![\w.-])(bash|sh|source)\s+\S*|\./\S*)verify_everything\.sh\b",
      "it says so itself: CPU-heavy, do not run during a measurement"),
     # The path has to sit where an interpreter would take it as the script to run: straight after
     # `python3` and any flags. Allowing it anywhere after `python3` still denied
@@ -65,7 +69,7 @@ HEAVY = [
     (r"\bpython3?\s+(-[A-Za-z]\S*\s+)*harness/(audit_results|analyze|analyze_depth|"
      r"analyze_cross_device|cost_model|mechanism_b|coverage_sim|width_groups|divergence_report|"
      r"truncation_audit|anchor_verdict|warp_intervention|completeness|ladder_trend|cross_rung|"
-     r"quality)\.py", "an analyser"),
+     r"quality|compare_reproduction|render_evidence)\.py", "an analyser"),
     (r"\bpython3?\s+(-[A-Za-z]\S*\s+)*(tests/(data_)?mutate|analysis/(verify_claims|"
      r"matrix_report|rederive_from_logs|check_data_integrity|past_threshold_fit|plot_\w+))\.py",
      "the other repository's suite"),
@@ -122,8 +126,24 @@ def _command_only(command):
     return HEREDOC.sub("<<HEREDOC", command)
 
 
+VERSION_ONLY = re.compile(r"^\s*\S+(\s+\S+)?\s+(--version|-V|-dumpversion|--help)\s*$")
+
+
+def _is_version_query(text):
+    """True when every segment of the command only asks something to print its version.
+
+    `gcc --version` costs nothing and tells a reproduction record which compiler built the tree,
+    but `gcc` is on the deny list because a build is expensive. Recording a toolchain should not
+    require the override.
+    """
+    parts = [p for p in re.split(r"&&|\|\||;|\|", text) if p.strip()]
+    return bool(parts) and all(VERSION_ONLY.match(p) for p in parts)
+
+
 def decide(command, info):
     text = _command_only(command)
+    if _is_version_query(text):
+        return "allow", ""
     for pattern, why in HEAVY:
         if re.search(pattern, text):
             return "deny", why

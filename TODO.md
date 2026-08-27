@@ -463,6 +463,12 @@ there was omission, not misstatement.
       apart, so **the cost tracks tokens drafted rather than tokens rejected**, and the verdict
       holds across F-2 to F+1. Two `host_contended` incidents from processes of my own leave the
       file marked FAIL in the audit; the fit above should be read with that.
+- [ ] **D7** wire the evidence block into README.md, first thing once the GPU is free. The
+      renderer, the registry and the check are all committed and tested on a subset; what is left
+      is the one step that costs CPU. Replace the hand-maintained "Evidence status" blockquote with
+      `<!-- BEGIN GENERATED: EVIDENCE_STATUS -->` / `<!-- END ... -->`, run
+      `python3 harness/render_evidence.py`, and keep only the narrative sentences the table cannot
+      carry. `scripts/verify_everything.sh` section 7 fails until this is done, deliberately.
 - [ ] **D6** regenerate `analysis/bootstrap_coverage.txt` once the GPU is free. `coverage_sim.py`
       now prints each coverage figure's own Monte Carlo standard error, so the committed report
       predates its analyser and the numbers in it carry no stated precision. Raise the replication

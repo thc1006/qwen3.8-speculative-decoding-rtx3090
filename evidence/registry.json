@@ -1,0 +1,165 @@
+{
+  "_comment": [
+    "The one place a phase's status is declared. It holds only what cannot be derived: the",
+    "question, how strongly the phase may be read, and the claims it must not be used to make.",
+    "Record counts, arm-pass shapes and incidents are NOT here -- analysis/render_evidence.py",
+    "computes them from the result files every time it runs, so a number in the README cannot",
+    "drift from the file it describes. The Phase B row said 'Running' for a day after 525 records",
+    "were committed, and the Phase R row did not exist at all; both were hand-maintained prose.",
+    "",
+    "`inference` is a controlled vocabulary, not free text:",
+    "  primary       the confirmatory result this repository was built to produce",
+    "  reported      within-run contrasts stand; nothing beyond the run is claimed",
+    "  exploratory   the question was registered, some scoring was implemented after the data",
+    "  association   cross-session or cross-host; not a controlled contrast",
+    "  control       exists to check another phase, not to answer a question of its own",
+    "  not-evaluable the run happened and the question could not be answered from it"
+  ],
+  "skip_patterns": [".partial.", "dryrun_", ".pre_repair."],
+  "phases": [
+    {
+      "id": "A",
+      "question": "does speculative decoding pay on one RTX 3090 at 8K context, single stream, greedy?",
+      "results": ["results/phase_a.json"],
+      "inference": "primary",
+      "forbidden": [
+        "representative deployment traffic: the 25 prompts were purposively constructed",
+        "semantic equivalence: only byte-level divergence is measured"
+      ]
+    },
+    {
+      "id": "A-1600",
+      "question": "do the divergence verdicts survive a generation cap four times longer?",
+      "results": ["results/phase_a_cap1600.json"],
+      "inference": "reported",
+      "forbidden": [
+        "throughput: two host_contended incidents leave this file marked FAIL by the audit"
+      ]
+    },
+    {
+      "id": "A-hostB",
+      "question": "does the width partition hold on a second card?",
+      "results": ["results/phase_a_hostB.json"],
+      "inference": "association",
+      "forbidden": ["absolute tok/s pooled with Phase A: different host"]
+    },
+    {
+      "id": "B",
+      "question": "under confidence gating, does the overhead scale with tokens drafted or tokens rejected?",
+      "results": ["results/phase_b.json"],
+      "inference": "exploratory",
+      "note": "H2 and H2' and the arm design were in the initial commit; the model comparison was committed before the run finished; the forward-count robustness sweep was added after the data",
+      "forbidden": [
+        "quantization or arithmetic intensity as the cause: no intervention on either",
+        "the joint drafted/rejected coefficients: the regressors correlate at +0.9963",
+        "absolute ms/step and ms/token: they wait on an exact verification-step count"
+      ]
+    },
+    {
+      "id": "C",
+      "question": "does drafter quantization change the answer, and does the predecessor's v3.0 need an erratum?",
+      "results": ["results/phase_c.json"],
+      "inference": "reported",
+      "forbidden": [
+        "a demonstrated separation between two drafter precisions: no paired interval was computed",
+        "n-gram efficacy from an arm that never activated"
+      ]
+    },
+    {
+      "id": "KV",
+      "question": "does the width partition survive an f16 cache, or was it an artefact of q8_0?",
+      "results": ["results/phase_kv.json"],
+      "inference": "control",
+      "forbidden": []
+    },
+    {
+      "id": "L",
+      "question": "does the long-context decode collapse of llama.cpp #27623 reproduce on sm_86, and does speculation survive it?",
+      "results": ["results/phase_l_*.json"],
+      "inference": "reported",
+      "forbidden": [
+        "a refutation of #27623: that report is a different architecture, quantization and software stack",
+        "throttling excluded: only SM-clock drift is ruled out as the explanation",
+        "a method separation at depth: the deepest rungs' intervals overlap"
+      ]
+    },
+    {
+      "id": "M",
+      "question": "does draft-mtp at small n-max escape the penalty a 0.8B draft-simple at n-max 8 suffers, and does the architecture decide it?",
+      "results": ["results/phase_m.json"],
+      "inference": "reported",
+      "note": "the preregistered replication anchor does not hold, and the phase's own gate then forbids reading it as a statement about the predecessor",
+      "forbidden": [
+        "anything about the predecessor: the anchor failed",
+        "an architecture effect: same gate",
+        "k, c, k0, the marginal-cost equality and the fixed-cost ratio: mean_len fails its integrity check here"
+      ]
+    },
+    {
+      "id": "n-max",
+      "question": "the full width ladder, 2 to 9, for the CUDA boundary question",
+      "results": ["results/phase_nmax.json"],
+      "inference": "reported",
+      "forbidden": []
+    },
+    {
+      "id": "Q",
+      "question": "does target quantization move the marginal cost of a verified position?",
+      "results": ["results/phase_q_*.json"],
+      "inference": "association",
+      "forbidden": [
+        "a causal reading: the two rungs ran in different sessions",
+        "the rungs a 24 GB card cannot hold: two of four are blocked on VRAM"
+      ]
+    },
+    {
+      "id": "Qs",
+      "question": "does the bf16 anchor #25618 rests on hold, and does #26750's CUDA acceptance figure reproduce on a second CUDA architecture?",
+      "results": ["results/phase_qsmall_*.json"],
+      "inference": "association",
+      "forbidden": [
+        "agreement or disagreement with #26750: the estimator and prompt population are not known to match",
+        "bf16 parity: 36 of 75 bf16 requests still diverge",
+        "the drafter's compute being unchanged: the MTP head is inside the quantized target"
+      ]
+    },
+    {
+      "id": "R",
+      "question": "which clock does each workload actually respond to?",
+      "results": ["results/phase_r.json"],
+      "inference": "reported",
+      "forbidden": [
+        "a roofline or per-kernel bottleneck attribution: these are response measurements",
+        "independent clock effects: this phase moves them through a power cap"
+      ]
+    },
+    {
+      "id": "R2",
+      "question": "does the compute elasticity hold with the SM clock pinned rather than power-capped?",
+      "results": ["results/phase_r2.json"],
+      "inference": "reported",
+      "forbidden": ["a roofline or per-kernel bottleneck attribution"]
+    },
+    {
+      "id": "V",
+      "question": "does the sign survive a move from llama.cpp to vLLM?",
+      "results": ["results/phase_v.json"],
+      "inference": "not-evaluable",
+      "note": "both MTP arms fail during server start on 24 GiB; the baseline served",
+      "forbidden": [
+        "an engine-isolated comparison: engine, quantization and checkpoint format differ together",
+        "a depth-specific engine limitation from the k=2 failure: it is the same allocation failing"
+      ]
+    },
+    {
+      "id": "warp",
+      "question": "does forcing calc_nwarps move the fork positions the partition follows?",
+      "results": ["results/phase_warp_*.json"],
+      "inference": "control",
+      "note": "four builds of one revision differing only in the GENERIC warp table, plus an A6000 replication",
+      "forbidden": [
+        "generalisation past the tested table, devices, quantized kernels and prompts"
+      ]
+    }
+  ]
+}

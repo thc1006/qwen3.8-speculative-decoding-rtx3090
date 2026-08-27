@@ -3,7 +3,10 @@
     "What Phase A was measured with. scripts/reproduce_phase_a.sh reads this file rather than",
     "carrying the values itself, so a rerun and this record cannot drift apart.",
     "The repository commit is deliberately absent: this file lives inside the repository, so a",
-    "commit written here would describe the state before itself. Use `git rev-parse HEAD`."
+    "commit written here would describe the state before itself. `repo_tag` closes that without",
+    "circularity -- this file names a tag, and the tag is created afterwards pointing at the",
+    "commit that contains this file. Without it a rerun a year from now uses a year-old lock",
+    "against whatever the harness has become, which is not the thing that produced phase_a.json."
   ],
   "llama_master_commit": "c060ca974c773c7c3d17fd1b66dc9d312bc292c0",
   "dflash2_commit": "d1a522fc89c96d1a3057e35681f0c4859810623c",
@@ -24,5 +27,27 @@
   "models": [
     "models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf",
     "models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf"
-  ]
+  ],
+  "repo_tag": "phase-a-v1",
+  "_repo_tag_note": "Create as an annotated, signed tag on the commit that carries this file: `git tag -s phase-a-v1 -m 'Phase A as measured'`. The reproduce script warns when HEAD is not at it, because a warning is honest about a tag that may not exist yet and a hard failure would block the script in the repository it ships in.",
+  "toolchain": {
+    "_source": "llamacpp-*/build/CMakeCache.txt and CMakeFiles/*/CMake*Compiler.cmake, read 2026-08-27. These are the settings the measured binaries were configured with, recovered from the trees themselves; no contemporaneous toolchain record was kept, so this is evidence rather than a log.",
+    "c_compiler": "GNU 14.2.0",
+    "cxx_compiler": "GNU 14.2.0",
+    "cuda_compiler": "NVIDIA 13.3.73",
+    "cmake": "3.31.6",
+    "ninja_observed_2026_08_27": "1.12.1",
+    "ccache": "on (GGML_CCACHE=ON); ccache 4.11.2 observed 2026-08-27",
+    "glibc_observed_2026_08_27": "Debian GLIBC 2.41-12+deb13u3",
+    "binutils_ld_observed_2026_08_27": "GNU ld 2.44",
+    "master_configured_at": "2026-08-24 10:57:52",
+    "dflash2_configured_at": "2026-08-24 11:02:16"
+  },
+  "_toolchain_note": "A mismatch here does not invalidate a reproduction; it bounds how far the two builds can be assumed identical. The script reports differences and continues, except for CUDA, which it already pins hard.",
+  "dflash2_archive": {
+    "_why": "dflash2_source points at pull/27342/head, a live ref. That PR's head has already moved past the measured commit, and a force-push or a closed PR can make the object unreachable, at which point this lock names a commit nobody can fetch.",
+    "bundle": "repro/dflash2-d1a522fc.bundle",
+    "swhid": null,
+    "_swhid_note": "swh:1:rev:<commit> once archive.softwareheritage.org has visited the origin; SWHIDs are ISO/IEC 18670 and content-derived, so the identifier is fixed by the commit itself and archival is what makes it retrievable."
+  }
 }

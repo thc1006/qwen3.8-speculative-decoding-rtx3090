@@ -20,7 +20,57 @@ done
 CUDA_VER=$(val "['cuda']")
 NVCC=/usr/local/cuda-$CUDA_VER/bin/nvcc
 [ -x "$NVCC" ] || die "$NVCC not found; the lock file pins CUDA $CUDA_VER"
-command -v hf >/dev/null || echo "  note: 'hf' not on PATH; download the models yourself"
+# `hf` is optional only when both pinned model files are already on disk. This printed a note and
+# then called `hf download` unconditionally three steps later, so a machine without it failed at
+# step 5 with a command-not-found instead of at step 1 with a reason.
+TARGET_GGUF=models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf
+DRAFTER_GGUF=models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
+if [ ! -f "$TARGET_GGUF" ] || [ ! -f "$DRAFTER_GGUF" ]; then
+  command -v hf >/dev/null || die "'hf' is required: a pinned model file is missing and step 5 downloads it"
+fi
+
+echo "== 1b. this repository's own version, and the toolchain"
+# A lock file cannot name its own commit, but it can name a tag created afterwards on the commit
+# that carries it. Without this the script pins llama.cpp, CUDA, the models and the card, and
+# leaves the harness that drives all of them free to be any later version of itself.
+WANT_TAG=$(val "['repo_tag']")
+HAVE_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
+if [ "$HAVE_TAG" = "$WANT_TAG" ]; then
+  echo "  repository at $WANT_TAG"
+else
+  echo "  WARNING: HEAD is $(git rev-parse HEAD)"
+  echo "           the lock was written for tag '$WANT_TAG'${HAVE_TAG:+, this tree is at '$HAVE_TAG'}"
+  echo "           a rerun from another commit uses another harness; that is a different experiment"
+fi
+python3 - "$LOCK" <<'PY'
+import json, re, shutil, subprocess, sys
+lock = json.load(open(sys.argv[1])).get("toolchain") or {}
+def first(*cmd):
+    if not shutil.which(cmd[0]):
+        return None
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        return (r.stdout or r.stderr).splitlines()[0].strip()
+    except Exception:
+        return None
+def ver(s):
+    m = re.search(r"(\d+\.\d+(?:\.\d+)?)", s or "")
+    return m.group(1) if m else None
+checks = [("cxx_compiler", ver(first("g++", "--version")), "g++"),
+          ("cmake", ver(first("cmake", "--version")), "cmake")]
+diffs = []
+for key, have, name in checks:
+    want = ver(lock.get(key, ""))
+    if want and have and want != have:
+        diffs.append(f"{name} {have} against {want} recorded")
+    elif want and not have:
+        diffs.append(f"{name} not on PATH; {want} recorded")
+if diffs:
+    print("  toolchain differs from the recorded build: " + "; ".join(diffs))
+    print("  reported, not enforced: it bounds how far the two builds can be assumed identical")
+else:
+    print("  toolchain matches the recorded build")
+PY
 
 echo "== 2. card"
 CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d ' .')
@@ -53,9 +103,9 @@ done
 
 echo "== 5. models, and only this phase's"
 mkdir -p models/target models/dflash2
-[ -f models/target/Qwen3.8-27B-UD-Q4_K_XL.gguf ] || \
+[ -f "$TARGET_GGUF" ] || \
   hf download unsloth/Qwen3.8-27B-GGUF Qwen3.8-27B-UD-Q4_K_XL.gguf --local-dir models/target
-[ -f models/dflash2/Qwen3.8-27B-DFlash2-Q4_K_M.gguf ] || \
+[ -f "$DRAFTER_GGUF" ] || \
   hf download z-lab/Qwen3.8-27B-DFlash2-GGUF Qwen3.8-27B-DFlash2-Q4_K_M.gguf --local-dir models/dflash2
 sha256sum -c "$(val "['checksums']")" || die "model checksums do not match the run's"
 
@@ -78,6 +128,22 @@ INC=$(python3 -c "import json;print(len(json.load(open('$OUT')).get('incidents')
 
 echo "== 9. analyse"
 python3 harness/analyze.py "$OUT"
+
 echo
-echo "Done. Yours: $OUT   Committed: results/phase_a.json"
-echo "Absolute tok/s are host-specific; compare the paired effects, not the levels."
+echo "== 10. compare against the committed run, on the effects rather than the record count"
+# Step 8 checks a shape. A rerun that landed on entirely different throughput would pass it, and
+# "compare the paired effects, not the levels" used to be printed at the end as advice for a human
+# to act on rather than as something this script did. Absolute tok/s are host-specific; the paired
+# effects are what a reproduction has to carry, so they are what gets compared and what decides the
+# exit code.
+if python3 harness/compare_reproduction.py results/phase_a.json "$OUT"; then
+  echo
+  echo "Done. Yours: $OUT   Committed: results/phase_a.json"
+else
+  echo
+  echo "Done, and the comparison did NOT establish a reproduction: $OUT"
+  echo "Read the section above before quoting either run against the other. If the only objection"
+  echo "is a recorded incident you have checked, re-run the comparison with --allow-incidents and"
+  echo "say in writing what you checked."
+  exit 1
+fi

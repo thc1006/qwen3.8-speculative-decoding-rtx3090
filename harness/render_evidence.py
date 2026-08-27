@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Render the README's evidence-status block from the result files, or check it has not drifted.
+
+The block this writes used to be a hand-maintained blockquote. It carried a date, and the date did
+not stop it: on 2026-08-27 it said Phase B was running while 525 committed records sat in
+`results/phase_b.json`, and it never mentioned Phase R at all, which has 1125. Every number here is
+computed from the files each time this runs, so the only things a human maintains are the ones a
+file cannot state -- the question, how strongly the phase may be read, and what it must not be used
+to claim. Those live in `evidence/registry.json`.
+
+  render_evidence.py            rewrite the block in README.md
+  render_evidence.py --check    exit non-zero if the block is not what would be written now
+  render_evidence.py --only A,B restrict to some phases, for a cheap check
+
+Reading every result file costs a few seconds of CPU on 61 MB of JSON, which is enough to be
+recorded as contention by a running measurement. `--only` exists so this can be exercised without
+that; the CPU guard denies the full run while the GPU lock is held.
+"""
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+import completeness as CP     # noqa: E402
+
+ROOT = Path(__file__).parent.parent
+REGISTRY = ROOT / "evidence" / "registry.json"
+README = ROOT / "README.md"
+BEGIN = "<!-- BEGIN GENERATED: EVIDENCE_STATUS -->"
+END = "<!-- END GENERATED: EVIDENCE_STATUS -->"
+
+INFERENCE = {
+    "primary": "primary result",
+    "reported": "within-run contrasts reported",
+    "exploratory": "exploratory",
+    "association": "association, not a controlled contrast",
+    "control": "control",
+    "not-evaluable": "**not evaluable**",
+}
+
+
+def files_for(phase, skip):
+    out = []
+    for pat in phase["results"]:
+        for p in sorted(glob.glob(str(ROOT / pat))):
+            name = Path(p).name
+            if any(s in name for s in skip):
+                continue
+            out.append(Path(p))
+    return out
+
+
+def facts(phase, skip):
+    """(files, records, expected, incidents, short note) computed from the files themselves."""
+    n_files = n_rec = n_exp = n_inc = 0
+    short = []
+    for p in files_for(phase, skip):
+        d = json.loads(p.read_text())
+        got, expected, _ = CP.completeness(d)
+        n_files += 1
+        n_rec += got
+        n_exp += expected or 0
+        n_inc += len(d.get("incidents") or [])
+        if expected and got < expected:
+            short.append(f"{p.name} {got}/{expected}")
+    return n_files, n_rec, n_exp, n_inc, short
+
+
+def render(only=None):
+    reg = json.loads(REGISTRY.read_text())
+    skip = reg.get("skip_patterns") or []
+    rows = ["| phase | data, computed from the files | inference |", "|---|---|---|"]
+    for phase in reg["phases"]:
+        if only and phase["id"] not in only:
+            continue
+        n_files, n_rec, n_exp, n_inc, short = facts(phase, skip)
+        if not n_files:
+            data = "**no result file**"
+        else:
+            data = f"{n_rec} records"
+            if n_files > 1:
+                data += f" over {n_files} files"
+            if n_exp and n_rec < n_exp:
+                data += f", **short of {n_exp}**"
+            elif n_exp:
+                data += ", complete"
+            data += f", {n_inc} incident" + ("" if n_inc == 1 else "s")
+            if short:
+                data += " (" + "; ".join(short[:2]) + ")"
+        inf = INFERENCE.get(phase["inference"], phase["inference"])
+        note = phase.get("note")
+        if note:
+            inf += f" -- {note}"
+        rows.append(f"| **{phase['id']}** | {data} | {inf} |")
+    return "\n".join(rows)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--check", action="store_true")
+    ap.add_argument("--only", default="")
+    ap.add_argument("--stdout", action="store_true", help="print the block and write nothing")
+    args = ap.parse_args()
+    only = {x.strip() for x in args.only.split(",") if x.strip()} or None
+
+    block = render(only)
+    if args.stdout:
+        print(block)
+        return 0
+
+    text = README.read_text()
+    if BEGIN not in text or END not in text:
+        print(f"README.md carries no {BEGIN} ... {END} block", file=sys.stderr)
+        return 2
+    head, rest = text.split(BEGIN, 1)
+    _, tail = rest.split(END, 1)
+    new = f"{head}{BEGIN}\n{block}\n{END}{tail}"
+
+    if args.check:
+        if only:
+            print("--check with --only would compare a partial block against the whole one",
+                  file=sys.stderr)
+            return 2
+        if new == text:
+            print("   evidence block matches the result files")
+            return 0
+        print("   the evidence block is not what the result files say now:", file=sys.stderr)
+        import difflib
+        old_block = rest.split(END, 1)[0].strip("\n")
+        for line in list(difflib.unified_diff(old_block.splitlines(), block.splitlines(),
+                                              "committed", "computed", lineterm=""))[:20]:
+            print("   " + line, file=sys.stderr)
+        return 1
+
+    README.write_text(new)
+    print("   evidence block rewritten from the result files")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
