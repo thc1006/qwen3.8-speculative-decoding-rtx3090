@@ -2949,3 +2949,144 @@ five seeds is evidence rather than justification. And `telemetry.host_load` now 
 `_ps_output` / `_self_pid` parameters that exist only so a test can exercise the threshold without
 burning CPU on a machine that may be measuring -- production code carrying a test seam, which is a
 trade rather than a free improvement.
+
+## Correction 33, 2026-08-27 15:48: the run that resolved D2, and five defects in the tools that read it
+
+TODO.md item D2 asked for the primary comparison re-run with a larger generation budget, because
+every identical verdict in Phase A was right-censored: at a 400-token cap **no record anywhere
+reached EOS**, so "identical" could only ever mean "had not diverged yet". That run is
+`results/phase_a_cap1600.json`: same prompts, same arms, cap raised 400 -> 1600, 3 passes rather
+than 5, 525 records, 21 of 21 arm-passes, 2 incidents, lock released.
+
+**The censoring largely dissolves.**
+
+| | cap 400 | cap 1600 |
+|---|---|---|
+| records that ran to EOS | 0 of 875 | **267 of 525** (195 of the 375 carrying a divergence verdict) |
+| right-censored | 260 of 750 (35 %) | **9 of 375 (2.4 %)** |
+| prompts carrying at least one censored cell | 25 of 25 | **2 of 25** |
+| latest resolved fork | token 334 (83 % of window) | token **1396** (87 %) |
+| repeated cells that agree across passes | 150 of 150 | 125 of 125 |
+
+Per arm, divergence from serial greedy decoding rises from 76-80 % to **100 % for dflash2-n4,
+dflash2-n7 and mtp-n5**, 96 % for mtp-n2 and 92 % for mtp-n3. The reading registered in Phase A
+survives and hardens: these arms are not bit-exact with serial greedy decoding, and the earlier
+"identical" verdicts were overwhelmingly the window ending before the fork did.
+
+**What this run did not carry.** At 400 the PR's own no-speculation arm `baseline@pr27342` had a
+divergence verdict on all 125 of its records, all identical -- the same-tree control showing the
+branch reproduces master's bytes with speculation off. The 1600 run computed no divergence for it
+at all. The reference is therefore unchecked in the new regime, and nothing here re-establishes it.
+
+**`audit_results.py` marks this file FAIL, and the mark stands.** Two `host_contended` incidents
+were recorded in pass 1, at `baseline@pr27342` and `mtp-n2`, both a `python3` process taking
+97-100 % of CPU. It was not this run: another session was running mutation tests out of the
+predecessor repository. The rule that a flagged file should not be used as it stands is the right
+default and I am not overriding it, but the harm it guards against is measurable here and did not
+occur. Divergence is a byte comparison of deterministic text and cannot be moved by CPU load, and
+the data says so directly: 125 of 125 repeated cells agree across passes, and all 25 of 25 of
+`mtp-n2`'s contended pass-1 cells give the identical verdict to its two clean passes. Throughput is
+what contention could have moved, and it did not move: median decode rate on the contended pass
+runs **-0.40 %** and **+0.40 %** against the same arm's other passes, while `dflash2-n7`, which
+carried no incident at all, sits at **-1.22 %**. The two flagged arm-passes are 2 of 21 and are
+cheap to re-run; until they are, this file is sound for the divergence conclusions above and
+should not be quoted for throughput.
+
+### Five defects in the readers, found by pointing them at the new file
+
+**The window was inferred from the output length.** `truncation_audit.classify` took the window
+from `predicted_n`, which is what a record produced, not what it was allowed to produce. While
+every record hit the cap the two were the same number and this was accidentally right. The moment
+half the records stopped on their own, the inferred window fanned out into 41 distinct values, the
+report printed `window: 634 tokens x15, 640 tokens x9, ...` as though the study had used dozens of
+different budgets, `censored_prompts` concluded there was no single window and returned `None`, and
+`width_groups` divided by it: `TypeError: unsupported operand type(s) for /: 'float' and
+'NoneType'`. The cap is now read from `design.max_tokens`, falling back for older files to the
+records that hit it, which are the ones whose own length is the cap.
+
+**A verdict printed without being checked.** The summary ended with "No record anywhere reached
+EOS, so no identity in this study is exact" whenever the exact-identity count was zero. The count
+was right; the sentence was not, once 267 records had run to EOS. What is true is narrower and had
+to be measured to be said: no identity is exact because every one of them is a cell whose two arms
+agreed while at least one side stopped on the cap -- and separately, of the records that did reach
+EOS, not one matched its baseline. The line now prints counts it computed.
+
+**A censored cell was compared against an observed fork position, and it would have retracted an
+upstream claim.** `width_groups` builds each width's signature as its vector of fork positions
+across prompts and groups widths whose vectors match. A cell that never diverged inside the window
+enters that vector as `same`. On the 1600 file, `code_sql_report` forks at character 5423 for
+width 3 and comes back censored for width 4 -- **one cell of 25** -- and comparing `5423` against
+`same` split the two widths. The tool then printed:
+
+> observed: [{3}, {4}, {8, 5, 6}] -- H8 NOT SUPPORTED. The grouping tracks something other than
+> the warp count, and the mechanism offered in llama.cpp #25618 needs withdrawing there.
+
+Nothing about width 4 had changed. Its fork was not observed, which is not the same as its fork
+being elsewhere; it may lie anywhere past 1600. A partition that moves when the cap moves is a
+property of the cap. Two widths are now separated only by a prompt where **both** diverged and the
+character indices differ, and the number of prompts that determined each grouping is printed
+beside it. The partition is then stable across the two caps and better supported at the larger one:
+
+| | cap 400 | cap 1600 |
+|---|---|---|
+| observed groups | {3,4}, {5,6,8} | {3,4}, {5,6,8} |
+| prompts determining w3 vs w4 | 19 of 25 | **23 of 25** |
+| prompts determining w5/w6/w8 | 20 of 25 | **25 of 25** |
+
+The existing verdict is unchanged by all of this: the partition matches `calc_nwarps` exactly and
+the four-build intervention already showed that table is not what causes it (Correction 22). What
+the defect would have added is a public withdrawal of a mechanism claim on the strength of a single
+unobserved cell.
+
+**The same mistake, a second time, in a second tool.** `divergence_report.group_stability` builds
+its own fork-position partition and reads cells through the same `quality.fork_cell`, which returns
+a character index for a fork and a string for every state that has none. It skipped only the
+missing ones, so every censored arm on a prompt landed in one bucket and came out as a shared fork
+position. On Phase A it printed `{baseline@pr27342}` -- the no-speculation arm, identical to the
+reference on 125 of 125 records and therefore the one arm in the study with no fork position at all
+-- as a group of a fork-position partition. With the no-position states excluded, both files and
+every pass give the same two groups as `width_groups`:
+`{dflash2-n4, dflash2-n7, mtp-n5} | {mtp-n2, mtp-n3}`, which is widths {5,6,8} and {3,4}. Two
+independent readers now agree where before one of them was printing an artefact of the cap.
+
+**A fifth, found by the verification script rather than by the new file.** Running
+`scripts/verify_everything.sh` afterwards reported Phase V as `75 records against an expected -75;
+more than the design`. A designed record count cannot be negative. `completeness()` subtracts the
+arm-passes that a `may_fail` arm recorded as failed, and `audit_results` subtracted them a second
+time: Phase V designs 225 records, six arm-passes of two `may_fail` vLLM arms failed at startup,
+and 225 - 150 - 150 is -75. The comment that introduced the first subtraction says in as many
+words that "audit_results.py already knew this; this function did not, so the two disagreed about
+the same file" -- the duplicate was left behind when the disagreement was resolved. The second copy
+was also the cruder one, counting every failed arm-pass rather than only those of a `may_fail` arm.
+Phase V now audits clean at 75 of 75 with the six failures as notes, and the committed results go
+from 33 of 36 clean to 34 of 36.
+
+`harness/test_harness.py` carries ten tests for these defects, including the negative control that
+two widths which genuinely fork at different characters are still separated. All ten fail against
+the previous code; the suite is 187 tests. One of them passed against the defect on first writing
+-- the spurious group lost a `most_common` tie-break and never reached the printed line -- which is
+the same false pass this Correction is about, found in the test written to catch it. It was
+strengthened until it failed.
+
+The two files still marked FAIL are both CPU contention and both recorded: `phase_a_cap1600` above,
+and `phase_b`, where the contending processes were mine (`nvidia-smi`, `git`). Neither is cleared
+by anything in this Correction.
+
+### Two of my own readings, refuted on the way
+
+I proposed that the {3},{4} split was itself a truncation artefact -- that widths 3 and 4 separate
+only past token 400, which the earlier run could not see. **Refuted:** of the five prompts where
+the two widths' token positions differ, three fork at 96, 127 and 188 tokens, well inside the old
+window. I then proposed that the split came from `chars_per_token` noise. **Refuted for this
+partition:** `width_groups` compares character indices through `quality.fork_cell`, not token
+positions, so the conversion never enters it.
+
+That second reading is, however, a real and separate imprecision, and it is left in place with its
+size recorded. `truncation_audit` converts a fork's character index to a token position by
+dividing by that record's own `text_len / predicted_n`. Two arms that fork at the identical
+character therefore get different token positions, because their texts have different overall
+lengths: char 650 reads as 187.7 tokens for width 3 and 187.2 for width 4, char 535 as 127.4 and
+131.2. The largest gap seen is 3.8 tokens, about 3 %. It is sound for describing a distribution --
+the min 6 / median 117 / max 1396 figures -- and unsound for comparing arms at fine granularity,
+which no conclusion in this study does. The correct denominator would be the shared baseline
+prefix rather than each arm's whole text.
