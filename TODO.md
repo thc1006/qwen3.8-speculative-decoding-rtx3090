@@ -334,10 +334,12 @@ there was omission, not misstatement.
       same 400-token window and the differential censoring does not exist. The "cleaner subset"
       robustness check both analysers had grown is removed, because there is no cleaner subset.
 - [x] **B8** three states, read off `finish_reason` rather than inferred from a threshold:
-      diverged at token t, identical through EOS, right-censored at the cap. **5825 of 5825 records
-      across every file stopped at the cap and none reached EOS**, so every identical verdict in
-      the study is right-censored, uniformly. Forks resolve as late as token 334 of 400 in Phase A
-      and 379 of 400 in the A6000 warp control.
+      diverged at token t, identical through EOS, right-censored at the cap. Across every file that
+      existed then, **5825 of 5825 records stopped at the cap and none reached EOS**, so every
+      identical verdict was right-censored, uniformly. Forks resolve as late as token 334 of 400 in
+      Phase A and 379 of 400 in the A6000 warp control. Superseded for the extended-cap regime by
+      D2: `phase_a_cap1600.json` has 267 of 525 records reaching EOS and 9 of 375 censored, and
+      still 0 exact identities.
 - [x] **B9** pass agreement asserted rather than assumed: 150 cells in Phase A and 300 in n-max are
       measured more than once and all agree.
 - [x] **B11** the repair recorded in `phase_a.json` verified rather than trusted: no measured field
@@ -443,9 +445,13 @@ there was omission, not misstatement.
       back. Three build gates stop it before it can produce numbers: no build may reconfigure,
       `libggml-base.so` must be identical across all four, and the two controls must be
       byte-identical in `libggml-cuda.so` while both forced builds must differ from them.
-- [ ] **D2** extended cap. Design verified, no code change: `--max-tokens 1600` on the host that
-      produced the file. 1600 because the densest prompt is 1.37 chars/token against a
-      1537-character threshold. The control is free: divergence is deterministic, 150 of 150.
+- [x] **D2** extended cap. `--max-tokens 1600` on the host that produced the file; 1600 because the
+      densest prompt is 1.37 chars/token against a 1537-character threshold. Run as
+      `results/phase_a_cap1600.json`, 525 records, 21 of 21 arm-passes, 2 incidents. Right-censoring
+      260 of 750 -> **9 of 375**, EOS 0 of 875 -> **267 of 525**, latest fork 334 -> **1396**, still
+      0 exact identities, partition unchanged. The free control held: 125 of 125 repeated cells
+      agree. Pointing the readers at the file exposed three defects in them, all fixed with tests
+      (Correction 33). Not carried over: the same-tree `baseline@pr27342` divergence control.
 - [ ] **D3** Phase B - `n_max` crossed with `p_min`. The only design here that can separate
       drafted volume from rejection volume, and therefore the only one that can identify the
       rollback components A2 leaves open.

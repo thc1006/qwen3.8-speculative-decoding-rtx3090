@@ -61,7 +61,7 @@ and the exact energy magnitude are.
 | **Which n-max?** | **2** for both, on the completed ladder. For `draft-mtp` it is the highest of the eight depths tested and has a slower tested point on each side. For `draft-dflash` it is the highest of the four tested, 1.7 points above `n-max=4`, but it is also the shallowest DFlash2 depth in the ladder, so it is not bracketed, and no direct paired interval between 2 and 4 has been computed. |
 | **Does DFlash2 beat the built-in MTP head?** | Not on the best point estimate: **+58.8 %** for MTP `n-max=2` against **+53.7 %** for DFlash2 `n-max=2` on the same ladder. This is not a paired test between the two methods, and they run on different llama.cpp trees against their own matched baselines. At the 80 K depth rung the ordering reverses, on overlapping intervals. |
 | **Energy, or just time?** | Both, in direction, and the direction is smaller than it first read. Board telemetry puts decode energy for a 400-token answer at **-37 %** (3980 -> 2503 J); two characterised effects bias the relative comparison in the same direction, and applying both as a sensitivity adjustment brings it nearer **-35 %**. That is a sensitivity-adjusted estimate, not a counter-based correction. All current telemetry sensitivity checks preserve the direction; the magnitude stays provisional until a hardware energy counter is read. Details below. |
-| **Bit-exact with serial greedy decoding?** | **No.** Depending on the arm, 76-80 % of requests had diverged **by output token 400**. Every request hit the token cap and none reached EOS, so the rest are right-censored: no divergence was observed inside the window, which is not identity through to the end of an answer. The divergence is deterministic and reproduces exactly across passes. |
+| **Bit-exact with serial greedy decoding?** | **No.** Re-run with the generation cap raised to 1600 tokens, **92-100 % of requests diverge** depending on the arm, and 267 of 525 records stop at EOS rather than on the cap. Right-censoring falls from 260 of 750 records at a 400-token cap to **9 of 375**; those 9 mean no divergence was observed inside the window, which is not identity through to the end of an answer. The divergence is deterministic and reproduces exactly across passes, 125 of 125 repeated cells. |
 | **Why does deeper drafting stop paying?** | Each extra verified position costs **c ~ 0.25-0.29** of a plain decode step across the whole speculative cycle, while accepted length shows diminishing increments. Over the measured clock intervals the baseline is the more memory-clock-sensitive workload and the speculative arms the more SM-clock-sensitive ones. That is a response measurement, not a roofline or a per-kernel bottleneck attribution. |
 | **Does the predecessor's negative result transfer?** | **Data complete, causal and cost interpretation withheld.** Phase M ran both targets in one session, 1575 records, 0 incidents. In the per-protocol series the built-in MTP head has positive point estimates on both targets (MoE **+29.2 %**, dense **+59.5 %** at n-max 2) and the 0.8B `draft-simple` arms negative ones on both (MoE -59.6 % to -70.8 %, dense -28.8 % to -34.9 %). Three things stop that from becoming a mechanism. The preregistered replication anchor **does not hold** (-65.6 % against a registered -32 % to -12 %), and the phase's own gate says nothing in it may then be read as a statement about the predecessor. 33 records are excluded from the per-protocol series for stopping before the token cap; they are one prompt, `zh_self_intro`, across all three passes of all eleven MoE arms including `baseline-moe`, so the MoE half is estimated on 24 of 25 prompts rather than on a treatment-correlated subset -- balanced, but still an exclusion decided by an outcome, and the analyser computes an intention-to-treat series it does not yet tabulate. And the `mean_len` derivation every cost quantity rests on **fails its own integrity check on this phase**: mean gap -0.3494, worst 2.9054 over 1425 requests, against a documented bound of under 1 %. `k`, `c`, `k0`, the marginal-cost equality and the per-cycle fixed-cost ratio are therefore withdrawn from this README; `cost_model.py` now refuses to print them for a result that fails that check. |
 | **Which prompts benefit?** | Within this suite, code and reasoning most, the Chinese tasks least - and `dflash2-n7` is **+22.6 % overall while having negative point estimates in three of the five declared classes**. Thinking mode is collinear with the reason class and the Chinese prompts are different tasks rather than translations, so these are differences between the selected prompts, not language or class effects. |
@@ -197,12 +197,19 @@ Derivation, the dispatch boundary, and what `k` does and does not identify:
 
 ### Greedy output divergence
 
-Depending on the arm, **76-80 % of requests had diverged from serial greedy decoding by output
-token 400**, deterministically and identically across passes. Every request hit the cap and none
-reached EOS, so the rest are right-censored rather than proven identical. The first-divergence and censoring signatures form stable groups by
-effective verification width rather than by drafter within the 400-token window, but about a fifth of each group's agreement is two arms
-both failing to diverge inside the window, and the four-build intervention falsifies the tested `calc_nwarps` change as
-the cause of the grouping.
+At a 400-token cap **76-80 % of requests had diverged from serial greedy decoding**, and every
+request hit that cap without reaching EOS, so the rest were right-censored rather than identical.
+Re-running the same prompts and arms at **1600 tokens** resolves most of that: divergence reaches
+**100 % for dflash2-n4, dflash2-n7 and mtp-n5**, 96 % for mtp-n2 and 92 % for mtp-n3; 267 of 525
+records now stop at EOS; and censoring falls to **9 of 375 records on 2 of 25 prompts**. It is
+deterministic and identical across passes at both caps, 150 of 150 and 125 of 125 repeated cells.
+
+The first-divergence signatures form stable groups by effective verification width rather than by
+drafter, **{3,4} and {5,6,8} at both caps**. Widths are grouped only on prompts where both actually
+diverged: at 400 that was 19-20 of 25 prompts per pair, at 1600 it is 23 of 25 for widths 3 and 4
+and all 25 for the rest, so the larger budget leaves the same partition resting on more evidence.
+The four-build intervention still falsifies the tested `calc_nwarps` change as the cause of the
+grouping.
 
 The matrix, the censoring accounting and the width partition:
 [`docs/GREEDY_DIVERGENCE.md`](docs/GREEDY_DIVERGENCE.md).
@@ -355,9 +362,11 @@ the numbers:
   cluster bootstrap undercovers at that size (88.0-90.9 % against a nominal 95 %), so the printed
   intervals are too narrow, and none of them carry uncertainty from changing host, card, build,
   model or prompt population.
-- **Output agreement is right-censored.** Every primary request hit the token cap and none reached
-  EOS. A record counted as identical means no divergence was observed within 400 tokens; it is not
-  a statement about the whole answer.
+- **Output agreement is right-censored, much less so since the cap was raised.** At a 400-token cap
+  every primary request hit the cap and none reached EOS. The 1600-token re-run leaves 9 of 375
+  records censored and 267 of 525 reaching EOS. Those 9 still mean no divergence was observed
+  within 1600 tokens; they are not a statement about the whole answer. The re-run computed no
+  divergence for the same-tree `baseline@pr27342` control, so that check exists only at 400.
 - **No semantic-quality benchmark.** The harness measures byte-level divergence and obvious
   degeneration. Whether a diverged answer is better, worse or equivalent is not tested.
 - **Dual-tree interaction.** Same-tree baselines control the branch's no-speculation main effect.

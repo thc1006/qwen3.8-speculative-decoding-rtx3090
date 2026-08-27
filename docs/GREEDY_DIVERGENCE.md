@@ -59,11 +59,17 @@ the window in characters and reported 15 of 25 prompts censored, with the partit
 the 10 that were not. The design fixes the window in tokens, and characters per token span 1.36 to
 6.17 across these prompts, so that split was an artefact of the wrong unit. Measured in tokens,
 `harness/truncation_audit.py` gives 490 of 750 Phase A records diverged, 260 right-censored, and
-**0 that reached EOS**. No record anywhere in this study stopped on its own, so no identity here is
-exact: every one means "did not diverge within 400 tokens". There is no clean subset, because the
-censoring is uniform, and the robustness check the earlier text claimed cannot be run on this data
-at all. Forks resolve between token 6 and token 334, the latest at 83 % of the window. What settles
-it is a larger budget, which is TODO.md item D2.
+**0 that reached EOS**: at that cap no record anywhere stopped on its own, so no identity was
+exact and every one meant "did not diverge within 400 tokens". There was no clean subset, because
+the censoring was uniform, and the robustness check the earlier text claimed could not be run on
+that data at all. Forks resolved between token 6 and token 334, the latest at 83 % of the window.
+
+The larger budget that settles it has since been run (`results/phase_a_cap1600.json`, cap 1600,
+Correction 33). Right-censoring falls to **9 of 375 records** on 2 of 25 prompts, **267 of 525
+records reach EOS**, and forks resolve as late as token 1396. Divergence per arm rises to 100 %
+for dflash2-n4, dflash2-n7 and mtp-n5, 96 % for mtp-n2 and 92 % for mtp-n3. Still **0 exact
+identities**: of the records that ran to EOS, not one matched its baseline. The width partition
+{3,4} / {5,6,8} is unchanged and rests on more determined cells than before.
 
 This corroborates [llama.cpp #25618](https://github.com/ggml-org/llama.cpp/issues/25618) rather
 than discovering anything: that thread already establishes the phenomenon, its
