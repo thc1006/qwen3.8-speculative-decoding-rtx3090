@@ -4217,5 +4217,153 @@ class TheWindowIsTheCapNotTheOutputLength(unittest.TestCase):
         self.assertFalse(TA.reached_eos({"finish_reason": "length"}))
 
 
+class AProvenanceCheckThatResolvesNothing(unittest.TestCase):
+    """Three of `compare_reproduction`'s provenance paths did not exist in any result file.
+
+    `design.kernel_facts.master.commit`, `env.llama_commit` and `env.driver`. `dig` returned None
+    for both sides, None equals None, and the table printed three reassuring rows for fields
+    nobody was comparing. A provenance check that resolves nothing is worse than none, because it
+    looks like one.
+    """
+
+    def _files(self, mutate_candidate=None):
+        import json, tempfile, os
+        base = {
+            "arms": {"base@m": {"tree": "master", "extra_args": []},
+                     "spec": {"tree": "master", "extra_args": ["--spec-draft-n-max", "2"]}},
+            "records": [{"arm": a, "prompt": p, "class": c, "pass": q, "decode_tok_s": v,
+                         "hit_cap": True, "finish_reason": "length"}
+                        for p, c in (("p1", "code"), ("p2", "prose"))
+                        for q in (1, 2)
+                        for a, v in (("base@m", 40.0), ("spec", 64.0))],
+            "incidents": [],
+            "env": {"llama_cpp_revisions": {"master": "abc1234"}, "model_sha256": "aa",
+                    "model_size_bytes": 1, "model": "/m.gguf", "gpu": "RTX 3090, 610.43.02",
+                    "overclock_state": {"power_limit_w": 420.0}, "kernel": "k",
+                    "python": "3.13.5", "host": "h"},
+            "design": {"max_tokens": 400, "passes": 2, "n_prompts": 2,
+                       "device": {"name": "RTX 3090"}},
+            "matrix": {"file_sha256": "m1"},
+        }
+        out = []
+        for i in range(2):
+            d = json.loads(json.dumps(base))
+            if i == 1 and mutate_candidate:
+                mutate_candidate(d)
+            fh = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+            json.dump(d, fh)
+            fh.close()
+            self.addCleanup(lambda n=fh.name: os.unlink(n))
+            out.append(fh.name)
+        return out
+
+    def _run(self, mutate=None, *flags):
+        import subprocess
+        a, b = self._files(mutate)
+        r = subprocess.run([sys.executable, str(Path(__file__).parent / "compare_reproduction.py"),
+                            a, b, *flags], capture_output=True, text=True)
+        return r.returncode, r.stdout + r.stderr
+
+    def test_every_declared_provenance_path_resolves(self):
+        import compare_reproduction as CR
+        d = json.loads(Path(__file__).parent.parent.joinpath(
+            "results/phase_a.json").read_text()) if False else None
+        # Against the fixture rather than a committed result, so the test does not depend on a
+        # 60 MB file being present, but the point is the same: every path must reach a value.
+        a, _ = self._files()
+        d = json.loads(Path(a).read_text())
+        dead = [label for label, path in CR.PROVENANCE if CR.dig(d, path) is None]
+        self.assertFalse(dead, f"these provenance paths resolve to nothing: {dead}")
+
+    def test_two_identical_runs_compare_clean(self):
+        rc, out = self._run()
+        self.assertEqual(rc, 0, out)
+        self.assertIn("consistent with a reproduction", out)
+
+    def test_a_provenance_difference_is_a_problem(self):
+        rc, out = self._run(lambda d: d["env"].update(model_sha256="bb"))
+        self.assertEqual(rc, 1)
+        self.assertIn("provenance differs", out)
+
+    def test_an_incident_fails_by_default_and_can_be_allowed(self):
+        inc = lambda d: d["incidents"].append({"kind": "host_contended", "arm": "base@m",
+                                               "pass": 1, "detail": "python3 99%"})
+        self.assertEqual(self._run(inc)[0], 1)
+        self.assertEqual(self._run(inc, "--allow-incidents")[0], 0)
+
+    def test_a_different_effect_fails(self):
+        def slower(d):
+            for r in d["records"]:
+                if r["arm"] == "spec":
+                    r["decode_tok_s"] = 90.0
+        rc, out = self._run(slower)
+        self.assertEqual(rc, 1)
+        self.assertIn("do not overlap", out)
+
+    def test_overlap_is_not_reported_as_agreement(self):
+        _, out = self._run()
+        self.assertIn("failure to exclude", out,
+                      "Correction 26: two intervals that overlap have failed to exclude each "
+                      "other, which is weaker than agreement and must not be printed as it")
+
+
+class TheRegistryDeclaresAVocabularyAndMustEnforceIt(unittest.TestCase):
+    """`inference` is documented as a controlled vocabulary and nothing checked it.
+
+    `INFERENCE.get(value, value)` fell back to printing whatever was there, so a typo would have
+    reached the README verbatim with nothing raised.
+    """
+
+    def _reg(self, mutate=None):
+        import copy, json
+        import render_evidence as RE
+        reg = json.loads(RE.REGISTRY.read_text())
+        if mutate:
+            mutate(reg)
+        return reg
+
+    def test_the_committed_registry_is_valid(self):
+        import render_evidence as RE
+        RE.validate(self._reg())
+
+    def test_an_unknown_inference_value_is_refused(self):
+        import render_evidence as RE
+        with self.assertRaises(SystemExit) as cm:
+            RE.validate(self._reg(lambda r: r["phases"][0].update(inference="reportd")))
+        self.assertIn("reportd", str(cm.exception))
+
+    def test_a_duplicate_phase_id_is_refused(self):
+        import copy
+        import render_evidence as RE
+        with self.assertRaises(SystemExit) as cm:
+            RE.validate(self._reg(lambda r: r["phases"].append(copy.deepcopy(r["phases"][0]))))
+        self.assertIn("duplicate", str(cm.exception))
+
+    def test_a_phase_with_no_results_is_refused(self):
+        import render_evidence as RE
+        with self.assertRaises(SystemExit):
+            RE.validate(self._reg(lambda r: r["phases"][0].update(results=[])))
+
+    def test_every_result_file_is_claimed_by_exactly_one_entry(self):
+        import glob, json, pathlib
+        import render_evidence as RE
+        reg = self._reg()
+        skip = reg.get("skip_patterns") or []
+        root = Path(__file__).parent.parent
+        claimed = {}
+        for phase in reg["phases"]:
+            for pat in phase["results"]:
+                for p in glob.glob(str(root / pat)):
+                    if any(s in pathlib.Path(p).name for s in skip):
+                        continue
+                    claimed.setdefault(p, []).append(phase["id"])
+        on_disk = [p for p in glob.glob(str(root / "results/phase_*.json"))
+                   if not any(s in pathlib.Path(p).name for s in skip)]
+        unclaimed = sorted(pathlib.Path(p).name for p in on_disk if p not in claimed)
+        self.assertFalse(unclaimed, f"no registry entry claims: {unclaimed}")
+        twice = {pathlib.Path(p).name: v for p, v in claimed.items() if len(v) > 1}
+        self.assertFalse(twice, f"claimed more than once, records would double-count: {twice}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
