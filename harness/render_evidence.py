@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -137,7 +138,13 @@ def main() -> int:
             print("   " + line, file=sys.stderr)
         return 1
 
-    README.write_text(new)
+    # Write beside the target and rename, rather than truncating the README and writing into it.
+    # `os.replace` is atomic within a filesystem, so a crash leaves the old README rather than half
+    # of a new one. The same fix went into post_measurement.sh's two `cmd > committed_artifact`
+    # redirects, which truncated the file before the command that fills it had run at all.
+    tmp = README.with_suffix(".md.tmp")
+    tmp.write_text(new)
+    os.replace(tmp, README)
     print("   evidence block rewritten from the result files")
     return 0
 

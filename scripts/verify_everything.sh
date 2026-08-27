@@ -135,54 +135,55 @@ for h in hits:
 raise SystemExit(1 if hits else 0)
 PY
 
-hdr "6. the README says about each phase what its result file says"
-# Phase B's 525 records were committed and the README kept a "**Running:**" line above them
-# for a day, with no row for the phase in the table at all. Phase R has 1125 records and had
-# no row either, which is how this check found it. A status sentence is a claim like any other.
-python3 - <<'PY' || bad "the README's phase status disagrees with a committed result"
-import json, pathlib, re, sys
+hdr "6. every result file is claimed by the evidence registry"
+python3 - <<'PY' || bad "a result file or a registry entry is unaccounted for"
+import glob, json, pathlib, re, sys
 
-# Result file -> the label its row carries in the README's later-phases table. Explicit because
-# deriving it from the filename would guess wrong on `qsmall`, `nmax` and the depth rungs, and a
-# check that guesses is a check that fires on the wrong thing.
-ROWS = {
-    "phase_b": "B", "phase_c": "C", "phase_m": "M", "phase_r": "R", "phase_r2": "R2",
-    "phase_kv": "KV", "phase_nmax": "n-max", "phase_v": "V", "phase_q_": "Q",
-    "phase_qsmall_": "Qs", "phase_l_": "L",
-}
+# Every result file has to be claimed by an entry in evidence/registry.json, and every entry has
+# to point at files that exist. The first version of this check matched result filenames against
+# the bold labels of the README's later-phases table, which put a hole exactly where the primary
+# result is: there was no `phase_a` prefix in the map, so Phase A, the extended-cap run and the
+# host-B replication were all unchecked, and `phase_a_cap1600.rerun.json` would have been invisible
+# to the generated evidence block without anything noticing.
+reg = json.loads(pathlib.Path("evidence/registry.json").read_text())
+skip = reg.get("skip_patterns") or []
 readme = pathlib.Path("README.md").read_text()
 problems = []
 
-# 1. Nothing described as running may have a finished result file. Phase B sat under a
-#    "**Running:**" line for a day after its 525 records were committed, and nothing noticed.
+claimed = {}
+for phase in reg["phases"]:
+    hits = []
+    for pat in phase["results"]:
+        hits += [p for p in glob.glob(pat) if not any(s in pathlib.Path(p).name for s in skip)]
+    if not hits:
+        problems.append(f"registry entry {phase['id']} matches no result file: {phase['results']}")
+    for h in hits:
+        claimed.setdefault(h, []).append(phase["id"])
+
+on_disk = [p for p in sorted(glob.glob("results/phase_*.json"))
+           if not any(s in pathlib.Path(p).name for s in skip)]
+for p in on_disk:
+    if p not in claimed:
+        problems.append(f"{p} is not claimed by any registry entry")
+for p, ids in claimed.items():
+    if len(ids) > 1:
+        problems.append(f"{p} is claimed by {ids}; its records would be counted twice")
+
+# Nothing described as running may have a finished result file. Phase B sat under a "**Running:**"
+# line for a day after its 525 records were committed.
 for m in re.finditer(r"\*\*Running:\*\*\s*Phase\s+([A-Za-z0-9-]+)", readme):
     letter = m.group(1)
-    for stem, row in ROWS.items():
-        if row.lower() != letter.lower():
+    for phase in reg["phases"]:
+        if phase["id"].lower() != letter.lower():
             continue
-        for p in pathlib.Path("results").glob(f"{stem}*.json"):
-            if ".partial." in p.name:
-                continue
-            d = json.loads(p.read_text())
-            n = len(d.get("records") or [])
-            if n:
-                problems.append(f"README calls Phase {letter} running; {p} holds {n} records")
+        for pat in phase["results"]:
+            for p in glob.glob(pat):
+                n = len(json.loads(pathlib.Path(p).read_text()).get("records") or [])
+                if n:
+                    problems.append(f"README calls Phase {letter} running; {p} holds {n} records")
 
-# 2. Every completed result must have a row. The table had no Phase B row at all.
-have = set()
-for p in sorted(pathlib.Path("results").glob("phase_*.json")):
-    if ".partial." in p.name or "dryrun" in p.name:
-        continue
-    for stem, row in ROWS.items():
-        if p.name.startswith(stem):
-            have.add(row)
-            break
-rows_present = set(re.findall(r"^\|\s*\*\*([A-Za-z0-9-]+)\*\*\s*\|", readme, re.M))
-for row in sorted(have):
-    if row not in rows_present:
-        problems.append(f"a result exists for Phase {row} and the later-phases table has no row for it")
-
-print(f"   {len(have)} phases with committed results, {len(problems)} status mismatches")
+print(f"   {len(on_disk)} result files, {len(reg['phases'])} registry entries, "
+      f"{len(problems)} mismatches")
 for x in problems:
     print("   FAIL:", x)
 raise SystemExit(1 if problems else 0)

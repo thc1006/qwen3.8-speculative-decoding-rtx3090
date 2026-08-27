@@ -15,12 +15,18 @@
     "  control       exists to check another phase, not to answer a question of its own",
     "  not-evaluable the run happened and the question could not be answered from it"
   ],
-  "skip_patterns": [".partial.", "dryrun_", ".pre_repair."],
+  "skip_patterns": [
+    ".partial.",
+    "dryrun_",
+    ".pre_repair."
+  ],
   "phases": [
     {
       "id": "A",
       "question": "does speculative decoding pay on one RTX 3090 at 8K context, single stream, greedy?",
-      "results": ["results/phase_a.json"],
+      "results": [
+        "results/phase_a.json"
+      ],
       "inference": "primary",
       "forbidden": [
         "representative deployment traffic: the 25 prompts were purposively constructed",
@@ -30,23 +36,41 @@
     {
       "id": "A-1600",
       "question": "do the divergence verdicts survive a generation cap four times longer?",
-      "results": ["results/phase_a_cap1600.json"],
+      "results": [
+        "results/phase_a_cap1600.json"
+      ],
       "inference": "reported",
       "forbidden": [
         "throughput: two host_contended incidents leave this file marked FAIL by the audit"
       ]
     },
     {
+      "id": "A-1600-rerun",
+      "question": "the same extended-cap run again, with nothing else competing for the host",
+      "results": [
+        "results/phase_a_cap1600.rerun.json"
+      ],
+      "inference": "reported",
+      "note": "supersedes A-1600, which carries two host_contended incidents from another session's mutation suite; whether the older file stays on as the record of that contention is not decided here",
+      "forbidden": []
+    },
+    {
       "id": "A-hostB",
       "question": "does the width partition hold on a second card?",
-      "results": ["results/phase_a_hostB.json"],
+      "results": [
+        "results/phase_a_hostB.json"
+      ],
       "inference": "association",
-      "forbidden": ["absolute tok/s pooled with Phase A: different host"]
+      "forbidden": [
+        "absolute tok/s pooled with Phase A: different host"
+      ]
     },
     {
       "id": "B",
       "question": "under confidence gating, does the overhead scale with tokens drafted or tokens rejected?",
-      "results": ["results/phase_b.json"],
+      "results": [
+        "results/phase_b.json"
+      ],
       "inference": "exploratory",
       "note": "H2 and H2' and the arm design were in the initial commit; the model comparison was committed before the run finished; the forward-count robustness sweep was added after the data",
       "forbidden": [
@@ -58,7 +82,9 @@
     {
       "id": "C",
       "question": "does drafter quantization change the answer, and does the predecessor's v3.0 need an erratum?",
-      "results": ["results/phase_c.json"],
+      "results": [
+        "results/phase_c.json"
+      ],
       "inference": "reported",
       "forbidden": [
         "a demonstrated separation between two drafter precisions: no paired interval was computed",
@@ -68,14 +94,18 @@
     {
       "id": "KV",
       "question": "does the width partition survive an f16 cache, or was it an artefact of q8_0?",
-      "results": ["results/phase_kv.json"],
+      "results": [
+        "results/phase_kv.json"
+      ],
       "inference": "control",
       "forbidden": []
     },
     {
       "id": "L",
       "question": "does the long-context decode collapse of llama.cpp #27623 reproduce on sm_86, and does speculation survive it?",
-      "results": ["results/phase_l_*.json"],
+      "results": [
+        "results/phase_l_*.json"
+      ],
       "inference": "reported",
       "forbidden": [
         "a refutation of #27623: that report is a different architecture, quantization and software stack",
@@ -86,7 +116,9 @@
     {
       "id": "M",
       "question": "does draft-mtp at small n-max escape the penalty a 0.8B draft-simple at n-max 8 suffers, and does the architecture decide it?",
-      "results": ["results/phase_m.json"],
+      "results": [
+        "results/phase_m.json"
+      ],
       "inference": "reported",
       "note": "the preregistered replication anchor does not hold, and the phase's own gate then forbids reading it as a statement about the predecessor",
       "forbidden": [
@@ -98,14 +130,18 @@
     {
       "id": "n-max",
       "question": "the full width ladder, 2 to 9, for the CUDA boundary question",
-      "results": ["results/phase_nmax.json"],
+      "results": [
+        "results/phase_nmax.json"
+      ],
       "inference": "reported",
       "forbidden": []
     },
     {
       "id": "Q",
       "question": "does target quantization move the marginal cost of a verified position?",
-      "results": ["results/phase_q_*.json"],
+      "results": [
+        "results/phase_q_*.json"
+      ],
       "inference": "association",
       "forbidden": [
         "a causal reading: the two rungs ran in different sessions",
@@ -115,7 +151,9 @@
     {
       "id": "Qs",
       "question": "does the bf16 anchor #25618 rests on hold, and does #26750's CUDA acceptance figure reproduce on a second CUDA architecture?",
-      "results": ["results/phase_qsmall_*.json"],
+      "results": [
+        "results/phase_qsmall_*.json"
+      ],
       "inference": "association",
       "forbidden": [
         "agreement or disagreement with #26750: the estimator and prompt population are not known to match",
@@ -126,7 +164,9 @@
     {
       "id": "R",
       "question": "which clock does each workload actually respond to?",
-      "results": ["results/phase_r.json"],
+      "results": [
+        "results/phase_r.json"
+      ],
       "inference": "reported",
       "forbidden": [
         "a roofline or per-kernel bottleneck attribution: these are response measurements",
@@ -136,14 +176,20 @@
     {
       "id": "R2",
       "question": "does the compute elasticity hold with the SM clock pinned rather than power-capped?",
-      "results": ["results/phase_r2.json"],
+      "results": [
+        "results/phase_r2.json"
+      ],
       "inference": "reported",
-      "forbidden": ["a roofline or per-kernel bottleneck attribution"]
+      "forbidden": [
+        "a roofline or per-kernel bottleneck attribution"
+      ]
     },
     {
       "id": "V",
       "question": "does the sign survive a move from llama.cpp to vLLM?",
-      "results": ["results/phase_v.json"],
+      "results": [
+        "results/phase_v.json"
+      ],
       "inference": "not-evaluable",
       "note": "both MTP arms fail during server start on 24 GiB; the baseline served",
       "forbidden": [
@@ -154,7 +200,9 @@
     {
       "id": "warp",
       "question": "does forcing calc_nwarps move the fork positions the partition follows?",
-      "results": ["results/phase_warp_*.json"],
+      "results": [
+        "results/phase_warp_*.json"
+      ],
       "inference": "control",
       "note": "four builds of one revision differing only in the GENERIC warp table, plus an A6000 replication",
       "forbidden": [
