@@ -135,7 +135,60 @@ for h in hits:
 raise SystemExit(1 if hits else 0)
 PY
 
-hdr "6. generated reports still match the analyser that writes them"
+hdr "6. the README says about each phase what its result file says"
+# Phase B's 525 records were committed and the README kept a "**Running:**" line above them
+# for a day, with no row for the phase in the table at all. Phase R has 1125 records and had
+# no row either, which is how this check found it. A status sentence is a claim like any other.
+python3 - <<'PY' || bad "the README's phase status disagrees with a committed result"
+import json, pathlib, re, sys
+
+# Result file -> the label its row carries in the README's later-phases table. Explicit because
+# deriving it from the filename would guess wrong on `qsmall`, `nmax` and the depth rungs, and a
+# check that guesses is a check that fires on the wrong thing.
+ROWS = {
+    "phase_b": "B", "phase_c": "C", "phase_m": "M", "phase_r": "R", "phase_r2": "R2",
+    "phase_kv": "KV", "phase_nmax": "n-max", "phase_v": "V", "phase_q_": "Q",
+    "phase_qsmall_": "Qs", "phase_l_": "L",
+}
+readme = pathlib.Path("README.md").read_text()
+problems = []
+
+# 1. Nothing described as running may have a finished result file. Phase B sat under a
+#    "**Running:**" line for a day after its 525 records were committed, and nothing noticed.
+for m in re.finditer(r"\*\*Running:\*\*\s*Phase\s+([A-Za-z0-9-]+)", readme):
+    letter = m.group(1)
+    for stem, row in ROWS.items():
+        if row.lower() != letter.lower():
+            continue
+        for p in pathlib.Path("results").glob(f"{stem}*.json"):
+            if ".partial." in p.name:
+                continue
+            d = json.loads(p.read_text())
+            n = len(d.get("records") or [])
+            if n:
+                problems.append(f"README calls Phase {letter} running; {p} holds {n} records")
+
+# 2. Every completed result must have a row. The table had no Phase B row at all.
+have = set()
+for p in sorted(pathlib.Path("results").glob("phase_*.json")):
+    if ".partial." in p.name or "dryrun" in p.name:
+        continue
+    for stem, row in ROWS.items():
+        if p.name.startswith(stem):
+            have.add(row)
+            break
+rows_present = set(re.findall(r"^\|\s*\*\*([A-Za-z0-9-]+)\*\*\s*\|", readme, re.M))
+for row in sorted(have):
+    if row not in rows_present:
+        problems.append(f"a result exists for Phase {row} and the later-phases table has no row for it")
+
+print(f"   {len(have)} phases with committed results, {len(problems)} status mismatches")
+for x in problems:
+    print("   FAIL:", x)
+raise SystemExit(1 if problems else 0)
+PY
+
+hdr "7. generated reports still match the analyser that writes them"
 # `analysis/phase_m_anchor.txt` reported -72.3 % for days, the pooled median, while the README
 # and the analyser both reported -65.6 % -- and the analyser states in the same breath that only
 # the class-stratified primary may be compared against the registered band. Nothing could see
@@ -153,7 +206,7 @@ else
   printf '   phase_m_anchor.txt regenerates byte-identical\n'
 fi
 
-hdr "7. the GPU is where the runs left it"
+hdr "8. the GPU is where the runs left it"
 # Through the module's own API. `python3 harness/gpustate.py --check` was here, and gpustate.py
 # has no __main__ and no argparse: it imported, did nothing, exited 0, and the fallback after the
 # || never ran. A section that reported nothing and passed.
