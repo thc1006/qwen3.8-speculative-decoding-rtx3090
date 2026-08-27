@@ -36,7 +36,7 @@ hdr "2. every committed result, audited"
 python3 harness/audit_results.py || bad "audit_results reported a problem"
 
 hdr "3. documents link only at paths a clone would have"
-python3 - <<'PY' || exit 1
+python3 - <<'PY' || bad "a document links at a path a clone would not have"
 import re, pathlib, subprocess, sys
 tracked = set(subprocess.check_output(["git", "ls-files"], text=True).split("\n")) - {""}
 dirs = {"/".join(t.split("/")[:i]) for t in tracked for i in range(1, len(t.split("/")))}
@@ -62,7 +62,7 @@ PY
 [ $? -ne 0 ] && bad "a document links at an untracked path"
 
 hdr "4. the README's numbers against the result files"
-python3 - <<'PY'
+python3 - <<'PY' || bad "a README number does not match the result files"
 import json, collections, statistics, sys
 sys.path.insert(0, "harness")
 import stats as ST
@@ -76,18 +76,37 @@ def strat(a):
     for p, v in per[a].items():
         byc[cls[p]].append(statistics.fmean(v))
     return ST.stratified_mean(byc)
-base = strat("baseline@master")
+# Each arm against the baseline built from its own tree. Every arm was compared against
+# `baseline@master`, including the two DFlash2 arms that run on PR #27342, which charges the
+# branch's own no-speculation difference to the method. The two baselines agree to 0.008 % here,
+# so it moved the DFlash2 figures by 0.01 points and the mistake sat behind a coincidence of this
+# run rather than anything the design guarantees.
+meta = d.get("arms", {})
+base_of = {(m or {}).get("tree"): a for a, m in meta.items() if not (m or {}).get("extra_args")}
 readme = open("README.md").read()
-print(f"   baseline {base:.2f} tok/s, quoted in README: {'41.55' in readme}")
+problems = []
+base = strat(base_of.get("master", "baseline@master"))
+quoted = "41.55" in readme
+if not quoted:
+    problems.append("the baseline tok/s figure is no longer quoted in the README")
+print(f"   baseline {base:.2f} tok/s, quoted in README: {quoted}")
 for arm, pct in (("mtp-n2", 59.8), ("mtp-n3", 52.3), ("dflash2-n4", 51.9),
                  ("mtp-n5", 32.1), ("dflash2-n7", 22.6)):
-    got = (strat(arm) / base - 1) * 100
+    ref = base_of.get((meta.get(arm) or {}).get("tree"))
+    if ref is None:
+        problems.append(f"{arm}: no baseline in its own tree")
+        continue
+    got = (strat(arm) / strat(ref) - 1) * 100
     ok = abs(got - pct) < 0.1 and f"+{pct} %" in readme
-    print(f"   {arm:12s} recomputed {got:+.2f} %, README says +{pct} %  {'ok' if ok else 'MISMATCH'}")
+    if not ok:
+        problems.append(f"{arm}: recomputed {got:+.2f} % against {ref}, README says +{pct} %")
+    print(f"   {arm:12s} vs {ref:16s} recomputed {got:+.2f} %, README says +{pct} %  "
+          f"{'ok' if ok else 'MISMATCH'}")
+raise SystemExit(1 if problems else 0)
 PY
 
 hdr "5. no committed document carries a withdrawn claim"
-python3 - <<'PY'
+python3 - <<'PY' || bad "a committed document carries a withdrawn claim"
 import subprocess, pathlib
 claims = ("not the architecture", "sign belongs to the drafting method",
           "rules out a large architecture effect", "flag was accepted and did nothing",
@@ -113,6 +132,7 @@ for f in files:
 print(f"   {len(files)} documents scanned, {len(hits)} residual claims")
 for h in hits:
     print("   FAIL:", h)
+raise SystemExit(1 if hits else 0)
 PY
 
 hdr "6. the GPU is where the runs left it"
