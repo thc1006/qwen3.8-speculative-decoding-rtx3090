@@ -4008,6 +4008,52 @@ class CensoredCellsDoNotPartition(unittest.TestCase):
                          "evidence of different fork positions:\n" + groups)
 
 
+class TheExpectedRecordCountIsComputedOnce(unittest.TestCase):
+    """`completeness` and `audit_results` each subtracted the may_fail arm-passes.
+
+    Phase V has three arms over three passes against 25 prompts, so 225 records were designed and
+    six arm-passes of two `may_fail` vLLM arms recorded a startup failure instead of running: 150
+    records that were never going to exist, and 75 that should. `completeness` subtracts them and
+    `audit_results` subtracted them again, giving an expectation of **-75** and reporting the 75
+    real records as "more than the design". The second subtraction also counted every failed
+    arm-pass rather than only those of a may_fail arm, so the two were not even the same quantity.
+    """
+
+    def _file(self):
+        import tempfile, os
+        arms = {"ok": {}, "mtp-k1": {"may_fail": True}, "mtp-k2": {"may_fail": True}}
+        failed = {f"pass{q}_{a}": "vllm exited with 1 during startup"
+                  for q in (1, 2, 3) for a in ("mtp-k1", "mtp-k2")}
+        recs = [{"arm": "ok", "prompt": f"p{i}", "pass": q, "decode_tok_s": 40.0}
+                for q in (1, 2, 3) for i in range(25)]
+        d = {"design": {"n_prompts": 25, "passes": 3}, "arms": arms,
+             "arm_pass_failed": failed, "records": recs}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as th:
+            json.dump(d, th)
+            tmp = th.name
+        self.addCleanup(lambda: os.unlink(tmp))
+        return d, tmp
+
+    def test_the_two_readers_cannot_disagree(self):
+        import completeness as CP
+        d, tmp = self._file()
+        got, expected, _ = CP.completeness(d)
+        self.assertEqual((got, expected), (75, 75),
+                         "225 designed less the six recorded may_fail arm-passes is 75")
+        self.assertEqual(AR.audit(Path(tmp))["expected"], expected,
+                         "the audit must not subtract the may_fail arm-passes a second time")
+
+    def test_a_negative_expectation_is_never_produced(self):
+        d, tmp = self._file()
+        self.assertGreater(AR.audit(Path(tmp))["expected"], 0,
+                           "a run cannot be designed to produce a negative number of records")
+
+    def test_the_count_is_not_reported_as_over_the_design(self):
+        d, tmp = self._file()
+        over = [f for f in AR.audit(Path(tmp))["fails"] if "more than the design" in f]
+        self.assertFalse(over, "75 of an expected 75 is not more than the design: " + str(over))
+
+
 class ArmsWithoutAForkAreNotAForkGroup(unittest.TestCase):
     """`divergence_report` partitioned arms by fork position and let the no-position states in.
 

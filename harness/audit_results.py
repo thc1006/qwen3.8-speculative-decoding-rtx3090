@@ -54,13 +54,12 @@ def audit(path: Path) -> dict:
         out["fails"].append("no records")
         return out
 
+    # `completeness` subtracts the arm-passes a may_fail arm recorded as failed. This function
+    # used to subtract them a second time, and on Phase V that turned an expectation of 75 into
+    # -75 and reported 75 records as "more than the design". It also counted every failed
+    # arm-pass rather than only the ones belonging to a may_fail arm, so the two subtractions
+    # were not even the same quantity. One place computes it.
     got, expected, note = CP.completeness(d)
-    _mf = {a for a, m in (d.get("arms") or {}).items()
-           if isinstance(m, dict) and m.get("may_fail")}
-    _rf = len(d.get("arm_pass_failed") or {})
-    if expected and _mf and _rf:
-        # the records an arm-pass would have produced had it started
-        expected -= _rf * ((d.get("design") or {}).get("n_prompts") or 0)
     out["expected"] = expected
     if expected and got < expected:
         out["fails"].append(f"{got}/{expected} records")
