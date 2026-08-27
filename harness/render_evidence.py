@@ -72,8 +72,36 @@ def facts(phase, skip):
     return n_files, n_rec, n_exp, n_inc, short
 
 
+def validate(reg):
+    """Raise on a registry the renderer would otherwise pass through unchanged.
+
+    The registry's own comment says `inference` is a controlled vocabulary and not free text. It
+    was not enforced: `INFERENCE.get(value, value)` fell back to printing whatever was there, so
+    `reportd` would have reached the README as `reportd` with nothing raised. A file that declares
+    its own constraint and a reader that does not apply it is the shape of defect this repository
+    keeps finding; it should not be in the thing built to stop it.
+    """
+    seen, problems = set(), []
+    for phase in reg["phases"]:
+        pid = phase.get("id")
+        if not pid:
+            problems.append("a phase has no id")
+            continue
+        if pid in seen:
+            problems.append(f"duplicate phase id {pid!r}: its rows would appear twice")
+        seen.add(pid)
+        inf = phase.get("inference")
+        if inf not in INFERENCE:
+            problems.append(f"{pid}: inference {inf!r} is not one of {sorted(INFERENCE)}")
+        if not phase.get("results"):
+            problems.append(f"{pid}: no result patterns")
+    if problems:
+        raise SystemExit("evidence/registry.json is not valid:\n  " + "\n  ".join(problems))
+
+
 def render(only=None):
     reg = json.loads(REGISTRY.read_text())
+    validate(reg)
     skip = reg.get("skip_patterns") or []
     rows = ["| phase | data, computed from the files | inference |", "|---|---|---|"]
     for phase in reg["phases"]:
