@@ -436,11 +436,15 @@ the numbers:
 
 ## License
 
-Original code in this repository is under the MIT License; see [`LICENSE`](LICENSE). The
-measurement data this study produced -- `results/`, `analysis/`, `repro/` and the committed logs
--- is dedicated to the public domain under CC0; see [`LICENSE-DATA`](LICENSE-DATA). Upstream and
-third-party material, including everything under `upstream/`, the copied source excerpts and the
-patches, keeps its original license; see [`NOTICE`](NOTICE).
+Original code is under the MIT License wherever it sits, including the `.py` files under
+`analysis/` and `repro/`; see [`LICENSE`](LICENSE). The measurement data this study produced --
+the `.json` records, the generated `.txt`, `.csv` and image reports, and the committed logs -- is
+dedicated to the public domain under CC0; see [`LICENSE-DATA`](LICENSE-DATA), which lists it by
+file type. It used to list `analysis/**` and `repro/**` whole, which swept four source files into
+a dedication the next sentence excluded them from. Upstream and third-party material keeps its
+original license: everything under `upstream/`, the copied source excerpts, the patches, and
+`repro/*.bundle`, which carries whole upstream llama.cpp commits rather than excerpts. See
+[`NOTICE`](NOTICE).
 
 ## Author
 
