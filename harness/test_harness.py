@@ -3941,5 +3941,40 @@ class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
         # top level, which is not a defect this file can produce, so it is not asserted.
 
 
+class TheWindowIsTheCapNotTheOutputLength(unittest.TestCase):
+    """`predicted_n` is what a record produced; it equals the cap only for records that hit it.
+
+    While every record hit the 400-token cap the two were the same number and reading the window
+    off the outputs was accidentally right. At 1600 half the records stop on their own, the
+    inferred window fans out into 41 distinct values, `censored_prompts` reports "no single
+    window" and returns None, and width_groups divided by it: TypeError, float / NoneType.
+    """
+
+    def test_the_design_states_the_cap(self):
+        import truncation_audit as TA
+        data = {"design": {"max_tokens": 1600},
+                "records": [{"predicted_n": 634, "finish_reason": "stop"},
+                            {"predicted_n": 1600, "hit_cap": True, "finish_reason": "length"},
+                            {"predicted_n": 640, "finish_reason": "stop"}]}
+        self.assertEqual(TA.budget(data), 1600)
+        self.assertEqual(TA.censored_prompts(data)[1], 1600,
+                         "a run whose records stop at different lengths still has one cap")
+
+    def test_an_older_file_falls_back_to_the_records_that_hit_the_cap(self):
+        import truncation_audit as TA
+        data = {"records": [{"predicted_n": 634, "finish_reason": "stop"},
+                            {"predicted_n": 400, "hit_cap": True, "finish_reason": "length"}]}
+        self.assertEqual(TA.budget(data), 400,
+                         "the records that ran out of budget are the ones whose length is the cap")
+        self.assertIsNone(TA.budget({"records": [{"predicted_n": 12, "finish_reason": "stop"}]}),
+                          "nothing was censored, so no cap is evidenced")
+
+    def test_reaching_eos_is_read_from_either_field(self):
+        import truncation_audit as TA
+        self.assertTrue(TA.reached_eos({"finish_reason": "stop"}))
+        self.assertFalse(TA.reached_eos({"hit_cap": True}))
+        self.assertFalse(TA.reached_eos({"finish_reason": "length"}))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

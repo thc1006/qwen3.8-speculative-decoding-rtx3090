@@ -41,28 +41,37 @@ def chars_per_token(rec):
     return (t / n) if (n and t) else None
 
 
-def classify(rec):
-    """(state, token position or None, window in tokens).
+def reached_eos(rec):
+    """True when the generation stopped on its own rather than running out of budget.
 
-    `hit_cap` and `finish_reason` both say whether the generation ran out of budget; either alone
-    is enough, and both are checked so a file from an older harness still classifies.
+    `hit_cap` and `finish_reason` both say it; either alone is enough, and both are checked so a
+    file from an older harness still reads.
+    """
+    return not (bool(rec.get("hit_cap")) or rec.get("finish_reason") == "length")
+
+
+def classify(rec):
+    """(state, token position or None, tokens produced).
+
+    The third element is what this record generated. It equals the cap only for the records that
+    hit it, so it is not the window; `budget()` is the position a censored record was cut at.
     """
     div = rec.get("divergence")
-    window = rec.get("predicted_n") or 0
+    produced = rec.get("predicted_n") or 0
     if not div:
-        return None, None, window
-    capped = bool(rec.get("hit_cap")) or rec.get("finish_reason") == "length"
+        return None, None, produced
+    capped = not reached_eos(rec)
     if div.get("identical"):
-        return (CENSORED if capped else IDENTICAL_EOS), None, window
+        return (CENSORED if capped else IDENTICAL_EOS), None, produced
     i = div.get("first_diff_char")
     if i is None:
-        return None, None, window
+        return None, None, produced
     # A difference reported at the end of the shorter text is a length difference, not a fork.
     limit = min(div.get("len_ref", 0), div.get("len_arm", 0))
     if limit and i >= limit:
-        return None, None, window
+        return None, None, produced
     cpt = chars_per_token(rec)
-    return DIVERGED, (i / cpt if cpt else None), window
+    return DIVERGED, (i / cpt if cpt else None), produced
 
 
 def resolved_forks(data):
@@ -75,8 +84,18 @@ def resolved_forks(data):
     return out
 
 
-def windows(data):
-    return sorted({w for _, _, w in (classify(r) for r in data["records"]) if w})
+def budget(data):
+    """The token cap the run was given: the position a right-censored record was cut at.
+
+    Reading this off the outputs reports a different cap for every distinct output length as soon
+    as any record stops early, so it is taken from the design instead. Files from an older harness
+    do not state it; there, the records that hit the cap are the ones whose own length is the cap.
+    """
+    n = (data.get("design") or {}).get("max_tokens")
+    if n:
+        return int(n)
+    capped = [r.get("predicted_n") or 0 for r in data["records"] if not reached_eos(r)]
+    return max(capped) if capped else None
 
 
 def censored_prompts(data, threshold=None):
@@ -91,8 +110,7 @@ def censored_prompts(data, threshold=None):
     for rec in data["records"]:
         if classify(rec)[0] == CENSORED:
             out.add(rec["prompt"])
-    ws = windows(data)
-    return out, (ws[0] if len(ws) == 1 else None)
+    return out, budget(data)
 
 
 def study_threshold(paths=None):
@@ -132,17 +150,17 @@ def audit(path):
         data = json.load(fh)
     counts = collections.Counter()
     forks = []
-    ws = collections.Counter()
+    n_eos = 0
     for rec in data["records"]:
-        state, pos, window = classify(rec)
+        state, pos, _produced = classify(rec)
         if state is None:
             continue
         counts[state] += 1
-        if window:
-            ws[window] += 1
+        if reached_eos(rec):
+            n_eos += 1
         if state == DIVERGED and pos is not None:
             forks.append(pos)
-    return path, counts, forks, ws, pass_agreement(data)
+    return path, counts, forks, budget(data), pass_agreement(data), n_eos
 
 
 def main():
@@ -152,9 +170,10 @@ def main():
     print("DIVERGENCE AS A TIME-TO-EVENT, IN TOKENS")
     print("=" * 100)
     total = collections.Counter()
+    eos_seen = [0, 0]   # records that stopped on their own, records classified
     for path in paths:
         try:
-            path, counts, forks, ws, (n_multi, disagree) = audit(path)
+            path, counts, forks, win, (n_multi, disagree), n_eos = audit(path)
         except Exception as exc:
             print("  %-40s unreadable: %s" % (path, exc))
             continue
@@ -162,9 +181,12 @@ def main():
             continue
         total.update(counts)
         n = sum(counts.values())
-        win = ", ".join("%d tokens x%d" % (w, c) for w, c in sorted(ws.items()))
+        eos_seen[0] += n_eos
+        eos_seen[1] += n
         print("\n  %s" % path)
-        print("    window            : %s" % (win or "unknown"))
+        print("    window            : %s" % ("%d tokens" % win if win else "unknown"))
+        print("    ran to EOS        : %4d / %d   <- stopped on their own, not on the cap"
+              % (n_eos, n))
         print("    diverged          : %4d / %d" % (counts[DIVERGED], n))
         print("    identical at EOS  : %4d / %d   <- the only exact identities" % (counts[IDENTICAL_EOS], n))
         print("    right-censored    : %4d / %d   <- no divergence within the window" % (counts[CENSORED], n))
@@ -172,10 +194,9 @@ def main():
             forks.sort()
             print("    fork position     : min %.0f  median %.0f  max %.0f tokens"
                   % (forks[0], statistics.median(forks), forks[-1]))
-            if len(ws) == 1:
-                w = next(iter(ws))
+            if win:
                 print("                        the latest sits at %.0f %% of the window, so a fork"
-                      % (100.0 * forks[-1] / w))
+                      % (100.0 * forks[-1] / win))
                 print("                        past it would not have been seen")
         if n_multi:
             if disagree:
@@ -192,10 +213,11 @@ def main():
         print("  Across every file: %d diverged, %d identical at EOS, %d right-censored."
               % (total[DIVERGED], total[IDENTICAL_EOS], total[CENSORED]))
         if total[IDENTICAL_EOS] == 0:
-            print("  No record anywhere reached EOS, so no identity in this study is exact. Every")
-            print("  one means 'did not diverge within the token budget'. The censoring is uniform,")
-            print("  so there is no subset of prompts to check the others against and the only")
-            print("  thing that resolves it is re-running with a larger budget. TODO.md item D2.")
+            print("  No identity here is exact. Every one is a cell whose two arms agreed while at")
+            print("  least one side stopped on the cap, so it reads 'did not diverge within the")
+            print("  window', not 'identical'. That is a statement about the identities alone:")
+            print("  %d of %d records did run to EOS, and not one of those matched its baseline."
+                  % (eos_seen[0], eos_seen[1]))
     return 0
 
 
