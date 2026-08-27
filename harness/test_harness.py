@@ -3941,6 +3941,75 @@ class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
         # top level, which is not a defect this file can produce, so it is not asserted.
 
 
+class TheTwoTreesAreStillCheckedAgainstEachOther(unittest.TestCase):
+    """The dual-tree fix mapped every baseline to itself, and the cross-tree control vanished.
+
+    At a 400-token cap `baseline@pr27342` carried a divergence against `baseline@master` on 125 of
+    125 records, all identical: the evidence that the PR branch reproduces master's bytes with
+    speculation off. `divergence_baseline_map` then gave each arm the baseline of its own tree,
+    which is right for a treatment arm and makes each baseline its own reference, and
+    `_attach_baseline_comparisons` skips every baseline. The 1600-token re-run carries no
+    comparison for `baseline@pr27342` at all. The comment introducing the map says the next pair
+    of trees need not agree, which is the argument for measuring it rather than for stopping.
+    """
+
+    def _run(self, arms_in_order, texts, pass_order=False):
+        """Called the way the old signature allowed unless `pass_order`, so a failure here is the
+        missing comparison rather than the added parameter."""
+        import bench
+        names = set(arms_in_order)
+        recs = [{"arm": a, "prompt": "p1", "pass": 1, "temperature": 0.0, "text": t}
+                for a, t in texts.items()]
+        recs.append({"arm": "mtp-n2", "prompt": "p1", "pass": 1, "temperature": 0.0,
+                     "text": "a wholly different answer"})
+        result = {"records": recs}
+        btext = {(a, "p1", 1): t for a, t in texts.items() if a in names}
+        bmap = {a: a for a in names}
+        bmap["mtp-n2"] = arms_in_order[0]
+        extra = [arms_in_order] if pass_order else []
+        bench._attach_baseline_comparisons(result, btext, bmap, names, 1, *extra)
+        return {r["arm"]: r for r in recs}
+
+    def test_the_second_baseline_is_compared_against_the_first(self):
+        by = self._run(["baseline@master", "baseline@pr"],
+                       {"baseline@master": "the same answer", "baseline@pr": "the same answer"})
+        pr = by["baseline@pr"]
+        self.assertIn("tree_divergence", pr,
+                      "the branch's own no-speculation arm is the only thing that says the branch "
+                      "reproduces master's bytes; nothing else in the design checks it")
+        self.assertEqual(pr["tree_compared_against"], "baseline@master")
+        self.assertTrue(pr["tree_divergence"]["identical"])
+
+    def test_a_difference_between_the_trees_is_visible(self):
+        by = self._run(["baseline@master", "baseline@pr"],
+                       {"baseline@master": "the same answer", "baseline@pr": "the same answEr"})
+        self.assertFalse(by["baseline@pr"]["tree_divergence"]["identical"],
+                         "a control that cannot come back negative is not a control")
+
+    def test_the_control_never_enters_the_method_effect_field(self):
+        by = self._run(["baseline@master", "baseline@pr"],
+                       {"baseline@master": "the same answer", "baseline@pr": "the same answEr"})
+        self.assertNotIn("divergence", by["baseline@pr"],
+                         "a baseline compared against another baseline is a control, and reading "
+                         "it as a method effect is how the arm with no fork position was printed "
+                         "as a group of a fork-position partition")
+        self.assertNotIn("tree_divergence", by["baseline@master"],
+                         "the reference is not compared against itself")
+
+    def test_a_single_tree_run_produces_no_cross_comparison(self):
+        by = self._run(["baseline@master"], {"baseline@master": "the same answer"})
+        self.assertNotIn("tree_divergence", by["baseline@master"])
+
+    def test_the_reference_is_the_arm_order_and_not_the_alphabet(self):
+        """Falling back to sorted names picks a reference by spelling, which is only ever right
+        by luck. The caller passes the order the matrix declares."""
+        by = self._run(["zzz-baseline", "aaa-baseline"],
+                       {"zzz-baseline": "one answer", "aaa-baseline": "another answer"},
+                       pass_order=True)
+        self.assertEqual(by["aaa-baseline"]["tree_compared_against"], "zzz-baseline")
+        self.assertNotIn("tree_divergence", by["zzz-baseline"])
+
+
 class CensoredCellsDoNotPartition(unittest.TestCase):
     """A cell that ran out of budget holds no fork position, so it cannot separate two widths.
 

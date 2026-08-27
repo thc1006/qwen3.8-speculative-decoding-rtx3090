@@ -807,7 +807,8 @@ def run_matrix(
             _atomic_write_json(out_path, result)
 
         # ---- post-pass: compare every arm against the baseline's own text for this pass ----
-        _attach_baseline_comparisons(result, baseline_text, _bmap, baseline_names, p_idx)
+        _attach_baseline_comparisons(result, baseline_text, _bmap, baseline_names, p_idx,
+                                     [a.name for a in arms if a.name in baseline_names])
         _atomic_write_json(out_path, result)
 
     if any(a.gpu_state is not None for a in arms):
@@ -822,7 +823,8 @@ def run_matrix(
 
 
 def _attach_baseline_comparisons(result: dict, baseline_text: dict, bmap: dict,
-                                 baseline_names: set, p_idx: int) -> None:
+                                 baseline_names: set, p_idx: int,
+                                 baseline_order: list | None = None) -> None:
     """Attach divergence + relative-degeneracy to every non-baseline record of one pass.
 
     Deferred until the pass ends because arm order is rotated, so the baseline arm may run
@@ -845,6 +847,30 @@ def _attach_baseline_comparisons(result: dict, baseline_text: dict, bmap: dict,
         if rec.get("temperature") == 0.0:
             rec["divergence"] = asdict(quality.compare_outputs(ref, text))
         rec["rel_degeneracy"] = asdict(quality.assess_against_baseline(ref, text))
+
+    # Every baseline is its own reference in `bmap`, so the loop above skips all of them and the
+    # cross-tree control went away when `bmap` was introduced. It used to exist: at a 400-token
+    # cap `baseline@pr27342` carried a divergence against `baseline@master` on 125 of 125 records,
+    # all identical, which is the evidence that the branch reproduces master's bytes with
+    # speculation off. The comment on `bmap` above says the next pair of trees need not agree --
+    # that is the reason to keep measuring it, not to stop. It is recorded under its own key
+    # because a control read as a method effect is how the one arm in the study with no fork
+    # position came to be printed as a group of a fork-position partition.
+    order = [b for b in (baseline_order or sorted(baseline_names)) if b in baseline_names]
+    if len(order) < 2:
+        return
+    primary = order[0]
+    for rec in result["records"]:
+        if (rec["pass"] != p_idx or rec["arm"] not in baseline_names
+                or rec["arm"] == primary or "tree_divergence" in rec):
+            continue
+        ref = baseline_text.get((primary, rec["prompt"], p_idx))
+        if ref is None:
+            rec["tree_comparison_unavailable"] = True
+            continue
+        rec["tree_compared_against"] = primary
+        if rec.get("temperature") == 0.0:
+            rec["tree_divergence"] = asdict(quality.compare_outputs(ref, rec.get("text", "")))
 
 
 def main() -> None:

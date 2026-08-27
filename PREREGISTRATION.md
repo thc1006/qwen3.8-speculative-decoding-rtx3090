@@ -3090,3 +3090,34 @@ lengths: char 650 reads as 187.7 tokens for width 3 and 187.2 for width 4, char 
 the min 6 / median 117 / max 1396 figures -- and unsound for comparing arms at fine granularity,
 which no conclusion in this study does. The correct denominator would be the shared baseline
 prefix rather than each arm's whole text.
+
+## Correction 34, 2026-08-27 17:05: why the extended-cap run carried no same-tree control
+
+Correction 33 recorded that `results/phase_a_cap1600.json` computes no divergence for
+`baseline@pr27342` and left the cause open. It is a harness regression, and the harness argues
+against it in its own comment.
+
+`bench.py` gained `divergence_baseline_map` to stop a dual-tree run charging a branch difference to
+the method: each arm is now compared against the baseline built from its own tree. That is right
+for a treatment arm. It also maps **each baseline to itself** -- the 1600 file records
+`{'baseline@master': 'baseline@master', 'baseline@pr27342': 'baseline@pr27342', ...}` -- and
+`_attach_baseline_comparisons` skips every arm in `baseline_names`, so no pair of baselines is ever
+compared. Before the map existed there was a single reference, and `baseline@pr27342` was compared
+against it: 125 of 125 records, all identical, at a 400-token cap. That is the only measurement in
+the study that says the PR branch reproduces master's bytes with speculation off, and it is the
+control the branch most needs. The comment introducing the map cites those 125 prompt-passes and
+adds that "the next pair of trees need not agree" -- the argument for continuing to measure it.
+
+Restored, under its own keys. A baseline that is not the run's reference now carries
+`tree_divergence` and `tree_compared_against`, never `divergence`: a control read as a method
+effect is exactly how the one arm in this study with no fork position came to be printed as a group
+of a fork-position partition (Correction 33). The reference is the first baseline in the order the
+matrix declares, not the alphabetically first, because picking a reference by spelling is only ever
+right by luck.
+
+Five tests. The reproducer fails against the previous code with the comparison simply absent; two
+of the five are guards that pass either way, and they exist so that a later repair cannot satisfy
+this by writing the control into the method-effect field. The suite is 192 tests.
+
+**No data yet.** The field is empty until Phase A is re-run at 1600, and that re-run is also what
+clears the two `host_contended` incidents. One run settles all three.
