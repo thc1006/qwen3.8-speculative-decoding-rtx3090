@@ -34,24 +34,28 @@ Phase M's preregistered replication anchor failed
 read as a statement about the predecessor until this is understood"*). This README therefore
 draws no architecture conclusion.
 
-> **Evidence status, 2026-08-27.**
-> **Complete and interpreted:** Phase A (875 request records, 0 incidents), Phase R (1125),
-> Phase R2 (1575, 0 incidents), Phase KV (175), the n-max ladder (1050), Phase C (750), the
-> depth ladder at five of five rungs (8 K, 32 K, 64 K, 80 K, 96 K, 180 records each), Phase
-> Q-small at four of four rungs (375 each), and the four-build forced-warp intervention (600)
-> with its disassembly and kernel benchmark.
-> **Complete, interpretation limited:** Phase M, 1575 records, 0 incidents, both targets in one
-> session -- its throughput and acceptance results stand, and its architecture, `k0`, `c` and
-> fixed-cost interpretations are withheld; see the Findings row and Limitations. Phase Q at two
-> rungs of four, which is every rung a 24 GB card can hold, reported as a cross-session
-> association.
-> Phase B complete, `--spec-draft-n-max` crossed with `--spec-draft-p-min`, 21 arm-passes, 525
-> records, 0 exclusions, 2 recorded host-contention incidents.
-> **Run, with most of its arms unable to start:** Phase V, 75 records. `baseline-vllm` serves and
-> gives the cross-engine decode-rate anchor; both MTP arms fail to load on this card, six recorded
-> failures, because the MTP module allocates its own bf16 `embed_tokens` and `lm_head`, 2.37 GiB
-> each, on top of a 17.33 GiB target. Filed as
-> [vllm#53887](https://github.com/vllm-project/vllm/issues/53887).
+### Evidence status
+
+Every count below is computed from the result files by
+[`harness/render_evidence.py`](harness/render_evidence.py) each time it runs; only the question,
+the strength of the reading and the claims a phase must not be used for are maintained by hand, in
+[`evidence/registry.json`](evidence/registry.json). This block used to be a hand-written paragraph
+with a date on it, and the date did not help: it said Phase B was running while 525 committed
+records sat in `results/phase_b.json`, and it never mentioned Phase R, which has 1125.
+`scripts/verify_everything.sh` section 7 regenerates this and fails if it has moved.
+
+<!-- BEGIN GENERATED: EVIDENCE_STATUS -->
+_Not generated yet. Run `python3 harness/render_evidence.py`; it reads 61 MB of result files and
+the CPU guard blocks it while a measurement holds the GPU lock._
+<!-- END GENERATED: EVIDENCE_STATUS -->
+
+Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`
+serves and gives the cross-engine decode-rate anchor, and both MTP arms fail to load on this card
+because the MTP module allocates its own bf16 `embed_tokens` and `lm_head`, 2.37 GiB each, on top
+of a 17.33 GiB target, filed as
+[vllm#53887](https://github.com/vllm-project/vllm/issues/53887). And Phase Q sits at two rungs of
+four because two rungs need 27.5 and 31.3 GB of VRAM, which is a limit of the card and not of the
+design.
 
 **On the measured prompt suite and the exact Phase A system, MTP is a clear
 server-reported decode-throughput win.** The 25 prompts were purposively constructed rather than
