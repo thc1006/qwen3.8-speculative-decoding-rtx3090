@@ -3941,6 +3941,73 @@ class TestEveryTestInThisFileActuallyRuns(unittest.TestCase):
         # top level, which is not a defect this file can produce, so it is not asserted.
 
 
+class CensoredCellsDoNotPartition(unittest.TestCase):
+    """A cell that ran out of budget holds no fork position, so it cannot separate two widths.
+
+    At a 400-token cap widths 3 and 4 share a fork vector; at 1600 one cell of code_sql_report
+    comes back censored for width 4 while width 3 forks at char 5423, and comparing those two
+    values split the widths and printed "H8 NOT SUPPORTED" with a note that the mechanism offered
+    in llama.cpp #25618 needed withdrawing. Nothing about width 4 had changed: its fork was
+    simply not reached inside the window. A partition that moves when the cap moves is a
+    property of the cap.
+    """
+
+    ARMS = {"mtp-n2": {"extra_args": ["--spec-type", "mtp", "--spec-draft-n-max", "2"]},
+            "mtp-n3": {"extra_args": ["--spec-type", "mtp", "--spec-draft-n-max", "3"]}}
+
+    def _run(self, third_cell_for_w4):
+        import contextlib, io, json, tempfile, os
+        import width_groups as W
+
+        def rec(arm, prompt, char):
+            capped = char is None
+            div = ({"identical": True} if capped else
+                   {"identical": False, "first_diff_char": char, "prefix_only": False,
+                    "len_ref": char + 500, "len_arm": char + 500})
+            return {"arm": arm, "prompt": prompt, "pass": 1, "divergence": div,
+                    "hit_cap": capped, "finish_reason": "length" if capped else "stop",
+                    "predicted_n": 1600 if capped else 900, "text_len": 3400}
+
+        recs = []
+        for prompt, c in (("p1", 100), ("p2", 200)):
+            recs.append(rec("mtp-n2", prompt, c))
+            recs.append(rec("mtp-n3", prompt, c))
+        recs.append(rec("mtp-n2", "p3", 5423))
+        recs.append(rec("mtp-n3", "p3", third_cell_for_w4))
+
+        data = {"design": {"max_tokens": 1600, "n_prompts": 3, "passes": 1},
+                "arms": self.ARMS, "records": recs}
+        fh = tempfile.NamedTemporaryFile("w", prefix="wg_", suffix=".json", delete=False)
+        json.dump(data, fh)
+        fh.close()
+        argv = sys.argv
+        buf = io.StringIO()
+        try:
+            sys.argv = ["width_groups.py", fh.name]
+            with contextlib.redirect_stdout(buf):
+                W.main()
+        finally:
+            sys.argv = argv
+            os.unlink(fh.name)
+        out = buf.getvalue()
+        return out[out.index("--- observed groups"):].split("--- H8")[0]
+
+    def test_a_censored_cell_leaves_the_widths_grouped(self):
+        groups = self._run(None)
+        self.assertIn("{3, 4}", groups,
+                      "width 4 did not diverge inside the window on p3; that is an unobserved "
+                      "fork, not a fork elsewhere, and it must not split the group:\n" + groups)
+        self.assertIn("grouped on 2 of 3 prompts", groups,
+                      "the reader has to be told how many prompts actually determined the "
+                      "grouping, or 2-of-3 reads as 3-of-3:\n" + groups)
+
+    def test_a_genuinely_different_fork_still_splits_them(self):
+        groups = self._run(4111)
+        self.assertNotIn("{3, 4}", groups,
+                         "both widths diverged on p3 and at different characters, which is real "
+                         "evidence of different fork positions:\n" + groups)
+
+
 class TheWindowIsTheCapNotTheOutputLength(unittest.TestCase):
     """`predicted_n` is what a record produced; it equals the cap only for records that hit it.
 

@@ -160,8 +160,12 @@ def main() -> int:
         print(f"  resolved as late as token {latest:.0f} ({100.0*latest/window:.0f} % of the window) "
               f"when {window} is the cap.")
         print(f"  {len(censored)} of {len(prompts)} prompts carry at least one. The censoring is "
-              f"uniform, so no")
-        print(f"  subset of prompts is cleaner than another; TODO.md D2 is the run that resolves it.")
+              f"uniform across")
+        print(f"  widths, so no subset of prompts is cleaner than another. The grouping below is "
+              f"built only from")
+        print(f"  cells where both widths diverged, so a censored cell narrows the evidence for a "
+              f"grouping")
+        print(f"  without moving it.")
     _mm, _rec = recorded_mmvq_max(d)
     print("  MMVQ dispatch limit %d, %s" % (
         _mm, "read from this run's own record" if _rec
@@ -247,14 +251,56 @@ def main() -> int:
         print("    Excluded from the grouping below: with no fork position there is nothing to")
         print("    group by. Reported here instead, and it is the H8a question for width 2.")
 
-    groups: dict[tuple, list] = collections.OrderedDict()
-    for w in gradable:
-        groups.setdefault(sig[w], []).append(w)
-    observed = [tuple(v) for v in groups.values()]
+    # A censored cell carries no fork position. "same" means the two texts had not disagreed when
+    # the budget ran out, so the fork is unobserved, not elsewhere; comparing it against an
+    # observed index separates two widths on the strength of a cell that measured nothing, and the
+    # partition then moves when the cap moves. It did: at a 400-token cap widths 3 and 4 share a
+    # vector, and at 1600 one cell of code_sql_report turns censored for width 4 while width 3
+    # forks at char 5423, which is enough to split them and to read as H8 failing. Two widths are
+    # separated only by a prompt where BOTH diverged and the indices differ.
+    def determined(v):
+        return v not in ("same", "prefix", "?")
 
-    print("\n--- observed groups (identical fork vector across every prompt) ---")
+    def separation(a, b):
+        """(prompts that separate a from b, prompts that determined both)."""
+        seps, both = [], 0
+        for va, vb, p in zip(sig[a], sig[b], prompts):
+            if not (determined(va) and determined(vb)):
+                continue
+            both += 1
+            if va != vb:
+                seps.append(p)
+        return seps, both
+
+    sep_of = {(a, b): separation(a, b) for a in gradable for b in gradable if a != b}
+    groups: list[list] = []
+    for w in gradable:
+        for g in groups:
+            if all(not sep_of[(w, x)][0] for x in g):
+                g.append(w)
+                break
+        else:
+            groups.append([w])
+    observed = [tuple(g) for g in groups]
+
+    print("\n--- observed groups (same fork position on every prompt that determined both) ---")
     for g in observed:
         print(f"    {set(g)}  warps {warp_label(g)}")
+    weak = sorted((min(a, b), max(a, b), both) for (a, b), (seps, both) in sep_of.items()
+                  if not seps and both < len(prompts))
+    for a, b, both in dict.fromkeys((a, b, n) for a, b, n in weak):
+        print(f"    w{a} and w{b} are grouped on {both} of {len(prompts)} prompts; the rest are "
+              f"censored for one of them and determine nothing")
+    # Agreement on the determined cells need not be transitive, and if it is not then "group" is
+    # the wrong word for what came out. Say so rather than let the greedy pass above pick one.
+    unsep = {k for k, (seps, _) in sep_of.items() if not seps}
+    broken = [(a, b, c) for a in gradable for b in gradable for c in gradable
+              if len({a, b, c}) == 3 and (a, b) in unsep and (b, c) in unsep and (a, c) not in unsep]
+    if broken:
+        a, b, c = broken[0]
+        print(f"    NOT AN EQUIVALENCE: w{a} groups with w{b} and w{b} with w{c}, but w{a} and w{c} "
+              f"are separated.")
+        print("    The sets above are one of several readings; the pairwise table is the finding.")
 
     # -------------------------------------------------- verdict on H8
     untestable = [w for w in gradable if warps_for(w) is None]
