@@ -40,7 +40,11 @@ OVERRIDE = "MEASUREMENT_OVERRIDE=1"
 # Anchored on what actually happened, not on a guess about what might be expensive.
 HEAVY = [
     (r"\b(sha256sum|sha1sum|md5sum|shasum|b3sum|cksum)\b", "hashing a file reads it end to end"),
-    (r"\bgh\b(?!\s*[-=])", "the GitHub CLI is a Go binary that spends real CPU on startup and JSON"),
+    # `gh` has to be in command position. `\bgh\b` matched the directory in `~/.config/gh/`, which
+    # denied a peer session's `curl` for mentioning a config path. A command is preceded by a
+    # boundary that is not a path character and is followed by whitespace.
+    (r"(?<![\w./~-])gh(?=\s)(?!\s*[-=])",
+     "the GitHub CLI is a Go binary that spends real CPU on startup and JSON"),
     (r"\bnvidia-smi\b", "short, but it reads as ~100 % pcpu and lands in the incident record"),
     (r"\bgit\s+(grep|blame|gc|fsck|repack|clone|bisect)\b", "git walks the whole object store"),
     # `git log -1` reads one commit; `git log -S` reads every blob in the history. The first
@@ -109,21 +113,58 @@ def lock_state():
         if info["pid"] is not None and not os.path.isdir(f"/proc/{info['pid']}"):
             info["stale"] = True
         return p, info
+    # No lock file, so look for the process anyway. `bench.py` acquires once at the top and
+    # releases once at the bottom -- checked, one call site each -- so the lock does not blink
+    # between arm-passes, and a peer session that saw it absent was seeing the ninety minutes
+    # between two runs. But the file is written a moment after the process starts, and a crashed
+    # run can leave the process without it. The process is the thing that must not be disturbed;
+    # the file is only how it announces itself.
+    running = bench_process()
+    if running:
+        where = "a running bench.py, with no lock file"
+        return where, {"path": where, "pid": running[0], "since": None, "body": running[1]}
     return None, None
+
+
+def bench_process():
+    """(pid, cmdline) of a running benchmark, or None. Never raises."""
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                cl = fh.read().decode("utf-8", "replace").replace("\0", " ")
+        except Exception:
+            continue
+        # Anchored on invocation position for the same reason the analyser rules are: a command
+        # that merely names bench.py is not running it.
+        if re.search(r"\bpython3?\s+(-[A-Za-z]\S*\s+)*\S*harness/bench\.py\b", cl):
+            return int(pid), " ".join(cl.split())[:90]
+    return None
 
 
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1.*?^\s*\2\s*$", re.S | re.M)
 
 
-def _command_only(command):
-    """The command with heredoc bodies removed, because a heredoc body is data.
+MESSAGE_ARG = re.compile(r"(?<![\w-])(-m|--message)(=|\s+)('[^']*'|\"[^\"]*\"|\S+)")
 
-    Writing a file through `cat >> notes.md <<'EOF' ... EOF` was denied for containing the word
-    `sha256sum`, in a sentence about an old contamination incident. The guard reads a command
-    string and cannot recover intent, so everywhere it can be told that a span is data rather
-    than a command, it should be.
+
+def _command_only(command):
+    """The command with the spans that are data rather than command removed.
+
+    Two of them, both found by being denied.
+
+      * A heredoc body. `cat >> notes.md <<'EOF' ... EOF` was denied for containing the word
+        `sha256sum`, in a sentence about an old contamination incident.
+      * The argument of `-m` / `--message`. `git commit -m "gh matched a config path"` was denied
+        for the word `gh` in its own prose. A commit message is data by definition.
+
+    Quoted spans in general are NOT stripped, and that is deliberate: `bash -c "sha256sum big"`
+    really does run the thing inside the quotes. The guard reads a command string and cannot
+    recover intent, so it is told about the spans where the answer is unambiguous and left
+    conservative everywhere else.
     """
-    return HEREDOC.sub("<<HEREDOC", command)
+    return MESSAGE_ARG.sub(r"\1 MSG", HEREDOC.sub("<<HEREDOC", command))
 
 
 VERSION_ONLY = re.compile(r"^\s*\S+(\s+\S+)?\s+(--version|-V|-dumpversion|--help)\s*$")
