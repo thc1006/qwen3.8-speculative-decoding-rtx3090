@@ -3121,3 +3121,123 @@ this by writing the control into the method-effect field. The suite is 192 tests
 
 **No data yet.** The field is empty until Phase A is re-run at 1600, and that re-run is also what
 clears the two `host_contended` incidents. One run settles all three.
+
+## Correction 35, 2026-08-27 22:15: an external README review, checked line by line, and what the instruments can actually support
+
+A reviewer pinned `097f77c` and returned eight correctness blockers. **All eight are real.** Two
+further claims in the same review are not, and one defect it did not raise sits underneath the rest.
+
+### The one that let the other seven happen
+
+`scripts/verify_everything.sh` sections 4 and 5 ended their heredocs on a bare `PY`. They printed
+`MISMATCH` and `FAIL:` and then let the script continue, so with section 2 clean the whole run would
+print those lines and finish with **"All sections passed."** A check whose verdict does not reflect
+what it found is the defect this repository was built to hunt, and it was in the hunter. Section 4
+carried a second fault of the same family as Correction 34: it compared **every** arm against
+`baseline@master`, including the two DFlash2 arms that run on PR #27342 and have their own tree's
+baseline. The two baselines agree to 0.008 %, so it moved the DFlash2 figures by 0.01 points and the
+mistake sat behind a coincidence of this run rather than anything the design guarantees. Sections 3,
+4 and 5 now fail closed, section 4 uses each arm's own tree, and both are checked with negative
+controls: changing a README number, and planting a withdrawn claim, each produce a FAIL and a
+non-zero exit.
+
+### The seven it had let through
+
+| | what it said | what is true |
+|---|---|---|
+| Phase B | "**Running:** Phase B" and no row in the table | 525 records committed, complete |
+| Phase M ITT | one row said "does not yet tabulate", another "now tabulates ... at most 0.42 points" | the second; both now say so, Limitations included |
+| anchor artifact | `analysis/phase_m_anchor.txt` reported `net -72.3 %` | that is the pooled median, which the analyser itself says may **not** be compared against the registered band; the primary is -65.6 % [-67.6, -63.7] |
+| coverage | README quoted 88.0-90.9 % | the committed artifact says 86.3-93.7 % over four processes at 300 replications; the older range comes from an 800-replication run whose code was never in the repository |
+| Q-small headline | led on `+36.0 pp [+16.0, +52.0]` | that interval clears zero by **0.89 half-widths** against this repository's own 1.3 rule, and the artifact already flagged it; the four depths span +36 to +44 pp and three of them clear it |
+| #26750 | "the comparator range itself is unverified (Correction 26)" | Correction 26 is where it *was* verified; what is unresolved is comparability |
+| energy | "all three limits ... all three flatter it", then "that one moves the absolute figure rather than the ratio" | two of the three bias the ratio; the third bounds the absolute joules |
+
+`tee -a` in `scripts/run_remaining.sh` is why the anchor report went stale: it appended a fresh
+verdict under the old one instead of replacing it. Reports now carry the sha256 of their inputs and
+no timestamp, so a regeneration is byte-comparable, and section 7 regenerates and diffs it.
+
+### Two of the review's own claims, refuted
+
+**"Phase B's regression and scoring implementation was written after the run, so the mechanism
+comparison is exploratory."** It was not. `harness/mechanism_b.py` was first committed 2026-08-26
+23:58; the run finished at 01:00 and the data was committed at 01:08. The pre-data version already
+contains the one-parameter comparison, the two-parameter `step + drafted` against `step + rejected`
+comparison, and the half-width machinery. The only change after the data is `443b62c`, **+40 lines
+and no deletions**, adding the forward-count robustness sweep. The review also says the completion
+commit "explicitly admits" the analyser was added afterwards; that commit message is one line and
+says no such thing. Writing the review's wording into the README would have introduced an error, so
+the row states what the history shows.
+
+**"`analysis/phase_a_report.txt` still prints `byte-identical` while the analyser says `no
+divergence through cap`."** It does not. The only occurrences are in
+`analysis/control_determinism.txt`, where "25/25 byte-identical between the two runs" describes a
+determinism control -- the same binary run twice -- and is the correct term for it.
+
+### One the review did not raise, and one this session's own fix found
+
+`harness/coverage_sim.py` opened with "This reproduces the recorded figures". At 300 replications the
+normal case comes back 93.7 % against the recorded 90.9 %, which is **2.0 Monte Carlo standard
+errors**; uniform and heavy-tailed land within about one. `stats.py`'s docstring was already honest
+and said "for two of the three"; the simulation's own summary was not. Coverage is an estimate from
+Bernoulli trials, so `_fmt` now prints its Monte Carlo standard error beside every row: 1.4 to 2.0
+points at 300 replications, and by the standard formula (Morris, White and Crowther 2019) about 1900
+replications would pin it to half a point. TODO D6 regenerates it.
+
+The new phase-status check found that **Phase R has 1125 records, 0 incidents, and no row in the
+later-phases table** -- the same omission as Phase B, in a phase nobody had flagged. Its row now
+reports what it measured: memory-clock elasticity 0.783 and 0.718 for the baseline against 0.100 to
+0.167 for the speculative arms, and over the upper SM-clock range 0.491 against 0.843 and 0.857. It
+also records the confound R2 exists to remove: Phase R moves the clocks through a power cap, so
+raising the memory clock takes power from the core.
+
+### What the energy instrument can actually support
+
+The README said the magnitude "stays provisional until a hardware energy counter is read". That was
+the wrong thing to wait for, and published characterisation of this sensor says so.
+
+*Part-time Power Measurements: nvidia-smi's Lack of Attention* (arXiv:2312.02741) measures NVIDIA's
+built-in sensor against external meters. One finding is favourable and specific to this card: the
+**RTX 3090 has an instant rise time, a 100 ms update period and a 100 ms averaging window**, so the
+sensor samples its whole runtime. The A100 and H100 average 25 ms of each 100 ms period and sample
+only 25 % of it -- "during the other 75 % of the time, the GPU can be using drastically different
+power" -- and that is where the paper's largest errors come from. **None of it applies here.** The
+second finding is not favourable: the steady-state error is **proportional, roughly plus or minus
+5 %**, not the flat 5 W NVIDIA specifies, and it runs in **both directions** with the individual
+board's component tolerances. That is larger than the 1.1-point correction this study applies and,
+unlike it, does not cancel in a ratio. It is reported rather than corrected for, because an error of
+unknown sign on one particular board cannot be corrected for.
+
+The counter would not have settled it either. `nvmlDeviceGetTotalEnergyConsumption` is reported on
+NVIDIA's own developer forum, and confirmed there by a second user, to sit roughly a factor of two
+below the integral of `power.draw` over the same interval, with the gap widening the more often
+power is polled and no vendor resolution. What would settle the magnitude is an external power
+meter, the reference that paper used.
+
+### Contamination, made mechanical
+
+Four `host_contended` incidents exist in this repository's results. Three are mine and one is
+another session's mutation suite at 585 % of a core. Every one was found after the run it marked.
+Detection was never the problem; `telemetry.host_load` caught all four.
+
+`.claude/hooks/no_cpu_during_measurement.py` is a `PreToolUse` guard that refuses CPU-heavy shell
+commands while `.gpu-in-use.lock` exists in either repository that can hold it. It fails open on any
+error, on unparseable input, and on a lock whose process is gone, because a guard that breaks the
+shell is worse than any contaminated benchmark. Four of its rules had to be narrowed within the hour
+it was installed, and every narrowing is the same lesson: it matches the text of a command and
+cannot recover intent.
+
+  * It denied `git log --oneline -1`, which reads one commit. Now only a history *search* is denied.
+  * It denied the edit that fixed that, because the patch contained its own rule as data.
+  * It denied `grep -n foo harness/coverage_sim.py`, which only reads an analyser. Precision came
+    from anchoring on invocation position -- a script counts as run when it sits where an
+    interpreter would take it -- rather than on the path appearing anywhere in the line.
+  * It denied writing this Correction, because the prose contains the name of a hashing tool.
+    Heredoc bodies are now stripped before matching: a heredoc body is data, not a command.
+
+`nvidia-smi` stays denied despite finishing in milliseconds, because `ps` reports `pcpu` over a
+process's whole lifetime and a 0.2 s process reads as ~100 %. It poisons the incident record whether
+or not it displaced any work, and under this repository's own rule a marked file cannot be quoted.
+
+It is installed at user level beside the existing `gh-guard.py`, which it does not replace. It works:
+it blocked its own commit, and it has blocked this session repeatedly while Phase A re-runs.

@@ -108,11 +108,26 @@ def lock_state():
     return None, None
 
 
+HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1.*?^\s*\2\s*$", re.S | re.M)
+
+
+def _command_only(command):
+    """The command with heredoc bodies removed, because a heredoc body is data.
+
+    Writing a file through `cat >> notes.md <<'EOF' ... EOF` was denied for containing the word
+    `sha256sum`, in a sentence about an old contamination incident. The guard reads a command
+    string and cannot recover intent, so everywhere it can be told that a span is data rather
+    than a command, it should be.
+    """
+    return HEREDOC.sub("<<HEREDOC", command)
+
+
 def decide(command, info):
+    text = _command_only(command)
     for pattern, why in HEAVY:
-        if re.search(pattern, command):
+        if re.search(pattern, text):
             return "deny", why
-    if CHEAP.match(command):
+    if CHEAP.match(text):
         return "allow", ""
     return "warn", ""
 
