@@ -11,7 +11,10 @@ prompt's cluster mean over three passes can only be 0, 1/3, 2/3 or 1. Whether a 
 bootstrap covers at 95 % on a four-valued cluster mean is not answered by a calibration run on
 continuous draws, and H9, H10 and H11 are all scored on exactly that statistic.
 
-This reproduces the recorded figures and adds the binary case. The design simulated is this
+This rechecks the recorded figures and adds the binary case. At 300 replications it does not
+land on all three: uniform and heavy-tailed come back within about one Monte Carlo standard error
+of the docstring values, and the normal case sits 2.0 standard errors away, so `reproduces` would
+be too strong a word for what this run establishes. The design simulated is this
 study's: five classes of five prompts, three passes each, resampling prompts within class, and
 the same estimator the reports use -- `stats.paired_cluster_bootstrap`.
 

@@ -135,7 +135,25 @@ for h in hits:
 raise SystemExit(1 if hits else 0)
 PY
 
-hdr "6. the GPU is where the runs left it"
+hdr "6. generated reports still match the analyser that writes them"
+# `analysis/phase_m_anchor.txt` reported -72.3 % for days, the pooled median, while the README
+# and the analyser both reported -65.6 % -- and the analyser states in the same breath that only
+# the class-stratified primary may be compared against the registered band. Nothing could see
+# that the committed file was older than the code. The reports carry the sha256 of their inputs
+# and no timestamp, so regenerating from the same result has to produce the same bytes.
+# A non-zero exit is this analyser's verdict, not an error: it gates on the anchor holding, and
+# the anchor does not hold. Only an empty output means it failed to run.
+out=$(python3 harness/anchor_verdict.py results/phase_m.json 2>&1)
+if [ -z "$out" ]; then
+  bad "anchor_verdict.py produced nothing"
+elif ! diff -q <(printf '%s\n' "$out") analysis/phase_m_anchor.txt >/dev/null; then
+  bad "analysis/phase_m_anchor.txt is not what anchor_verdict.py writes now"
+  diff <(printf '%s\n' "$out") analysis/phase_m_anchor.txt | head -6 | sed 's/^/     /'
+else
+  printf '   phase_m_anchor.txt regenerates byte-identical\n'
+fi
+
+hdr "7. the GPU is where the runs left it"
 # Through the module's own API. `python3 harness/gpustate.py --check` was here, and gpustate.py
 # has no __main__ and no argparse: it imported, did nothing, exited 0, and the fallback after the
 # || never ran. A section that reported nothing and passed.

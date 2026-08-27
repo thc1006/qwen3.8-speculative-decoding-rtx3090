@@ -25,6 +25,7 @@ therefore three conditions, reported separately so a near miss can be read rathe
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os as _os
 import statistics
@@ -197,6 +198,14 @@ def render(v: dict) -> str:
     return "\n".join(L)
 
 
+def _sha256(path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("result", nargs="?", default="results/phase_m.json")
@@ -207,7 +216,18 @@ def main() -> None:
     args = ap.parse_args()
 
     v = verdict(AN.load(Path(args.result)))
-    print(json.dumps(v, indent=2, default=str) if args.json else render(v))
+    if args.json:
+        print(json.dumps(v, indent=2, default=str))
+    else:
+        # Provenance, so a committed copy of this report can be told apart from a fresh one.
+        # Deliberately no timestamp: regenerating from the same inputs has to produce the same
+        # bytes, because that is what lets a checker diff the committed file against a fresh run.
+        # `analysis/phase_m_anchor.txt` sat for days reporting -72.3 %, the pooled median, which
+        # this analyser now states may not be compared against the registered band -- and nothing
+        # in the repository could see that the file was older than the code that wrote it.
+        print(f"generated from   {args.result}  sha256 {_sha256(args.result)[:16]}")
+        print(f"analyser         {Path(__file__).name}  sha256 {_sha256(__file__)[:16]}")
+        print(render(v))
 
     marker = Path(args.marker)
     if v["holds"]:

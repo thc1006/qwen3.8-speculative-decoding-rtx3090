@@ -102,7 +102,7 @@ fi
 # every fork position reported so far was taken under a cache that is not output-preserving.
 run_phase phase_kv 1 18215 results/phase_kv.json || exit 1
 python3 harness/divergence_report.py results/phase_kv.json > analysis/phase_kv_divergence.txt 2>&1
-python3 - <<'PYEOF' | tee -a analysis/phase_kv_divergence.txt
+python3 - <<'PYEOF' | tee analysis/phase_kv_divergence.txt
 import json, collections
 W = {"mtp-n2": 3, "mtp-n3": 4, "dflash2-n4": 5, "mtp-n5": 6, "dflash2-n7": 8}
 print("\n=== does the width grouping survive f16 KV? ===")
@@ -172,7 +172,9 @@ run_phase phase_m 3 18240 results/phase_m.json || exit 1
 # second, so a faithful replication of the raw number would have failed the gate written for
 # it. On the completed run the two estimators differ by 6.7 points. See PREREGISTRATION.md
 # Correction 13.
-python3 harness/anchor_verdict.py results/phase_m.json | tee -a analysis/phase_m_anchor.txt
+# `tee -a` here is what let this report go stale: it appended a fresh verdict under an old one
+# instead of replacing it, so the file kept the first block it was ever given.
+python3 harness/anchor_verdict.py results/phase_m.json | tee analysis/phase_m_anchor.txt
 
 # Phase Q needs disk that Phase M's 22 GB MoE target is sitting on, so the deletion happens here
 # rather than inside scripts/run_phase_q.sh, and only against a Phase M result that is actually complete.
