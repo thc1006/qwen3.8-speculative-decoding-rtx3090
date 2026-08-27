@@ -124,12 +124,14 @@ second-host addendum in `PREREGISTRATION.md`.
       (1-4 identical for forced-up, 5-8 identical for forced-down), which is what forced the
       explanation. forced_down2 splits the row and leaves 1,2 at four warps. Predictions are
       registered in PREREGISTRATION.md Correction 6, written before the run finished.
-- [ ] **Truncation, extended-cap run** - not started; the design is verified and needs no code.
-      `harness/truncation_audit.py` finds 15 of 25 prompts in phase_a holding a 'same' the
-      400-token cap could have produced. The partition survives on the 10 that do not, so the
-      grouping does not depend on generation length, but the other 15 are unrecovered.
+- [x] **Truncation, extended-cap run** - done, and it is the same item as D2; see Correction 33.
+      The two sentences that stood here are withdrawn twice over. They said the audit found 15 of
+      25 prompts censored and that the partition survived on the other 10: B7 had already shown
+      that split was an artefact of measuring the window in characters, and the run itself has
+      since shown the censoring is not a fixed property of the study at all. At a 1600-token cap
+      it is 9 of 375 records on 2 of 25 prompts, against 260 of 750 at 400.
 
-      Run it as `bench.py --matrix <same> --max-tokens 1600` on the host that produced the file.
+      It was run as `bench.py --matrix <same> --max-tokens 1600` on the host that produced the file.
       Nothing else changes. Three things were checked before writing this down:
 
       - `max_tokens` is applied at the single measured request, the same line for every arm, so
@@ -142,9 +144,12 @@ second-host addendum in `PREREGISTRATION.md`.
         2188 characters against the 1537-character study threshold. Every other prompt clears it
         by more.
 
-      The control is free: divergence is deterministic here, 150 of 150 arm-by-prompt cells agree
-      across all five passes of phase_a, so every already-resolved fork must come back at the same
-      character. One that does not means something other than the cap changed.
+      The control was free: divergence is deterministic here, 150 of 150 arm-by-prompt cells agree
+      across all five passes of phase_a, so every already-resolved fork had to come back at the
+      same character. It did: 125 of 125 repeated cells agree in the new file, over its three
+      passes. All three checks above held in the run - every arm including the baseline ran at
+      1600, and all 25 prompts carry a single `sha_ref` across arms, so each comparison is against
+      a baseline under the same cap.
 - [x] **Forced-warp intervention** (host C) - forced-up stands; forced-down withdrawn. See Correction 8. - three builds of the same revision differing only in
       the `calc_nwarps` GENERIC table. Registered before any of it ran, with the outcomes and the
       baseline identity control written down first.
@@ -452,9 +457,12 @@ there was omission, not misstatement.
       0 exact identities, partition unchanged. The free control held: 125 of 125 repeated cells
       agree. Pointing the readers at the file exposed three defects in them, all fixed with tests
       (Correction 33). Not carried over: the same-tree `baseline@pr27342` divergence control.
-- [ ] **D3** Phase B - `n_max` crossed with `p_min`. The only design here that can separate
-      drafted volume from rejection volume, and therefore the only one that can identify the
-      rollback components A2 leaves open.
+- [x] **D3** Phase B - `n_max` crossed with `p_min`. Run: `results/phase_b.json`, 525 records,
+      `mtp-n3` and `mtp-n7` crossed with `p_min` 0.00 / 0.50 / 0.75. It separated the two volumes:
+      step + drafted tokens fits at r2 0.9912 against 0.9687 for step + rejected, 3.57 half-widths
+      apart, so **the cost tracks tokens drafted rather than tokens rejected**, and the verdict
+      holds across F-2 to F+1. Two `host_contended` incidents from processes of my own leave the
+      file marked FAIL in the audit; the fit above should be read with that.
 - [ ] **D4** full re-run of Phase A under the C1/C2/C3 harness, once those land.
 - [ ] **D5** factorial prompts: class crossed with thinking, language crossed with matched task,
       short and medium output lengths alongside the 400-token regime.
