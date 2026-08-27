@@ -91,14 +91,23 @@ python3 - <<'PY'
 import subprocess, pathlib
 claims = ("not the architecture", "sign belongs to the drafting method",
           "rules out a large architecture effect", "flag was accepted and did nothing",
-          "no quantization anywhere", "the cost is linear", "costs a fixed c")
-marks = ("withdraw", "Withdraw", "used to read", "an earlier version", "no longer", "retract")
+          "no quantization anywhere", "the cost is linear", "costs a fixed c",
+          # Withdrawn by TODO B7: the window is fixed in tokens, so there is no censored subset
+          # to check the rest against and no partition surviving on the rest.
+          "The partition survives on the 10", "15 of 25 prompts")
+marks = ("withdraw", "Withdraw", "used to read", "an earlier version", "An earlier version",
+         "no longer", "retract", "superseded", "Superseded")
 files = [f for f in subprocess.check_output(["git", "ls-files", "*.md"], text=True).split("\n")
          if f and "PREREGISTRATION" not in f and not f.startswith(("upstream/", "llamacpp"))]
 hits = []
 for f in files:
-    for i, line in enumerate(pathlib.Path(f).read_text(errors="replace").splitlines(), 1):
-        if any(m in line for m in marks):
+    lines = pathlib.Path(f).read_text(errors="replace").splitlines()
+    for i, line in enumerate(lines, 1):
+        # A withdrawal runs to a sentence, not to a line: "An earlier version of this paragraph"
+        # sat one line above the claim it was withdrawing, and a line-local exemption missed it
+        # and would have reported the withdrawal itself as a residual claim.
+        ctx = " ".join(lines[max(0, i - 3):i + 2])
+        if any(m in ctx for m in marks):
             continue
         hits += [f"{f}:{i} {c!r}" for c in claims if c in line]
 print(f"   {len(files)} documents scanned, {len(hits)} residual claims")
