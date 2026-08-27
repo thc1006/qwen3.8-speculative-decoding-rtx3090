@@ -4008,6 +4008,65 @@ class CensoredCellsDoNotPartition(unittest.TestCase):
                          "evidence of different fork positions:\n" + groups)
 
 
+class ArmsWithoutAForkAreNotAForkGroup(unittest.TestCase):
+    """`divergence_report` partitioned arms by fork position and let the no-position states in.
+
+    `quality.fork_cell` returns a character index for a fork and a string for each state that has
+    none. Feeding those into the position map put every censored arm on a prompt into one bucket,
+    which reads as a shared fork position. On Phase A it printed `baseline@pr27342` -- the arm that
+    never diverges, 125 of 125 identical -- as a group of a fork-position partition.
+    """
+
+    def _partition(self, records, arms):
+        import contextlib, io
+        import divergence_report as DR
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            DR.group_stability({"records": records, "arms": arms})
+        out = buf.getvalue()
+        return [l for l in out.splitlines() if "modal partition" in l]
+
+    def _recs(self):
+        def rec(arm, prompt, q, char):
+            div = ({"identical": True} if char is None else
+                   {"identical": False, "first_diff_char": char, "prefix_only": False,
+                    "len_ref": char + 500, "len_arm": char + 500})
+            return {"arm": arm, "prompt": prompt, "pass": q, "divergence": div,
+                    "hit_cap": char is None, "finish_reason": "length" if char is None else "stop",
+                    "predicted_n": 400, "text_len": 1400}
+        recs = []
+        for q in (1, 2):
+            for prompt in ("p1", "p2", "p3"):
+                recs.append(rec("armA", prompt, q, 100))
+                recs.append(rec("armB", prompt, q, 100))
+                recs.append(rec("never", prompt, q, None))   # censored on every prompt
+        return recs
+
+    def test_an_arm_that_never_diverges_is_not_a_group(self):
+        lines = self._partition(self._recs(), {})
+        self.assertTrue(lines, "the partition did not print")
+        for l in lines:
+            self.assertNotIn("never", l,
+                             "an arm with no fork position cannot be a group in a partition of "
+                             "fork positions: " + l)
+            self.assertIn("{armA,armB}", l, l)
+
+    def test_two_censored_arms_are_not_reported_as_agreeing(self):
+        recs = self._recs()
+        # armB is censored on two of the three prompts, so "both ran out of budget" is the modal
+        # shape. A single such prompt loses the tie-break in `most_common` and never reaches the
+        # printed line, which is why the first version of this test passed against the defect.
+        for r in recs:
+            if r["arm"] == "armB" and r["prompt"] in ("p2", "p3"):
+                r["divergence"] = {"identical": True}
+                r["hit_cap"], r["finish_reason"] = True, "length"
+        lines = self._partition(recs, {})
+        for l in lines:
+            self.assertNotIn("{armB,never}", l,
+                             "both ran out of budget on p2; neither has a position, so they did "
+                             "not land anywhere together: " + l)
+
+
 class TheWindowIsTheCapNotTheOutputLength(unittest.TestCase):
     """`predicted_n` is what a record produced; it equals the cap only for records that hit it.
 

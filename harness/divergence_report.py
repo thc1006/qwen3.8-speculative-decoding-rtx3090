@@ -316,7 +316,13 @@ def group_stability(result: dict) -> None:
             by_pos: dict[object, list[str]] = {}
             for a in arms:
                 v = fork.get((a, p, q))
-                if v is None:
+                # `fork_cell` returns a character index for a fork and a string for every state
+                # that has none: SAME when the texts never disagreed inside the window, PREFIX
+                # when the shorter one ran out, - when there is no record. Letting those into
+                # `by_pos` groups arms by a position none of them has: every censored arm lands
+                # in one bucket and reads as a shared fork. It is how `baseline@pr27342`, which
+                # never diverges at all, came to be a group in a fork-position partition.
+                if not isinstance(v, int):
                     continue
                 by_pos.setdefault(v, []).append(a)
             # only informative when at least two arms diverge and agree
