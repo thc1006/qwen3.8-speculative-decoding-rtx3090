@@ -85,7 +85,19 @@ M=$(val "['llama_master_commit']"); D=$(val "['dflash2_commit']")
 git -C llamacpp-master fetch --all --quiet
 git -C llamacpp-master checkout --detach "$M" --quiet
 [ -d llamacpp-dflash2 ] || cp -r llamacpp-master llamacpp-dflash2
-git -C llamacpp-dflash2 fetch origin pull/27342/head --quiet
+# The bundle first, the live PR ref only as a fallback. `pull/27342/head` moves: that PR's head has
+# already advanced past the measured commit, and a force-push or a deleted branch makes the object
+# unreachable, at which point the lock names a commit nobody can fetch. The bundle carries the ten
+# commits between the pinned master and the measured one, 22 KB, and its prerequisite is an
+# ancestor of the pinned master, so a clone at that commit can always complete it.
+BUNDLE=$(val "['dflash2_archive']['bundle']")
+if [ -f "$BUNDLE" ] && git -C llamacpp-dflash2 bundle verify "../$BUNDLE" >/dev/null 2>&1; then
+  git -C llamacpp-dflash2 fetch "../$BUNDLE" 'refs/tags/*:refs/tags/*' --quiet || true
+fi
+git -C llamacpp-dflash2 cat-file -e "$D^{commit}" 2>/dev/null || \
+  git -C llamacpp-dflash2 fetch origin pull/27342/head --quiet
+git -C llamacpp-dflash2 cat-file -e "$D^{commit}" 2>/dev/null || \
+  die "$D is not in the bundle and not reachable from pull/27342/head any more"
 git -C llamacpp-dflash2 checkout --detach "$D" --quiet
 # Full 40-character comparison. A short prefix can resolve to a different object as a repository
 # grows, and the point of pinning is that it cannot.
