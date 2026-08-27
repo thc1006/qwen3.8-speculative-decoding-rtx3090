@@ -33,12 +33,18 @@ import stats as ST            # noqa: E402
 
 # Fields that describe what was measured rather than what came out. A difference in any of them
 # means the two runs are not the same experiment, whatever their numbers say.
+# Paths that actually resolve. The first version of this list carried three that did not --
+# `design.kernel_facts.master.commit`, `env.llama_commit` and `env.driver` -- and none of them
+# exists in a result file. `dig` returned None for both sides, None equals None, and the table
+# printed three reassuring rows for fields nobody was comparing. A provenance check that resolves
+# nothing is worse than no provenance check, because it looks like one.
 PROVENANCE = [
-    ("engine, master", ("design", "kernel_facts", "master", "commit")),
-    ("engine commit", ("env", "llama_commit")),
+    ("engine revisions", ("env", "llama_cpp_revisions")),
     ("model sha256", ("env", "model_sha256")),
     ("model bytes", ("env", "model_size_bytes")),
-    ("driver", ("env", "driver")),
+    ("model path", ("env", "model")),
+    ("gpu and driver", ("env", "gpu")),
+    ("clock state", ("env", "overclock_state")),
     ("kernel", ("env", "kernel")),
     ("python", ("env", "python")),
     ("host", ("env", "host")),
@@ -115,6 +121,11 @@ def main() -> int:
     for label, path in PROVENANCE:
         a, b = dig(ref, path), dig(cand, path)
         if a is None and b is None:
+            # Not "they agree". Neither file has the field, so this row compared nothing, and
+            # saying so is the whole point: three rows used to pass silently this way.
+            print(f"  {label:16s} {'-- absent from both files, nothing compared --':<70}")
+            problems.append(f"provenance field '{label}' resolves in neither file; "
+                            f"{'.'.join(path)} is not a path a result carries")
             continue
         same = a == b
         mark = "" if same else "   <-- DIFFERS"

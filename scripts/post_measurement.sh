@@ -21,10 +21,26 @@ hdr() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 bad() { FAIL=1; printf '   FAIL: %s\n' "$*"; }
 note() { printf '   %s\n' "$*"; }
 
+# Temporaries live BESIDE their target, not in /tmp. `mv` across filesystems is a copy followed by
+# an unlink, which is exactly the non-atomic write this pattern exists to avoid; a rename within
+# one directory is atomic. The trap covers every exit path, including the early ones.
+TMPFILES=()
+cleanup() { [ "${#TMPFILES[@]}" -gt 0 ] && rm -f "${TMPFILES[@]}"; return 0; }
+trap cleanup EXIT
+mktmp() { local t; t=$(mktemp "$1.XXXXXX"); TMPFILES+=("$t"); printf '%s' "$t"; }
+
 RERUN=results/phase_a_cap1600.rerun.json
 COMMITTED=results/phase_a_cap1600.json
 MAINTENANCE_ANYWAY=0
-[ "${1:-}" = "--maintenance-anyway" ] && MAINTENANCE_ANYWAY=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --maintenance-anyway) MAINTENANCE_ANYWAY=1 ;;
+    # An unrecognised flag used to be ignored in silence, so a typo in --maintenance-anyway would
+    # have stopped at Part A while looking like it had been honoured.
+    *) echo "unknown argument: $1"; echo "usage: $0 [--maintenance-anyway]"; exit 2 ;;
+  esac
+  shift
+done
 
 # The audit fails on these two and that is known and accepted, so a bare "verify_everything
 # failed" carries no information. Naming them here turns the check into a real one: a file that
@@ -69,8 +85,17 @@ for i in inc:
 # leaves a well-formed JSON with fewer records and no closing fields; the previous attempt left
 # exactly that at 150 of 525.
 ok = True
-if n != 525:
-    print(f"   expected 525 records", file=sys.stderr); ok = False
+# Derived, not hardcoded. `525` was written in by hand; if the matrix ever gains an arm or a pass,
+# a hardcoded total silently checks the wrong number, which is the failure mode this whole script
+# exists to catch elsewhere.
+des = d.get("design") or {}
+want = (des.get("n_prompts") or 0) * (des.get("passes") or 0) * len(d.get("arms") or {})
+if not want:
+    print("   cannot derive the expected record count from the design", file=sys.stderr); ok = False
+elif n != want:
+    print(f"   expected {want} records "
+          f"({des['n_prompts']} prompts x {des['passes']} passes x {len(d['arms'])} arms)",
+          file=sys.stderr); ok = False
 if not closed:
     print("   no gpu_state_at_end: the run did not reach its own shutdown", file=sys.stderr); ok = False
 if inc:
@@ -112,8 +137,15 @@ if not tv:
     print("   the bench.py fix from Correction 34 did not take effect", file=sys.stderr)
     raise SystemExit(1)
 if ident != len(tv):
-    print(f"   {len(tv) - ident} are NOT identical: the branch does not reproduce master's bytes "
-          f"with speculation off, which would be a finding, not a formality", file=sys.stderr)
+    # This exits non-zero on purpose, and the message says why. It is not a malfunction: it is the
+    # most interesting outcome this control can have. The first version printed it to stderr and
+    # returned 0, so a branch that does NOT reproduce master's bytes with speculation off would
+    # have been reported under "All post-measurement steps passed."
+    print(f"   FINDING, not a failure of this script: {len(tv) - ident} of {len(tv)} cross-tree "
+          f"comparisons are NOT identical. The PR branch does not reproduce master's bytes with "
+          f"speculation off. Read them before anything else in this run is quoted.",
+          file=sys.stderr)
+    raise SystemExit(1)
 PY
 
 if [ "$FAIL" != 0 ] && [ "$MAINTENANCE_ANYWAY" = 0 ]; then
@@ -130,17 +162,16 @@ hdr "B1. coverage, at a replication count that can tell the figures apart (TODO 
 # here, and the sweep is 8 rows, so 2000 replications is about 2.5 minutes plus whatever the n=50
 # rows add. The comment this replaces said "roughly 6.7x the work of the committed run", which was
 # a ratio nobody had turned into a duration.
-if python3 harness/coverage_sim.py --replications 2000 > /tmp/coverage.$$ 2>/tmp/coverage.err.$$; then
+COV=$(mktmp analysis/.bootstrap_coverage); COV_ERR=$(mktmp analysis/.bootstrap_coverage_err)
+if python3 harness/coverage_sim.py --replications 2000 > "$COV" 2>"$COV_ERR"; then
   # Write only after it succeeds. `cmd > committed_file` truncates the file before the command
   # runs, so a crash left the repository with an empty artifact and no way to tell.
-  mv /tmp/coverage.$$ analysis/bootstrap_coverage.txt
+  mv "$COV" analysis/bootstrap_coverage.txt
   head -16 analysis/bootstrap_coverage.txt | sed 's/^/   /'
 else
   bad "coverage_sim did not finish; analysis/bootstrap_coverage.txt left untouched"
-  head -5 /tmp/coverage.err.$$ | sed 's/^/     /'
-  rm -f /tmp/coverage.$$
+  head -5 "$COV_ERR" | sed 's/^/     /'
 fi
-rm -f /tmp/coverage.err.$$
 
 hdr "B2. the README's evidence block, generated (TODO D7)"
 python3 harness/render_evidence.py || bad "render_evidence did not write the block"
@@ -149,16 +180,21 @@ hdr "B3. the anchor report, regenerated from the current analyser"
 # A non-zero exit is this analyser's verdict, not an error: it gates on the anchor holding, and the
 # anchor does not hold. stderr is kept OUT of the artifact -- merging it meant a traceback would
 # have been written into the committed report and only the grep below would have noticed.
-python3 harness/anchor_verdict.py results/phase_m.json > /tmp/anchor.$$ 2>/tmp/anchor.err.$$
-if grep -q "PRIMARY" /tmp/anchor.$$; then
-  mv /tmp/anchor.$$ analysis/phase_m_anchor.txt
-  note "anchor report regenerated"
+ANC=$(mktmp analysis/.phase_m_anchor); ANC_ERR=$(mktmp analysis/.phase_m_anchor_err)
+python3 harness/anchor_verdict.py results/phase_m.json > "$ANC" 2>"$ANC_ERR"
+# `grep -q PRIMARY` alone accepts a truncated file that happens to reach that line. The report has
+# a fixed shape: a provenance header naming its two inputs, the registered band, the primary
+# estimate and a verdict. Check for all of them, or a half-written report replaces a whole one.
+if grep -q "generated from" "$ANC" && grep -q "analyser " "$ANC" \
+   && grep -q "registered band" "$ANC" && grep -q "PRIMARY" "$ANC" \
+   && grep -qE "ANCHOR (DOES NOT HOLD|HOLDS)" "$ANC"; then
+  mv "$ANC" analysis/phase_m_anchor.txt
+  note "anchor report regenerated, $(wc -l < analysis/phase_m_anchor.txt) lines"
 else
-  bad "the anchor report has no PRIMARY line; analysis/phase_m_anchor.txt left untouched"
-  head -5 /tmp/anchor.err.$$ | sed 's/^/     /'
-  rm -f /tmp/anchor.$$
+  bad "the anchor report is not the expected shape; analysis/phase_m_anchor.txt left untouched"
+  note "got $(wc -l < "$ANC") lines; first stderr:"
+  head -5 "$ANC_ERR" | sed 's/^/     /'
 fi
-rm -f /tmp/anchor.err.$$
 
 hdr "B4. the audit's failures are the ones already accounted for"
 python3 - <<PY || bad "the set of audit failures is not the expected one"
