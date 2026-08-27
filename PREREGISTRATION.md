@@ -3241,3 +3241,74 @@ or not it displaced any work, and under this repository's own rule a marked file
 
 It is installed at user level beside the existing `gh-guard.py`, which it does not replace. It works:
 it blocked its own commit, and it has blocked this session repeatedly while Phase A re-runs.
+
+## Correction 36, 2026-08-27 22:15: the evidence registry, and four things found while closing the reproduction gaps
+
+Prepared while Phase A re-runs and the CPU guard refuses every analyser in the repository, so all
+of it is written and tested on subsets and none of it is run at full scale yet.
+`scripts/post_measurement.sh` is the one command that runs the rest, and it refuses while the lock
+is held.
+
+### The status paragraph is now generated
+
+`evidence/registry.json` holds one entry per phase and deliberately holds no numbers: the question,
+a controlled-vocabulary strength for how far the phase may be read, and the claims it must not be
+used to make. `harness/render_evidence.py` computes records, completeness and incidents from the
+result files themselves and writes the README's block; `--check` fails when the two have moved
+apart, and `scripts/verify_everything.sh` section 7 runs it. The paragraph it replaces carried a
+date, and the date did not help: it said Phase B was running while 525 committed records sat in
+`results/phase_b.json`, and it never mentioned Phase R at all.
+
+### Four things found on the way
+
+**The reproduction script needed `hf` and said it was optional.** It printed "note: 'hf' not on
+PATH; download the models yourself" at step 1 and then called `hf download` unconditionally at step
+5, so a machine without it failed three steps later with a command-not-found instead of at the top
+with a reason. It is now required exactly when a pinned model file is absent.
+
+**The PR ref the DFlash2 commit came from has already moved past it.** `dflash2_source` is
+`pull/27342/head`, a live ref, and the measured commit `d1a522fc` is ten commits behind that head.
+A force-push or a deleted branch makes it unreachable and the lock then names a commit nobody can
+fetch. `repro/dflash2-d1a522fc.bundle` carries those ten commits in 22 KB. Its prerequisite,
+`9731ad3f`, was checked to be an ancestor of the pinned master, so a clone at the pinned master can
+always complete it; `git bundle verify` passes; the script prefers the bundle and falls back to the
+live ref only when the object is missing.
+
+**The build-time toolchain was recoverable, and nobody had recorded it.** The lock pinned CUDA, the
+engine commits, the models and the card, and said nothing about the compiler. It did not have to
+stay unknown: `llamacpp-*/build/CMakeCache.txt` and the `CMakeFiles/*/CMake*Compiler.cmake` beside
+it name what configured the measured binaries -- GNU 14.2.0 for C and C++, nvcc 13.3.73, CMake
+3.31.6, Release, `sm_86`, ccache on -- and are dated 2026-08-24 10:57 and 11:02, before the run.
+That is evidence rather than a contemporaneous log, and the lock says so. The script reports
+differences and continues; a toolchain mismatch bounds how far two builds can be assumed identical
+and does not by itself invalidate a reproduction.
+
+**The data dedication covered four source files, and would have covered upstream source.**
+`LICENSE-DATA` listed `analysis/**` and `repro/**`, which are `analysis/plot.py`,
+`analysis/plot_phase_m.py`, `analysis/plot_qsmall_ladder.py` and `repro/llamacpp_27572.py` among
+other things -- all code, and all excluded by the document's very next sentence, so a downstream
+reader could not tell which statement governed a `.py` file. Adding the bundle above made it worse:
+it put whole upstream llama.cpp commits inside a directory dedicated to the public domain. The
+dedication is now scoped by file type, `repro/*.bundle` is excluded explicitly, and `NOTICE` names
+it as upstream MIT source rather than excerpts.
+
+### A reproduction is now checked on its effects
+
+`scripts/reproduce_phase_a.sh` ended by printing "Absolute tok/s are host-specific; compare the
+paired effects, not the levels" -- advice for a human, after a check that only counted records. A
+rerun that landed on entirely different throughput passed it. `harness/compare_reproduction.py`
+compares the paired class-stratified effect per arm, each against its own tree's baseline, using
+`analyze.build_series` so the estimator and the exclusion rule are the same code that produced the
+committed report rather than a second implementation. It reports provenance, the excluded and
+flagged record counts, and each run's own interval, and it deliberately puts **no** interval on the
+difference: the two runs are separate sessions and nothing in the design pairs them. Non-overlap
+fails it; overlap is reported as a failure to exclude rather than as agreement, which is
+Correction 26's lesson. A recorded incident fails it by default.
+
+### The guard needed five narrowings, and the last one is the sharpest
+
+Every one is the same lesson -- it matches the text of a command and cannot recover intent -- but
+the fifth is worth stating on its own. `git add reproduce_phase_a.sh scripts/verify_everything.sh`
+was denied, because `\b` before an interpreter name is too weak a boundary: `\bsh` found the tail
+of `_a.sh`, and the rest of the pattern did the work. Command names and file suffixes end in the
+same letters, so the boundary has to exclude `.` and `-` as well.
