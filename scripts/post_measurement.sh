@@ -27,7 +27,12 @@ note() { printf '   %s\n' "$*"; }
 TMPFILES=()
 cleanup() { [ "${#TMPFILES[@]}" -gt 0 ] && rm -f "${TMPFILES[@]}"; return 0; }
 trap cleanup EXIT
-mktmp() { local t; t=$(mktemp "$1.XXXXXX"); TMPFILES+=("$t"); printf '%s' "$t"; }
+# Assigns into the variable named by $1 rather than echoing, because `V=$(mktmp path)` runs the
+# function in a command substitution -- a subshell -- so `TMPFILES+=(...)` appended to a copy that
+# died with it and the parent array stayed empty. The trap was correct and swept nothing; the run
+# that proved it left two .err files behind in analysis/. Static review did not find this. Running
+# it did.
+mktmp() { local __v=$1 __t; __t=$(mktemp "$2.XXXXXX"); TMPFILES+=("$__t"); printf -v "$__v" '%s' "$__t"; }
 
 RERUN=results/phase_a_cap1600.rerun.json
 COMMITTED=results/phase_a_cap1600.json
@@ -162,7 +167,7 @@ hdr "B1. coverage, at a replication count that can tell the figures apart (TODO 
 # here, and the sweep is 8 rows, so 2000 replications is about 2.5 minutes plus whatever the n=50
 # rows add. The comment this replaces said "roughly 6.7x the work of the committed run", which was
 # a ratio nobody had turned into a duration.
-COV=$(mktmp analysis/.bootstrap_coverage); COV_ERR=$(mktmp analysis/.bootstrap_coverage_err)
+mktmp COV analysis/.bootstrap_coverage; mktmp COV_ERR analysis/.bootstrap_coverage_err
 if python3 harness/coverage_sim.py --replications 2000 > "$COV" 2>"$COV_ERR"; then
   # Write only after it succeeds. `cmd > committed_file` truncates the file before the command
   # runs, so a crash left the repository with an empty artifact and no way to tell.
@@ -180,7 +185,7 @@ hdr "B3. the anchor report, regenerated from the current analyser"
 # A non-zero exit is this analyser's verdict, not an error: it gates on the anchor holding, and the
 # anchor does not hold. stderr is kept OUT of the artifact -- merging it meant a traceback would
 # have been written into the committed report and only the grep below would have noticed.
-ANC=$(mktmp analysis/.phase_m_anchor); ANC_ERR=$(mktmp analysis/.phase_m_anchor_err)
+mktmp ANC analysis/.phase_m_anchor; mktmp ANC_ERR analysis/.phase_m_anchor_err
 python3 harness/anchor_verdict.py results/phase_m.json > "$ANC" 2>"$ANC_ERR"
 # `grep -q PRIMARY` alone accepts a truncated file that happens to reach that line. The report has
 # a fixed shape: a provenance header naming its two inputs, the registered band, the primary
