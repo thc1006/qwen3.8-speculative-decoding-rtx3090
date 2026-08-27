@@ -60,11 +60,14 @@ class Interval:
         Those three numbers had no reproducible source until 2026-08-27. `harness/coverage_sim.py`
         is that source now, and it also covers the process this study actually scores its
         divergence verdicts on, which is BINARY and whose cluster mean over three passes takes one
-        of four values. At 300 replications it puts the binary case at 91.7 % for 25 prompts and
-        94.0 % for 50 -- inside the band the continuous processes occupy, so this threshold applies
-        to a binary outcome with about the same force. The same run reads 93.7 %, 92.3 % and 86.3 %
-        for normal, uniform and heavy-tailed at 25, which agrees with the figures above to within
-        roughly one Monte Carlo standard error for two of the three. See PREREGISTRATION.md
+        of four values. At 2000 replications, where a coverage figure's own Monte Carlo standard
+        error is 0.6 to 0.7 points, it puts the binary case at 90.2 % for 25 prompts and 93.3 % for
+        50 -- inside the band the continuous processes occupy, so this threshold applies to a
+        binary outcome with about the same force. The same run reads 91.1 %, 92.0 % and 87.5 % for
+        normal, uniform and heavy-tailed at 25: normal and heavy-tailed land on the figures above
+        within one standard error, and uniform is 2.3 away. An earlier 300-replication pass had the
+        discrepancy on `normal` instead; the standard error is 1.4 to 2.0 points at that size, so
+        which of the three disagreed was itself noise. See PREREGISTRATION.md
         Correction 30. Restoring the missing coverage is worth roughly a 1.15 to 1.25 times wider
         interval, so a margin under about 1.3 is a verdict that should not be leaned on.
 

@@ -11,17 +11,20 @@ prompt's cluster mean over three passes can only be 0, 1/3, 2/3 or 1. Whether a 
 bootstrap covers at 95 % on a four-valued cluster mean is not answered by a calibration run on
 continuous draws, and H9, H10 and H11 are all scored on exactly that statistic.
 
-This rechecks the recorded figures and adds the binary case. At 300 replications it does not
-land on all three: uniform and heavy-tailed come back within about one Monte Carlo standard error
-of the docstring values, and the normal case sits 2.0 standard errors away, so `reproduces` would
-be too strong a word for what this run establishes. The design simulated is this
+This rechecks the recorded figures and adds the binary case. At 2000 replications, where a
+coverage estimate's own Monte Carlo standard error is 0.6 to 0.7 points, normal and heavy-tailed
+land on the docstring values within one standard error and uniform is 2.3 away. A 300-replication
+pass had put the discrepancy on `normal` at 2.0 standard errors instead; the standard error is
+1.4 to 2.0 points at that size, so which of the three disagreed was itself noise. `reproduces` is
+still too strong a word for a run with one process 2.3 standard errors out. The design simulated is this
 study's: five classes of five prompts, three passes each, resampling prompts within class, and
 the same estimator the reports use -- `stats.paired_cluster_bootstrap`.
 
 Cost note: coverage needs an interval per replication and each interval is a full bootstrap, so
-the work is replications x n_boot. The recorded figures used 800 replications; the defaults here
-are lower so a run finishes in a few minutes, and every printed figure names the counts behind
-it rather than inheriting authority from the docstring it is checking.
+the work is replications x n_boot. The recorded figures used 800 replications; this defaults to
+2000, which takes about two and a half minutes and is what the committed artifact was generated
+at, and every printed figure names the counts behind it rather than inheriting authority from the
+docstring it is checking.
 """
 from __future__ import annotations
 
@@ -112,13 +115,13 @@ def coverage(process: str, *, n_prompts: int, passes: int, replications: int, n_
 
 def _fmt(row: dict) -> str:
     # A coverage figure is itself an estimate from `replications` Bernoulli trials, and printing
-    # it to one decimal without its own uncertainty invites exactly the comparison this file was
-    # written to settle: 93.7 % here against a docstring's 90.9 % looks like a contradiction and
-    # is about two Monte Carlo standard errors. Morris, White and Crowther (2019) give the
-    # formula; at p = 0.95 you need about 211 replications for an MCSE of 1.5 points and about
-    # 1900 for 0.5. The 300 used here give 1.4 to 2.0 points depending on the process, so the
-    # gap between this file's 93.7 % and the docstring's 90.9 % is 2.0 MCSE -- worth reporting,
-    # not worth calling a contradiction. Printed alongside so nobody has to derive that.
+    # it to one decimal without its own uncertainty is what let a 300-replication pass read
+    # 93.7 % against a docstring's 90.9 % and look like a contradiction when it was 2.0 Monte
+    # Carlo standard errors. Morris, White and Crowther (2019) give the formula; at p = 0.95 you
+    # need about 211 replications for an MCSE of 1.5 points and about 1900 for 0.5. At the 2000
+    # this file now defaults to it is 0.6 to 0.7, and normal comes back at 91.1 % -- on the
+    # recorded figure, with uniform the one that is out. Printed beside every row so nobody has
+    # to derive which differences are real.
     p, k = row["coverage"], row["replications"]
     mcse = math.sqrt(p * (1.0 - p) / k) if k and 0.0 <= p <= 1.0 else float("nan")
     return (f"  {row['process']:8s} n={row['n_prompts']:<3d} passes={row['passes']}  "
@@ -129,7 +132,10 @@ def _fmt(row: dict) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--replications", type=int, default=400)
+    # 2000, not 400: `analysis/bootstrap_coverage.txt` is generated at 2000 and a default that
+    # does not reproduce the committed artifact is the same defect as a stale report. It costs
+    # about two and a half minutes.
+    ap.add_argument("--replications", type=int, default=2000)
     ap.add_argument("--n-boot", type=int, default=2000)
     ap.add_argument("--passes", type=int, default=3)
     ap.add_argument("--processes", default="normal,uniform,heavy,binary")

@@ -45,8 +45,24 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 `scripts/verify_everything.sh` section 7 regenerates this and fails if it has moved.
 
 <!-- BEGIN GENERATED: EVIDENCE_STATUS -->
-_Not generated yet. Run `python3 harness/render_evidence.py`; it reads 61 MB of result files and
-the CPU guard blocks it while a measurement holds the GPU lock._
+| phase | data, computed from the files | inference |
+|---|---|---|
+| **A** | 875 records, complete, 0 incidents | primary result |
+| **A-1600** | 525 records, complete, 2 incidents | within-run contrasts reported |
+| **A-1600-rerun** | 525 records, complete, 0 incidents | within-run contrasts reported -- supersedes A-1600, which carries two host_contended incidents from another session's mutation suite; whether the older file stays on as the record of that contention is not decided here |
+| **A-hostB** | 175 records, complete, 0 incidents | association, not a controlled contrast |
+| **B** | 525 records, complete, 2 incidents | exploratory -- H2 and H2' and the arm design were in the initial commit; the model comparison was committed before the run finished; the forward-count robustness sweep was added after the data |
+| **C** | 750 records, complete, 0 incidents | within-run contrasts reported |
+| **KV** | 175 records, complete, 0 incidents | control |
+| **L** | 900 records over 5 files, complete, 0 incidents | within-run contrasts reported |
+| **M** | 1575 records, complete, 0 incidents | within-run contrasts reported -- the preregistered replication anchor does not hold, and the phase's own gate then forbids reading it as a statement about the predecessor |
+| **n-max** | 1050 records, complete, 0 incidents | within-run contrasts reported |
+| **Q** | 600 records over 2 files, complete, 0 incidents | association, not a controlled contrast |
+| **Qs** | 1500 records over 4 files, complete, 0 incidents | association, not a controlled contrast |
+| **R** | 1125 records, complete, 0 incidents | within-run contrasts reported |
+| **R2** | 1575 records, complete, 0 incidents | within-run contrasts reported |
+| **V** | 75 records, complete, 6 incidents | **not evaluable** -- both MTP arms fail during server start on 24 GiB; the baseline served |
+| **warp** | 1950 records over 13 files, complete, 0 incidents | control -- four builds of one revision differing only in the GENERIC warp table, plus an A6000 replication |
 <!-- END GENERATED: EVIDENCE_STATUS -->
 
 Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`
@@ -121,19 +137,25 @@ why deeper drafting stops paying.
 The inferential unit is the prompt, `n = 25`; the 5 passes are repeated measurements of the same
 prompt, not independent samples, and 875 is not a sample size. Intervals are a paired cluster
 bootstrap over prompts, on the class-stratified effect, and are **nominal** 95 %: this repo's own
-simulation puts the percentile interval's actual coverage between **86.3 % and 93.7 %** at
-`n = 25`, so the widths printed here should be read as potentially under-covering rather than as
-exact 95 % statements. Those are the reproducible figures, from
-[`analysis/bootstrap_coverage.txt`](analysis/bootstrap_coverage.txt): four synthetic processes at
-300 replications x 2000 resamples each. An older set, 88.0-90.9 %, is quoted in `stats.py` from an
-800-replication simulation whose code was never in the repository; the reproduction agrees with it
-to within about one Monte Carlo standard error on two of the three continuous processes and sits
-2.0 standard errors from the third, so neither set should be read as a precise constant. A coverage
-figure is itself an estimate from Bernoulli trials: at 300 replications its own Monte Carlo standard
-error is 1.4 to 2.0 points depending on the process, and by the standard formula ([Morris, White and
-Crowther 2019](https://onlinelibrary.wiley.com/doi/10.1002/sim.8086)) about 1900 replications would
-be needed to pin it to half a point. `coverage_sim.py` now prints that standard error beside every
-row rather than leaving the reader to derive which differences are real. All of
+simulation puts the percentile interval's actual coverage between **87.5 % and 92.0 %** at
+`n = 25`, so the widths printed here should be read as under-covering rather than as exact 95 %
+statements. Those come from [`analysis/bootstrap_coverage.txt`](analysis/bootstrap_coverage.txt):
+four synthetic processes at 2000 replications x 2000 resamples each, every row carrying its own
+Monte Carlo standard error of 0.6 to 0.7 points, which is the precision the standard formula
+([Morris, White and Crowther 2019](https://onlinelibrary.wiley.com/doi/10.1002/sim.8086)) asks
+about 1900 replications for.
+
+An older set, 88.0-90.9 %, is quoted in `stats.py` from an 800-replication simulation whose code
+was never in the repository, and at this replication count the reproduction lands on it: normal
+**91.1 %** against 90.9 % recorded, 0.3 standard errors, and heavy-tailed **87.5 %** against
+88.0 %, 0.7. Uniform is the one that does not, **92.0 %** against 90.6 %, 2.3 away. An earlier
+300-replication run had put the discrepancy on `normal` instead, at 2.0 standard errors; that was
+Monte Carlo noise, and settling which of the three actually disagrees is what the larger run
+bought. The binary process every divergence verdict in this study is scored on comes back at
+**90.2 %**, inside the band the continuous ones occupy. All of them are synthetic
+data-generating processes rather than this data's own unknown distribution, so they diagnose the
+estimator rather than quantify this interval; the primary Phase A effects sit far from zero under
+any of the sets. All of
 them come from synthetic data-generating processes, not from this data's own unknown distribution,
 so they diagnose the estimator rather than quantify this interval; the primary Phase A effects sit
 far from zero under either set.
