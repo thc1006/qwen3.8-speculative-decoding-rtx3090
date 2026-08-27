@@ -463,6 +463,13 @@ there was omission, not misstatement.
       apart, so **the cost tracks tokens drafted rather than tokens rejected**, and the verdict
       holds across F-2 to F+1. Two `host_contended` incidents from processes of my own leave the
       file marked FAIL in the audit; the fit above should be read with that.
+- [ ] **D6** regenerate `analysis/bootstrap_coverage.txt` once the GPU is free. `coverage_sim.py`
+      now prints each coverage figure's own Monte Carlo standard error, so the committed report
+      predates its analyser and the numbers in it carry no stated precision. Raise the replication
+      count while regenerating: at 300 the standard error is 1.4 to 2.0 points depending on the
+      process, which is why 93.7 % here and 90.9 % in `stats.py` look like a contradiction and are
+      2.0 standard errors apart. About 1900 replications pin coverage to half a point (Morris,
+      White and Crowther 2019). Blocked during a measurement by the CPU guard, deliberately.
 - [ ] **D4** full re-run of Phase A under the C1/C2/C3 harness, once those land.
 - [ ] **D5** factorial prompts: class crossed with thinking, language crossed with matched task,
       short and medium output lengths alongside the 400-token regime.

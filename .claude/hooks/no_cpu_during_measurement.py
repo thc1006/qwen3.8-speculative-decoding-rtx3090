@@ -51,12 +51,24 @@ HEAVY = [
     # That is a real limit of this design: use Read/Edit for those, not the override.
     (r"\bgit\s+log\b[^|;&]*?\s(-[SG]\b|--(since|until|grep|follow|all)\b)", "a git history search"),
     (r"\b(python3?\s+-m\s+)?(unittest|pytest|nose2?)\b", "a test suite"),
-    (r"\bverify_everything\.sh\b", "it says so itself: CPU-heavy, do not run during a measurement"),
-    (r"harness/(audit_results|analyze|analyze_depth|analyze_cross_device|cost_model|mechanism_b|"
-     r"coverage_sim|width_groups|divergence_report|truncation_audit|anchor_verdict|"
-     r"warp_intervention|completeness|ladder_trend|cross_rung|quality)\.py", "an analyser"),
-    (r"(tests/(data_)?mutate|analysis/(verify_claims|matrix_report|rederive_from_logs|"
-     r"check_data_integrity|past_threshold_fit|plot_\w+))\.py", "the other repository's suite"),
+    # These three require the script to be INVOKED, not merely named. The first version matched
+    # any command containing the path, so `grep -n coverage harness/coverage_sim.py` was denied
+    # as though it were running the analyser, and `cat scripts/verify_everything.sh` with it.
+    # Reading a file is not what costs CPU; a guard that cannot tell the two apart is one you
+    # start overriding out of habit, which is worse than not having it.
+    (r"(\b(bash|sh|source)\s+\S*|\./\S*)verify_everything\.sh\b",
+     "it says so itself: CPU-heavy, do not run during a measurement"),
+    # The path has to sit where an interpreter would take it as the script to run: straight after
+    # `python3` and any flags. Allowing it anywhere after `python3` still denied
+    # `python3 -c "...open('harness/coverage_sim.py')..."`, which only reads the file. Matching a
+    # command string cannot recover intent, so the precision has to come from position.
+    (r"\bpython3?\s+(-[A-Za-z]\S*\s+)*harness/(audit_results|analyze|analyze_depth|"
+     r"analyze_cross_device|cost_model|mechanism_b|coverage_sim|width_groups|divergence_report|"
+     r"truncation_audit|anchor_verdict|warp_intervention|completeness|ladder_trend|cross_rung|"
+     r"quality)\.py", "an analyser"),
+    (r"\bpython3?\s+(-[A-Za-z]\S*\s+)*(tests/(data_)?mutate|analysis/(verify_claims|"
+     r"matrix_report|rederive_from_logs|check_data_integrity|past_threshold_fit|plot_\w+))\.py",
+     "the other repository's suite"),
     (r"\bcompileall\b|\bpyflakes\b|\bshellcheck\b|\bmypy\b|\bruff\b", "a whole-tree linter"),
     (r"\b(cmake|ninja|nvcc|cargo|gcc|g\+\+|clang\+?\+?)\b|\bmake\s+-j", "a build"),
     (r"\bpip3?\s+install\b|\bnpm\s+(i|install|ci)\b|\bhf\s+download\b", "a download and unpack"),

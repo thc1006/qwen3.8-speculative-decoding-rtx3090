@@ -26,6 +26,7 @@ it rather than inheriting authority from the docstring it is checking.
 from __future__ import annotations
 
 import argparse
+import math
 import random
 import statistics
 from collections import defaultdict
@@ -110,9 +111,19 @@ def coverage(process: str, *, n_prompts: int, passes: int, replications: int, n_
 
 
 def _fmt(row: dict) -> str:
+    # A coverage figure is itself an estimate from `replications` Bernoulli trials, and printing
+    # it to one decimal without its own uncertainty invites exactly the comparison this file was
+    # written to settle: 93.7 % here against a docstring's 90.9 % looks like a contradiction and
+    # is about two Monte Carlo standard errors. Morris, White and Crowther (2019) give the
+    # formula; at p = 0.95 you need about 211 replications for an MCSE of 1.5 points and about
+    # 1900 for 0.5. The 300 used here give 1.4 to 2.0 points depending on the process, so the
+    # gap between this file's 93.7 % and the docstring's 90.9 % is 2.0 MCSE -- worth reporting,
+    # not worth calling a contradiction. Printed alongside so nobody has to derive that.
+    p, k = row["coverage"], row["replications"]
+    mcse = math.sqrt(p * (1.0 - p) / k) if k and 0.0 <= p <= 1.0 else float("nan")
     return (f"  {row['process']:8s} n={row['n_prompts']:<3d} passes={row['passes']}  "
-            f"coverage {row['coverage'] * 100:5.1f} %  "
-            f"(mean width {row['mean_width']:.3f}, {row['replications']} replications x "
+            f"coverage {p * 100:5.1f} % +- {mcse * 100:.1f} (MCSE)  "
+            f"(mean width {row['mean_width']:.3f}, {k} replications x "
             f"{row['n_boot']} resamples)")
 
 
