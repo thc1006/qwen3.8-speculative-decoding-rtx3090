@@ -127,19 +127,32 @@ def lock_state():
 
 
 def bench_process():
-    """(pid, cmdline) of a running benchmark, or None. Never raises."""
+    """(pid, cmdline) of a running benchmark or its server, or None. Never raises.
+
+    `/proc/<pid>/cmdline` is NUL-separated, which is the real argv. An earlier version joined it
+    on spaces and matched a regex against the result -- throwing away the argument boundaries and
+    then guessing them back. A peer session working on the sibling repository hit the same problem
+    from the other side, with a plain `"bench.py" in cmdline`, and its fix is the better one: split
+    on NUL and compare basenames at the positions where an interpreter would take a script.
+    `vim harness/bench.py`, `grep -rn bench.py .` and a shell command that merely mentions the path
+    all miss; the two things that actually hold the GPU both hit.
+    """
     for pid in os.listdir("/proc"):
         if not pid.isdigit():
             continue
         try:
             with open(f"/proc/{pid}/cmdline", "rb") as fh:
-                cl = fh.read().decode("utf-8", "replace").replace("\0", " ")
+                argv = [a for a in fh.read().decode("utf-8", "replace").split("\0") if a]
         except Exception:
             continue
-        # Anchored on invocation position for the same reason the analyser rules are: a command
-        # that merely names bench.py is not running it.
-        if re.search(r"\bpython3?\s+(-[A-Za-z]\S*\s+)*\S*harness/bench\.py\b", cl):
-            return int(pid), " ".join(cl.split())[:90]
+        if not argv:
+            continue
+        exe = os.path.basename(argv[0])
+        hit = exe in ("llama-server", "llama-bench") or (
+            exe.startswith("python")
+            and any(os.path.basename(a) == "bench.py" for a in argv[1:4]))
+        if hit:
+            return int(pid), " ".join(argv)[:90]
     return None
 
 
