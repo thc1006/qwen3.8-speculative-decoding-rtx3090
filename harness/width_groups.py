@@ -121,7 +121,8 @@ def main() -> int:
         return 2
 
     # (width, spec_type) -> {prompt -> fork position or "same"}, first pass only; divergence
-    # proved perfectly reproducible across passes in Phase A, 125 of 125.
+    # proved perfectly reproducible across passes in Phase A, 150 of 150. (This said 125, which
+    # is the extended-cap re-run's count over its three passes, not Phase A's over five.)
     cell: dict[tuple, dict] = collections.defaultdict(dict)
     for r in d["records"]:
         w = width_of(r["arm"], arms.get(r["arm"]))

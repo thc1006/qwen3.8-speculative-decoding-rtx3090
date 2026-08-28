@@ -4366,5 +4366,35 @@ class TheRegistryDeclaresAVocabularyAndMustEnforceIt(unittest.TestCase):
         self.assertFalse(twice, f"claimed more than once, records would double-count: {twice}")
 
 
+class ThePrefixOnlyStateStillHasNotHappened(unittest.TestCase):
+    """`quality.fork_position` treats a prefix-only scan as no fork, and says it never happens.
+
+    The docstring carried the count in prose -- "0 of 4673 records" -- and by the time anyone
+    looked the repository held 13900. The conclusion survived the drift; the denominator did not,
+    and a claim whose denominator is three times smaller than reality understates its own evidence.
+    The number lives here now, where it is recomputed instead of remembered.
+    """
+
+    def test_prefix_only_has_still_never_happened(self):
+        import glob
+        root = Path(__file__).parent.parent
+        total = prefix = files = 0
+        for p in sorted(glob.glob(str(root / "results" / "*.json"))):
+            name = Path(p).name
+            if ".partial." in name or name.startswith("dryrun") or ".pre_repair." in name:
+                continue
+            files += 1
+            for rec in json.loads(Path(p).read_text())["records"]:
+                total += 1
+                div = rec.get("divergence")
+                if div and div.get("prefix_only"):
+                    prefix += 1
+        self.assertGreater(files, 20, "the sweep found almost no result files; check the glob")
+        self.assertEqual(prefix, 0,
+                         f"prefix_only has now happened: {prefix} of {total} records over {files} "
+                         f"files. quality.fork_position folds it into 'no fork', and every "
+                         f"consumer of a fork position needs to be re-read before that stands.")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

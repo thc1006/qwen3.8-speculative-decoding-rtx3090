@@ -141,7 +141,9 @@ def fork_position(div: dict | None):
     treated the same way: no divergence record, the texts never disagreed within the window, and
     the scan stopping because the shorter text ended rather than because a character differed.
     The third is the one that reads as a fork if you only check `identical`. It has not happened
-    in this repo, 0 of 4673 records, and the arms all stop at a token cap while tokens are not a
+    anywhere in this repository's results, and `test_prefix_only_has_still_never_happened`
+    recounts that on every run rather than leaving a total in this sentence to go stale -- it said
+    4673 when the answer was already 13900. The arms all stop at a token cap while tokens are not a
     fixed number of characters, so it can.
 
     Records written before `prefix_only` existed are checked against their own lengths instead.
