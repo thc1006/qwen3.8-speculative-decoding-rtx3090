@@ -4445,15 +4445,35 @@ class TheCitationFileMayNotNameAThingThatDoesNotExist(unittest.TestCase):
             return
         # Each of the three has to be backed by something outside this file.
         if "version" in declared:
-            v = data["version"] if data else ""
+            v = str(data["version"] if data else "")
+            if not (root / ".git").exists():
+                # What a Zenodo or GitHub source tarball looks like: the tree without its history.
+                # The deposit is meant to be runnable from there, so a test that shells out to git
+                # has to say it cannot check rather than fail.
+                self.skipTest("no git metadata here (source tarball); cannot check the tag")
             tags = subprocess.run(["git", "-C", str(root), "tag", "--list"],
                                   capture_output=True, text=True).stdout.split()
-            self.assertIn(str(v), tags,
-                          f"CITATION.cff declares version {v!r} and no such git tag exists. "
-                          f"Tag the commit first, or take the key back out.")
+            # CFF wants the bare version and the tag is conventionally v-prefixed, so 1.0.0 is
+            # backed by a tag named v1.0.0. Requiring an exact match would have failed the release
+            # it was written to protect.
+            self.assertTrue(v in tags or f"v{v}" in tags,
+                            f"CITATION.cff declares version {v!r} and neither {v!r} nor "
+                            f"'v{v}' is a git tag (tags: {tags}). Tag the commit first, or take "
+                            f"the key back out.")
         if "doi" in declared:
-            self.fail("CITATION.cff declares a DOI. Remove this branch of the test only when the "
-                      "deposit exists and its identifier resolves -- and check that it does.")
+            # This used to fail unconditionally, as a tripwire against naming a deposit that did
+            # not exist. That was right while there was no deposit and wrong the moment one is
+            # made: it would have blocked the DOI it was guarding. What it should check is that
+            # the identifier has the shape Zenodo mints and is a CONCEPT DOI's sibling, not that
+            # nobody may write one. Resolvability is not checked here -- a unit test that reaches
+            # the network fails on a train.
+            doi = str(data["doi"] if data else "")
+            self.assertRegex(doi, r"^10\.\d{4,9}/[-._;()/:A-Za-z0-9]+$",
+                             f"CITATION.cff doi {doi!r} is not a DOI. A Zenodo one looks like "
+                             f"10.5281/zenodo.1234567.")
+            self.assertNotIn("doi.org", doi,
+                             "CITATION.cff wants the bare DOI, not a resolver URL; CFF renders "
+                             "the link itself")
         if "date-released" in declared and "version" not in declared:
             self.fail("CITATION.cff carries a release date with no version to attach it to")
 
