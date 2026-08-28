@@ -113,7 +113,14 @@ claims = ("not the architecture", "sign belongs to the drafting method",
           "no quantization anywhere", "the cost is linear", "costs a fixed c",
           # Withdrawn by TODO B7: the window is fixed in tokens, so there is no censored subset
           # to check the rest against and no partition surviving on the rest.
-          "The partition survives on the 10", "15 of 25 prompts")
+          "The partition survives on the 10", "15 of 25 prompts",
+          # Withdrawn by Correction 38. Agreement inside the window is not identity while anything
+          # stopped on the cap: 39 of the 75 cross-tree comparisons are right-censored, and at 400
+          # tokens every one of the 125 was. The bare phrase `byte-identical` is NOT listed --
+          # control_determinism.txt and the warp_intervention reports use it correctly, for two
+          # runs of the same input -- so the withdrawn readings are listed by their own wording.
+          "share the whole trajectory", "byte-identical output on",
+          "reproduces master's bytes")
 marks = ("withdraw", "Withdraw", "used to read", "an earlier version", "An earlier version",
          "no longer", "retract", "superseded", "Superseded")
 files = [f for f in subprocess.check_output(["git", "ls-files", "*.md"], text=True).split("\n")
@@ -129,7 +136,11 @@ for f in files:
         if any(m in ctx for m in marks):
             continue
         hits += [f"{f}:{i} {c!r}" for c in claims if c in line]
-print(f"   {len(files)} documents scanned, {len(hits)} residual claims")
+# What this actually checked, not what it would be nice to have checked. "0 residual claims"
+# reads as "no withdrawn claim survives anywhere"; it means "none of these listed strings appear".
+# The list is hand-maintained and lags every withdrawal until someone adds to it -- three of
+# tonight's were missing from it until this commit.
+print(f"   {len(files)} documents scanned for {len(claims)} withdrawn wordings, {len(hits)} found")
 for h in hits:
     print("   FAIL:", h)
 raise SystemExit(1 if hits else 0)
@@ -214,7 +225,7 @@ else
   printf '   phase_m_anchor.txt regenerates byte-identical\n'
 fi
 
-hdr "9. every generated report is what its analyser writes now"
+hdr "9. every generated report and figure is what its generator writes now"
 # Section 8 does this for one report. It had to be done for all of them: twenty-three committed
 # artifacts were older than the analysers that produce them, including `phase_a_report.txt`, which
 # still said "byte-identical" -- wording this study withdrew -- and `phase_c_cost.txt`, which
@@ -256,6 +267,25 @@ for x in stale:
     print("   FAIL:", x)
 raise SystemExit(1 if stale else 0)
 PY
+
+# The figures too. Regenerating them is byte-reproducible here -- matplotlib 3.11.1, same data,
+# same bytes -- which is what makes this checkable at all. It needs the venv, because matplotlib is
+# not in the system interpreter, and it says so rather than skipping quietly when that is missing.
+if [ -x .venv/bin/python ] && .venv/bin/python -c 'import matplotlib' 2>/dev/null; then
+  before=$(git status --porcelain analysis/*.png)
+  .venv/bin/python analysis/plot.py >/dev/null 2>&1
+  .venv/bin/python analysis/plot_phase_m.py >/dev/null 2>&1
+  .venv/bin/python analysis/plot_qsmall_ladder.py >/dev/null 2>&1
+  after=$(git status --porcelain analysis/*.png)
+  if [ "$before" = "$after" ]; then
+    printf '   16 figures regenerated, none changed\n'
+  else
+    bad "a figure is not what its plot script draws now"
+    printf '%s\n' "$after" | sed 's/^/     /'
+  fi
+else
+  bad "no .venv with matplotlib: the figures were NOT checked"
+fi
 
 hdr "10. the GPU is where the runs left it"
 # Through the module's own API. `python3 harness/gpustate.py --check` was here, and gpustate.py

@@ -135,7 +135,7 @@ and the concavity is also why a slope has to be compared over a matched width ra
 One threat to `c` can be checked without any of them. Once an arm diverges from its baseline it is
 decoding a different token sequence, so what follows is not a comparison of two widths on one
 trajectory. Between a fifth and a quarter of these requests show no divergence from their
-baseline inside the window, and those share the whole trajectory that was measured. They are
+baseline inside the window, and those two arms therefore ran the same tokens for as long as either was watched. They are
 right-censored rather than identical -- at a 400-token cap nothing reached EOS, so what happens
 after the cap is unobserved -- but the fit only ever uses the measured span, so for this argument
 the distinction does not bite. Fitting on those alone gives **0.2898 against 0.2904 for `draft-mtp`

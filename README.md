@@ -172,7 +172,7 @@ inside that margin.
 | mtp-n5 | 6 | 54.89 | +32.1 % [+26.4, +37.8] | 0.1343 | 3228 |
 | dflash2-n7 | 8 | 50.95 | +22.6 % [+14.7, +30.4] | 0.1251 | 3786 |
 
-The two trees agree to 41.55 tok/s and produce **byte-identical output on 125/125 prompt-passes**,
+The two trees agree to 41.55 tok/s and **show no divergence from each other on 125/125 prompt-passes**, all of which stopped on the 400-token cap, so that is agreement through the measured window rather than through a whole answer,
 so no no-speculation offset between the branches was detected here, and every DFlash2 arm is
 estimated against its same-tree baseline. That controls the branch's baseline main effect. It
 cannot rule out an interaction between the branch and the DFlash2 method itself, because
