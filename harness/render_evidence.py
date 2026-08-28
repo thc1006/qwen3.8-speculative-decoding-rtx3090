@@ -125,7 +125,13 @@ def render(only=None):
         note = phase.get("note")
         if note:
             inf += f" -- {note}"
-        rows.append(f"| **{phase['id']}** | {data} | {inf} |")
+        # Plain, not bold. `| **M** |` is exactly the syntax the later-phases findings table
+        # uses for its rows, so this block put a second `| **M** |` and a second `| **Q** |` into
+        # the document, and every check that greps for a phase row started matching whichever came
+        # first -- which is this one. Two tests broke that way: the Phase Q rung count and the
+        # Phase M "cost interpretation withheld" guard were both reading a status row that has
+        # neither. A generated block must not collide with the hand-written table it sits above.
+        rows.append(f"| {phase['id']} | {data} | {inf} |")
     return "\n".join(rows)
 
 

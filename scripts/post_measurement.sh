@@ -221,11 +221,20 @@ raise SystemExit(1 if new else 0)
 PY
 
 hdr "B5. everything, checked"
-# verify_everything's section 2 fails on the two files named above, by design and on purpose, so
-# its overall verdict is expected to be non-zero until they are dealt with. B4 is the check that
-# carries information; this one is here for sections 1 and 3 through 9.
-bash scripts/verify_everything.sh
-note "section 2 is expected to fail on $EXPECTED_AUDIT_FAILURES; B4 is what checks that set"
+# verify_everything's section 2 fails on the two files named above, by design, so its exit code is
+# expected to be non-zero and cannot be used as this step's verdict. The first version simply ran
+# it and printed a note -- which swallowed everything else it reported, including two genuinely
+# failing tests in section 1 that had been broken for hours. Every FAIL line is collected instead,
+# and any that is not the known section-2 one fails this step.
+VERIFY_OUT=$(mktmp analysis/.verify_out)
+bash scripts/verify_everything.sh 2>&1 | tee "$VERIFY_OUT"
+UNEXPECTED=$(grep -E '^   FAIL: ' "$VERIFY_OUT" | grep -v 'audit_results reported a problem' || true)
+if [ -n "$UNEXPECTED" ]; then
+  bad "verify_everything reported a failure that is not the known audit one:"
+  printf '%s\n' "$UNEXPECTED" | sed 's/^/     /'
+else
+  note "the only failure is section 2 on $EXPECTED_AUDIT_FAILURES, which B4 checks the set of"
+fi
 
 echo
 if [ "$FAIL" = 0 ]; then

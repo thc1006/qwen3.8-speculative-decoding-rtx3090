@@ -47,22 +47,22 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 <!-- BEGIN GENERATED: EVIDENCE_STATUS -->
 | phase | data, computed from the files | inference |
 |---|---|---|
-| **A** | 875 records, complete, 0 incidents | primary result |
-| **A-1600** | 525 records, complete, 2 incidents | within-run contrasts reported |
-| **A-1600-rerun** | 525 records, complete, 0 incidents | within-run contrasts reported -- supersedes A-1600, which carries two host_contended incidents from another session's mutation suite; whether the older file stays on as the record of that contention is not decided here |
-| **A-hostB** | 175 records, complete, 0 incidents | association, not a controlled contrast |
-| **B** | 525 records, complete, 2 incidents | exploratory -- H2 and H2' and the arm design were in the initial commit; the model comparison was committed before the run finished; the forward-count robustness sweep was added after the data |
-| **C** | 750 records, complete, 0 incidents | within-run contrasts reported |
-| **KV** | 175 records, complete, 0 incidents | control |
-| **L** | 900 records over 5 files, complete, 0 incidents | within-run contrasts reported |
-| **M** | 1575 records, complete, 0 incidents | within-run contrasts reported -- the preregistered replication anchor does not hold, and the phase's own gate then forbids reading it as a statement about the predecessor |
-| **n-max** | 1050 records, complete, 0 incidents | within-run contrasts reported |
-| **Q** | 600 records over 2 files, complete, 0 incidents | association, not a controlled contrast |
-| **Qs** | 1500 records over 4 files, complete, 0 incidents | association, not a controlled contrast |
-| **R** | 1125 records, complete, 0 incidents | within-run contrasts reported |
-| **R2** | 1575 records, complete, 0 incidents | within-run contrasts reported |
-| **V** | 75 records, complete, 6 incidents | **not evaluable** -- both MTP arms fail during server start on 24 GiB; the baseline served |
-| **warp** | 1950 records over 13 files, complete, 0 incidents | control -- four builds of one revision differing only in the GENERIC warp table, plus an A6000 replication |
+| A | 875 records, complete, 0 incidents | primary result |
+| A-1600 | 525 records, complete, 2 incidents | within-run contrasts reported |
+| A-1600-rerun | 525 records, complete, 0 incidents | within-run contrasts reported -- supersedes A-1600, which carries two host_contended incidents from another session's mutation suite; whether the older file stays on as the record of that contention is not decided here |
+| A-hostB | 175 records, complete, 0 incidents | association, not a controlled contrast |
+| B | 525 records, complete, 2 incidents | exploratory -- H2 and H2' and the arm design were in the initial commit; the model comparison was committed before the run finished; the forward-count robustness sweep was added after the data |
+| C | 750 records, complete, 0 incidents | within-run contrasts reported |
+| KV | 175 records, complete, 0 incidents | control |
+| L | 900 records over 5 files, complete, 0 incidents | within-run contrasts reported |
+| M | 1575 records, complete, 0 incidents | within-run contrasts reported -- the preregistered replication anchor does not hold, and the phase's own gate then forbids reading it as a statement about the predecessor |
+| n-max | 1050 records, complete, 0 incidents | within-run contrasts reported |
+| Q | 600 records over 2 files, complete, 0 incidents | association, not a controlled contrast |
+| Qs | 1500 records over 4 files, complete, 0 incidents | association, not a controlled contrast |
+| R | 1125 records, complete, 0 incidents | within-run contrasts reported |
+| R2 | 1575 records, complete, 0 incidents | within-run contrasts reported |
+| V | 75 records, complete, 6 incidents | **not evaluable** -- both MTP arms fail during server start on 24 GiB; the baseline served |
+| warp | 1950 records over 13 files, complete, 0 incidents | control -- four builds of one revision differing only in the GENERIC warp table, plus an A6000 replication |
 <!-- END GENERATED: EVIDENCE_STATUS -->
 
 Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`
