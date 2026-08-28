@@ -333,12 +333,22 @@ def group_stability(result: dict) -> None:
         c = Counter(groups_per_prompt)
         modal, n = c.most_common(1)[0]
         sigs[q] = repr(modal)
-        pretty = " | ".join("{" + ",".join(g) + "}" for g in modal)
+        # An empty modal partition is a real answer and used to print as a dangling arrow. It
+        # means that on the commonest prompt shape no arm had a determined fork position at all,
+        # which is what BF16 looks like: 156 of its 300 cells never diverge. Saying so beats
+        # printing nothing after the arrow.
+        pretty = (" | ".join("{" + ",".join(g) + "}" for g in modal) if modal
+                  else "(no arm has a determined fork position on the modal prompt)")
         print(f"  pass {q}: modal partition on {n}/{len(prompts)} prompts -> {pretty}")
 
     same = len(set(sigs.values())) == 1
     print(f"\n  partition identical in every pass: {same}")
-    if same:
+    if same and all(sigs[q] == repr(()) for q in passes):
+        # Stability of nothing is not evidence of anything. Without this the report said an empty
+        # partition was "a stable property of the configuration".
+        print("  -> and it is empty in every pass, which says the arms could not be told apart "
+              "here rather than that they behave alike.")
+    elif same:
         print("  -> the grouping is a stable property of the configuration, not a single-pass "
               "coincidence.")
     else:
