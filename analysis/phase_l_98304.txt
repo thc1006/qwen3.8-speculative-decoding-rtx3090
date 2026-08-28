@@ -13,6 +13,11 @@ baseline@96k-pr                    26.37      26.37      45  zh_self_intro=10.2%
 mtp-n2@96k                         40.70      40.70      45  zh_debug=0.6%
 dflash2-n4@96k                     42.22      42.22      45  code_py_ratelimiter=10.6%
 
+--- unspeculated contrast (baselines against each other; not an effect) ---
+  baseline@96k-pr          vs baseline@96k             -0.59 [-1.07, +0.01]   differs in: tree
+  Both sides are unspeculated, so this is a property of the setup, not an effect. A
+  contrast that spans zero is a control: whatever differs did not move baseline throughput.
+
 --- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
 arm                          vs                                    delta %  verdict
 mtp-n2@96k                   baseline@96k           +53.44 [+48.78, +58.12]  FASTER
@@ -45,13 +50,15 @@ arm                     tok/J dec   vs base  J/request   vs base  accept  draft 
   and understates the speculative arms, so an energy saving read off the averaged
   field is larger than the instantaneous field supports, by about this much.
 baseline@96k               0.0628     +0.0%       2531     +0.0%       -          -
-baseline@96k-pr            0.0625     -0.5%       2545     +0.5%       -          -
+baseline@96k-pr            0.0625     +0.0%       2545     +0.0%       -          -
 mtp-n2@96k                 0.0967    +54.0%       1663    -34.3%   0.646       2.28
-dflash2-n4@96k             0.1008    +60.5%       1678    -33.7%   0.451       2.77
+dflash2-n4@96k             0.1008    +61.2%       1678    -34.1%   0.451       2.77
+  Each arm is measured against its own baseline from baseline_map, not against a single
+  reference: this matrix holds more than one.
 
 --- losslessness (greedy arms vs baseline text, same prompt+pass) ---
-  dflash2-n4@96k             byte-identical 18/45   median shared prefix when forked: 0.168
-  mtp-n2@96k                 byte-identical 18/45   median shared prefix when forked: 0.168
+  dflash2-n4@96k             no divergence through cap 18/45   median shared prefix when forked: 0.168
+  mtp-n2@96k                 no divergence through cap 18/45   median shared prefix when forked: 0.168
 
 --- determinism (greedy, same arm/prompt across passes) ---
   baseline@96k               reproducible 30/30

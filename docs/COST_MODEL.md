@@ -225,10 +225,16 @@ it to the share of the cycle it would account for:
 | matrix | arms fitted | largest upper limit on `r` | share of cycle cost |
 |---|---|---|---|
 | A | 5 | +0.00435 | 0.29 % |
-| C | 3 | +0.00075 | 0.08 % |
 | KV | 5 | +0.00293 | 0.22 % |
 | NMAX | 12 | +0.04818 | 1.29 % |
 | R2 | 14 | +0.01518 | 1.37 % |
+
+Phase C had a row here, `3 arms, +0.00075, 0.08 %`, and it is withdrawn. `cost_model.py` gained a
+fail-closed check on the `mean_len` derivation every cost quantity rests on, and Phase C does not
+pass it, so the analyser now refuses to print `k`, `c`, `k0` or this bound for that matrix. The
+number was published under an earlier version that did not check, and the artifact it came from
+was never regenerated afterwards. Phases B and M are withheld for the same reason and never had
+rows.
 
 The share is the comparable column, because `r` is per rejected *draft token* and arms at
 different widths carry the same total cost at very different `r`. Nothing reaches 1.4 %.

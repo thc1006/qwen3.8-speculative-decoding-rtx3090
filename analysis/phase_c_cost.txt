@@ -16,82 +16,16 @@ VERIFICATION-STEP COST MODEL     speedup = mean_len / k
 
 [integrity] API counters vs llama.cpp log lines: 375 requests compared, 0 mismatched  -- two independent sources agree to the token
 
---- k by arm (pooled over classes and passes) ---
-arm              spec             w    n   k mean    k sd         k range
-dflash2-q4k      draft-dflash     5   75   1.8958  0.0096   1.873-1.921
-dflash2-q8       draft-dflash     5   75   1.8886  0.0106   1.856-1.916
-dflash2-bf16     draft-dflash     5   75   1.9511  0.0140   1.914-1.981
-draft08b-n4      draft-simple     5   75   2.6410  0.0677   2.562-2.786
-ngram-cache      ngram-cache      5   63   1.1122  0.0636   1.015-1.245
-ngram-map-k      ngram-map-k      5    6   1.0120  0.0015   1.010-1.013
-draft08b-n8      draft-simple     9   75   2.9608  0.0828   2.847-3.132
+====================================================================================================
+REFUSING TO REPORT k, c OR k0 FOR THIS RESULT.
+====================================================================================================
+Every quantity below k is a function of mean_len, and the check above says this
+phase's mean_len derivation is wrong by more than the bound collect() documents.
+A number that is systematically wrong still fits a line, still produces a tight
+bootstrap interval, and still reads as a mechanism. Printing it with a caption
+saying it is wrong is how it ends up quoted without the caption.
 
---- TEST 1: is the overhead charged to REJECTION? ---
-    Model a rejection-proportional cost r (decode-steps per rejected draft token):
-        k = k_verify + r * w * (1 - acceptance),  w = realised draft len / forward
-        => dk/d(acceptance) = -r * w,   so  r = -slope / w
-    A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
-    The model holds w constant within an arm. Where the server reuses a surviving
-    draft tail instead of re-drafting, w moves WITH acceptance and the slope picks
-    that up rather than any rejection cost - biased positive, which reads as r < 0,
-    which is this test's own conclusion. Arms whose w varies are fitted and shown,
-    and excluded from the bound.
-
-arm                 n    accept range      w  w cv%     r2                   r [95 %]  reading
-dflash2-q4k         4  0.162-0.843   3.98   0.39  0.116       -0.00 [-0.01, +0.00]  no rejection cost detected (interval contains zero)
-dflash2-q8          4  0.167-0.868   3.98   0.38  0.152       -0.00 [-0.01, -0.00]  clears zero by only 0.15 half-widths - inside the known undercoverage; would be -0.5% of k
-dflash2-bf16        4  0.165-0.868   3.98   0.37  0.071       -0.00 [-0.01, +0.00]  no rejection cost detected (interval contains zero)
-draft08b-n4         4  0.192-0.735   2.26  12.88  0.946       -0.16 [-0.18, -0.15]  CONFOUNDED: draft/fwd varies 12.9% and tracks acceptance at r=+0.99; the regressor is inside the response
-ngram-cache         4  0.000-0.000   0.39  57.85      -              not estimable  too few prompts to resample
-ngram-map-k         4  0.000-0.167   0.12   1.11      -              not estimable  too few prompts to resample
-draft08b-n8         8  0.106-0.611   4.19   8.34  0.948       -0.12 [-0.12, -0.11]  CONFOUNDED: draft/fwd varies 8.3% and tracks acceptance at r=+0.97; the regressor is inside the response
-
-  Largest upper 95 % limit on r, over the 3 arm(s) where the model applies: +0.00075
-  decode-steps per rejected draft token (dflash2-bf16). The bound is an upper confidence
-  limit, not the largest point estimate: the maximum of several noisy points is
-  biased upward and is not a bound on anything.
-  At that limit the rejection term accounts for at most +0.08 % of the cycle cost (dflash2-bf16),
-  which is the comparable figure: r is per rejected draft token, so arms at different widths
-  carry the same total cost at different r.
-  Acceptance spans roughly 0.000-0.868 in this data - nearly a ten-fold range -
-  so a rejection-driven overhead of any consequence would have shown up here.
-  Reading: the verification overhead is paid per position VERIFIED, not per
-  draft REJECTED. This does not say rollback is free; it bounds how much of
-  the observed cost rollback can account for.
-  dflash2-q8: r is significantly NEGATIVE, the opposite of a rollback account. k rises with acceptance at constant
-  draft width, which is what a cost paid per position verified looks like near saturation: mean_len climbs toward w+1 while the cycle cost does not.
-  Excluded from the bound as confounded: draft08b-n4, draft08b-n8.
-
---- TEST 2: k vs verification width, per method ---
-    MMVQ dispatch limit 8, from the analyser's constant: this file predates harness/kernel_facts.py
-    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified
-    position in serial-decode-step equivalents, over the whole cycle rather than
-    attributed to any one component; see the note under the fits.
-  draft-dflash   only one width (5) - cannot fit
-  draft-simple   fewer than two widths on the MMVQ path - cannot fit
-  ngram-cache    only one width (5) - cannot fit
-  ngram-map-k    only one width (5) - cannot fit
-
---- the same fit on requests that never diverged from their baseline ---
-  draft-dflash   only 1 widths keep two or more non-diverging records; not fitted
-  draft-simple   only 1 widths keep two or more non-diverging records; not fitted
-  ngram-cache    only 1 widths keep two or more non-diverging records; not fitted
-  ngram-map-k    only 1 widths keep two or more non-diverging records; not fitted
-
---- implied optimum ---
-    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k has
-    an interior maximum in principle. Whether the measured ladder shows one is read
-    off the data below rather than asserted. An earlier version of this line stated
-    that the ladder falls monotonically over every width measured. That was true of
-    the dense phases it was written against and false the moment Phase M ran an MTP
-    ladder that peaks at n-max 2 on both targets, and nothing would have caught it.
-    These are best TESTED points. Whether a peak clears noise is analyze.py's paired
-    intervals, not this table.
-  draft-dflash   n4=1.513x
-                 -> best tested n-max = 4   (one width only)
-  draft-simple   n4=0.715x  n8=0.702x
-                 -> best tested n-max = 4   (falls monotonically)
-  ngram-cache    n4=0.902x
-                 -> best tested n-max = 4   (one width only)
-  ngram-map-k    n4=0.998x
-                 -> best tested n-max = 4   (one width only)
+What would make this reportable: llama.cpp exposing the exact verification-step
+count. `server_slot_stats` already holds it in `n_draft_verif_steps` and does not
+put it in `to_json()`; the one-line patch is in upstream/. Until then this phase
+supports throughput and acceptance results, and no cost decomposition.

@@ -18,41 +18,86 @@ dflash2-n7       draft-dflash     8   25   2.9833  0.0231   2.926-3.036
 
 --- TEST 1: is the overhead charged to REJECTION? ---
     Model a rejection-proportional cost r (decode-steps per rejected draft token):
-        k = k_verify + r * n_max * (1 - acceptance)
-        => dk/d(acceptance) = -r * n_max,   so  r = -slope / n_max
+        k = k_verify + r * w * (1 - acceptance),  w = realised draft len / forward
+        => dk/d(acceptance) = -r * w,   so  r = -slope / w
     A state-rollback account of the overhead predicts r > 0, i.e. slope < 0.
+    The model holds w constant within an arm. Where the server reuses a surviving
+    draft tail instead of re-drafting, w moves WITH acceptance and the slope picks
+    that up rather than any rejection cost - biased positive, which reads as r < 0,
+    which is this test's own conclusion. Arms whose w varies are fitted and shown,
+    and excluded from the bound.
 
-arm               n    accept range     slope     r2  r estimate  reading
-mtp-n2            2  0.418-0.918   -0.0172  0.044     0.00859  r negligible (k spread 3.24%)
-mtp-n3            3  0.325-0.857   -0.0180  0.036     0.00602  r negligible (k spread 3.29%)
-dflash2-n4        4  0.162-0.843   -0.0276  0.091     0.00691  r negligible (k spread 4.71%)
-mtp-n5            5  0.173-0.720   -0.0646  0.242     0.01293  r negligible (k spread 4.04%)
-dflash2-n7        7  0.096-0.695   -0.0108  0.010     0.00154  r negligible (k spread 3.71%)
+arm                 n    accept range      w  w cv%     r2                   r [95 %]  reading
+mtp-n2              2  0.418-0.918   1.99   0.29  0.044       +0.01 [-0.00, +0.02]  no rejection cost detected (interval contains zero)
+mtp-n3              3  0.325-0.857   2.99   0.34  0.036       +0.01 [-0.01, +0.02]  no rejection cost detected (interval contains zero)
+dflash2-n4          4  0.162-0.843   3.98   0.39  0.091       +0.01 [-0.00, +0.01]  no rejection cost detected (interval contains zero)
+mtp-n5              5  0.173-0.720   4.96   0.48  0.242       +0.01 [+0.00, +0.02]  clears zero by only 0.47 half-widths - inside the known undercoverage; would be +1.5% of k
+dflash2-n7          7  0.096-0.695   6.94   0.62  0.010       +0.00 [-0.00, +0.01]  no rejection cost detected (interval contains zero)
 
-  Largest r across arms: +0.01293 decode-steps per rejected draft token.
+  Largest upper 95 % limit on r, over the 5 arm(s) where the model applies: +0.02131
+  decode-steps per rejected draft token (mtp-n5). The bound is an upper confidence
+  limit, not the largest point estimate: the maximum of several noisy points is
+  biased upward and is not a bound on anything.
+  At that limit the rejection term accounts for at most +2.47 % of the cycle cost (mtp-n5),
+  which is the comparable figure: r is per rejected draft token, so arms at different widths
+  carry the same total cost at different r.
   Acceptance spans roughly 0.096-0.918 in this data - nearly a ten-fold range -
   so a rejection-driven overhead of any consequence would have shown up here.
   Reading: the verification overhead is paid per position VERIFIED, not per
   draft REJECTED. This does not say rollback is free; it bounds how much of
   the observed cost rollback can account for.
+  Not established, and not treated as overturning the reading: mtp-n5 (0.47 half-widths)
 
 --- TEST 2: k vs verification width, per method ---
-    fitting k = k0 + c*(w-1); c is the marginal cost of one more verified position
-  draft-dflash   widths [5, 8]  ->  k0=0.8807  c=0.3004  r2=1.0000
+    MMVQ dispatch limit 8, from the analyser's constant: this file predates harness/kernel_facts.py
+    fitting k = k0 + c*(w-1). `c` is the marginal cost of one more verified
+    position in serial-decode-step equivalents, over the whole cycle rather than
+    attributed to any one component; see the note under the fits.
+  draft-dflash   MMVQ widths [5, 8]  ->  k0=0.8807  c=0.3004  r2=1.0000
+                     k0 0.8648 to 0.8981   c 0.2973 to 0.3031   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 0.8807, BELOW the floor of 1.0: the line implies a cycle cheaper than a plain decode step at zero draft depth, which no configuration can be.
+                     so k(w) is concave here and the FIRST extra position costs more than c. Refit with k(1) pinned at the floor: k0=0.9855  c=0.2826  r2=0.9991  (5.9 % change in c)
+                     the pin moves the fit materially, so the linear form does not reach zero depth and neither coefficient is a mechanism.
+                     baseline    38.8 tok/s -> one decode step 25.747 ms; k0 = 22.674 ms, c = 7.734 ms per extra position  [7.654, 7.805]
       w= 5  k=2.0822  fit=2.0822  resid=+0.0000
       w= 8  k=2.9833  fit=2.9833  resid=+0.0000
-  draft-mtp      widths [3, 4, 6]  ->  k0=0.9568  c=0.3134  r2=0.9994
+  draft-mtp      MMVQ widths [3, 4, 6]  ->  k0=0.9568  c=0.3134  r2=0.9994
+                     k0 0.9486 to 0.9656   c 0.3107 to 0.3162   nominal 95 %, 25 prompts resampled within class
+                     k(w=1) extrapolates to 0.9568, BELOW the floor of 1.0: the line implies a cycle cheaper than a plain decode step at zero draft depth, which no configuration can be.
+                     so k(w) is concave here and the FIRST extra position costs more than c. Refit with k(1) pinned at the floor: k0=0.9884  c=0.3051  r2=0.9994  (2.6 % change in c)
+                     under 5 % and r2 still above 0.97, so the line describes the measured widths well. What it does not support is reading k0 as a fixed overhead, on this method or any other.
+                     lack of fit across widths: residual se on the slope 0.0075 (3 widths, 1 dof), against the prompt bootstrap's half-width 0.0028
+                     the line is a 2.7x poorer description of these widths than prompt-to-prompt scatter alone would suggest, so `c` is a chord over the widths fitted and not a constant marginal cost.
+                     baseline    38.9 tok/s -> one decode step 25.736 ms; k0 = 24.625 ms, c = 8.067 ms per extra position  [7.995, 8.137]
       w= 3  k=1.5750  fit=1.5837  resid=-0.0087
       w= 4  k=1.9102  fit=1.8971  resid=+0.0130
       w= 6  k=2.5197  fit=2.5240  resid=-0.0043
 
-  Two methods with independent drafters fitted separately. If their `c` agree
-  while `k0` differ, the marginal cost belongs to the verification path rather
-  than to the drafter.
+--- the same fit on requests that never diverged from their baseline ---
+  draft-dflash   only 2 widths keep two or more non-diverging records; not fitted
+  draft-mtp      c on all   75 = 0.3134   c on the  17 that never diverged = 0.3101   -1.1 %
+
+  Two methods with independent drafters, fitted separately. What `k` measures is
+  the whole speculative cycle: target verification, the drafter's own forwards,
+  sampling, launch and synchronisation, output extraction and any per-step state
+  management. The two methods share every one of those except the drafter.
+  The two fits share 0 width(s) and cannot be compared on a common range.
+
+  Separating the components needs per-context CUDA-event timing, a replay that
+  skips drafter compute, or a profiler decomposition - none of which this file has.
 
 --- implied optimum ---
-    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k
-    has an interior maximum in principle. Over the widths measured here it falls
-    monotonically, so what follows is the best TESTED point, not a fitted optimum:
-  draft-dflash   n4=1.386x  n7=1.124x   -> best n-max = 4
-  draft-mtp      n2=1.476x  n3=1.396x  n5=1.211x   -> best n-max = 2
+    mean_len saturates with depth while k grows linearly, so speedup = mean_len/k has
+    an interior maximum in principle. Whether the measured ladder shows one is read
+    off the data below rather than asserted. An earlier version of this line stated
+    that the ladder falls monotonically over every width measured. That was true of
+    the dense phases it was written against and false the moment Phase M ran an MTP
+    ladder that peaks at n-max 2 on both targets, and nothing would have caught it.
+    These are best TESTED points. Whether a peak clears noise is analyze.py's paired
+    intervals, not this table.
+  draft-dflash   n4=1.386x  n7=1.124x
+                 -> best tested n-max = 4   (falls monotonically)
+                 -> smoothing k through the fit over MMVQ widths [5, 8] puts the peak at n-max 4 (preserves it; same mean_len, so not independent evidence)
+  draft-mtp      n2=1.476x  n3=1.396x  n5=1.211x
+                 -> best tested n-max = 2   (falls monotonically)
+                 -> smoothing k through the fit over MMVQ widths [3, 4, 6] puts the peak at n-max 2 (preserves it; same mean_len, so not independent evidence)

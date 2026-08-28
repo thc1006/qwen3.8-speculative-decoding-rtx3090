@@ -13,6 +13,11 @@ baseline@32k-pr                    35.13      35.13      45  zh_debug=0.2%
 mtp-n2@32k                         54.06      54.06      45  code_rust_mergesort=0.3%
 dflash2-n4@32k                     51.49      51.49      45  code_py_ratelimiter=0.3%
 
+--- unspeculated contrast (baselines against each other; not an effect) ---
+  baseline@32k-pr          vs baseline@32k             -0.01 [-0.04, +0.01]   differs in: tree
+  Both sides are unspeculated, so this is a property of the setup, not an effect. A
+  contrast that spans zero is a control: whatever differs did not move baseline throughput.
+
 --- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
 arm                          vs                                    delta %  verdict
 mtp-n2@32k                   baseline@32k           +53.86 [+49.87, +57.51]  FASTER
@@ -32,14 +37,25 @@ dflash2-n4@32k               baseline@32k-pr        +46.57 [+37.52, +55.41]  FAS
    No study in the prior-art sweep publishes an energy figure for this model.)
 
 arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+
+--- averaged against instantaneous power, per arm ---
+  baseline@32k            -0.01 %   n=45
+  baseline@32k-pr         +0.05 %   n=45
+  dflash2-n4@32k          +1.40 %   n=45
+  mtp-n2@32k              +1.12 %   n=45
+  Positive means power.draw integrated low. It leaves the baselines nearly alone
+  and understates the speculative arms, so an energy saving read off the averaged
+  field is larger than the instantaneous field supports, by about this much.
 baseline@32k               0.0843     +0.0%       1887     +0.0%       -          -
-baseline@32k-pr            0.0844     +0.1%       1885     -0.1%       -          -
+baseline@32k-pr            0.0844     +0.0%       1885     +0.0%       -          -
 mtp-n2@32k                 0.1292    +53.4%       1243    -34.1%   0.655       2.30
-dflash2-n4@32k             0.1249    +48.2%       1364    -27.7%   0.436       2.72
+dflash2-n4@32k             0.1249    +48.0%       1364    -27.6%   0.436       2.72
+  Each arm is measured against its own baseline from baseline_map, not against a single
+  reference: this matrix holds more than one.
 
 --- losslessness (greedy arms vs baseline text, same prompt+pass) ---
-  dflash2-n4@32k             byte-identical 15/45   median shared prefix when forked: 0.256
-  mtp-n2@32k                 byte-identical 9/45   median shared prefix when forked: 0.565
+  dflash2-n4@32k             no divergence through cap 15/45   median shared prefix when forked: 0.256
+  mtp-n2@32k                 no divergence through cap 9/45   median shared prefix when forked: 0.565
 
 --- determinism (greedy, same arm/prompt across passes) ---
   baseline@32k               reproducible 30/30

@@ -32,6 +32,19 @@ dflash2-n4                   baseline@pr27342       +50.81 [+43.92, +57.60]  FAS
 mtp-n5                       baseline@master        +32.86 [+27.13, +38.72]  FASTER
 dflash2-n7                   baseline@pr27342       +21.76 [+13.11, +30.44]  FASTER
 
+--- INTENTION TO TREAT: the same effect over every record, none excluded ---
+  The per-protocol table above drops requests that stopped before the token cap.
+  Speculation moves where a request stops, so that is an exclusion decided by an
+  outcome. This table keeps them. Where the two agree, the exclusion rule did no
+  work; where they differ, the per-protocol number is the one that needs the
+  argument.
+arm                          vs                              delta % (ITT)            delta % (PP)
+mtp-n2                       baseline@master        +59.60 [+56.18, +63.30]  +59.57 [+55.81, +63.59]
+mtp-n3                       baseline@master        +52.68 [+48.16, +57.54]  +52.95 [+47.94, +58.25]
+dflash2-n4                   baseline@pr27342       +50.81 [+43.92, +57.60]  +50.81 [+43.92, +57.60]
+mtp-n5                       baseline@master        +32.86 [+27.13, +38.72]  +32.86 [+27.13, +38.72]
+dflash2-n7                   baseline@pr27342       +21.76 [+13.11, +30.44]  +21.76 [+13.11, +30.44]
+
 --- SECONDARY (exploratory): per-class effect ---
   mtp-n2                     chat: +47.3%  code: +91.5%  prose: +46.9%  reason: +71.4%  zh: +40.7%
   mtp-n3                     chat: +33.8%  code: +97.5%  prose: +35.9%  reason: +70.5%  zh: +27.1%
@@ -56,18 +69,20 @@ dflash2-n7                   baseline@pr27342       +21.76 [+13.11, +30.44]  FAS
 
 arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
 baseline@master            0.1016     +0.0%       3937     +0.0%       -          -
-baseline@pr27342           0.1017     +0.1%       3933     -0.1%       -          -
+baseline@pr27342           0.1017     +0.0%       3933     +0.0%       -          -
 mtp-n2                     0.1635    +61.0%       2491    -36.7%   0.663       2.32
 mtp-n3                     0.1567    +54.2%       2650    -32.7%   0.558       2.66
-dflash2-n4                 0.1554    +53.0%       2835    -28.0%   0.467       2.86
+dflash2-n4                 0.1554    +52.8%       2835    -27.9%   0.467       2.86
 mtp-n5                     0.1363    +34.1%       3162    -19.7%   0.416       3.06
-dflash2-n7                 0.1252    +23.3%       3780     -4.0%   0.336       3.33
+dflash2-n7                 0.1252    +23.1%       3780     -3.9%   0.336       3.33
+  Each arm is measured against its own baseline from baseline_map, not against a single
+  reference: this matrix holds more than one.
 
 --- losslessness (greedy arms vs baseline text, same prompt+pass) ---
-  dflash2-n4                 byte-identical 7/25   median shared prefix when forked: 0.198
-  dflash2-n7                 byte-identical 7/25   median shared prefix when forked: 0.198
-  mtp-n2                     byte-identical 4/25   median shared prefix when forked: 0.211
-  mtp-n3                     byte-identical 4/25   median shared prefix when forked: 0.211
-  mtp-n5                     byte-identical 7/25   median shared prefix when forked: 0.198
+  dflash2-n4                 no divergence through cap 7/25   median shared prefix when forked: 0.198
+  dflash2-n7                 no divergence through cap 7/25   median shared prefix when forked: 0.198
+  mtp-n2                     no divergence through cap 4/25   median shared prefix when forked: 0.211
+  mtp-n3                     no divergence through cap 4/25   median shared prefix when forked: 0.211
+  mtp-n5                     no divergence through cap 7/25   median shared prefix when forked: 0.198
 
 --- determinism (greedy, same arm/prompt across passes) ---

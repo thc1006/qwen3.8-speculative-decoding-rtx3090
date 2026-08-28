@@ -3170,9 +3170,14 @@ says no such thing. Writing the review's wording into the README would have intr
 the row states what the history shows.
 
 **"`analysis/phase_a_report.txt` still prints `byte-identical` while the analyser says `no
-divergence through cap`."** It does not. The only occurrences are in
-`analysis/control_determinism.txt`, where "25/25 byte-identical between the two runs" describes a
-determinism control -- the same binary run twice -- and is the correct term for it.
+divergence through cap`."** I wrote here that it does not. **That refutation was wrong and the
+reviewer was right; Correction 37 records how far it went.** The grep behind my claim was
+`grep -n 'byte-identical' analysis/*.txt | head -6`, and `control_determinism.txt` holds exactly
+six matching lines, so the truncation consumed the whole output before reaching anything else. I
+read a truncated result as a complete one and published a refutation of a correct claim. Twenty-six
+committed artifacts carried the withdrawn wording, `phase_a_report.txt` among them. A conclusion
+drawn from evidence that was cut off is the defect this repository exists to hunt, and this one was
+in the paragraph where I was correcting somebody else.
 
 ### One the review did not raise, and one this session's own fix found
 
