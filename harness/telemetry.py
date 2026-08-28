@@ -452,8 +452,8 @@ def overclock_state(index: int = 0) -> dict:
     # UUID-verified mapping, and treat an unverifiable mapping as unknown rather than guessing.
     env = dict(os.environ)
     env.setdefault("DISPLAY", ":0")
+    import gpustate as _gs
     try:
-        import gpustate as _gs
         sidx = _gs.settings_index_for(index)
     except Exception as e:                                        # noqa: BLE001
         state["settings_mapping_error"] = repr(e)[:200]
@@ -475,12 +475,44 @@ def overclock_state(index: int = 0) -> dict:
         except Exception:
             state[key] = "unavailable"
 
-    pl, dpl = state.get("power_limit_w"), state.get("power_default_limit_w")
+    # Fans, from 2026-08-29. The gate covered clock offsets and the power limit and said nothing
+    # about cooling, so holding the card cooler -- which raises the sustained clock, and Phase B
+    # shows every arm shedding 8-12 % of its clock inside one arm-pass -- was the one lever that
+    # could be pulled without any field recording it.
+    if sidx is not None:
+        try:
+            state.update(_gs.fan_state(sidx))
+        except Exception as e:                                    # noqa: BLE001
+            state["fan_error"] = repr(e)[:200]
+            state["fan_control"] = "unknown"
+    else:
+        state["fan_control"] = "unknown"
+
+    state["is_stock"] = is_stock(state)
+    return state
+
+
+def is_stock(state: dict) -> bool:
+    """Whether a card is in the condition this study calls stock.
+
+    A separate function from `overclock_state` because the rule is the interesting part and it
+    could not be tested while it was four lines inside a function that shells out to two binaries
+    and an X server. Feed it a dict.
+
+    UNKNOWN FAILS, in every clause. `len(numeric) == 2` is what enforces that for the offsets: a
+    card whose offsets could not be read is not thereby stock, it is unverified, and unverified
+    has to stop a run for the same reason a +400 MHz memory overclock does -- the first Phase A
+    run was discarded over exactly that, found ten minutes in while the write-up said "stock".
+    `fan_control != "auto"` extends the same treatment to cooling, and covers "manual" and
+    "unknown" with one comparison.
+    """
     offsets = [state.get("mem_transfer_rate_offset"), state.get("graphics_clock_offset")]
     numeric = [o for o in offsets if isinstance(o, (int, float))]
-    state["is_stock"] = (
-        all(o == 0 for o in numeric)
-        and isinstance(pl, float) and isinstance(dpl, float) and pl == dpl
-        and len(numeric) == 2
-    )
-    return state
+    if len(numeric) != 2 or not all(o == 0 for o in numeric):
+        return False
+    pl, dpl = state.get("power_limit_w"), state.get("power_default_limit_w")
+    if not (isinstance(pl, float) and isinstance(dpl, float) and pl == dpl):
+        return False
+    if state.get("fan_control") != "auto":
+        return False
+    return True

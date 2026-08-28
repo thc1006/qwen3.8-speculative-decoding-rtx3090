@@ -23,6 +23,7 @@ import audit_results as AR  # noqa: E402
 import backfill_model_size as BMS  # noqa: E402
 import ladder_trend as LT  # noqa: E402
 import stats as ST  # noqa: E402
+import gpustate as GS  # noqa: E402
 import telemetry as T  # noqa: E402
 
 
@@ -4471,6 +4472,76 @@ class TheCitationFileMayNotNameAThingThatDoesNotExist(unittest.TestCase):
         self.assertEqual(ids, in_readme,
                          f"the ORCIDs disagree: CITATION.cff {sorted(ids)} vs README {sorted(in_readme)}")
 
+
+
+class ACoolerCardIsAnInterventionAndMustBeRecorded(unittest.TestCase):
+    """The stock gate covered clocks and power and said nothing at all about cooling.
+
+    `overclock_state` exists because a card was found carrying +400 MHz of memory while the
+    write-up said "stock", and that run was discarded. Cooling reaches the same place by another
+    road: hold the card cooler and it holds a higher sustained clock. Phase B's own telemetry has
+    every arm shedding 8-12 % of its clock inside one arm-pass, and `arm_pass_gpu` shows the
+    memory-bound baseline ending at 76.7 C / 1775 MHz against 81.6 C / 1751 MHz for the arms it
+    is compared to. Until 2026-08-29 nothing anywhere in the harness read a fan, so a changed
+    curve would have shown up only as temperatures that were quietly lower.
+    """
+
+    REAL = (
+        "\n  Attribute 'GPUFanControlState' (host:0[gpu:0]): 0.\n"
+        "  Attribute 'GPUTargetFanSpeed' (host:0[fan:0]): 30.\n"
+        "  Attribute 'GPUCurrentFanSpeed' (host:0[fan:0]): 0.\n"
+        "  Attribute 'GPUTargetFanSpeed' (host:0[fan:1]): 30.\n"
+        "  Attribute 'GPUCurrentFanSpeed' (host:0[fan:1]): 0.\n"
+    )
+
+    def test_a_partial_answer_from_a_nonzero_exit_is_still_parsed(self):
+        """This card has two fans, so a four-fan query exits 1 with five good values on stdout."""
+        got = GS.parse_fan_query(self.REAL)
+        self.assertEqual(got["fan_control_state"], 0)
+        self.assertEqual(got["fan_control"], "auto")
+        self.assertEqual(got["fan_count"], 2)
+        self.assertEqual(got["fan_targets_pct"], {"0": 30.0, "1": 30.0})
+        self.assertEqual(got["fan_current_pct"], {"0": 0.0, "1": 0.0})
+
+    def test_target_and_current_are_kept_apart(self):
+        """At 41 C this card reports target 30 % and current 0 %: a 3090 stops its fans below a
+        threshold. Collapsing the two would make 'the curve asks for nothing' and 'the fans are
+        dead' the same reading, and it is target-against-temperature that a changed curve moves."""
+        got = GS.parse_fan_query(self.REAL)
+        self.assertNotEqual(got["fan_targets_pct"]["0"], got["fan_current_pct"]["0"])
+
+    def test_a_missing_control_state_is_an_error_not_a_default(self):
+        only_fans = "  Attribute 'GPUTargetFanSpeed' (host:0[fan:0]): 30.\n"
+        got = GS.parse_fan_query(only_fans)
+        self.assertIn("fan_error", got)
+        self.assertEqual(got["fan_control"], "unknown")
+
+    def test_manual_fan_control_is_not_stock(self):
+        base = {"mem_transfer_rate_offset": 0.0, "graphics_clock_offset": 0.0,
+                "power_limit_w": 420.0, "power_default_limit_w": 420.0}
+        self.assertTrue(T.is_stock({**base, "fan_control": "auto"}))
+        self.assertFalse(T.is_stock({**base, "fan_control": "manual"}),
+                         "a card whose fans a human is driving is not at stock settings")
+
+    def test_an_unreadable_fan_is_not_stock_either(self):
+        """Unknown fails, the same way an unreadable clock offset fails. A host that cannot answer
+        the question has not answered it 'no'."""
+        base = {"mem_transfer_rate_offset": 0.0, "graphics_clock_offset": 0.0,
+                "power_limit_w": 420.0, "power_default_limit_w": 420.0}
+        self.assertFalse(T.is_stock({**base, "fan_control": "unknown"}))
+        self.assertFalse(T.is_stock(base), "fan_control absent entirely must not pass")
+
+    def test_the_clock_and_power_clauses_still_hold(self):
+        """Regression: extracting this rule from overclock_state must not have loosened it."""
+        ok = {"mem_transfer_rate_offset": 0.0, "graphics_clock_offset": 0.0,
+              "power_limit_w": 420.0, "power_default_limit_w": 420.0, "fan_control": "auto"}
+        self.assertTrue(T.is_stock(ok))
+        self.assertFalse(T.is_stock({**ok, "mem_transfer_rate_offset": 800.0}))
+        self.assertFalse(T.is_stock({**ok, "graphics_clock_offset": 100.0}))
+        self.assertFalse(T.is_stock({**ok, "power_limit_w": 450.0}))
+        self.assertFalse(T.is_stock({**ok, "mem_transfer_rate_offset": "unverifiable"}),
+                         "an offset that could not be read leaves only one numeric, and one is "
+                         "not two")
 
 
 if __name__ == "__main__":

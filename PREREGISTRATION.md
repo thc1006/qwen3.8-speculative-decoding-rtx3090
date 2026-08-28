@@ -3519,4 +3519,47 @@ because it moves in seconds where the clock moves in milliseconds.
 `gpustate.py` records `core_offset`, `power_limit_w` and the clock maxima, and **records nothing
 about the fan**. A fan curve changed between two runs would leave no field saying so, only
 temperatures that are quietly lower. Nothing has changed one, and the gap should be closed before
-anything does.
+anything does. *(Closed the next day; Correction 40.)*
+
+
+## Correction 40, 2026-08-29: the stock gate had nothing to say about cooling
+
+Correction 39 left one thing open: no part of this harness read a fan. `overclock_state` exists
+because a card was found carrying +400 MHz of memory while the write-up said "stock", and that run
+was discarded -- but the gate it feeds covered clock offsets and the power limit only. Cooling
+reaches the same destination by another road. Hold the card cooler and it holds a higher sustained
+clock, and Phase B's own `arm_pass_gpu` has every arm shedding 8-12 % of its clock inside a single
+arm-pass, between 1695 and 1785 MHz against a 2130 MHz maximum. A curve changed between two runs
+would have shown up as temperatures that were quietly lower, which reads as a cooler room.
+
+Now recorded, per arm-pass and in the once-per-run declaration: `fan_control` (`auto` / `manual` /
+`unknown`), `fan_control_state`, `fan_count`, and per-fan `fan_targets_pct` and `fan_current_pct`.
+`fan.speed` rides along on an nvidia-smi query the harness was already making, so the actual speed
+costs nothing; the control mode needs one batched nvidia-settings call, measured at 37 ms against
+26 ms for a single attribute, which is under a second across 21 arm-passes of a 109-minute run.
+
+`is_stock` is now a named function rather than four lines inside a routine that shells out to two
+binaries and an X server, which is what made it untestable. The rule is unchanged except for one
+clause: `fan_control != "auto"` fails, and that covers `manual` and `unknown` together. **Unknown
+fails in every clause** -- `len(numeric) == 2` was already enforcing that for the offsets, and a
+host that cannot read its fans has not answered the question "no". Verified on this host after the
+change: `is_stock` still true, so nothing that ran before is newly refused.
+
+Two things the implementation turned up that a review would not have.
+
+**A complete answer arrives with a failing exit code.** This card has two fans; the probe asks for
+four, because the count is not known in advance. nvidia-settings prints every attribute that
+resolves and *then* exits 1 for the two that do not. `check_output`, which the module's existing
+`_settings` helper uses, would have raised and discarded all five good values. The parse is split
+from the call and tested on a captured stdout, so the rule can be checked without an X server, a
+driver or a card -- the same seam `telemetry.host_load` grew for `ps`.
+
+**Target and current are different measurements and only one of them detects a changed curve.** At
+41 C this card reports `GPUTargetFanSpeed` 30 % and `GPUCurrentFanSpeed` 0 %: a 3090 stops its fans
+below a threshold. Recording only the current speed would make "the curve is asking for nothing"
+and "the fans are dead" the same reading. It is the target, read against the temperature already in
+`arm_pass_gpu`, that a changed curve moves. Both are kept.
+
+Section 10 of `verify_everything.sh` -- "the GPU is where the runs left it" -- now fails on a card
+left under manual fan control, alongside the power limit and the two clock offsets it already
+checked.

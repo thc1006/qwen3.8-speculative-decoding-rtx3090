@@ -299,12 +299,20 @@ now, stock = G.read_state(0), G.stock_for(0)
 print(f"   power limit {now['power_limit_w']:.0f} W, stock {stock.power_limit_w} W")
 print(f"   offsets mem {now['mem_transfer_offset']} core {now['core_offset']}, "
       f"stock {stock.mem_transfer_offset} / {stock.core_offset}")
+print(f"   fan {now.get('fan_control')}, {now.get('fan_count')} fans, "
+      f"target {now.get('fan_targets_pct')} current {now.get('fan_current_pct')}")
 drift = []
 if abs(now["power_limit_w"] - stock.power_limit_w) > 0.5:
     drift.append("power_limit_w")
 for k in ("mem_transfer_offset", "core_offset"):
     if now[k] != getattr(stock, k):
         drift.append(k)
+# Cooling belongs here for the same reason the power limit does: a card left under manual fan
+# control runs the next study at a different sustained clock, and until 2026-08-29 nothing in
+# this repository would have said so. "unknown" counts as drift -- a host that cannot answer the
+# question has not answered it no.
+if now.get("fan_control") != "auto":
+    drift.append(f"fan_control={now.get('fan_control')!r}")
 if drift:
     print("   FAIL: the card is not at the state the runs assume:", drift)
     sys.exit(1)

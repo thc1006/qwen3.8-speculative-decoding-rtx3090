@@ -16,6 +16,7 @@ Two things this module exists to prevent, both of which happened during developm
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -110,6 +111,76 @@ def settings_index_for(smi_index: int) -> int:
         f"running with Coolbits enabled for this card?")
 
 
+_FAN_ATTR = re.compile(r"Attribute '(\w+)' \([^)]*\[(gpu|fan):(\d+)\]\):\s*([-\d.]+)")
+
+
+def parse_fan_query(stdout: str) -> dict:
+    """Pull the fan attributes out of nvidia-settings' output.
+
+    Split from the subprocess call so the parsing rule can be tested without an X server, a
+    driver, or a card -- the same reason `telemetry.host_load` grew a `_ps_output` seam.
+    """
+    out: dict = {"fan_targets_pct": {}, "fan_current_pct": {}}
+    for line in stdout.splitlines():
+        m = _FAN_ATTR.search(line)
+        if not m:
+            continue
+        attr, kind, idx, val = m.group(1), m.group(2), m.group(3), m.group(4)
+        try:
+            num = float(val)
+        except ValueError:
+            continue
+        if attr == "GPUFanControlState" and kind == "gpu":
+            out["fan_control_state"] = int(num)
+        elif attr == "GPUTargetFanSpeed" and kind == "fan":
+            out["fan_targets_pct"][idx] = num
+        elif attr == "GPUCurrentFanSpeed" and kind == "fan":
+            out["fan_current_pct"][idx] = num
+    if "fan_control_state" not in out:
+        out["fan_error"] = "GPUFanControlState did not resolve"
+    out["fan_count"] = len(out["fan_targets_pct"])
+    # 0 = driver-controlled, 1 = a human or a tool has taken the fans over. Spelled out because a
+    # bare 0/1 in a result file read a year from now is a coin flip for whoever reads it.
+    out["fan_control"] = {0: "auto", 1: "manual"}.get(out.get("fan_control_state"), "unknown")
+    return out
+
+
+def fan_state(sidx: int, *, max_fans: int = 4) -> dict:
+    """Fan control mode and per-fan target/current speed, in one nvidia-settings call.
+
+    Nothing in this harness recorded a fan anywhere until 2026-08-29. `overclock_state` captures
+    clock offsets and power limits precisely so an overclock can never be silently in effect, and
+    a fan curve is the same intervention by another route: a card held cooler holds a higher
+    sustained clock, and Phase B's own telemetry has every arm losing 8-12 % of its clock inside a
+    single arm-pass. Someone who changed the curve between two runs would have left no field
+    saying so -- only temperatures that were quietly lower, which reads as a cooler room.
+
+    Two values per fan, because they answer different questions. `GPUCurrentFanSpeed` is what the
+    fan is doing; `GPUTargetFanSpeed` is what the curve is asking for. On this card at idle they
+    disagree -- target 30 %, current 0 % at 41 C -- because a 3090 stops its fans below a
+    threshold. So *current* alone cannot separate "the curve asks for nothing" from "the fans are
+    dead", and it is *target*, read against the temperature already in `arm_pass_gpu`, that a
+    changed curve would move.
+
+    Deliberately not `check_output`. Asking for a fan index the card does not have makes
+    nvidia-settings exit non-zero even though every attribute that does exist was printed on
+    stdout; this card has two fans, so a four-fan query is a complete, successful call that
+    returns 1. Trusting the return code here would throw all five good values away.
+    """
+    args = ["-q", f"[gpu:{sidx}]/GPUFanControlState"]
+    for i in range(max_fans):
+        args += ["-q", f"[fan:{i}]/GPUTargetFanSpeed",
+                 "-q", f"[fan:{i}]/GPUCurrentFanSpeed"]
+    env = dict(os.environ)
+    env.setdefault("DISPLAY", ":0")
+    try:
+        r = subprocess.run(["nvidia-settings", *args], capture_output=True, text=True,
+                           env=env, timeout=20)
+    except Exception as e:                                        # noqa: BLE001
+        return {"fan_error": repr(e)[:200], "fan_control": "unknown"}
+    return parse_fan_query(r.stdout)
+
+
 def read_state(index: int = 0) -> dict:
     out: dict = {}
     # No silent fallback to the raw index. A wrong read here feeds the `is_stock` gate, so
@@ -138,14 +209,23 @@ def read_state(index: int = 0) -> dict:
     try:
         csv = subprocess.check_output(
             ["nvidia-smi", "--query-gpu=power.limit,clocks.max.memory,clocks.max.graphics,"
-             "clocks.current.graphics",
+             "clocks.current.graphics,fan.speed",
              "--format=csv,noheader,nounits", "-i", str(index)],
             text=True, stderr=subprocess.DEVNULL).strip()
-        pl, mem, gr, cur = [float(x) for x in csv.split(",")]
+        # fan.speed rides along on the query that was already being made, so the actual speed
+        # costs nothing. The control mode needs nvidia-settings and is fetched separately below.
+        pl, mem, gr, cur, fan = [float(x) for x in csv.split(",")]
         out.update(power_limit_w=pl, clocks_max_memory_mhz=mem, clocks_max_graphics_mhz=gr,
-                   clocks_current_graphics_mhz=cur)
+                   clocks_current_graphics_mhz=cur, fan_speed_pct=fan)
     except Exception as e:                                       # noqa: BLE001
         out["nvidia_smi_error"] = repr(e)
+    # One batched nvidia-settings call, measured at 37 ms against 26 ms for a single -q, so
+    # asking for nine attributes costs 11 ms more than asking for one. Over 21 arm-passes that is
+    # under a second on a 109-minute run.
+    if sidx is not None:
+        out.update(fan_state(sidx))
+    else:
+        out["fan_control"] = "unknown"
     return out
 
 
