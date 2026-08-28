@@ -1,9 +1,19 @@
 ============================================================================================
 FORCED-WARP INTERVENTION
 ============================================================================================
-  control     : results/phase_warp_control_hostB.json (150 records)
-  forced_up   : results/phase_warp_forced_up_hostB.json (150 records)
-  forced_down : results/phase_warp_forced_down2_hostB.json (150 records)
+  control       : results/phase_warp_control_hostB.json
+  forced_down2  : results/phase_warp_forced_down2_hostB.json
+  forced_up     : results/phase_warp_forced_up_hostB.json
+
+  --- tables verified against the source each build was compiled from ---
+    verified: control, forced_down2, forced_up
+
+  control holds 150 records
+
+  --- the guard ---
+    control2 was not supplied. Two builds from one configure and no source
+    difference is the only check that separates the table from the build, and
+    without it a difference below could be either. Reported, not assumed away.
 
 ============================================================================================
 FORCED_UP : GENERIC table w1->4, w3->4, w4->4, w5->4, w6->4, w8->4
@@ -36,17 +46,14 @@ FORCED_UP : GENERIC table w1->4, w3->4, w4->4, w5->4, w6->4, w8->4
     effect and none is invented here.
 
 ============================================================================================
-FORCED_DOWN : GENERIC table w1->2, w3->2, w4->2, w5->2, w6->2, w8->2
+FORCED_DOWN2 : GENERIC table w1->4, w3->2, w4->2, w5->2, w6->2, w8->2
 ============================================================================================
     widths whose warp count changed : [3, 4]
     widths left at the stock count  : [5, 6, 8]
 
   --- validity gates (registered: a failure here voids the comparison) ---
-    [N/A ] greedy baseline byte-identical across builds
-           This build maps width 1 to 2 warps against the stock 4, so the baseline is
-           part of the intervention and cannot also be its control. Observed: identical 7, differs 18.
-           PREREGISTRATION.md asserts width 1 is at 4 warps in all three builds while also
-           specifying 1-4 -> 2 here. Both cannot be true; the table is what was built.
+    [FAIL] greedy baseline byte-identical across builds
+           width 1 is at 4 warps in both builds; identical 7, differs 18
     [FAIL] intervention did not touch widths it should not have
            widths [5, 6, 8]: identical 12, differs 63
     [PASS] intervention had a measurable effect where it was applied
@@ -62,11 +69,3 @@ FORCED_DOWN : GENERIC table w1->2, w3->2, w4->2, w5->2, w6->2, w8->2
   changed. Control and forced-up agree byte for byte at every width forced-up
   left alone, so the build process itself is deterministic and the effect is
   specific to this edit.
-
-=== Correction 6 on the 3090, the same gates as the A6000 ===
-  w=1  baseline    7/25 identical   registered: identical to control   *** FAIL ***
-  w=3  mtp-n2      4/25 identical   registered: must change            PASS
-  w=4  mtp-n3      4/25 identical   registered: must change            PASS
-  w=5  mtp-n4      4/25 identical   registered: identical to control   *** FAIL ***
-  w=6  mtp-n5      4/25 identical   registered: identical to control   *** FAIL ***
-  w=8  mtp-n7      4/25 identical   registered: identical to control   *** FAIL ***
