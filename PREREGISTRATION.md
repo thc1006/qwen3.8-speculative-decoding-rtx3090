@@ -3563,3 +3563,64 @@ and "the fans are dead" the same reading. It is the target, read against the tem
 Section 10 of `verify_everything.sh` -- "the GPU is where the runs left it" -- now fails on a card
 left under manual fan control, alongside the power limit and the two clock offsets it already
 checked.
+
+## Correction 41, 2026-08-29: the deposit, and an adversarial pass that mostly caught itself
+
+v1.0.0 is archived at [10.5281/zenodo.22149942](https://doi.org/10.5281/zenodo.22149942), under
+the concept DOI [10.5281/zenodo.22149941](https://doi.org/10.5281/zenodo.22149941) which resolves
+to whichever version is newest. Two signed tags point at the same commit and are meant to diverge:
+`v1.0.0` follows the repository, `phase-a-v1` stays with the environment Phase A was measured in
+and is what `repro/phase_a.lock.json` names.
+
+**The deposit was checked against the tag rather than assumed to match it.** The Zenodo archive was
+downloaded and compared file by file against `git archive v1.0.0`: 886 files on both sides, no file
+present on one and absent on the other, and every SHA-256 equal. That check is worth running once
+because the failure it would catch is silent -- a `.gitattributes` carrying `export-ignore` would
+have dropped files from the archive with nothing anywhere reporting it, and the deposit is what
+gets cited.
+
+One wrinkle a reproducer will hit: GitHub names the archive directory after the **tag object's**
+hash, not the commit's. The download unpacks into `...-5e7d5a2` while the commit inside is
+`e9444b0`. `git rev-parse v1.0.0` prints the first and `git rev-parse v1.0.0^{commit}` the second,
+and looking for `5e7d5a2` as a commit finds nothing.
+
+### Two records of one release disagreed by a day
+
+`CITATION.cff` was committed with `date-released: 2026-08-29` before the release existed, so the
+date was a prediction. Zenodo published `2026-08-28`. Both describe the same instant: the release
+was created at `2026-08-28T19:18:39Z`, which is 03:18 on the 29th at +0800, where the tag was made.
+Corrected to 08-28, matching the archive of record and the release's own `created_at`. A day's
+disagreement between two machine-readable records of one event is small and is still a thing a
+reader can catch and an author cannot explain.
+
+### The published release notes carried a stale count
+
+They said "885 tracked paths". The number was true of the verification run before `.zenodo.json`
+was added and false of the tree being released, which has 886. Copied from an earlier run's output
+rather than the one that gated the release. Fixed in the published release body.
+
+### The adversarial pass raised three alarms and two were its own
+
+Asked to review this phase adversarially, I checked every number in the release notes against the
+verification log and every `Correction N` reference against the headings that exist. It reported:
+
+| alarm | verdict |
+|---|---|
+| release notes say 885 tracked paths, verification says 886 | **real** |
+| `README.md:352` cites "Correction 2", which does not exist | **my scanner's bug** |
+| `PREREGISTRATION.md:2727` cites "Correction 28a", which does not exist | **my scanner's bug** |
+
+The scan collected headings with `^## Correction (\d+)`. Corrections 1 and 2 are written
+`### CORRECTION 1:` and `### CORRECTION 2:` -- a different heading level and upper case -- and 28a
+is a `###` sub-heading. So the scanner missed six headings and then reported references to them as
+dangling. Rewritten to accept both levels and both cases, it finds 48 headings, 40 distinct
+numbers running 1 to 40 with no gap, six letter-suffixed follow-ups, and **no dangling references
+at all**. I had already written "found a real defect" about the README before checking; it was not
+one, and the README line is correct as it stands.
+
+That is the same failure as the `pgrep` patterns earlier in this work that matched their own
+command lines -- four times, including a wait-loop that waited for itself and ran for nineteen
+minutes. **The checking tools in this session have produced more false signals than the artifacts
+they check have contained defects.** A check that has not been shown to fire on a known-bad input
+is a check whose silence means nothing, and a check that fires on a known-good one wastes the
+attention it was built to focus.

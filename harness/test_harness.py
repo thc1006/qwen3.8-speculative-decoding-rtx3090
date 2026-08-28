@@ -8,6 +8,7 @@ Run: python3 harness/test_harness.py
 import collections
 import inspect
 import json
+import re
 import time
 import sys
 import unittest
@@ -4562,6 +4563,68 @@ class ACoolerCardIsAnInterventionAndMustBeRecorded(unittest.TestCase):
         self.assertFalse(T.is_stock({**ok, "mem_transfer_rate_offset": "unverifiable"}),
                          "an offset that could not be read leaves only one numeric, and one is "
                          "not two")
+
+
+class EveryCorrectionReferencePointsAtACorrectionThatExists(unittest.TestCase):
+    """`PREREGISTRATION.md` is cited by number from the README, the docs and the reports.
+
+    Nothing checked those numbers. The link checker cannot: "Correction 2" is prose, not a link,
+    so a reference to a correction that was never written, or was renumbered, would read as
+    authoritative and lead nowhere.
+
+    This test is also the reason its own first draft is worth describing. It collected headings
+    with `^## Correction (\\d+)` and immediately reported two dangling references -- one in the
+    README, one in PREREGISTRATION itself. Both were real headings the pattern could not see:
+    Corrections 1 and 2 are written `### CORRECTION 1:`, a level down and in upper case, and 28a
+    is a `###` sub-heading. The scan had missed six headings and then accused the documents of
+    citing them. A checker that fires on correct input costs more than no checker, because the
+    time goes into disproving it.
+    """
+
+    HEADING = re.compile(r'^#{2,4}[ \t]+(?:CORRECTION|Correction)[ \t]+(\d+[a-z]?)', re.M)
+    REFERENCE = re.compile(r'\bCorrections?[ \t]+(\d+[a-z]?)')
+
+    def _headings(self):
+        root = Path(__file__).parent.parent
+        text = (root / "PREREGISTRATION.md").read_text()
+        got = set(self.HEADING.findall(text))
+        # A reference to `19` is satisfied by `19`, and a reference to `19` is also what someone
+        # writes when they mean the group that includes 19a; both resolve to a heading that is
+        # there, so the base number counts as present once any of its variants is.
+        return got | {re.match(r'\d+', h).group(0) for h in got}
+
+    def test_the_numbering_has_no_gap(self):
+        got = self._headings()
+        nums = sorted({int(re.match(r'\d+', h).group()) for h in got})
+        self.assertEqual(nums, list(range(1, max(nums) + 1)),
+                         f"the corrections are numbered {nums[0]}..{max(nums)} with gaps at "
+                         f"{sorted(set(range(1, max(nums) + 1)) - set(nums))}; a missing number "
+                         f"reads as a correction that was removed")
+
+    def test_no_document_cites_a_correction_that_is_not_there(self):
+        import glob
+        root = Path(__file__).parent.parent
+        exist = self._headings()
+        bad = []
+        for pat in ("*.md", "docs/*.md", "analysis/*.txt", "harness/*.py", "scripts/*.sh"):
+            for path in sorted(glob.glob(str(root / pat))):
+                p = Path(path)
+                try:
+                    text = p.read_text()
+                except (OSError, UnicodeDecodeError):
+                    continue
+                lines = text.splitlines()
+                for m in self.REFERENCE.finditer(text):
+                    n = m.group(1)
+                    if n in exist:
+                        continue
+                    ln = text[:m.start()].count("\n")
+                    # The heading itself matches the reference pattern; it is not a citation.
+                    if ln < len(lines) and self.HEADING.match(lines[ln]):
+                        continue
+                    bad.append(f"{p.name}:{ln + 1} cites Correction {n}")
+        self.assertEqual(bad, [], "these point at corrections that do not exist:\n  "
+                                  + "\n  ".join(bad))
 
 
 if __name__ == "__main__":

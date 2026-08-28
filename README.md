@@ -1,5 +1,7 @@
 # Qwen3.8-27B speculative decoding on a single RTX 3090
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22149941.svg)](https://doi.org/10.5281/zenodo.22149941)
+
 A controlled study of `draft-mtp` and `draft-dflash` on llama.cpp. **Phase A is the primary
 single-RTX-3090 result**; the follow-up phases use a second 3090, an RTX A6000, a Qwen3.6 MoE
 target, a Qwen3.5-9B ladder and vLLM, and their absolute throughput figures are not pooled with it.
@@ -506,8 +508,16 @@ GitHub [`thc1006`](https://github.com/thc1006)
 ## Citation
 
 [`CITATION.cff`](CITATION.cff) carries the machine-readable metadata, which is what GitHub's
-"Cite this repository" button reads. It names no DOI, no version and no release date, because
-nothing has been deposited or tagged: a citation file that asserts a version the repository has
-not cut is the same species of claim this document spends its length avoiding. Cite the commit
-you actually read -- `git rev-parse HEAD` -- and if you need a fixed identifier, say so and one
-will be minted.
+"Cite this repository" button reads.
+
+The badge above is the **concept DOI**, [`10.5281/zenodo.22149941`](https://doi.org/10.5281/zenodo.22149941),
+which resolves to whichever version is newest. Cite that unless you need to pin one: the release
+archived on 2026-08-28 is [`10.5281/zenodo.22149942`](https://doi.org/10.5281/zenodo.22149942),
+and it is v1.0.0.
+
+The deposit is the tree that `v1.0.0` tags, and the two are the same bytes: 886 files, every one
+matching by SHA-256. Both `v1.0.0` and `phase-a-v1` are signed, and `git tag -v v1.0.0` checks
+them. One wrinkle worth knowing before you go looking: GitHub names the archive directory after
+the *tag object's* hash rather than the commit's, so the download unpacks into a directory ending
+`-5e7d5a2` while the commit it contains is `e9444b0`. `git rev-parse v1.0.0` prints the former,
+`git rev-parse v1.0.0^{commit}` the latter.
