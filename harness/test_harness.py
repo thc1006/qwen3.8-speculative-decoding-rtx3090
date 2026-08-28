@@ -3945,8 +3945,9 @@ class TheTwoTreesAreStillCheckedAgainstEachOther(unittest.TestCase):
     """The dual-tree fix mapped every baseline to itself, and the cross-tree control vanished.
 
     At a 400-token cap `baseline@pr27342` carried a divergence against `baseline@master` on 125 of
-    125 records, all identical: the evidence that the PR branch reproduces master's bytes with
-    speculation off. `divergence_baseline_map` then gave each arm the baseline of its own tree,
+    125 records, all showing no divergence inside the window: the evidence that the PR branch
+    matches master with speculation off. At a 400-token cap none of them reached EOS, so it is
+    agreement through the measured span rather than through a whole answer. `divergence_baseline_map` then gave each arm the baseline of its own tree,
     which is right for a treatment arm and makes each baseline its own reference, and
     `_attach_baseline_comparisons` skips every baseline. The 1600-token re-run carries no
     comparison for `baseline@pr27342` at all. The comment introducing the map says the next pair
@@ -3976,7 +3977,7 @@ class TheTwoTreesAreStillCheckedAgainstEachOther(unittest.TestCase):
         pr = by["baseline@pr"]
         self.assertIn("tree_divergence", pr,
                       "the branch's own no-speculation arm is the only thing that says the branch "
-                      "reproduces master's bytes; nothing else in the design checks it")
+                      "matches master inside the window; nothing else in the design checks it")
         self.assertEqual(pr["tree_compared_against"], "baseline@master")
         self.assertTrue(pr["tree_divergence"]["identical"])
 

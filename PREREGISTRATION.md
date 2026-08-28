@@ -3374,3 +3374,48 @@ the other 54 is how twenty-three of them drifted.
 A commit-time heuristic was tried first and rejected: it flagged 30 files, of which several were
 false positives whose content had not changed, and a check that cries wolf is one that gets
 ignored. Content comparison costs about a minute and answers the question asked.
+
+## Correction 38, 2026-08-28 11:55: I made the withdrawn claim myself, in the same night I spent removing it
+
+Corrections 33 and 37 are about one mistake: calling a request "identical" when the generation
+stopped on the cap, so what happened afterwards was never observed. B7 removed the wording from the
+analysers. Correction 37 removed it from twenty-six committed reports.
+
+**And then I made it.** Asked whether the cross-tree control had come back, I reported that
+`baseline@pr27342` matched `baseline@master` on 75 of 75 records and wrote that the PR branch
+"reproduces master's bytes with speculation off". Checked:
+
+| | |
+|---|---|
+| cross-tree comparisons, all agreeing | 75 |
+| **both sides ran to EOS** -- byte-identical outright | **36** |
+| stopped on the 1600-token cap -- no divergence *within the window* | **39** |
+
+More than half of what I called byte-identical is right-censored. The claim I published is true of
+36 records and unobserved for 39.
+
+It is worse in Corrections 33 and 34, which say the same thing about the 400-token file's 125 of
+125. At that cap **nothing in the study reached EOS at all**, so that version of the claim is a
+hundred per cent censored. The sentence has been corrected in `PREREGISTRATION.md`, `bench.py`,
+`test_harness.py` and `scripts/post_measurement.sh`, and the post-run check now prints the split
+rather than a single count.
+
+### Two documents carried it too
+
+`docs/COST_MODEL.md` said "between a fifth and a quarter of these requests come out byte-identical,
+and those share the whole trajectory". They share the whole *measured* trajectory; the argument it
+supports -- that fitting on the non-diverging subset moves `c` by 0.2 % -- survives, because the fit
+only ever uses the measured span. The wording did not.
+
+`docs/EXPERIMENT_PLAN.md` recorded "byte-identical output on 5/5 prompts" as the evidence that the
+two llama.cpp trees introduce no confound. Same correction, same reason.
+
+Seven artifacts still contain the phrase and are right to: `control_determinism.txt` and the six
+`warp_intervention*.txt` compare two runs of the same input and mean exactly what they say.
+
+### What this says about the practice
+
+The wording was withdrawn from the analysers days ago and I still reached for it, twice, in the
+hours I spent taking it out of everything else. Removing a phrase from the tooling does not remove
+it from the person writing the summary. The post-run check now reports the EOS split so the
+distinction is in the output rather than in whoever is reading it.

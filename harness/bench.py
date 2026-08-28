@@ -851,7 +851,7 @@ def _attach_baseline_comparisons(result: dict, baseline_text: dict, bmap: dict,
     # Every baseline is its own reference in `bmap`, so the loop above skips all of them and the
     # cross-tree control went away when `bmap` was introduced. It used to exist: at a 400-token
     # cap `baseline@pr27342` carried a divergence against `baseline@master` on 125 of 125 records,
-    # all identical, which is the evidence that the branch reproduces master's bytes with
+    # all showing no divergence inside the window, which is the evidence that the branch matches
     # speculation off. The comment on `bmap` above says the next pair of trees need not agree --
     # that is the reason to keep measuring it, not to stop. It is recorded under its own key
     # because a control read as a method effect is how the one arm in the study with no fork

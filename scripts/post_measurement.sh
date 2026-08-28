@@ -137,7 +137,12 @@ d = json.load(open(sys.argv[1]))
 tv = [r for r in d["records"] if r.get("tree_divergence")]
 ident = sum(1 for r in tv if r["tree_divergence"].get("identical"))
 by = collections.Counter(r["arm"] for r in tv)
-print(f"   {len(tv)} records carry tree_divergence, {ident} identical, arms {dict(by)}")
+capped = sum(1 for r in tv if r.get("hit_cap") or r.get("finish_reason") == "length")
+print(f"   {len(tv)} records carry tree_divergence, {ident} agree, arms {dict(by)}")
+# Agreement is not identity while anything stopped on the cap. Reporting the split here is the
+# whole lesson of Corrections 33 and B7, and it was left out of the first version of this check.
+print(f"   of the {ident} that agree, {ident - capped} ran to EOS and are identical outright; "
+      f"{capped} stopped on the cap and mean 'no divergence within the window'")
 if not tv:
     print("   the bench.py fix from Correction 34 did not take effect", file=sys.stderr)
     raise SystemExit(1)

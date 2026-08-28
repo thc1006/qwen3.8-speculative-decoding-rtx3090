@@ -17,6 +17,14 @@ Every script assumes it is invoked from anywhere and resolves the repository its
 | `run_phase_l.sh` | Phase L, the context-depth ladder | budgeted in seconds so it stops at a rung boundary rather than mid-rung |
 | `run_chain.sh` | an earlier chain | superseded by `run_remaining.sh`; kept because results reference it |
 
+## Not runners — they read rather than measure
+
+| script | does | notes |
+|---|---|---|
+| `verify_everything.sh` | re-checks every claim the repository makes about itself | ten sections: tests, the result audit, links, the README's numbers, withdrawn claims, registry coverage, the generated evidence block, the anchor report, every other generated report, and the GPU's state. CPU-heavy; the measurement guard refuses it while a run holds the GPU lock |
+| `reproduce_phase_a.sh` | rebuilds Phase A from `repro/phase_a.lock.json` | pins the engines, the toolchain, the models, the card and this repository's own tag, writes to `results/reproductions/` and compares the paired effects rather than only the record count |
+| `post_measurement.sh` | everything that had to wait for a free GPU | Part A decides whether a re-run is usable and stops if it is not; Part B is deferred maintenance. `--maintenance-anyway` forces past a Part A failure |
+
 ## Forced-warp intervention — `warp/`
 
 The intervention is finished (four builds from one configure, three hosts). These are kept
