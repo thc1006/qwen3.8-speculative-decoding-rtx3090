@@ -4627,5 +4627,113 @@ class EveryCorrectionReferencePointsAtACorrectionThatExists(unittest.TestCase):
                                   + "\n  ".join(bad))
 
 
+class TheProseDoesNotCarryTheLLMLexicalSignature(unittest.TestCase):
+    """The words a 2024 language model reaches for, and this repository does not.
+
+    Kobak et al. (Science Advances 2025, arXiv:2406.07016) tracked vocabulary in 14 million PubMed
+    abstracts and found a set of style words whose frequency jumped after late 2022. Their
+    discriminating power is in the RARE, high-ratio end -- `delves` appeared 28 times more often in
+    2024 than the pre-2023 trend predicts, `underscores` 13.8, `showcasing` 10.7 -- not in the
+    common band, where ordinary scientific English lives whatever wrote it.
+
+    The list below is that rare end, minus the words this domain genuinely needs. `harness` is the
+    directory these tests live in; a hypothesis `holds` against its registered interval; a card
+    cannot `hold` a 31 GB rung; an inference server `serves`. Those are on ALLOWED with the reason,
+    because a guard that fires on correct usage costs more than no guard: the time goes into
+    disproving it.
+
+    This checks a property of the prose, not of its authorship. A clean result means the text does
+    not carry the 2024 lexical signature; the paper's own Delta is a lower bound at corpus scale
+    and says nothing about any single document. It is here so the property cannot quietly decay
+    through later edits.
+    """
+
+    # The rare, high-ratio end of Kobak et al.'s 2024 excess style words. Not the whole 291: the
+    # ones with no plausible technical reading in a GPU inference benchmark.
+    TELLS = """
+        delve delved delves delving underscore underscored underscores underscoring
+        showcase showcased showcases showcasing pivotal intricate intricately intricacies
+        realm realms meticulous meticulously groundbreaking seamless seamlessly
+        unparalleled revolutionize revolutionizing boasts commendable invaluable
+        noteworthy multifaceted nuanced nuances myriad plethora
+        elucidate elucidates elucidating illuminates illuminating
+        leverages leveraging harnessing unlocking unveil unveiled unveiling unveils
+        transformative uncharted unexplored underexplored burgeoning
+        exemplifies epitomizes underpins spearheaded
+        crucial comprehensive
+    """.split()
+
+    # Present in the paper's list, kept here on purpose, with the reason each one is load-bearing.
+    ALLOWED = {
+        "harness": "the harness/ directory and the benchmark harness itself",
+        "hold": "a hypothesis holding against its registered interval; VRAM capacity",
+        "holds": "same",
+        "serves": "an inference server serving requests",
+        "serving": "multi-user serving, an named-out-of-scope axis",
+        "spanning": "the width of a confidence interval",
+        "attributed": "causal attribution, the document's own subject",
+        "alongside": "a sampling thread alongside a fork",
+        "stands": "an analysis standing on its own integrity check",
+        "enabling": "the question 'is it worth enabling?'",
+        "diminishing": "diminishing increments in accepted length, measured",
+    }
+
+    DOCS = ("README.md", "PREREGISTRATION.md", "docs/COST_MODEL.md",
+            "docs/GREEDY_DIVERGENCE.md", "docs/RESOURCE_RESPONSE.md")
+
+    @staticmethod
+    def _prose_only(text):
+        """Strip fenced blocks and inline code, so the check sees use and not mention.
+
+        Correction 42 records which words this scan looks for, and names them: `delve`,
+        `intricate`, `underscore`. The first version of this guard fired on that paragraph -- six
+        hits, every one inside backticks -- which is the guard working on the wrong question. A
+        word in a code span is being quoted as a string, not reached for as prose, and a
+        repository that documents its own checks has to be able to write down what they check.
+        The words are blanked rather than deleted so line numbers in the report stay true.
+        """
+        import re
+        text = re.sub(r"```.*?```", lambda m: re.sub(r"[^\n]", " ", m.group(0)), text, flags=re.S)
+        return re.sub(r"`[^`\n]*`", lambda m: " " * len(m.group(0)), text)
+
+    def test_no_document_reaches_for_them(self):
+        import re
+        root = Path(__file__).parent.parent
+        self.assertFalse(set(self.TELLS) & set(self.ALLOWED),
+                         "a word cannot be both a tell and allowed; decide")
+        hits = []
+        for name in self.DOCS:
+            p = root / name
+            if not p.exists():
+                continue
+            text = self._prose_only(p.read_text())
+            lines = text.splitlines()
+            for w in self.TELLS:
+                for m in re.finditer(rf"\b{w}\b", text, re.I):
+                    ln = text[:m.start()].count("\n")
+                    hits.append(f"{name}:{ln + 1} {w!r} -- {lines[ln].strip()[:70]}")
+        self.assertEqual(hits, [],
+                         "these are words a 2024 model reaches for and this repository has not "
+                         "needed. If one is genuinely the right word, move it to ALLOWED with the "
+                         "reason rather than deleting the check:\n  " + "\n  ".join(hits))
+
+    def test_the_check_fires_on_a_known_bad_sentence(self):
+        """A guard nobody has watched fail is a guard whose silence means nothing."""
+        import re
+        bad = self._prose_only("This section delves into the intricate realm of pivotal gains.")
+        fired = [w for w in self.TELLS if re.search(rf"\b{w}\b", bad, re.I)]
+        self.assertEqual(sorted(fired), ["delves", "intricate", "pivotal", "realm"])
+
+    def test_a_quoted_word_is_a_mention_and_not_a_use(self):
+        """The same words, in backticks, are this repository writing down what it checks for."""
+        import re
+        quoted = self._prose_only("The markers checked are `delve`, `intricate` and `pivotal`.")
+        fired = [w for w in self.TELLS if re.search(rf"\b{w}\b", quoted, re.I)]
+        self.assertEqual(fired, [], f"a mention was read as a use: {fired}")
+        self.assertEqual(len(quoted), len("The markers checked are `delve`, `intricate` and "
+                                          "`pivotal`."),
+                         "blanking must preserve length, or reported line numbers drift")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

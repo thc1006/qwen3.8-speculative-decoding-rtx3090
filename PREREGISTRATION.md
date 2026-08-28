@@ -3624,3 +3624,136 @@ minutes. **The checking tools in this session have produced more false signals t
 they check have contained defects.** A check that has not been shown to fire on a known-bad input
 is a check whose silence means nothing, and a check that fires on a known-good one wastes the
 attention it was built to focus.
+
+## Correction 42, 2026-08-29: a fix that ate the data it was protecting, and six things the README said that were not so
+
+### The README
+
+Six defects, found by checking every number in it against the files rather than by reading it.
+
+**A paragraph appeared twice.** The coverage discussion carried the same sentence in two
+rewordings, one after the other -- "All of them are synthetic data-generating processes rather
+than..." and "All of them come from synthetic data-generating processes, not from...". The second
+also ended "under either set", which was left from when there were two sets and there are now
+three. Between them they had swallowed whatever introduced "that margin", so the next sentence
+pointed at an antecedent that no longer existed; `stats.Interval.near_zero` and its 1.3 half-width
+rule are named there now.
+
+**Limitations contradicted Results.** Results says the percentile bootstrap covers 87.5 to 92.0 %
+at 2000 replications and says in as many words that the 300-replication run was Monte Carlo noise.
+Limitations still quoted that run -- "86.3-93.7 %, four synthetic processes, 300 replications
+each" -- as the operative figure. One document, two sections, opposite claims about the same
+estimator.
+
+**A limitation that had stopped being true.** "The re-run computed no divergence for the same-tree
+`baseline@pr27342` control, so that check exists only at 400." It does not: `phase_a_cap1600.json`
+carries 75 records with `tree_divergence`, identical on all 75, 36 of them with both sides at EOS.
+The cross-tree control was added to the re-run and the limitation was not revisited.
+
+**Twenty-six** forbidden claims became twenty-seven when Correction 39 rewrote Phase A-1600's, and
+the sentence counting them did not move. **"matplotlib ... is the only third-party dependency"** --
+`analysis/plot.py` imports numpy directly and the test suite reads `CITATION.cff` with PyYAML when
+it is installed. And the energy details block **opened with the Findings table's own first
+sentence**, so inside the block "Both, in direction" answered a question the block does not ask.
+
+Everything else checked out against the data: the Phase A table, `c = 0.2904` and `0.2481` and the
+`-0.0473` difference, the eight elasticities, 17.56 GB, Phase C's `-29.8 % [-33.1, -26.4]`, and the
+whole greedy-divergence section -- 100 / 96 / 92 % divergence, 267 of 525 at EOS, 9 of 375 censored
+on 2 of 25 prompts, widths 3 and 4 grouped on 23 of 25. Those last were recomputed from the
+re-measured file and are unchanged, which is a stronger statement about the re-run than the
+arm-by-arm comparison alone.
+
+### A number in seven committed reports that nothing here can produce
+
+`analyze.py`'s coverage note told every reader that "a t interval on the same draws reaches
+94.1 %". `coverage_sim.py` has no t machinery of any kind -- no scipy, no quantile, nothing. The
+figure came from the 800-replication simulation whose code was never committed, which this README
+already says of the coverage numbers beside it, and it had been reaching seven generated reports as
+a current result. The note now leads with what `analysis/bootstrap_coverage.txt` actually contains
+and names the older run as the history the 1.3 threshold was set against, with its t comparison
+marked as not reproducible here.
+
+### The fix that ate the line it was protecting
+
+`plot_cost_model` labels each series at the end of its line. The other method's line ran through
+the label and read as a strikethrough, so a patch in the background colour was put behind the text.
+It worked, and it masked a *rectangle*: measured on the committed figure, **119 px of the orange
+draft-dflash line had no orange pixel in it at all** in the first panel, 66 and 51 in the other two.
+A line that stops and restarts is what missing data looks like.
+
+Stroking the glyphs instead of boxing them took the gap from 119 px to 64. Thinning the stroke to
+1.6 pt took it to 52 and no further, which is the measurement that settles it: what covers the line
+is the letters, not the halo. The label had to move. Offset down by 11 points -- the third panel's
+own labels already clear their curves that way -- the gap is **0 px**. Both fixes are kept: the
+stroke for the strikethrough, the offset for the occlusion.
+
+Two more overlaps went with it. `plot_bound_by`'s dotted reference line runs through the glyphs of
+its own label, in the same colour and with no background, which was the only true strikethrough in
+the set; and `plot_cost_model`'s y = 2.50 gridline crossed the digits of `c = 0.2784`.
+
+### The dark theme was drawing an unreadable blue, and would have kept doing so
+
+Wong's palette is specified for print on white. Against this repository's `#0d1117` its blue
+`#0072B2` measures **3.65:1**, under WCAG AA, and it is what carries the fit coefficients at 14 to
+15 px. Its paired vermillion is 4.89:1, so two annotations that are peers read at different
+weights.
+
+Swapping the palette would not have worked: Wong's own sky blue reaches 8.20:1 on the dark
+background and **2.31:1 on white**, which moves the failure to the light figures. The series
+colours are per theme now, with the dark values chosen so blue, vermillion, green and orange sit in
+a 6.6 to 8.4 band together. The light values are untouched.
+
+Making `WONG` resolve per theme exposed the same defect one screen further down: `R2_METHODS` held
+`WONG["blue"]` in a module-level list, evaluated at import, which is before `theme()` runs. Every
+dark figure would have drawn the light palette from it. It stores the colour's name now.
+
+### The marker was bigger than the interval, on the point that decides the phase
+
+In `plot_phase_m` at n-max 7, the marker rendered 17 px wide while the confidence interval it sits
+on is smaller than that, and the zero line was drawn underneath at `zorder=1`. The point that
+carries "MTP is positive on both targets" was the one point whose sign could not be read off the
+figure. The marker is 4.6 now and the zero line is drawn above the series: the marker is data about
+the point estimate, the interval is data about what the study can say, and where they collide the
+smaller one has to win.
+
+The same figure's x-axis is ordinal -- one slot per tested depth -- while its labels are the depths
+themselves, so the 8 to 16 step is eight units drawn in the width of one and nothing said so. There
+is a break mark on the spine now, drawn on every non-consecutive gap rather than on the one this
+data happens to have.
+
+### Ten figures nobody could see
+
+Four figures and six dark variants were generated, committed and referenced from nowhere, among
+them the one showing the cost coefficients this README quotes and the one showing the clock
+elasticities it describes in prose. All sixteen are reachable now, seven as `<picture>` pairs that
+follow the reader's theme. `plot_cost_model` stays a link, and says why: it fits Phase A alone and
+reports `c = 0.2829`, `0.2784` and a best width of 5, all superseded by the completed ladder.
+
+### On the checking
+
+Three separate scans ran over the prose. A 398-word lexical screen built from Kobak et al. and two
+follow-up papers found none of the high-ratio markers -- `delve`, `intricate`, `underscore`,
+`pivotal`, `realm`, `showcasing` are all zero across 52,339 words of README, preregistration and
+docs -- and all 225 hits sat in the common band where ordinary scientific English lives. A
+structural pass found sentence-initial transitions at 0 in 343 sentences, no `not X but Y` in any
+of five forms, and one epistemic hedge against twenty-two named downgrades. The lexical screen is a
+test now, and it was watched failing on a deliberately bad sentence before it was trusted.
+
+The first thing it caught was the paragraph above. Naming the markers it looks for put six of them
+into this file, all inside backticks, and the guard read them as prose. That is the use/mention
+distinction and the guard was on the wrong side of it: a word in a code span is being quoted as a
+string, not reached for. It strips fenced blocks and inline code before scanning now, blanking
+them to preserve length so the line numbers it reports stay true, and a third test holds the
+distinction in place -- the same three words fire in a sentence and do not fire in backticks. A
+repository that documents its own checks has to be able to write down what they check.
+
+The figure review is worth recording for how it went rather than what it found. Its first pass
+reported the `37 %` label in `plot_phase_m` as struck through by the zero line. Cropping the region
+at 8x showed the line stopping cleanly either side of the label, which has had a background box
+since the day that was fixed -- the code comment names that exact label. Two of the three findings
+in the earlier textual pass went the same way, and both came from a scanner that could not see
+`### CORRECTION 1:` because it was looking for `## Correction 1`. **Every claim of an overlap in
+this round was required to be confirmed by cropping and enlarging first, and two more were withdrawn
+that way.** The measurements that survived -- 119 px, 3.65:1, 17 px, 159 px of blank -- are all
+pixel counts or computed ratios, because by that point nothing that was merely looked at was being
+believed.

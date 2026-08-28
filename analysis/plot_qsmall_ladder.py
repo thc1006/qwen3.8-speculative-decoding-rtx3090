@@ -139,7 +139,8 @@ def build(rungs, shared, bpw):
     note = ("A binary outcome over 25 prompts resolves very little: Phase Q's pairwise intervals "
             "spanned 32 percentage points, so panel 3 shows an interval covering zero as "
             "UNMEASURED rather than as absent.")
-    P._save(fig, "plot_qsmall_ladder", note=note, bottom=0.17, provenance=PROVENANCE)
+    P._save(fig, "plot_qsmall_ladder", note=note, bottom=0.17, provenance=PROVENANCE,
+             top_in=0.28)
 
 
 def main() -> int:

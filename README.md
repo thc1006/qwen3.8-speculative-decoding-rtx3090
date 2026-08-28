@@ -69,7 +69,7 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 ### What each phase may not be used to claim
 
 Declared per phase in [`evidence/registry.json`](evidence/registry.json) and rendered here by the
-same script that writes the table above. Twenty-six of these existed as a note in a JSON file that
+same script that writes the table above. Twenty-seven of these exist as a note in a JSON file that
 nothing read: a limit only the author can see is a limit only the author is bound by. They are
 **not** mechanically enforced -- they are sentences about what an argument may not do, not strings
 a scanner can match. `scripts/verify_everything.sh` section 5 catches specific withdrawn wordings;
@@ -183,12 +183,12 @@ bought. The binary process every divergence verdict in this study is scored on c
 **90.2 %**, inside the band the continuous ones occupy. All of them are synthetic
 data-generating processes rather than this data's own unknown distribution, so they diagnose the
 estimator rather than quantify this interval; the primary Phase A effects sit far from zero under
-any of the sets. All of
-them come from synthetic data-generating processes, not from this data's own unknown distribution,
-so they diagnose the estimator rather than quantify this interval; the primary Phase A effects sit
-far from zero under either set.
-`analyze.py` names any verdict that sits
-inside that margin.
+any of the sets.
+
+Undercoverage is why an interval that only just clears zero is not read as a result.
+`stats.Interval.near_zero` counts how far the nearer bound sits from zero in half-widths and calls
+anything under 1.3 too close to lean on; `analyze.py` names any verdict that sits inside that
+margin.
 
 | arm | verify width | tok/s | vs own-tree baseline | tok/J | decode J per request |
 |---|---:|---:|---|---:|---:|
@@ -217,7 +217,7 @@ baseline against 83.2 J for `dflash2-n7`, because a speculative arm processes th
 its drafter as well. `joule`, `tok/J` and `watt` appear zero times in PR #27342's 60-comment
 thread.
 
-Both, in direction, and the direction is smaller than it first read. Board telemetry puts decode energy for a 400-token answer at **-37 %** (3980 -> 2503 J). All three limits on that figure have now been measured rather than named, and two of the three bias the **relative** comparison in the same direction. `power.draw` on Ampere is a rolling average of about a second: sampled beside the instantaneous field, the two integrals agree to 0.00-0.34 % on the baselines and differ by 0.58-1.97 % on the speculative arms, always the same sign, so the averaged field understates exactly the arms being compared, worth about 1.1 points. The prefill subtraction removes a `max_tokens=1` calibration that runs on a server with the drafter already loaded, so it costs 10-17 % more energy on a speculative arm than on a baseline and takes out more than prefill: worth 0.3 to 0.8 points. The integral runs first sample to last, and the sampler's period is its nvidia-smi query plus the interval rather than the interval alone, so about 4 % of the request sits outside the window; that one limits the absolute joule totals rather than the ratio, which is why it is not one of the two above. Applying the two relative biases as a sensitivity adjustment brings the saving nearer **-35 %**. This is also not an energy comparison for an identical or quality-equivalent answer: most speculative generations follow a different token trajectory inside the window, and semantic quality is not scored. The energy columns are point estimates; no prompt-cluster interval is reported for them. `analyze.py` prints the per-arm gap and the window coverage wherever energy appears. Two facts about the instrument itself bound what any of this can mean, both from [*Part-time Power Measurements: nvidia-smi's Lack of Attention*](https://arxiv.org/abs/2312.02741), which characterises NVIDIA's built-in sensor against external meters. The first is favourable and specific to this card: the RTX 3090 has an instant rise time, a 100 ms update period and a **100 ms averaging window**, so the sensor samples its whole runtime. The A100 and H100 average over 25 ms of each 100 ms period and therefore sample only 25 % of it -- "during the other 75 % of the time, the GPU can be using drastically different power" -- and that is where that paper's largest errors come from. **None of that applies here.** The second fact is not favourable: the sensor's steady-state error is **proportional, roughly ±5 %**, rather than the flat ±5 W NVIDIA specifies, and it runs in **both directions** depending on the individual board's component tolerances. That is larger than the 1.1-point correction above and, unlike it, is not one-sided, so it does not cancel in a ratio by construction. It is not folded into any figure here, because a bidirectional instrument error of unknown sign on this particular board cannot be corrected for, only reported. Reading `nvmlDeviceGetTotalEnergyConsumption` would **not** settle the magnitude either: a report on NVIDIA's own developer forum, [confirmed there by a second user](https://forums.developer.nvidia.com/t/value-from-nvmldevicegettotalenergyconsumption-seems-to-be-off-by-a-factor/336318), puts that counter roughly a factor of two below the integral of `power.draw` over the same interval and says the gap widens the more often power is polled, with no vendor resolution. What would settle it is an external power meter, which is the reference the study above used. None of the sources in this repository's dated 2026-08-24 prior-art sweep reported an energy figure for this model and setup.
+Board telemetry puts decode energy for a 400-token answer at **-37 %** (3980 -> 2503 J). All three limits on that figure have now been measured rather than named, and two of the three bias the **relative** comparison in the same direction. `power.draw` on Ampere is a rolling average of about a second: sampled beside the instantaneous field, the two integrals agree to 0.00-0.34 % on the baselines and differ by 0.58-1.97 % on the speculative arms, always the same sign, so the averaged field understates exactly the arms being compared, worth about 1.1 points. The prefill subtraction removes a `max_tokens=1` calibration that runs on a server with the drafter already loaded, so it costs 10-17 % more energy on a speculative arm than on a baseline and takes out more than prefill: worth 0.3 to 0.8 points. The integral runs first sample to last, and the sampler's period is its nvidia-smi query plus the interval rather than the interval alone, so about 4 % of the request sits outside the window; that one limits the absolute joule totals rather than the ratio, which is why it is not one of the two above. Applying the two relative biases as a sensitivity adjustment brings the saving nearer **-35 %**. This is also not an energy comparison for an identical or quality-equivalent answer: most speculative generations follow a different token trajectory inside the window, and semantic quality is not scored. The energy columns are point estimates; no prompt-cluster interval is reported for them. `analyze.py` prints the per-arm gap and the window coverage wherever energy appears. Two facts about the instrument itself bound what any of this can mean, both from [*Part-time Power Measurements: nvidia-smi's Lack of Attention*](https://arxiv.org/abs/2312.02741), which characterises NVIDIA's built-in sensor against external meters. The first is favourable and specific to this card: the RTX 3090 has an instant rise time, a 100 ms update period and a **100 ms averaging window**, so the sensor samples its whole runtime. The A100 and H100 average over 25 ms of each 100 ms period and therefore sample only 25 % of it -- "during the other 75 % of the time, the GPU can be using drastically different power" -- and that is where that paper's largest errors come from. **None of that applies here.** The second fact is not favourable: the sensor's steady-state error is **proportional, roughly ±5 %**, rather than the flat ±5 W NVIDIA specifies, and it runs in **both directions** depending on the individual board's component tolerances. That is larger than the 1.1-point correction above and, unlike it, is not one-sided, so it does not cancel in a ratio by construction. It is not folded into any figure here, because a bidirectional instrument error of unknown sign on this particular board cannot be corrected for, only reported. Reading `nvmlDeviceGetTotalEnergyConsumption` would **not** settle the magnitude either: a report on NVIDIA's own developer forum, [confirmed there by a second user](https://forums.developer.nvidia.com/t/value-from-nvmldevicegettotalenergyconsumption-seems-to-be-off-by-a-factor/336318), puts that counter roughly a factor of two below the integral of `power.draw` over the same interval and says the gap widens the more often power is polled, with no vendor resolution. What would settle it is an external power meter, which is the reference the study above used. None of the sources in this repository's dated 2026-08-24 prior-art sweep reported an energy figure for this model and setup.
 
 </details>
 
@@ -269,6 +269,17 @@ above stands on its own check. What the exclusion costs is the cross-architectur
 `c`; nothing in this repository currently bounds a difference in marginal cost between the two
 targets.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_dispatch_boundary_dark.png">
+  <img alt="Cost of one verification step against verification width, for draft-mtp over widths 2 to 8 and draft-dflash over 3, 5 and 7. Both are close to straight, fitted at c = 0.2904 and c = 0.2481 with r-squared above 0.994. A vertical rule marks MMVQ_MAX_BATCH_SIZE = 8; the width-9 points are drawn as open markers, excluded from the fits, and sit 26 % and 7 % below the line the widths under the limit define." src="analysis/plot_dispatch_boundary.png">
+</picture>
+
+This is the completed ladder. `plot_cost_model.png`
+([light](analysis/plot_cost_model.png), [dark](analysis/plot_cost_model_dark.png) -- a plain link
+cannot switch on the reader's theme the way the figures above do) fits the same model to Phase A alone, which reaches `c = 0.2829` and `0.2784` and puts DFlash2's best width at
+5; the ladder above supersedes both coefficients and both optima, and that figure is kept because the
+Phase A subset is what the earlier write-ups quoted.
+
 Derivation, the dispatch boundary, and what `k` does and does not identify:
 [`docs/COST_MODEL.md`](docs/COST_MODEL.md).
 
@@ -288,6 +299,11 @@ and all 25 for the rest, so the larger budget leaves the same partition resting 
 The four-build intervention still falsifies the tested `calc_nwarps` change as the cause of the
 grouping.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_width_partition_dark.png">
+  <img alt="Matrix of the 25 prompts on which each pair of arms shows the same first-divergence or censoring signature, at the 400-token cap. Two blocks appear, widths 3 and 4 against widths 5, 6 and 8, agreeing within a block on 100 % of prompts and across the blocks on 44 %. The blocks span both drafters, so verification width predicts the grouping and drafter identity does not." src="analysis/plot_width_partition.png">
+</picture>
+
 The matrix, the censoring accounting and the width partition:
 [`docs/GREEDY_DIVERGENCE.md`](docs/GREEDY_DIVERGENCE.md).
 
@@ -299,6 +315,11 @@ to opposite clocks: memory-clock elasticity **0.79-0.81 against 0.13-0.18**, SM-
 1200 MHz and 2.85x above it, which is why elasticities are never pooled across that boundary.
 Nothing here counts bytes moved or arithmetic issued, so it locates neither workload against a
 hardware limit.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_bound_by_dark.png">
+  <img alt="Two panels. The first plots SM-clock elasticity against memory-clock elasticity: the non-speculative baseline sits at (0.80, 0.27) and the two speculative arms at (0.14, 0.76) and (0.18, 0.80), on opposite sides of a dotted line where the two elasticities sum to 1. The second gives SM-clock elasticity per interval: below 1200 MHz all three track the clock at 0.80 to 0.93, above it the baseline falls to 0.27 while the speculative arms stay at 0.76 and 0.80." src="analysis/plot_bound_by.png">
+</picture>
 
 Per-interval intervals and the pinning method: [`docs/RESOURCE_RESPONSE.md`](docs/RESOURCE_RESPONSE.md).
 
@@ -376,6 +397,18 @@ status column says which.
 | **Qs** | does the bf16 anchor #25618 rests on actually hold, and does #26750's CUDA acceptance figure reproduce on a second CUDA architecture? | **complete**, four rungs, 375 records each, 0 incidents. **The anchor holds as an effect and not as parity.** The share with **no divergence observed through output token 400** against each rung's own baseline is 16 / 8 / 4 % across Q4_K_M, Q6_K, Q8_0 and **52 % at BF16** -- every request stops at the cap and none reaches EOS, so a match inside the window is right-censored rather than identity to the end of an answer -- paired over the same prompts, the Q4_K_M-to-BF16 shift is **+36 to +44 pp** across the four tested MTP depths. Three of the four clear this repository's own 1.3-half-width sensitivity rule; the `mtp-n2` pair, **+36.0 pp [+16.0, +52.0]**, clears zero by only **0.89 half-widths**, which is inside the margin where the measured undercoverage can reach zero, so it is reported and not leaned on alone. But 52 % is not parity: 36 of 75 requests still diverge with **bf16 model weights** (the K/V cache is `q8_0` on every rung, so this is a weight-precision ladder and not an unquantized target), so #25618's "stays bit-identical on bf16" is too strong as written. Within the quantized rungs the rate *falls* with bit width, so bf16 is off that line rather than its endpoint. `mtp-n6@Q4_K_M` is the matched configuration for [#26750](https://github.com/ggml-org/llama.cpp/issues/26750) and measures **35.0 % [32.9, 37.3]** on sm_86, which is **57 points below** the ~92 % that report gives for Vulkan. Whether it agrees with that report's CUDA figure is **not established**: an overlap of intervals is a failure to exclude, not a reproduction, and what is unresolved is comparability rather than the figures: Correction 26 read both halves of that range from the issue and they are real and both CUDA -- 35.8 % on an RTX PRO 4000 (Blackwell) headline row and 40.7 % across four context and parallel sweep rows -- but that is a different CUDA architecture and a different prompt population, and the estimator behind it is **not known** to be the one computed here -- a class-stratified mean of per-request acceptance -- rather than a server-log aggregate over all drafted tokens, which is what `llama-server` itself reports. `c` falls with bit width (-0.019 per bit, clear of zero) but **saturates**, r2 0.666, and in wall time there is no trend at all (r2 0.019) because bf16's decode step is 2.44x Q4_K_M's. Acceptance is stable across the whole ladder, so the trend is not explained by the drafter's observed proposal behaviour. It is not evidence that the drafter's compute is unchanged: the MTP head lives inside the target gguf, so quantizing the target quantizes the head too, and its forward latency can move while its acceptance does not. Nothing here separates the two. Scored in Correction 22 against hypotheses registered in Correction 21 Figure: [`analysis/plot_qsmall_ladder.png`](analysis/plot_qsmall_ladder.png) |
 | **V** | does the same comparison hold on vLLM rather than llama.cpp? | **Run, and what this card can produce is one arm and six recorded failures.** 75 records, `baseline-vllm` only, three passes at 47.52 / 47.53 / 47.52 tok/s -- a 0.02 % spread, and the first decode-only rate this study has from vLLM, taken from `vllm:request_decode_time_seconds` over `vllm:generation_tokens_total` rather than from wall time. Prefill is 1.29 % of inference on these requests, which is what a wall-clock rate would have folded into the comparison. Both MTP arms failed to start on all three passes: the same 2.37 GiB allocation at `qwen3_5_mtp.py:244` every time, which is `vocab_size 248320 x hidden_size 5120 x 2 bytes` for a bf16 `lm_head` the checkpoint does not contain, on top of a 17.33 GiB target. Filed as [vllm#53887](https://github.com/vllm-project/vllm/issues/53887). Design and the memory arithmetic: [`docs/PHASE_V_DESIGN.md`](docs/PHASE_V_DESIGN.md) |
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_phase_m_dark.png">
+  <img alt="Two panels, MoE and dense, of net effect against requested depth. The built-in MTP head is positive on both targets and peaks at n-max 2; the 0.8B draft-simple arms are negative on both at every depth. Draft acceptance is annotated under each point, and the columns actually verified where they differ from the requested depth. The axis is ordinal and carries a break between 8 and 16." src="analysis/plot_phase_m.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_qsmall_ladder_dark.png">
+  <img alt="Three panels against bits per weight for the Qwen3.5-9B ladder. Acceptance is flat across the four rungs for every depth. The fitted cost chord falls from 0.41 at Q4_K_M to 0.17 at BF16 while wall-time per step does not follow it. The share of requests with no divergence observed through the token cap is 4 to 16 % on the quantized rungs and about 52 % at BF16." src="analysis/plot_qsmall_ladder.png">
+</picture>
+
+Phase M and Phase Q-small in full. Both are also linked from the table above.
+
 ## Reproduce
 
 ```bash
@@ -412,8 +445,10 @@ Absolute tok/s are host-specific. Compare the paired effects, not the levels; se
 dry run. Reduced runs label themselves in the output file, so they can never be read back as a
 full result.
 
-Figures need matplotlib, which is the only third-party dependency and is not needed to reproduce
-the numbers:
+Figures need matplotlib, and `analysis/plot.py` imports numpy directly, which installing
+matplotlib provides. Neither is needed to reproduce the numbers. The test suite reads
+`CITATION.cff` with PyYAML when it is installed and skips that one check when it is not, so the
+reproduction path does not require it either:
 
 ```bash
 .venv/bin/pip install matplotlib && .venv/bin/python analysis/plot.py
@@ -438,9 +473,10 @@ the numbers:
 - **Curated prompts, not traffic.** The five classes carry equal weight by design. A deployment
   figure would have to reweight them by its own traffic mix, which has not been measured.
 - **Statistical scope.** The inferential unit is 25 prompts, not 875 records. The percentile
-  cluster bootstrap shows material undercoverage at that size on some tested processes
-  (86.3-93.7 % against a nominal 95 %, four synthetic processes, 300 replications each), so the
-  printed intervals may be too narrow, and none of them carry uncertainty from changing host,
+  cluster bootstrap undercovers at that size on every process tested
+  (87.5-92.0 % against a nominal 95 %, four synthetic processes, 2000 replications each, Monte
+  Carlo standard error 0.6 to 0.7 points), so the printed intervals should be read as
+  under-covering rather than as exact 95 % statements, and none of them carry uncertainty from changing host,
   card, build, model or prompt population. The prompts were purposively constructed rather than
   sampled from deployment traffic, so the bootstrap measures sensitivity to resampling this suite
   under its class structure and is not a population-representative traffic interval. Intervals
@@ -449,8 +485,9 @@ the numbers:
 - **Output agreement is right-censored, much less so since the cap was raised.** At a 400-token cap
   every primary request hit the cap and none reached EOS. The 1600-token re-run leaves 9 of 375
   records censored and 267 of 525 reaching EOS. Those 9 still mean no divergence was observed
-  within 1600 tokens; they are not a statement about the whole answer. The re-run computed no
-  divergence for the same-tree `baseline@pr27342` control, so that check exists only at 400.
+  within 1600 tokens; they are not a statement about the whole answer. The re-run does carry the
+  cross-tree control: `baseline@pr27342` against `baseline@master` on 75 records, identical on all
+  75, of which 36 had both sides reach EOS and 39 are themselves right-censored.
 - **No semantic-quality benchmark.** The harness measures byte-level divergence and obvious
   degeneration. Whether a diverged answer is better, worse or equivalent is not tested.
 - **Dual-tree interaction.** Same-tree baselines control the branch's no-speculation main effect.

@@ -255,13 +255,23 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         print(f"{a:28s} {b:22s} {str(iv):>22s}  {verdict}")
 
     if near_zero_seen:
+        # This printed the 800-replication figures, and a t-interval coverage of 94.1 % that
+        # NOTHING in this repository computes: coverage_sim.py has no t machinery at all. Both
+        # came from a simulation whose code was never committed, and both were reaching seven
+        # generated reports as if they were current results. The reproducible set replaced them;
+        # the old ones stay, named as history, because the 1.3 half-width threshold was chosen
+        # against them and a reader deserves to see what it was chosen against.
         print("\n  COVERAGE NOTE. The interval above is a percentile bootstrap, which is not")
-        print("  second-order accurate and undercovers at this sample size. Measured on 25")
-        print("  prompts with 800 replications: 90.9 % for a normal draw, 90.6 % uniform, 88.0 %")
-        print("  heavy-tailed, against a nominal 95 %. A t interval on the same draws reaches")
-        print("  94.1 %. The intervals are therefore too narrow, and putting the missing")
-        print("  coverage back is worth roughly 1.15 to 1.25 times the width. These verdicts sit")
-        print("  inside that margin and should not be leaned on:")
+        print("  second-order accurate and undercovers at this sample size. Measured in this")
+        print("  repository at 2000 replications x 2000 resamples on 25 prompts, and printed by")
+        print("  harness/coverage_sim.py into analysis/bootstrap_coverage.txt: 91.1 % normal,")
+        print("  92.0 % uniform, 87.5 % heavy-tailed, 90.2 % binary, against a nominal 95 %,")
+        print("  each carrying 0.6 to 0.7 points of Monte Carlo error. The 1.3 half-width")
+        print("  threshold below was set against an earlier 800-replication run that reported")
+        print("  90.9 / 90.6 / 88.0 and a t interval at 94.1 %; that run's code was never")
+        print("  committed, so its t comparison is quoted history and not something reproducible")
+        print("  here. The intervals are too narrow either way. These verdicts sit inside the")
+        print("  margin where that matters and should not be leaned on:")
         for a, iv in near_zero_seen:
             print(f"    {a:24s} {str(iv):>22s}   margin {iv.margin_half_widths:.2f} half-widths")
         print("  Everything not listed clears zero by more than the correction is worth.")

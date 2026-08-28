@@ -38,6 +38,7 @@ from statistics import fmean
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,8 +60,41 @@ FIG_W = 9.0          # inches; 9.0 x 150 = 1350 px, close to GitHub's column
 MAX_PX = 1400
 
 # Wong, B. (2011) Points of view: Color blindness. Nature Methods 8:441.
-WONG = {"blue": "#0072B2", "vermillion": "#D55E00", "green": "#009E73",
-        "orange": "#E69F00", "purple": "#CC79A7"}
+# Wong's palette is specified for print on white and is not a dark-theme palette. Measured
+# against this repo's dark background #0d1117: blue #0072B2 is 3.65:1, below WCAG AA for text,
+# and it is what carries the fit coefficients at 14-15 px on plot_dispatch_boundary and
+# plot_cost_model. Its paired vermillion is 4.89:1, so two annotations that are peers read at
+# visibly unequal weight. The dark values below put blue, vermillion and green in a 6.6-8.4 band
+# together with the orange that was already there.
+#
+# This has to be per theme rather than one palette for both: Wong's own sky blue #56B4E9 reaches
+# 8.20:1 on the dark background and 2.31:1 on white, so swapping the palette outright would just
+# move the failure to the light figures. The light values are unchanged.
+_WONG_LIGHT = {"blue": "#0072B2", "vermillion": "#D55E00", "green": "#009E73",
+               "orange": "#E69F00", "purple": "#CC79A7"}
+_WONG_DARK = {"blue": "#4DA6E0", "vermillion": "#EE7733", "green": "#1FB894",
+              "orange": "#E69F00", "purple": "#E58FC2"}
+
+
+class _ThemedColours:
+    """`WONG["blue"]` resolving against whichever theme is being drawn.
+
+    A plain dict here would have been read once at import, which is before `theme()` runs, so
+    every dark figure would have carried the light palette. Kept subscriptable so no call site
+    changes: three modules index it directly.
+    """
+
+    def __getitem__(self, k):
+        return (_WONG_DARK if _MODE == "dark" else _WONG_LIGHT)[k]
+
+    def __iter__(self):
+        return iter(_WONG_LIGHT)
+
+    def keys(self):
+        return _WONG_LIGHT.keys()
+
+
+WONG = _ThemedColours()
 INK = {"light": {"fg": "#111111", "mut": "#5a5a5a", "grid": "#c9c9c9", "bg": "#ffffff",
                  "neutral": "#333333", "flat": "#e2e2e2"},
        "dark":  {"fg": "#e6edf3", "mut": "#9aa4b0", "grid": "#3a4149", "bg": "#0d1117",
@@ -73,7 +107,23 @@ BASE = {"mtp-n2": "baseline@master", "mtp-n3": "baseline@master", "mtp-n5": "bas
 METHOD = {a: ("draft-dflash" if a.startswith("dflash") else "draft-mtp") for a in SPEC_ARMS}
 DRAFTER = {"mtp-n2": "MTP", "mtp-n3": "MTP", "mtp-n5": "MTP",
            "dflash2-n4": "DFlash2", "dflash2-n7": "DFlash2"}
-STYLE = {"draft-mtp": (WONG["blue"], "o"), "draft-dflash": (WONG["vermillion"], "s")}
+class _ThemedStyle:
+    """(colour, marker) per method, with the colour resolved per theme. Same reason as WONG."""
+
+    _COL = {"draft-mtp": "blue", "draft-dflash": "vermillion"}
+    _MARK = {"draft-mtp": "o", "draft-dflash": "s"}
+
+    def __getitem__(self, k):
+        return (WONG[self._COL[k]], self._MARK[k])
+
+    def items(self):
+        return [(k, self[k]) for k in self._MARK]
+
+    def __iter__(self):
+        return iter(self._MARK)
+
+
+STYLE = _ThemedStyle()
 
 PROVENANCE = ("Qwen3.8-27B UD-Q4_K_XL | RTX 3090 24 GB | llama.cpp c060ca9 | greedy, "
               "--parallel 1, fresh server per arm-pass, thermal gate at arm entry | "
@@ -105,7 +155,24 @@ def theme(mode):
     _MODE = "light"
 
 
-def _save(fig, stem, note="", bottom=0.13, provenance=None):
+def _halo(lw=2.2):
+    """Outline text in the background colour instead of putting a box behind it.
+
+    The box came first, and it over-corrected. Its job was to stop the OTHER method's line reading
+    as a strikethrough across a series label, and it did -- by masking a rectangle. A rectangle is
+    wider and taller than the letters in it, so on plot_cost_model the blue `draft-mtp` label was
+    erasing 51 to 120 px of the orange draft-dflash LINE in all three panels: measured, no orange
+    pixel at all between x 730 and 850 in the first. A reader sees a line that stops and restarts,
+    which is what missing data looks like.
+
+    A stroke around the glyphs masks only the glyphs. The line stays continuous between the
+    letters, the text stays legible, and nothing that is data gets covered. Kept as a function
+    rather than a constant because `C("bg")` resolves per theme at call time.
+    """
+    return [pe.withStroke(linewidth=lw, foreground=C("bg"))]
+
+
+def _save(fig, stem, note="", bottom=0.13, provenance=None, top_in=None):
     # Footer spacing is computed in inches, not in figure fractions. A fixed fraction is a
     # different number of pixels on every figure height, and on the 4.5-inch panels it put the
     # footer lines on top of each other and on the x-label.
@@ -118,6 +185,13 @@ def _save(fig, stem, note="", bottom=0.13, provenance=None):
     line_h, pad = 0.155 / h_in, 0.05 / h_in
     # 0.62 in below the axes for the tick labels and the x-label, then the footer block under it.
     fig.subplots_adjust(bottom=max(bottom, pad + line_h * len(lines) + 0.62 / h_in))
+    # `top_in` is the headroom above the topmost panel, in INCHES, for the same reason the footer
+    # is: matplotlib's default top fraction of 0.88 is 0.5 in on a 4.5-inch figure and 1.3 in on a
+    # 10.5-inch one, so a tall multi-panel figure with no suptitle opens with a band of nothing.
+    # Measured on the committed set: plot_qsmall_ladder carried 159 px of blank at the top, 10 %
+    # of its height, against 5 to 58 px everywhere else.
+    if top_in is not None:
+        fig.subplots_adjust(top=1.0 - top_in / h_in)
     for i, ln in enumerate(reversed(lines)):
         fig.text(0.5, pad + i * line_h, ln, ha="center", va="bottom",
                  fontsize=7.6, style="italic", color=C("mut"))
@@ -263,23 +337,28 @@ def fig_cost_model(result):
     for spec, (col, _) in STYLE.items():
         pts = series_of(spec, "mean_len")
         if pts:
-            ax_n.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
+            # Offset down as well as right. The stroke stops the label being struck through, but
+            # the letters still sit ON the other method's line and interrupt it: 119 px of the
+            # orange line vanished behind the old opaque box, and 60 px still went behind the
+            # glyphs. Panel 3's "best tested here" labels already clear their curves this way.
+            ax_n.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, -11),
                           color=col, fontsize=10, va="center", fontweight="bold",
                           # The other method's line runs on past this label and through it: at w=6
                           # the dflash line crosses "draft-mtp" and it read as a strikethrough, in
-                          # both themes. A patch in the figure's own background colour masks the
-                          # line behind the text without drawing a visible box around it.
-                          bbox=dict(facecolor=C("bg"), edgecolor="none", pad=1.2))
+                          # both themes. Stroked, not boxed -- see _halo; the box that used to be
+                          # here cut a 120 px hole in the line it was protecting the text from.
+                          path_effects=_halo())
 
     for i, (txt, col) in enumerate(c_labels):
+        # The y = 2.50 gridline runs through this text, and the vertical rules cross it too.
         ax_k.text(0.015, 0.93 - i * 0.115, txt, transform=ax_k.transAxes, color=col,
-                  fontsize=9.8, va="top", family="monospace")
+                  fontsize=9.8, va="top", family="monospace", path_effects=_halo())
     for spec, (col, _) in STYLE.items():
         pts = series_of(spec, "k")
         if pts:
             ax_k.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
                           color=col, fontsize=10, va="center", fontweight="bold",
-                          bbox=dict(facecolor=C("bg"), edgecolor="none", pad=1.2))
+                          path_effects=_halo())
     ax_k.set_ylabel("cost of one target pass,\nin plain decode steps")
     # "linear ... fixed c" was the old title. The completed ladder shows curvature -- k(w) is
     # concave for draft-mtp on the dense target and the residuals are several times
@@ -479,7 +558,10 @@ def fig_width_partition(result):
 # comparable, which is what this figure needs.
 R2_HI = ("sm1700-bwlo", "sm1700", "sm1700-bwhi")     # bandwidth sweep at a pinned 1710 MHz core
 R2_COMPUTE = (("sm600", "sm1200"), ("sm1200", "sm1700"))
-R2_METHODS = [("baseline", None, "o"), ("mtp-n3", WONG["blue"], "s"), ("mtp-n7", WONG["green"], "^")]
+# Names, not colours. A module-level list holding WONG["blue"] would resolve at import, which is
+# before theme() runs, so every dark figure would draw the light palette -- the exact failure the
+# _ThemedColours docstring describes, and it was already here.
+R2_METHODS = [("baseline", None, "o"), ("mtp-n3", "blue", "s"), ("mtp-n7", "green", "^")]
 
 
 def _elast(res, m, lo, hi, key):
@@ -497,7 +579,8 @@ def fig_bound_by(res):
     # the two speculative points sit almost on top of each other, so their labels are offset
     # rather than anchored, or they overlap
     OFFS = {"baseline": (14, 0, "left"), "mtp-n3": (-12, -20, "right"), "mtp-n7": (22, 24, "left")}
-    for m, col, mk in R2_METHODS:
+    for m, _colour_name, mk in R2_METHODS:
+        col = None if _colour_name is None else WONG[_colour_name]
         col = col or C("neutral")
         bw = fmean([_elast(res, m, a, b, EL.MEM_KEY)[0]
                     for a, b in zip(R2_HI, R2_HI[1:])])
@@ -508,7 +591,9 @@ def fig_bound_by(res):
         ax1.annotate(f"{m}\n({bw:.2f}, {cp:.2f})", (bw, cp), textcoords="offset points",
                      xytext=(dx, dy), fontsize=9.6, color=col, va="center", ha=ha)
     ax1.plot([0, 1], [1, 0], color=C("mut"), ls=":", lw=1.0, zorder=1)
+    # The dotted 1:1 line runs through the glyphs of its own label, in the same colour.
     ax1.annotate("the two elasticities sum to 1", (0.62, 0.38), fontsize=8.4, color=C("mut"),
+                 path_effects=_halo(2.6),
                  rotation=-31, rotation_mode="anchor", ha="center", va="bottom")
     ax1.set_xlim(-0.03, 1.0); ax1.set_ylim(-0.03, 1.0)
     ax1.set_xlabel("memory-clock elasticity   d(ln tok/s) / d(ln memory clock)\n"

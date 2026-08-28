@@ -53,7 +53,8 @@ class Interval:
         this study runs. Measured here against three data-generating processes at 25 prompts,
         800 replications each: 90.9 % for a normal, 90.6 % for a uniform and 88.0 % for a
         heavy-tailed mixture, against a nominal 95 %; at 50 prompts it recovers to 92.4 %. A t
-        interval on the same draws reaches 94.1 %. The error is one-sided, the intervals come out
+        interval on the same draws was reported at 94.1 %, and that one is still not
+        reproducible here: `coverage_sim.py` computes percentile-bootstrap coverage only. The error is one-sided, the intervals come out
         too narrow, so the verdicts that can move are the ones whose interval nearly touches zero
         already.
 

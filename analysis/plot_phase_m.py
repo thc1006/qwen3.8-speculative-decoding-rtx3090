@@ -139,7 +139,9 @@ def fig_phase_m(result, series, prompt_class):
     simple_c = P.WONG["orange"]
 
     for ax, (key, title, base, lad) in zip(axes, rows):
-        ax.axhline(0, color=P.C("neutral"), lw=1.0, zorder=1)
+        # Above the series, not under it. Zero is the reference every point in this figure is
+        # read against, and a marker that covers it takes the reader's only anchor away.
+        ax.axhline(0, color=P.C("neutral"), lw=1.0, zorder=4)
         mtp = [(n, iv, a, w) for n, iv, a, is_m, w in lad if is_m]
         sim = [(n, iv, a, w) for n, iv, a, is_m, w in lad if not is_m]
         if mtp:
@@ -154,7 +156,13 @@ def fig_phase_m(result, series, prompt_class):
                         yerr=[[iv.point - iv.lo for _, iv, *_ in group],
                               [iv.hi - iv.point for _, iv, *_ in group]],
                         fmt=marker, color=colour, ecolor=colour, elinewidth=1.3,
-                        capsize=3.2, ms=6.4, lw=0, zorder=3, label=label)
+                        # 6.4 rendered as a 17 px disc, wider than the interval it sits on: at
+                        # n-max 7 the whole confidence interval fitted inside the marker and the
+                        # zero line went behind it, so the one point that decides "positive on
+                        # both targets" was the one point whose sign could not be read off the
+                        # figure. The marker is data about the point estimate; the interval is
+                        # data about what the study can say, and the smaller of the two has to win.
+                        capsize=3.2, ms=4.6, lw=0, zorder=3, label=label)
         # The peak, named on the figure rather than left to be read off the line.
         if len(mtp) > 1:
             bn, biv = max(mtp, key=lambda t: t[1].point)[:2]
@@ -198,6 +206,21 @@ def fig_phase_m(result, series, prompt_class):
                         "columns actually verified where those differ")
     axes[-1].set_xticks(list(pos.values()))
     axes[-1].set_xticklabels([str(n) for n in xs_all])
+    # The positions are ordinal -- enumerate(), one slot per tested depth -- while the labels are
+    # the depths themselves. Where the depths are not consecutive the axis draws eight units in
+    # the width of one, and nothing said so: the 8 -> 16 step read as a single step, which makes
+    # the slope across it look eight times shallower than it is. A break mark on the spine is the
+    # standard way to say "this axis is not to scale here", and it is drawn on every gap, not
+    # just the one this data happens to have.
+    for _a, _b in zip(xs_all, xs_all[1:]):
+        if _b - _a <= 1:
+            continue
+        _mid = (pos[_a] + pos[_b]) / 2.0
+        for _ax in axes:
+            for _dx in (-0.045, 0.045):
+                _ax.plot([_mid + _dx - 0.05, _mid + _dx + 0.05], [0, 0.028],
+                         transform=_ax.get_xaxis_transform(), clip_on=False,
+                         color=P.C("fg"), lw=1.1, zorder=6)
     axes[-1].set_xlim(-0.6, len(xs_all) - 0.4)
     # The title states what the panels show and nothing beyond it. It used to read "the sign
     # belongs to the drafter, not the architecture", which is a causal claim this phase does not
