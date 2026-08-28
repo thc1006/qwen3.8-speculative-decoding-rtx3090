@@ -82,7 +82,7 @@ PHASE_A_N = "Phase A: 875 requests, 0 incidents, 0 excluded."
 CI_NOTE = ("Nominal 95 % paired cluster bootstrap over prompts within class, 10 000 "
            "resamples. The inferential unit is the prompt, n = 25; the passes are repeated "
            "measurements. Simulation in this repo puts the percentile interval's actual "
-           "coverage at 88.0-90.9 % at that size, so these widths are optimistic.")
+           "coverage at 87.5-92.0 % at that size, so these widths are optimistic.")
 
 _MODE = "light"
 
@@ -264,7 +264,12 @@ def fig_cost_model(result):
         pts = series_of(spec, "mean_len")
         if pts:
             ax_n.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
-                          color=col, fontsize=10, va="center", fontweight="bold")
+                          color=col, fontsize=10, va="center", fontweight="bold",
+                          # The other method's line runs on past this label and through it: at w=6
+                          # the dflash line crosses "draft-mtp" and it read as a strikethrough, in
+                          # both themes. A patch in the figure's own background colour masks the
+                          # line behind the text without drawing a visible box around it.
+                          bbox=dict(facecolor=C("bg"), edgecolor="none", pad=1.2))
 
     for i, (txt, col) in enumerate(c_labels):
         ax_k.text(0.015, 0.93 - i * 0.115, txt, transform=ax_k.transAxes, color=col,
@@ -273,7 +278,8 @@ def fig_cost_model(result):
         pts = series_of(spec, "k")
         if pts:
             ax_k.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
-                          color=col, fontsize=10, va="center", fontweight="bold")
+                          color=col, fontsize=10, va="center", fontweight="bold",
+                          bbox=dict(facecolor=C("bg"), edgecolor="none", pad=1.2))
     ax_k.set_ylabel("cost of one target pass,\nin plain decode steps")
     # "linear ... fixed c" was the old title. The completed ladder shows curvature -- k(w) is
     # concave for draft-mtp on the dense target and the residuals are several times
@@ -301,7 +307,8 @@ def fig_cost_model(result):
                           xytext=(-6 if lha == "left" else 0, 13), ha=lha, fontsize=10,
                           color=col, fontweight="bold")
         ax_s.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
-                      color=col, fontsize=10, va="center", fontweight="bold")
+                      color=col, fontsize=10, va="center", fontweight="bold",
+                      bbox=dict(facecolor=C("bg"), edgecolor="none", pad=1.2))
 
     for ax in axes:
         ax.grid(alpha=0.5)
