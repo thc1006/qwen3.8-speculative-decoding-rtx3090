@@ -34,6 +34,8 @@ REGISTRY = ROOT / "evidence" / "registry.json"
 README = ROOT / "README.md"
 BEGIN = "<!-- BEGIN GENERATED: EVIDENCE_STATUS -->"
 END = "<!-- END GENERATED: EVIDENCE_STATUS -->"
+FBEGIN = "<!-- BEGIN GENERATED: FORBIDDEN_CLAIMS -->"
+FEND = "<!-- END GENERATED: FORBIDDEN_CLAIMS -->"
 
 INFERENCE = {
     "primary": "primary result",
@@ -99,8 +101,29 @@ def validate(reg):
         raise SystemExit("evidence/registry.json is not valid:\n  " + "\n  ".join(problems))
 
 
-def render(only=None):
-    reg = json.loads(REGISTRY.read_text())
+def render_forbidden(reg, only=None):
+    """The claims each phase may not be used to make, from the registry, as a table.
+
+    Twenty-six of these were declared and nothing read them: they sat in a JSON file as a note to
+    whoever wrote it. Publishing them is most of the point -- a limit a reader cannot see is a
+    limit only the author is bound by. They are NOT mechanically enforced and this says so: they
+    are sentences about what an argument may not do, not strings a scanner can grep for. Section 5
+    of verify_everything.sh catches specific withdrawn wordings; these are the wider constraints
+    those wordings came from.
+    """
+    rows = ["| phase | must not be used to claim |", "|---|---|"]
+    for phase in reg["phases"]:
+        if only and phase["id"] not in only:
+            continue
+        f = phase.get("forbidden") or []
+        if not f:
+            continue
+        rows.append(f"| {phase['id']} | " + "<br>".join(f) + " |")
+    return "\n".join(rows)
+
+
+def render(only=None, reg=None):
+    reg = reg or json.loads(REGISTRY.read_text())
     validate(reg)
     skip = reg.get("skip_patterns") or []
     rows = ["| phase | data, computed from the files | inference |", "|---|---|---|"]
@@ -143,18 +166,24 @@ def main() -> int:
     args = ap.parse_args()
     only = {x.strip() for x in args.only.split(",") if x.strip()} or None
 
-    block = render(only)
+    reg = json.loads(REGISTRY.read_text())
+    block = render(only, reg)
+    fblock = render_forbidden(reg, only)
     if args.stdout:
         print(block)
+        print()
+        print(fblock)
         return 0
 
     text = README.read_text()
-    if BEGIN not in text or END not in text:
-        print(f"README.md carries no {BEGIN} ... {END} block", file=sys.stderr)
-        return 2
-    head, rest = text.split(BEGIN, 1)
-    _, tail = rest.split(END, 1)
-    new = f"{head}{BEGIN}\n{block}\n{END}{tail}"
+    new = text
+    for begin, end, b in ((BEGIN, END, block), (FBEGIN, FEND, fblock)):
+        if begin not in new or end not in new:
+            print(f"README.md carries no {begin} ... {end} block", file=sys.stderr)
+            return 2
+        head, rest = new.split(begin, 1)
+        _, tail = rest.split(end, 1)
+        new = f"{head}{begin}\n{b}\n{end}{tail}"
 
     if args.check:
         if only:
@@ -166,9 +195,8 @@ def main() -> int:
             return 0
         print("   the evidence block is not what the result files say now:", file=sys.stderr)
         import difflib
-        old_block = rest.split(END, 1)[0].strip("\n")
-        for line in list(difflib.unified_diff(old_block.splitlines(), block.splitlines(),
-                                              "committed", "computed", lineterm=""))[:20]:
+        for line in list(difflib.unified_diff(text.splitlines(), new.splitlines(),
+                                              "committed", "computed", lineterm=""))[:24]:
             print("   " + line, file=sys.stderr)
         return 1
 

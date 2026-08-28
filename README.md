@@ -65,6 +65,33 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 | warp | 1950 records over 13 files, complete, 0 incidents | control -- four builds of one revision differing only in the GENERIC warp table, plus an A6000 replication |
 <!-- END GENERATED: EVIDENCE_STATUS -->
 
+### What each phase may not be used to claim
+
+Declared per phase in [`evidence/registry.json`](evidence/registry.json) and rendered here by the
+same script that writes the table above. Twenty-six of these existed as a note in a JSON file that
+nothing read: a limit only the author can see is a limit only the author is bound by. They are
+**not** mechanically enforced -- they are sentences about what an argument may not do, not strings
+a scanner can match. `scripts/verify_everything.sh` section 5 catches specific withdrawn wordings;
+these are the wider constraints those wordings came from.
+
+<!-- BEGIN GENERATED: FORBIDDEN_CLAIMS -->
+| phase | must not be used to claim |
+|---|---|
+| A | representative deployment traffic: the 25 prompts were purposively constructed<br>semantic equivalence: only byte-level divergence is measured |
+| A-1600 | throughput: two host_contended incidents leave this file marked FAIL by the audit |
+| A-hostB | absolute tok/s pooled with Phase A: different host |
+| B | quantization or arithmetic intensity as the cause: no intervention on either<br>the joint drafted/rejected coefficients: the regressors correlate at +0.9963<br>absolute ms/step and ms/token: they wait on an exact verification-step count |
+| C | a demonstrated separation between two drafter precisions: no paired interval was computed<br>n-gram efficacy from an arm that never activated |
+| L | a refutation of #27623: that report is a different architecture, quantization and software stack<br>throttling excluded: only SM-clock drift is ruled out as the explanation<br>a method separation at depth: the deepest rungs' intervals overlap |
+| M | anything about the predecessor: the anchor failed<br>an architecture effect: same gate<br>k, c, k0, the marginal-cost equality and the fixed-cost ratio: mean_len fails its integrity check here |
+| Q | a causal reading: the two rungs ran in different sessions<br>the rungs a 24 GB card cannot hold: two of four are blocked on VRAM |
+| Qs | agreement or disagreement with #26750: the estimator and prompt population are not known to match<br>bf16 parity: 36 of 75 bf16 requests still diverge<br>the drafter's compute being unchanged: the MTP head is inside the quantized target |
+| R | a roofline or per-kernel bottleneck attribution: these are response measurements<br>independent clock effects: this phase moves them through a power cap |
+| R2 | a roofline or per-kernel bottleneck attribution |
+| V | an engine-isolated comparison: engine, quantization and checkpoint format differ together<br>a depth-specific engine limitation from the k=2 failure: it is the same allocation failing |
+| warp | generalisation past the tested table, devices, quantized kernels and prompts |
+<!-- END GENERATED: FORBIDDEN_CLAIMS -->
+
 Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`
 serves and gives the cross-engine decode-rate anchor, and both MTP arms fail to load on this card
 because the MTP module allocates its own bf16 `embed_tokens` and `lm_head`, 2.37 GiB each, on top
