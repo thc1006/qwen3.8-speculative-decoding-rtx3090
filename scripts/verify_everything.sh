@@ -214,7 +214,50 @@ else
   printf '   phase_m_anchor.txt regenerates byte-identical\n'
 fi
 
-hdr "9. the GPU is where the runs left it"
+hdr "9. every generated report is what its analyser writes now"
+# Section 8 does this for one report. It had to be done for all of them: twenty-three committed
+# artifacts were older than the analysers that produce them, including `phase_a_report.txt`, which
+# still said "byte-identical" -- wording this study withdrew -- and `phase_c_cost.txt`, which
+# published the k, c and k0 that cost_model.py now refuses to compute for that matrix. A generated
+# file is a claim, and a claim nobody rechecks is the thing this script exists for.
+python3 - <<'PY' || bad "a generated report is not what its analyser writes now"
+import pathlib, subprocess, sys
+TOOLS = {"_report.txt": "analyze", "_cost.txt": "cost_model", "_divergence.txt": "divergence_report",
+         "_stability.txt": "pass_stability", "_width_groups.txt": "width_groups"}
+SKIP = {"bootstrap_coverage.txt", "phase_m_anchor.txt"}   # section 8 covers the anchor
+
+
+def resolve(name):
+    for suf, tool in TOOLS.items():
+        if name.endswith(suf):
+            return tool, name[:-len(suf)]
+    return "analyze", name[:-4]
+
+
+stale, checked, no_source = [], 0, 0
+for art in sorted(pathlib.Path("analysis").glob("*.txt")):
+    if art.name in SKIP:
+        continue
+    tool, stem = resolve(art.name)
+    if stem == "analysis_hostB":
+        stem = "phase_a_hostB"
+    res = pathlib.Path(f"results/{stem}.json")
+    if not res.exists():
+        no_source += 1
+        continue
+    r = subprocess.run([sys.executable, f"harness/{tool}.py", str(res)],
+                       capture_output=True, text=True)
+    checked += 1
+    if r.stdout + r.stderr != art.read_text():
+        stale.append(f"{art.name} (from {tool}.py)")
+print(f"   {checked} reports regenerated and compared, {no_source} have no single result file "
+      f"to regenerate from, {len(stale)} differ")
+for x in stale:
+    print("   FAIL:", x)
+raise SystemExit(1 if stale else 0)
+PY
+
+hdr "10. the GPU is where the runs left it"
 # Through the module's own API. `python3 harness/gpustate.py --check` was here, and gpustate.py
 # has no __main__ and no argparse: it imported, did nothing, exited 0, and the fallback after the
 # || never ran. A section that reported nothing and passed.

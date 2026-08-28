@@ -3317,3 +3317,60 @@ the fifth is worth stating on its own. `git add reproduce_phase_a.sh scripts/ver
 was denied, because `\b` before an interpreter name is too weak a boundary: `\bsh` found the tail
 of `_a.sh`, and the rest of the pattern did the work. Command names and file suffixes end in the
 same letters, so the boundary has to exclude `.` and `-` as well.
+
+## Correction 37, 2026-08-28 11:20: twenty-three generated reports were older than the analysers that write them, and one of them refutes Correction 35
+
+Asked whether every file in the repository was up to date, I checked instead of answering, and the
+answer was no.
+
+### The sweep
+
+`analysis/` holds 72 generated reports. Regenerating each one from its result file and comparing
+byte for byte: **23 of the 55 that have a single result file differed from what their analyser
+writes now.** Nothing regenerates them when an analyser changes, and nothing checked.
+
+Two of the differences carry withdrawn claims into the committed tree.
+
+**`analysis/phase_a_report.txt`, the primary phase, still said `byte-identical 125/125`.** That is
+the wording this study withdrew: at a 400-token cap nothing reached EOS, so a match inside the
+window is right-censoring and not identity. `analyze.py` has printed `no divergence through cap`
+for some time. Twenty-six committed artifacts carried the old phrase.
+
+**`analysis/phase_c_cost.txt` published `k`, `c`, `k0` and a rejection-cost bound that
+`cost_model.py` now refuses to compute for that matrix.** The refusal is the fail-closed check on
+the `mean_len` derivation; Phase C does not pass it. The numbers were generated before the check
+existed and the artifact was never regenerated. `docs/COST_MODEL.md` quoted the bound in its
+rejection table -- `C | 3 | +0.00075 | 0.08 %` -- and that row is now withdrawn with its reason.
+Phases B and M fail the same check and never had rows.
+
+`analysis/phase_qsmall_BF16_divergence.txt` was wrong in a third way: it reported all four arms
+sharing one fork vector on 25 of 25 prompts. 156 of that file's 300 cells never diverge at all, so
+the "shared" vector was the no-position states grouped together -- the defect fixed in Correction
+33, still sitting in the committed report hours later. The regenerated file says the partition is
+empty, and `divergence_report.py` now prints that as a sentence rather than as a dangling arrow,
+and no longer calls an empty partition "a stable property of the configuration".
+
+### Correction 35 refuted a claim that was true
+
+Correction 35 lists two of the reviewer's own claims as refuted. **The second refutation is wrong.**
+The reviewer said `analysis/phase_a_report.txt` still prints `byte-identical`, and it did.
+
+The grep behind my refutation was `grep -n 'byte-identical' analysis/*.txt | head -6`.
+`control_determinism.txt` holds exactly six matching lines, so the truncation consumed the entire
+output before reaching any other file. I read a truncated result as a complete one and published a
+refutation of a correct claim, in the paragraph where I was correcting somebody else. Correction 35
+now carries the retraction.
+
+The first refutation in that Correction, about Phase B's analyser predating its data, stands: it
+rests on commit timestamps and a `+40/-0` diff, both of which I can still check.
+
+### The mechanism, so it cannot recur
+
+`scripts/verify_everything.sh` section 9 regenerates every report that has a single result file and
+compares it byte for byte: 55 checked, 15 skipped because they take more than one input, 0
+differing. Section 8 already did this for the anchor report alone; doing it for one file and not
+the other 54 is how twenty-three of them drifted.
+
+A commit-time heuristic was tried first and rejected: it flagged 30 files, of which several were
+false positives whose content had not changed, and a check that cries wolf is one that gets
+ignored. Content comparison costs about a minute and answers the question asked.
