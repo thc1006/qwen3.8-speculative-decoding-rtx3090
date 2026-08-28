@@ -463,19 +463,20 @@ there was omission, not misstatement.
       apart, so **the cost tracks tokens drafted rather than tokens rejected**, and the verdict
       holds across F-2 to F+1. Two `host_contended` incidents from processes of my own leave the
       file marked FAIL in the audit; the fit above should be read with that.
-- [ ] **D7** wire the evidence block into README.md, first thing once the GPU is free. The
-      renderer, the registry and the check are all committed and tested on a subset; what is left
-      is the one step that costs CPU. Replace the hand-maintained "Evidence status" blockquote with
-      `<!-- BEGIN GENERATED: EVIDENCE_STATUS -->` / `<!-- END ... -->`, run
-      `python3 harness/render_evidence.py`, and keep only the narrative sentences the table cannot
-      carry. `scripts/verify_everything.sh` section 7 fails until this is done, deliberately.
-- [ ] **D6** regenerate `analysis/bootstrap_coverage.txt` once the GPU is free. `coverage_sim.py`
-      now prints each coverage figure's own Monte Carlo standard error, so the committed report
-      predates its analyser and the numbers in it carry no stated precision. Raise the replication
-      count while regenerating: at 300 the standard error is 1.4 to 2.0 points depending on the
-      process, which is why 93.7 % here and 90.9 % in `stats.py` look like a contradiction and are
-      2.0 standard errors apart. About 1900 replications pin coverage to half a point (Morris,
-      White and Crowther 2019). Blocked during a measurement by the CPU guard, deliberately.
+- [x] **D7** evidence block wired into README.md. `evidence/registry.json` holds only what a file
+      cannot state -- the question, a controlled-vocabulary strength, and the claims a phase must
+      not be used for -- and `harness/render_evidence.py` computes every count from the result
+      files. `verify_everything.sh` section 7 regenerates and diffs it. The registry's vocabulary
+      is now enforced rather than merely declared, and the generated rows are plain rather than
+      bold because `| **M** |` is the findings table's own syntax and the duplicate shadowed two
+      tests that grep for a phase row.
+- [x] **D6** `analysis/bootstrap_coverage.txt` regenerated at 2000 replications, which is what
+      `coverage_sim.py` now defaults to so the artifact reproduces from a bare invocation. Every
+      row carries its own Monte Carlo standard error, 0.6 to 0.7 points. The result reverses which
+      process disagrees with the recorded 800-replication figures: normal lands on 90.9 % at
+      91.1 % (0.3 SE) and heavy-tailed on 88.0 % at 87.5 % (0.7), while uniform is 92.0 % against
+      90.6 % (2.3). The earlier 300-replication pass had put the discrepancy on `normal` at 2.0 SE;
+      that was Monte Carlo noise. Binary at n=25 is 90.2 %, inside the continuous band.
 - [ ] **D4** full re-run of Phase A under the C1/C2/C3 harness, once those land.
 - [ ] **D5** factorial prompts: class crossed with thinking, language crossed with matched task,
       short and medium output lengths alongside the 400-token regime.
