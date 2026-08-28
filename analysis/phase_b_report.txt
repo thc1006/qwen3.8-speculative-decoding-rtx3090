@@ -8,22 +8,22 @@ design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
 
 --- per-arm absolute (class-stratified mean over prompts) ---
 arm                           strat mean   raw mean   n obs  worst-prompt CV
-baseline@master                    41.30      41.30      75  prose_bookshelves=1.4%
-mtp-n3-p.00                        63.01      63.01      75  zh_tea=1.4%
-mtp-n3-p.50                        61.35      61.35      75  chat_music=1.8%
-mtp-n3-p.75                        58.36      58.36      75  chat_music=2.7%
-mtp-n7-p.00                        45.01      45.01      75  prose_bookshelves=1.9%
-mtp-n7-p.50                        55.40      55.40      75  prose_bookshelves=2.0%
-mtp-n7-p.75                        57.76      57.76      75  zh_moving=1.1%
+baseline@master                    41.05      41.05      75  code_rust_mergesort=0.6%
+mtp-n3-p.00                        62.53      62.53      75  code_nginx_cfg=0.5%
+mtp-n3-p.50                        61.05      61.05      75  chat_music=0.6%
+mtp-n3-p.75                        58.46      58.46      75  zh_debug=0.4%
+mtp-n7-p.00                        44.82      44.82      75  code_py_ratelimiter=0.4%
+mtp-n7-p.50                        55.15      55.15      75  prose_market=0.4%
+mtp-n7-p.75                        57.29      57.29      75  chat_advice=0.5%
 
 --- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
 arm                          vs                                    delta %  verdict
-mtp-n3-p.00                  baseline@master        +52.48 [+48.52, +56.72]  FASTER
-mtp-n3-p.50                  baseline@master        +48.48 [+44.51, +52.44]  FASTER
-mtp-n3-p.75                  baseline@master        +41.25 [+37.56, +45.14]  FASTER
-mtp-n7-p.00                  baseline@master         +8.91 [+3.55, +14.36]  FASTER  (margin 0.66 half-widths, see below)
-mtp-n7-p.50                  baseline@master        +34.07 [+30.38, +37.87]  FASTER
-mtp-n7-p.75                  baseline@master        +39.80 [+35.83, +43.89]  FASTER
+mtp-n3-p.00                  baseline@master        +52.20 [+48.41, +56.30]  FASTER
+mtp-n3-p.50                  baseline@master        +48.60 [+44.75, +52.44]  FASTER
+mtp-n3-p.75                  baseline@master        +42.32 [+38.70, +46.15]  FASTER
+mtp-n7-p.00                  baseline@master         +9.04 [+3.69, +14.46]  FASTER  (margin 0.68 half-widths, see below)
+mtp-n7-p.50                  baseline@master        +34.25 [+30.59, +37.98]  FASTER
+mtp-n7-p.75                  baseline@master        +39.46 [+35.57, +43.51]  FASTER
 
   COVERAGE NOTE. The interval above is a percentile bootstrap, which is not
   second-order accurate and undercovers at this sample size. Measured on 25
@@ -32,20 +32,19 @@ mtp-n7-p.75                  baseline@master        +39.80 [+35.83, +43.89]  FAS
   94.1 %. The intervals are therefore too narrow, and putting the missing
   coverage back is worth roughly 1.15 to 1.25 times the width. These verdicts sit
   inside that margin and should not be leaned on:
-    mtp-n7-p.00               +8.91 [+3.55, +14.36]   margin 0.66 half-widths
+    mtp-n7-p.00               +9.04 [+3.69, +14.46]   margin 0.68 half-widths
   Everything not listed clears zero by more than the correction is worth.
 
 --- SECONDARY (exploratory): per-class effect ---
-  mtp-n3-p.00                chat: +31.2%  code: +99.3%  prose: +37.4%  reason: +71.3%  zh: +23.1%
-  mtp-n3-p.50                chat: +29.0%  code: +92.8%  prose: +30.2%  reason: +66.5%  zh: +24.0%
-  mtp-n3-p.75                chat: +22.3%  code: +87.6%  prose: +22.3%  reason: +53.0%  zh: +21.0%
-  mtp-n7-p.00                chat: -16.0%  code: +68.0%  prose: -16.2%  reason: +29.3%  zh: -20.6%
-  mtp-n7-p.50                chat: +18.7%  code: +76.9%  prose: +19.0%  reason: +43.6%  zh: +12.1%
-  mtp-n7-p.75                chat: +24.9%  code: +88.0%  prose: +21.5%  reason: +46.1%  zh: +18.5%
+  mtp-n3-p.00                chat: +31.3%  code: +98.2%  prose: +37.0%  reason: +71.3%  zh: +23.3%
+  mtp-n3-p.50                chat: +29.6%  code: +91.9%  prose: +30.1%  reason: +66.6%  zh: +24.8%
+  mtp-n3-p.75                chat: +23.8%  code: +87.4%  prose: +23.8%  reason: +54.2%  zh: +22.4%
+  mtp-n7-p.00                chat: -15.8%  code: +67.6%  prose: -16.0%  reason: +29.6%  zh: -20.2%
+  mtp-n7-p.50                chat: +19.2%  code: +76.1%  prose: +19.6%  reason: +43.7%  zh: +12.6%
+  mtp-n7-p.75                chat: +24.8%  code: +86.5%  prose: +21.1%  reason: +45.9%  zh: +18.9%
 
 --- integrity ---
-  incidents recorded: 2
-    host_contended: 2
+  incidents recorded: 0
   requests excluded from aggregates: 0 / 525
   requests flagged but KEPT (absolute-threshold concerns): 0
 
@@ -55,27 +54,27 @@ mtp-n7-p.75                  baseline@master        +39.80 [+35.83, +43.89]  FAS
 
 arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
 
---- energy window coverage: 99.3 % of wall time (min 97.6 %) ---
+--- energy window coverage: 99.3 % of wall time (min 97.7 %) ---
   Energy outside the first and last sample is not in the figure above.
 
 --- averaged against instantaneous power, per arm ---
-  baseline@master         +0.55 %   n=75
-  mtp-n3-p.00             +1.44 %   n=75
-  mtp-n3-p.50             +1.31 %   n=75
-  mtp-n3-p.75             +1.29 %   n=75
-  mtp-n7-p.00             +0.95 %   n=75
-  mtp-n7-p.50             +1.32 %   n=75
-  mtp-n7-p.75             +1.29 %   n=75
+  baseline@master         +0.51 %   n=75
+  mtp-n3-p.00             +1.29 %   n=75
+  mtp-n3-p.50             +1.24 %   n=75
+  mtp-n3-p.75             +1.24 %   n=75
+  mtp-n7-p.00             +0.85 %   n=75
+  mtp-n7-p.50             +1.18 %   n=75
+  mtp-n7-p.75             +1.20 %   n=75
   Positive means power.draw integrated low. It leaves the baselines nearly alone
   and understates the speculative arms, so an energy saving read off the averaged
   field is larger than the instantaneous field supports, by about this much.
-baseline@master            0.1001     +0.0%       3987     +0.0%       -          -
-mtp-n3-p.00                0.1550    +54.9%       2681    -32.7%   0.558       2.67
-mtp-n3-p.50                0.1515    +51.4%       2729    -31.6%   0.683       2.47
-mtp-n3-p.75                0.1447    +44.5%       2861    -28.3%   0.848       2.17
-mtp-n7-p.00                0.1102    +10.1%       4044     +1.4%   0.323       3.24
-mtp-n7-p.50                0.1366    +36.5%       3024    -24.2%   0.526       2.99
-mtp-n7-p.75                0.1431    +42.9%       2894    -27.4%   0.768       2.49
+baseline@master            0.0994     +0.0%       4013     +0.0%       -          -
+mtp-n3-p.00                0.1537    +54.5%       2702    -32.7%   0.558       2.67
+mtp-n3-p.50                0.1507    +51.6%       2742    -31.7%   0.683       2.47
+mtp-n3-p.75                0.1447    +45.5%       2856    -28.8%   0.848       2.17
+mtp-n7-p.00                0.1096    +10.2%       4065     +1.3%   0.323       3.24
+mtp-n7-p.50                0.1357    +36.5%       3042    -24.2%   0.526       2.99
+mtp-n7-p.75                0.1417    +42.5%       2919    -27.3%   0.768       2.49
 
 --- losslessness (greedy arms vs baseline text, same prompt+pass) ---
   mtp-n3-p.00                no divergence through cap 18/75   median shared prefix when forked: 0.240

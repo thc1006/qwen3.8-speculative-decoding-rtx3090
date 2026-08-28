@@ -34,23 +34,40 @@ trap cleanup EXIT
 # it did.
 mktmp() { local __v=$1 __t; __t=$(mktemp "$2.XXXXXX"); TMPFILES+=("$__t"); printf -v "$__v" '%s' "$__t"; }
 
-RERUN=results/phase_a_cap1600.rerun.json
-COMMITTED=results/phase_a_cap1600.json
+# The pair Part A gates, given on the command line rather than written in. This script ran twice
+# with two different pairs -- Phase A's cap-1600 re-run on 08-27 and Phase B's on 08-28 -- and both
+# promotions deleted the very files a hardcoded pair named, leaving the script pointing at nothing.
+# With no pair given, Part A is skipped and only the maintenance in Part B runs.
+RERUN=""
+COMMITTED=""
 MAINTENANCE_ANYWAY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --maintenance-anyway) MAINTENANCE_ANYWAY=1 ;;
-    # An unrecognised flag used to be ignored in silence, so a typo in --maintenance-anyway would
-    # have stopped at Part A while looking like it had been honoured.
-    *) echo "unknown argument: $1"; echo "usage: $0 [--maintenance-anyway]"; exit 2 ;;
+    -*) echo "unknown option: $1"
+        echo "usage: $0 [--maintenance-anyway] [<rerun.json> <committed.json>]"; exit 2 ;;
+    # An unrecognised FLAG used to be ignored in silence, so a typo in --maintenance-anyway would
+    # have stopped at Part A while looking like it had been honoured. Positional arguments are the
+    # rerun/committed pair, and a third one is a mistake worth stopping on.
+    *)  if [ -z "$RERUN" ]; then RERUN=$1
+        elif [ -z "$COMMITTED" ]; then COMMITTED=$1
+        else echo "unexpected third argument: $1"
+             echo "usage: $0 [--maintenance-anyway] [<rerun.json> <committed.json>]"; exit 2
+        fi ;;
   esac
   shift
 done
+if [ -n "$RERUN" ] && [ -z "$COMMITTED" ]; then
+  echo "gave a re-run but no committed file to compare it against"; exit 2
+fi
 
 # The audit fails on these two and that is known and accepted, so a bare "verify_everything
 # failed" carries no information. Naming them here turns the check into a real one: a file that
 # leaves this set, or joins it, is news.
-EXPECTED_AUDIT_FAILURES="phase_a_cap1600 phase_b"
+# Empty since 2026-08-28: both files that used to be here were re-measured clean and the
+# flagged originals retired (analysis/rerun_agreement.txt). A name appearing here again is
+# a decision to keep a FAILing file, and should be argued for in the same place.
+EXPECTED_AUDIT_FAILURES=""
 
 if [ -f .gpu-in-use.lock ]; then
   echo "REFUSING: .gpu-in-use.lock still exists. This script is the thing that runs after."
@@ -74,6 +91,9 @@ then
   exit 2
 fi
 
+if [ -z "$RERUN" ]; then
+  echo; echo "No re-run pair given; skipping Part A and running only the Part B maintenance."
+else
 # ------------------------------------------------------------------ PART A: is the re-run usable
 hdr "A1. did the re-run finish"
 [ -f "$RERUN" ] || { echo "   $RERUN is not there; nothing to do"; exit 2; }
@@ -166,6 +186,8 @@ if [ "$FAIL" != 0 ] && [ "$MAINTENANCE_ANYWAY" = 0 ]; then
   exit 1
 fi
 
+fi   # end of Part A
+
 # ------------------------------------------------- PART B: maintenance that waited for a free GPU
 hdr "B1. coverage, at a replication count that can tell the figures apart (TODO D6)"
 # Measured, not guessed: one paired_cluster_bootstrap at n_boot=2000 over 25 prompts takes 9.2 ms
@@ -247,7 +269,11 @@ if [ "$FAIL" = 0 ]; then
 else
   echo "At least one step failed. Nothing is committed."
 fi
-echo "Then decide what becomes of $COMMITTED: the re-run supersedes it, and whether the older file"
-echo "stays as the record of that contention is a call for the person who owns the study. Whichever"
-echo "way it goes, evidence/registry.json and EXPECTED_AUDIT_FAILURES here both need updating."
+if [ -n "$COMMITTED" ]; then
+  echo "Then decide what becomes of $COMMITTED: the re-run supersedes it, and whether the older file"
+  echo "stays as the record of that contention is a call for the person who owns the study. Whichever"
+  echo "way it goes, evidence/registry.json and EXPECTED_AUDIT_FAILURES here both need updating."
+  echo "The two promotions done so far kept the committed name and retired the older file; what"
+  echo "justified each is recorded arm-by-arm in analysis/rerun_agreement.txt."
+fi
 exit "$FAIL"

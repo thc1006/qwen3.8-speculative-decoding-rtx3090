@@ -3419,3 +3419,104 @@ The wording was withdrawn from the analysers days ago and I still reached for it
 hours I spent taking it out of everything else. Removing a phrase from the tooling does not remove
 it from the person writing the summary. The post-run check now reports the EOS split so the
 distinction is in the output rather than in whoever is reading it.
+
+## Correction 39, 2026-08-28 13:40: the two flagged files are gone, and four things found while retiring them
+
+`results/phase_a_cap1600.json` and `results/phase_b.json` each carried two `host_contended`
+incidents, which under this repository's own audit rule makes a file FAIL and means it may not be
+used as it stands. Both were re-measured. The replacements carry none, and the originals are
+deleted rather than kept as flagged records.
+
+| | reference | replacement |
+|---|---|---|
+| Phase A cap-1600 | 525 records, **2 incidents** | 525 records, **0** |
+| Phase B | 525 records, **2 incidents** | 525 records, **0** |
+
+Neither was retired on the strength of its replacement alone. `analysis/rerun_agreement.txt` holds
+the arm-by-arm comparison: all eleven arms across the two phases have overlapping intervals, with
+point-estimate deltas from **-0.86 to +1.06 percentage points**. Overlap is a failure to exclude
+and not a proof of agreement (Correction 26), but a contention that moved the measurement would
+have shown here and did not.
+
+The originals are recoverable from git history, and the comparison file names the commit that still
+contains them along with the exact commands to regenerate it. A committed artifact whose inputs the
+same commit deletes cannot otherwise be rechecked by anyone.
+
+### 1. The comparison tool asserted the opposite of its own table
+
+`compare_reproduction.py` prints a verdict under the shape table. On success it printed:
+
+> Every arm's intervals overlap, the provenance matches and **neither run carries an incident**.
+
+It printed that over a reference file carrying two, six lines below a row reading `incidents 2  0
+<-- DIFFERS`. The cause is that `--allow-incidents` suppresses the *check* and the summary was
+written as though it suppressed the *fact*. The verdict now names both counts and says that whether
+the contention mattered is a judgement made outside the tool rather than a check it performed.
+
+### 2. It called an absent field a difference
+
+Phase B's reference was written on 08-27, before the schema carried `matrix.file_sha256`. The tool
+compared `None` against a real hash and reported `provenance differs: matrix sha256`. Nothing
+differed. The row could not be compared at all, which is a weaker and more useful thing to say --
+it tells the reader to go and verify the matrix another way instead of hunting for a change that is
+not there. Absence and disagreement now print differently, and the failure hint about
+`--allow-incidents` no longer appears on failures that have nothing to do with incidents.
+
+The matrix was then verified by content against what the reference file itself records: seven arms
+with identical `extra_args`, identical `COMMON_ARGS`, and twenty-five prompt tags in identical
+order. That note sits in the comparison file rather than inside the tool's verdict, because it is a
+weaker check than a hash and the distinction should survive.
+
+### 3. I attributed another session's contention to myself
+
+The first draft of `analysis/rerun_agreement.txt` said of all four incidents: "All of them were
+mine." Two of them were: Phase B's `nvidia-smi 50%` and `git 162%`. The other two -- Phase A's
+`python3 100%` and `python3 97%` -- came from a second session's data-perturbation suite, which
+`evidence/registry.json` had recorded correctly and I did not read before writing the sentence.
+Fixed before the file was committed. Blanket ownership reads as candour and is worth no more than
+any other unchecked claim.
+
+### 4. A mechanism I asserted, and measurement refuted
+
+Watching for the re-run to finish, I ran a monitor that spawned `grep` twice and `tail` once every
+ninety seconds. `ps` reports `pcpu` as CPU time over lifetime, so a process alive for three
+milliseconds that is charged one 10 ms jiffy reads 333 %, far above the 5 % floor in
+`telemetry.host_load`, and it is not a descendant of the run so descent attribution does not exempt
+it. I replaced it with a loop of bash builtins and one `sleep`, which is what it should have been.
+
+Told that a peer session was polling a remote host by `ssh` every five minutes from this machine, I
+recommended connection multiplexing on the grounds that it would drop the CPU cost "to near zero".
+It does not. `pcpu` is a ratio, and multiplexing reduces the numerator and the denominator together:
+measured, 0.006 s over 0.056 s becomes 0.003 s over 0.034 s, or 11 % against 9 %. Both are above the
+floor. What multiplexing actually buys is a ~40 % shorter exposure window. **The recommendation was
+right and the reason I gave for it was wrong**, which is the same error as Correction 30's ratio
+that explained nothing.
+
+Both of us had also missed that `contended` needs `competing_pct >= 25.0` in aggregate, so a lone
+9 % process cannot raise an incident by itself -- the two real incidents were single processes at
+50 % and 162 %. The risk from the peer's polling was therefore near zero and the risk from my
+monitor was not, for reasons neither of the two estimates we exchanged had captured.
+
+### 5. A prediction about heat, refuted by the run's own telemetry
+
+Watching settle time grow from 0.0 s on a cold card to 35.2 s, I predicted the slowest arm would
+finish hottest and be penalised further. `arm_pass_gpu` says otherwise: `baseline@master` runs
+4.1 min per pass and ends at **76.7 C / 1775 MHz**, while the mtp arms average 3.2 min and end at
+**81.6 C / 1751 MHz**. `mtp-n7-p.00` takes 4.2 minutes -- the same as baseline -- and still ends
+4.3 C hotter. Duration is not the driver; power draw is, and the memory-bound baseline draws less.
+The bias therefore runs *against* the speculative arms, which are measured at a slightly lower
+clock than the baseline they are compared to, by 1.4 %.
+
+Two things follow that are worth recording. Every arm loses 8-12 % of its clock within a single
+arm-pass, so the whole study is measured between 1695 and 1785 MHz against a 2130 MHz maximum.
+And `at_start.clocks.current.graphics` is sampled at a variable point in the clock ramp -- one arm
+recorded 1380 MHz where every other recorded 1930-1965 -- so the *start* figures are not a reliable
+baseline while the *end* figures, all taken under sustained load, are. Temperature is unaffected,
+because it moves in seconds where the clock moves in milliseconds.
+
+### Still open
+
+`gpustate.py` records `core_offset`, `power_limit_w` and the clock maxima, and **records nothing
+about the fan**. A fan curve changed between two runs would leave no field saying so, only
+temperatures that are quietly lower. Nothing has changed one, and the gap should be closed before
+anything does.

@@ -4396,5 +4396,82 @@ class ThePrefixOnlyStateStillHasNotHappened(unittest.TestCase):
                          f"consumer of a fork position needs to be re-read before that stands.")
 
 
+class TheCitationFileMayNotNameAThingThatDoesNotExist(unittest.TestCase):
+    """`CITATION.cff` is metadata a reader is invited to trust without opening the repository.
+
+    GitHub renders it behind a "Cite this repository" button, and Zenodo and the CFF tooling read
+    it mechanically, so anything it asserts travels further than the README does and is checked by
+    fewer people. That makes it the easiest place in the tree to publish an unbacked claim: a
+    `version:` nobody tagged, a `doi:` nobody minted, a `date-released:` for a release that never
+    happened. Those three keys are absent on purpose. This test is what keeps them absent until
+    the artifact they name is real, and checks the ORCID here is the one the README shows -- two
+    copies of an identifier is two chances to publish a wrong one.
+    """
+
+    @staticmethod
+    def _load():
+        root = Path(__file__).parent.parent
+        text = (root / "CITATION.cff").read_text()
+        try:
+            import yaml
+        except ImportError:
+            return None, text
+        return yaml.safe_load(text), text
+
+    def test_it_parses_and_carries_what_cff_1_2_0_requires(self):
+        data, text = self._load()
+        if data is None:
+            self.skipTest("PyYAML is not installed; the structural check needs a parser")
+        for key in ("cff-version", "message", "title", "authors", "type"):
+            self.assertIn(key, data, f"CITATION.cff has no {key!r}; CFF 1.2.0 requires it")
+        self.assertEqual(data["cff-version"], "1.2.0")
+        self.assertTrue(data["authors"], "CITATION.cff lists no authors")
+        for a in data["authors"]:
+            self.assertIn("family-names", a)
+            self.assertIn("given-names", a)
+
+    def test_no_version_doi_or_release_date_without_the_artifact_behind_it(self):
+        import re
+        import subprocess
+        data, text = self._load()
+        root = Path(__file__).parent.parent
+        if data is None:
+            declared = {k for k in ("version", "doi", "date-released")
+                        if re.search(rf"(?m)^{k}:", text)}
+        else:
+            declared = {k for k in ("version", "doi", "date-released") if k in data}
+        if not declared:
+            return
+        # Each of the three has to be backed by something outside this file.
+        if "version" in declared:
+            v = data["version"] if data else ""
+            tags = subprocess.run(["git", "-C", str(root), "tag", "--list"],
+                                  capture_output=True, text=True).stdout.split()
+            self.assertIn(str(v), tags,
+                          f"CITATION.cff declares version {v!r} and no such git tag exists. "
+                          f"Tag the commit first, or take the key back out.")
+        if "doi" in declared:
+            self.fail("CITATION.cff declares a DOI. Remove this branch of the test only when the "
+                      "deposit exists and its identifier resolves -- and check that it does.")
+        if "date-released" in declared and "version" not in declared:
+            self.fail("CITATION.cff carries a release date with no version to attach it to")
+
+    def test_the_orcid_matches_the_one_the_readme_prints(self):
+        import re
+        data, text = self._load()
+        root = Path(__file__).parent.parent
+        readme = (root / "README.md").read_text()
+        ids = set(re.findall(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b", text))
+        in_readme = set(re.findall(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b", readme))
+        if not ids:
+            self.skipTest("CITATION.cff names no ORCID")
+        self.assertTrue(in_readme,
+                        "CITATION.cff carries an ORCID the README never shows; a reader who "
+                        "never opens the .cff has no way to check it against anything")
+        self.assertEqual(ids, in_readme,
+                         f"the ORCIDs disagree: CITATION.cff {sorted(ids)} vs README {sorted(in_readme)}")
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

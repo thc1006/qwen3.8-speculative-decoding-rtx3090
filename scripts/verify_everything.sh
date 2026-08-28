@@ -154,8 +154,8 @@ import glob, json, pathlib, re, sys
 # to point at files that exist. The first version of this check matched result filenames against
 # the bold labels of the README's later-phases table, which put a hole exactly where the primary
 # result is: there was no `phase_a` prefix in the map, so Phase A, the extended-cap run and the
-# host-B replication were all unchecked, and `phase_a_cap1600.rerun.json` would have been invisible
-# to the generated evidence block without anything noticing.
+# host-B replication were all unchecked, and a re-run added later would have been invisible to the
+# generated evidence block without anything noticing.
 reg = json.loads(pathlib.Path("evidence/registry.json").read_text())
 skip = reg.get("skip_patterns") or []
 readme = pathlib.Path("README.md").read_text()

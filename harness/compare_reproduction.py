@@ -128,6 +128,21 @@ def main() -> int:
                             f"{'.'.join(path)} is not a path a result carries")
             continue
         same = a == b
+        if not same and (a is None or b is None):
+            # Absence is not disagreement. `matrix sha256` reported "provenance differs" when
+            # comparing an 08-27 result against an 08-28 one, and the two runs did not differ on
+            # it at all -- the older schema had no such field to record. Calling that a
+            # difference invites the reader to look for a change that is not there, and hides the
+            # thing that IS true: this row could not be compared, so the matrix has to be
+            # verified some other way or not claimed.
+            which = "reference" if a is None else "candidate"
+            print(f"  {label:16s} {str(a)[:34]:34s} {str(b)[:34]:34s}"
+                  f"   <-- NOT RECORDED in {which}")
+            problems.append(
+                f"provenance not verifiable: {label} is absent from the {which}, so the two "
+                f"runs cannot be compared on it (usually an older result written before the "
+                f"field existed); verify it another way or do not claim it")
+            continue
         mark = "" if same else "   <-- DIFFERS"
         print(f"  {label:16s} {str(a)[:34]:34s} {str(b)[:34]:34s}{mark}")
         if not same:
@@ -139,6 +154,7 @@ def main() -> int:
                       ("incidents", lambda d: len(incidents(d)))):
         a, b = fn(ref), fn(cand)
         print(f"  {label:16s} {a:<34d} {b:<34d}{'' if a == b else '   <-- DIFFERS'}")
+    n_incidents = {"reference": len(incidents(ref)), "candidate": len(incidents(cand))}
     for name, d in (("reference", ref), ("candidate", cand)):
         for inc in incidents(d):
             print(f"    {name} incident: {inc.get('kind')} at {inc.get('arm')} "
@@ -182,11 +198,27 @@ def main() -> int:
         print(f"  NOT ESTABLISHED as a reproduction: {len(problems)} problem(s)")
         for p in problems:
             print(f"    - {p}")
-        print("  A recorded incident fails this by default; pass --allow-incidents to say the")
-        print("  contention was checked and did not move the measurement, and say so in writing.")
+        # Only when an incident is actually among the problems. This hint used to print on
+        # every failure, so a run that failed solely on an unrecorded provenance field told the
+        # reader to pass a flag that had already been passed, and pointed at contention that was
+        # not the reason for anything.
+        if any("recorded incident" in x for x in problems):
+            print("  A recorded incident fails this by default; pass --allow-incidents to say the")
+            print("  contention was checked and did not move the measurement, and say so in writing.")
         return 1
-    print("  Every arm's intervals overlap, the provenance matches and neither run carries an")
-    print("  incident. That is consistent with a reproduction and is not proof of one.")
+    print("  Every arm's intervals overlap and the provenance that both files record matches.")
+    if n_incidents["reference"] or n_incidents["candidate"]:
+        # The success line asserted "neither run carries an incident" while --allow-incidents was
+        # suppressing exactly that check, and it printed that sentence over a reference file
+        # carrying two. A summary that states the opposite of the shape table above it is worse
+        # than no summary.
+        print(f"  The reference carries {n_incidents['reference']} recorded incident(s) and the "
+              f"candidate {n_incidents['candidate']};")
+        print("  --allow-incidents was passed, so whether that contention moved the measurement")
+        print("  is a judgement made outside this tool, not a check it performed.")
+    else:
+        print("  Neither run carries a recorded incident.")
+    print("  That is consistent with a reproduction and is not proof of one.")
     return 0
 
 

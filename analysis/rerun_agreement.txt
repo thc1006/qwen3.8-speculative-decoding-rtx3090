@@ -1,0 +1,149 @@
+Why two result files were replaced, and what the replacements agree with.
+
+Both originals carried host_contended incidents caused by work run on this host DURING
+the measurement, but not by the same party, and the distinction is worth keeping:
+Phase A's cap-1600 run took two from another session's data-perturbation suite (python3
+at 100 % and 97 %); Phase B's took one from a repo-side nvidia-smi and one from a
+repo-side git, and both of those were this session's own doing. Under this repository's
+own audit rule an incident makes the file FAIL, and a FAIL means the result may not be
+used as it stands.
+Re-running is the only way to clear that; deleting the flag would not be.
+
+Neither original is retired on the strength of the re-run alone. What follows is the
+arm-by-arm comparison between each original and its replacement. Had the contention
+moved the measurement, it would show as arms whose intervals do not overlap.
+
+REGENERATING THIS FILE: the reference files are deleted in the commit that adds it.
+They are present in cfd8ce35754d1654e8be9e591f3a10829a54603e and every commit before it:
+    git show cfd8ce35754d1654e8be9e591f3a10829a54603e:results/phase_a_cap1600.json > /tmp/ref_a.json
+    git show cfd8ce35754d1654e8be9e591f3a10829a54603e:results/phase_b.json         > /tmp/ref_b.json
+    python3 harness/compare_reproduction.py /tmp/ref_a.json results/phase_a_cap1600.json --allow-incidents
+    python3 harness/compare_reproduction.py /tmp/ref_b.json results/phase_b.json --allow-incidents
+(after the promotion the replacements carry the reference files' names.)
+
+================================================================
+REFERENCE  results/phase_a_cap1600.json
+CANDIDATE  results/phase_a_cap1600.rerun.json
+================================================================
+====================================================================================================
+REPRODUCTION COMPARISON
+====================================================================================================
+  reference results/phase_a_cap1600.json
+  candidate results/phase_a_cap1600.rerun.json
+
+--- provenance: what was measured ---
+  engine revisions {'master': 'c060ca9', 'pr27342': ' {'master': 'c060ca9', 'pr27342': '
+  model sha256     3f227079003add2511437e5b1e94812e36 3f227079003add2511437e5b1e94812e36
+  model bytes      17559178144                        17559178144                       
+  model path       /home/thc1006/dev/qwen3.8-speculat /home/thc1006/dev/qwen3.8-speculat
+  gpu and driver   NVIDIA GeForce RTX 3090, 24576 MiB NVIDIA GeForce RTX 3090, 24576 MiB
+  clock state      {'power_limit_w': 420.0, 'power_de {'power_limit_w': 420.0, 'power_de
+  kernel           6.12.101+deb13-amd64               6.12.101+deb13-amd64              
+  python           3.13.5                             3.13.5                            
+  host             thc1006-debian13                   thc1006-debian13                  
+  device           NVIDIA GeForce RTX 3090            NVIDIA GeForce RTX 3090           
+  matrix sha256    0f68af0cbf4e469b13e3fda4e9ee486cad 0f68af0cbf4e469b13e3fda4e9ee486cad
+  max_tokens       1600                               1600                              
+  passes           3                                  3                                 
+  n_prompts        25                                 25                                
+
+--- shape ---
+  records          525                                525                               
+  arms             7                                  7                                 
+  incidents        2                                  0                                    <-- DIFFERS
+    reference incident: host_contended at baseline@pr27342 pass 1: 100% of CPU is not this run: python3 100%
+    reference incident: host_contended at mtp-n2 pass 1: 97% of CPU is not this run: python3 97%
+
+--- records the quality rule set aside, and records it flagged ---
+  reference  excluded 267  flagged 0     arms: baseline@master, baseline@pr27342, dflash2-n4, dflash2-n7, m
+  candidate  excluded 267  flagged 0     arms: baseline@master, baseline@pr27342, dflash2-n4, dflash2-n7, m
+
+--- effect per arm, each against its own tree's baseline ---
+  arm                                     reference                  candidate  delta pt  overlap
+  dflash2-n4                +60.26 [+56.35, +64.40]    +59.51 [+55.65, +63.59]     -0.75  yes
+  dflash2-n7                +28.03 [+22.78, +33.92]    +28.32 [+23.15, +34.14]     +0.28  yes
+  mtp-n2                    +69.59 [+65.52, +73.82]    +69.26 [+65.25, +73.49]     -0.34  yes
+  mtp-n3                    +66.69 [+60.46, +73.21]    +66.32 [+60.21, +72.79]     -0.38  yes
+  mtp-n5                    +41.18 [+37.02, +45.47]    +40.31 [+36.31, +44.51]     -0.86  yes
+
+  Overlap is a failure to exclude, not agreement (Correction 26). No interval is put
+  on the delta column: the two runs are separate sessions and nothing in this design
+  pairs them.
+
+====================================================================================================
+  Every arm's intervals overlap and the provenance that both files record matches.
+  The reference carries 2 recorded incident(s) and the candidate 0;
+  --allow-incidents was passed, so whether that contention moved the measurement
+  is a judgement made outside this tool, not a check it performed.
+  That is consistent with a reproduction and is not proof of one.
+
+================================================================
+REFERENCE  results/phase_b.json
+CANDIDATE  results/phase_b.rerun.json
+================================================================
+====================================================================================================
+REPRODUCTION COMPARISON
+====================================================================================================
+  reference results/phase_b.json
+  candidate results/phase_b.rerun.json
+
+--- provenance: what was measured ---
+  engine revisions {'master': 'c060ca9'}              {'master': 'c060ca9'}             
+  model sha256     3f227079003add2511437e5b1e94812e36 3f227079003add2511437e5b1e94812e36
+  model bytes      17559178144                        17559178144                       
+  model path       /home/thc1006/dev/qwen3.8-speculat /home/thc1006/dev/qwen3.8-speculat
+  gpu and driver   NVIDIA GeForce RTX 3090, 24576 MiB NVIDIA GeForce RTX 3090, 24576 MiB
+  clock state      {'power_limit_w': 420.0, 'power_de {'power_limit_w': 420.0, 'power_de
+  kernel           6.12.101+deb13-amd64               6.12.101+deb13-amd64              
+  python           3.13.5                             3.13.5                            
+  host             thc1006-debian13                   thc1006-debian13                  
+  device           NVIDIA GeForce RTX 3090            NVIDIA GeForce RTX 3090           
+  matrix sha256    None                               8496aa4bc176a46780ef2d26e96e224e82   <-- NOT RECORDED in reference
+  max_tokens       400                                400                               
+  passes           3                                  3                                 
+  n_prompts        25                                 25                                
+
+--- shape ---
+  records          525                                525                               
+  arms             7                                  7                                 
+  incidents        2                                  0                                    <-- DIFFERS
+    reference incident: host_contended at mtp-n3-p.00 pass 2: 50% of CPU is not this run: nvidia-smi 50%
+    reference incident: host_contended at mtp-n7-p.75 pass 3: 162% of CPU is not this run: git 162%
+
+--- records the quality rule set aside, and records it flagged ---
+  reference  excluded 0    flagged 0   
+  candidate  excluded 0    flagged 0   
+
+--- effect per arm, each against its own tree's baseline ---
+  arm                                     reference                  candidate  delta pt  overlap
+  mtp-n3-p.00               +52.48 [+48.52, +56.72]    +52.20 [+48.41, +56.30]     -0.28  yes
+  mtp-n3-p.50               +48.48 [+44.51, +52.44]    +48.60 [+44.75, +52.44]     +0.12  yes
+  mtp-n3-p.75               +41.25 [+37.56, +45.14]    +42.32 [+38.70, +46.15]     +1.06  yes
+  mtp-n7-p.00                 +8.91 [+3.55, +14.36]      +9.04 [+3.69, +14.46]     +0.13  yes
+  mtp-n7-p.50               +34.07 [+30.38, +37.87]    +34.25 [+30.59, +37.98]     +0.18  yes
+  mtp-n7-p.75               +39.80 [+35.83, +43.89]    +39.46 [+35.57, +43.51]     -0.34  yes
+
+  Overlap is a failure to exclude, not agreement (Correction 26). No interval is put
+  on the delta column: the two runs are separate sessions and nothing in this design
+  pairs them.
+
+====================================================================================================
+  NOT ESTABLISHED as a reproduction: 1 problem(s)
+    - provenance not verifiable: matrix sha256 is absent from the reference, so the two runs cannot be compared on it (usually an older result written before the field existed); verify it another way or do not claim it
+
+================================================================
+NOTE on the phase_b row 'matrix sha256 -- NOT RECORDED in reference'
+
+results/phase_b.json was written on 2026-08-27, before the result schema carried
+`matrix.file_sha256`, so the tool has nothing to compare and correctly declines to
+call it verified. The matrix was instead checked by content, on 2026-08-28, against
+what the reference file itself records about the design:
+
+  arms and their extra_args   7 vs 7   identical: True
+  COMMON_ARGS                 identical: True
+  prompt tags and their order 25 vs 25   identical: True
+
+That covers every input the matrix module supplies to a run. It is a weaker check
+than a hash -- it compares what the old file chose to record, not the file that
+produced it -- and it is stated here rather than folded into the tool's verdict so
+that the distinction survives.

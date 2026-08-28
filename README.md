@@ -48,10 +48,9 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 | phase | data, computed from the files | inference |
 |---|---|---|
 | A | 875 records, complete, 0 incidents | primary result |
-| A-1600 | 525 records, complete, 2 incidents | within-run contrasts reported |
-| A-1600-rerun | 525 records, complete, 0 incidents | within-run contrasts reported -- supersedes A-1600, which carries two host_contended incidents from another session's mutation suite; whether the older file stays on as the record of that contention is not decided here |
+| A-1600 | 525 records, complete, 0 incidents | within-run contrasts reported -- re-measured 2026-08-28. The first extended-cap run took two host_contended incidents from another session's data-perturbation suite; the replacement carries none, and the arm-by-arm comparison that justified retiring the older file is in analysis/rerun_agreement.txt |
 | A-hostB | 175 records, complete, 0 incidents | association, not a controlled contrast |
-| B | 525 records, complete, 2 incidents | exploratory -- H2 and H2' and the arm design were in the initial commit; the model comparison was committed before the run finished; the forward-count robustness sweep was added after the data |
+| B | 525 records, complete, 0 incidents | exploratory -- H2 and H2' and the arm design were in the initial commit; the model comparison was committed before the run finished; the forward-count robustness sweep was added after the data; re-measured 2026-08-28 after the first run took two host_contended incidents from this session's own nvidia-smi and git, with the comparison in analysis/rerun_agreement.txt |
 | C | 750 records, complete, 0 incidents | within-run contrasts reported |
 | KV | 175 records, complete, 0 incidents | control |
 | L | 900 records over 5 files, complete, 0 incidents | within-run contrasts reported |
@@ -78,7 +77,7 @@ these are the wider constraints those wordings came from.
 | phase | must not be used to claim |
 |---|---|
 | A | representative deployment traffic: the 25 prompts were purposively constructed<br>semantic equivalence: only byte-level divergence is measured |
-| A-1600 | throughput: two host_contended incidents leave this file marked FAIL by the audit |
+| A-1600 | identity: a run that matched inside the 1600-token cap is right-censored, not byte-identical<br>representative deployment traffic: the 25 prompts were purposively constructed |
 | A-hostB | absolute tok/s pooled with Phase A: different host |
 | B | quantization or arithmetic intensity as the cause: no intervention on either<br>the joint drafted/rejected coefficients: the regressors correlate at +0.9963<br>absolute ms/step and ms/token: they wait on an exact verification-step count |
 | C | a demonstrated separation between two drafter precisions: no paired interval was computed<br>n-gram efficacy from an arm that never activated |
@@ -501,4 +500,14 @@ original license: everything under `upstream/`, the copied source excerpts, the 
 
 ## Author
 
-Hsiu-Chi Tsai | GitHub [`thc1006`](https://github.com/thc1006)
+Hsiu-Chi Tsai ([ORCID `0000-0001-7421-8027`](https://orcid.org/0000-0001-7421-8027)) |
+GitHub [`thc1006`](https://github.com/thc1006)
+
+## Citation
+
+[`CITATION.cff`](CITATION.cff) carries the machine-readable metadata, which is what GitHub's
+"Cite this repository" button reads. It names no DOI, no version and no release date, because
+nothing has been deposited or tagged: a citation file that asserts a version the repository has
+not cut is the same species of claim this document spends its length avoiding. Cite the commit
+you actually read -- `git rev-parse HEAD` -- and if you need a fixed identifier, say so and one
+will be minted.
