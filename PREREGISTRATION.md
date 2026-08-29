@@ -3909,3 +3909,253 @@ it was fixed. A fourth, that `plot_cost_model`'s label patch was harmless, fell 
 
 Every measurement in this correction is a pixel count, a byte comparison, a computed ratio or a line
 number. By the end of it nothing that was merely looked at was being believed.
+
+## Correction 44, 2026-08-30: the counter was read, and `energy_j` is the instrument that disagrees
+
+Correction 43 section 5 stopped at naming `nvmlDeviceGetTotalEnergyConsumption` as a cross-check
+worth reading rather than dismissing unread. It has now been read, against 450 records in
+`results/phase_e.json` -- 6 arms x 25 prompts x 3 passes, complete, 0 incidents -- and against a
+controlled measurement of the counter's own failure mode in `analysis/nvml_polling.txt`.
+
+The result is not the one the framing expected. **The counter is not the questionable instrument
+here. `energy_j` is.**
+
+### Two instruments agree across a 2.75x power range; the published one does not
+
+`phase_e` uses the power limit as the load lever -- 420, 250 and 150 W -- because at stock every
+arm sits between 409.8 and 415.7 W -- a 5.9 W spread, 97.6 to 99.0 % of the cap -- and a
+load-dependent instrument error cannot be separated from a constant one when the load never
+changes. Each window is read by three instruments at the same
+instants: a trapezoid over `power.draw`, a trapezoid over `power.draw.instant`, and the driver's
+cumulative counter read exactly twice.
+
+| arm | mean W | counter vs `power.draw` | counter vs `power.draw.instant` |
+|---|---:|---:|---:|
+| `baseline@pw150` | 150.2 | -0.085 % | **-0.094 %** |
+| `baseline@pw250` | 249.2 | -0.024 % | **-0.135 %** |
+| `baseline@pw420` | 412.0 | **+0.745 %** | **-0.091 %** |
+| `mtp-n2@pw150` | 149.8 | -0.143 % | **-0.149 %** |
+| `mtp-n2@pw250` | 248.3 | +0.152 % | **-0.124 %** |
+| `mtp-n2@pw420` | 404.6 | **+1.872 %** | **-0.008 %** |
+
+The counter and the instantaneous field agree to within 0.15 % on every arm mean, at every load.
+The agreement is systematic rather than symmetric: all six arm means are negative, -0.008 to
+-0.149 %, and at record level the spread is wider, -1.229 to +0.958 %. The averaged field departs
+from both, by more the harder the card works. Regressing the counter's apparent disagreement with
+`energy_j` on the instantaneous field's disagreement with `energy_j` gives r = +0.910: what looked
+like the counter disputing the integral is the averaged field's own offset, seen twice.
+
+**These are not two sensors.** They are three readout paths over one on-board sensor -- a
+one-second rolling average, a less-smoothed instantaneous reading, and an accumulator the firmware
+integrates. Their agreement bounds the processing, not the calibration; the proportional +-5 %
+bidirectional sensor error this repository cites from the measurement literature is invisible to
+all three of them and an external meter remains the only thing that would see it. What two paths
+agreeing does establish is which of the three is the outlier.
+
+`docs/ENERGY.md` already had the averaged-versus-instantaneous gap measured and folded into its
+sensitivity adjustment. What is new is the third reading, which is what turns "these two integrals
+differ" into "these two agree and that one does not".
+
+### Reading the counter is what breaks it, and the harness reads it twice
+
+The reason the counter had been dismissed was a developer-forum report putting it about a factor of
+two below the integral, with the gap widening the more often power is polled. That report is
+correct, and the cause is the reading. `analysis/nvml_polling.txt`, idle card, 5 interleaved reps of
+an 8 s window, varying only what happens between the two end reads:
+
+| between the end reads | counter | `power.draw` integral | counter retains | reads |
+|---|---:|---:|---:|---:|
+| no nvidia-smi at all | 32.22 +- 0.12 W | -- | -- | 2 |
+| nvidia-smi at 10 Hz | 32.13 +- 0.25 W | 32.32 +- 0.14 W | 99.4 % | 2 |
+| plus the counter at 1 Hz | 30.17 +- 0.25 W | 32.41 +- 0.08 W | 93.1 % | 9 |
+| plus the counter at 10 Hz | 20.34 +- 3.74 W | 32.44 +- 0.10 W | 62.7 % | 81 |
+| plus the counter at 100 Hz | 2.21 +- 0.81 W | **37.52 +- 0.32 W** | **5.9 %** | 801 |
+
+**The control is what makes this a measurement rather than an anecdote.** "The counter loses energy"
+and "polling makes the card draw less" predict the same counter values. Only the second instrument
+separates them, and it separates them the strong way: at 100 Hz the card draws *more* -- 37.52 W
+against 32.3 W everywhere else, the polling's own cost -- while the counter reports 5.9 % of it.
+
+Two consequences.
+
+**The harness's own polling is clear.** Every energy number this repository has published rests on
+an nvidia-smi subprocess sampling at 10 Hz. With no nvidia-smi at all the counter reads 32.22 W;
+with it, 32.13 W. A difference of -0.09 W against a pooled standard deviation of 0.19 W across
+those ten windows. That assumption had never been tested.
+
+**`PowerSampler` reads the counter exactly twice per window** -- beside the first power sample and
+beside the last -- which is the 99.4 % row. An earlier version read it beside every power sample,
+which is 10 Hz, and came out 34 % low.
+
+A fixed cost per read would explain the ordering, and does not: the loss divided by the reads that
+produced it is 1999, 1196 and 353 mJ per read at 1, 10 and 100 Hz. The dose-response is established;
+the mechanism behind it is not, and the file says so where the numbers are.
+
+### The averaged field's offset is not proportional, and nothing measured predicts its size
+
+`analysis/energy_instruments.txt` puts the two integrals against each other over 73 file-arm cells,
+11 files, 5355 records, spanning both base models, six named quantizations across two model
+sizes, and three power caps. It is one file short of a context-length sweep: four of the five
+`phase_l` files carry both integrals and no window span, so 720 records cannot be used and only the
+98304 file is in. The report names them rather than shrinking its denominator quietly.
+
+| the offset in joules tracks | r |
+|---|---:|
+| total energy `P x span` -- what a proportional gain error predicts | **+0.085** |
+| window length | -0.112 |
+| SM-clock spread -- what a power-fluctuation story predicts | -0.120 |
+| mean power | +0.623 |
+
+The first row is the useful one and it is a negative result: **the offset is not a proportional
+error, so it cannot be corrected by scaling.** A same-board multiplicative gain would cancel in a
+ratio between two arms; this does not, which is exactly the failure mode Correction 43 section 5
+identified as the one that survives its own arithmetic.
+
+An earlier reading of two files had it as a per-window edge effect with a time constant that
+separated baselines (about 0.07 s) from speculative arms (about 0.11 s). Nine more files refuse it.
+Across all 73 cells the two ranges overlap -- baselines 0.0040 to 0.0830 s, speculative -0.0928 to
+0.1393 s -- and `phase_m`'s `moe-draft08b-*` arms carry a *negative* offset of 11 to 24 J, which a
+per-window loss cannot produce. Neither can it be power alone: at the 420 and 250 W caps the
+speculative arm draws less power than its baseline and shows the *larger* offset, which no
+monotone function of power gives. At 150 W that ordering does not hold either -- baseline +0.009 %
+against mtp-n2 +0.006 % -- but at that cap both offsets are within noise of zero and the pair
+separates nothing.
+
+So the honest statement is the shape and not the cause. The offset is real, systematically signed
+for MTP arms, and not predicted by mean power, window length, total energy or clock variability. It
+is not modelled here, and nothing below treats it as though it were.
+
+### What it does to the published energy figure
+
+The headline is 400-token decode energy for `mtp-n2`, 3980 -> 2503 J, a ratio of 0.6289 and a
+saving of 37.1 %. `phase_e`'s 420 W arms are that comparison at that cap: `n_predict` 400, every
+record at the cap, the same two arms, the same board. So this is a matched measurement rather than
+an extrapolation.
+
+**`phase_e` replicates the headline before anything is corrected.** Its own 420 W arms give a
+decode-energy saving of **37.06 %** against Phase A's **37.10 %**, four days and a separate run
+apart, which is what makes the rest of this transferable rather than an analogy.
+
+The correction is in joules, not per cent, and getting that wrong the first time is what this
+paragraph replaces. `decode_energy = energy - prefill_energy`: both terms are integrals of the
+averaged field, each with its own offset, so the quantity to add back is `d_req - d_pre` and NOT
+`decode_energy` scaled by the request window's percentage. Scaling gave 36.4 %; the difference is
+small here and the method is wrong at any size.
+
+| at the 420 W cap | decode J | `d_req` | `d_pre` | net | corrected |
+|---|---:|---:|---:|---:|---:|
+| `baseline@pw420` | 4005.0 | +34.19 | -2.93 | **+37.12** | 4042.1 |
+| `mtp-n2@pw420` | 2520.6 | +48.41 | -5.09 | **+53.49** | 2574.1 |
+
+A saving of **36.32 %** in `phase_e`'s own arms. Adding the same net joules to Phase A's records --
+3979.6 -> 4016.7 and 2503.3 -> 2556.8 -- gives **36.34 %**. So the figure is **-36.3 %**, a shift of
+0.75 points, and the two files agree on it to 0.02.
+
+`docs/ENERGY.md`'s existing "nearer -35 %" came from the extreme ends of the 1600-token cap's ranges
+rather than a matched pair; it is the more conservative number and it stays, now with a matched
+estimate beside it.
+
+**`results/phase_a.json` cannot be corrected from its own contents.** It carries `energy_j` and
+neither of the other two readings; both fields postdate it. The number above is what an instrument
+it does not contain would have reported for the same conditions, not a re-derivation of the file.
+
+The size of what is at stake elsewhere, from the same table, paired by the model family and tree the
+arm names state rather than by nearest power:
+
+| | ratio understated by |
+|---|---:|
+| `phase_a_cap1600` `mtp-n2` vs `baseline@master` | 0.304 % |
+| `phase_e` `mtp-n2@pw420` vs `baseline@pw420` | 1.035 % |
+| `phase_m` `moe-mtp-n5` vs `baseline-moe` | 4.317 % |
+| `phase_m` `moe-draft08b-n2` vs `baseline-moe` | **-2.528 %** |
+
+The last row changes sign. Any correction applied as a single constant would be wrong for it.
+
+### Three defects caught before the run, one of which was invented
+
+- **The counter's window was wider than the integral's.** The first version read it outside the
+  `with` block, so its span was the whole wall-clock plus the thread join while the integral runs
+  first-sample-to-last. Every record of a trial run came out 1.08 to 2.59 % high, all the same
+  direction, which at 415 W is about the poll period. That was the instrumentation, not the
+  instruments.
+- **The matrix premise was fabricated.** The docstring said `mtp-n2` draws more power than its
+  baseline, and it was written before anything was checked. It draws 4.9 W *less*, and all seven
+  Phase A arms sit between 409.8 and 415.7 W, 97.6 to 99.0 % of the cap, so the design could not
+  have separated
+  what it was built to separate. The power limit became the lever because of that check.
+- **The closing read carried an earlier timestamp.** Moved inside the sampler thread; the two
+  windows now end at instants that differ by 0.000 ms.
+
+### Three more found by reviewing this work
+
+- **The dose-response lived only in a source comment.** Correction 43 section 3 raised exactly this
+  against the coverage figures -- quotable, not recheckable -- and it was committed again four hours
+  later in `telemetry.py`. The comment had also drifted against itself, giving the undisturbed
+  window as 31.82 W in its table and 31.74 W in the sentence below. `harness/nvml_polling.py` is the
+  generator it never had, and the numbers in this correction are that script's, not the comment's.
+- **The comparison script reintroduced the confound it was written to check.** Pairing each
+  speculative arm with the baseline nearest it in mean power put `dense-draft08b-*` against
+  `baseline-moe` -- a dense arm against a different model's baseline, because those arms run 335 to
+  356 W and the MoE baseline sits at 357 W. In `phase_a_cap1600` the two baselines are 0.1 W apart,
+  so it chose between the master and PR trees on noise. That is Correction 43 section 6. Pairing now
+  reads the model family and tree the arm name states, by token equality rather than substring, and
+  prints which rule fired on every row.
+- **`--stdout` differed from the file it writes by one newline**, so section 9 called the artifact
+  stale on every run. The manifest entry now names the argv that reproduces it, and the script
+  discovers its own inputs and reports what it skipped, so a new result file changes the report
+  instead of being silently outside a frozen list.
+
+### Six more, found by reviewing the commits before they were pushed
+
+Everything above was committed, verified green -- 221 tests, `verify_everything.sh` exit 0, 37 of 37
+result files clean -- and then reviewed again against the data rather than against itself. Six
+things were wrong. The commits were rewritten because none had been pushed; a wrong commit message
+cannot be corrected later the way a document can.
+
+**A real defect, in `bench.py`.** The prefill calibration runs its window over eight requests and
+divides by that count so one request's worth can be subtracted. It divided `energy_j`.
+`energy_j_instant` and `energy_j_nvml` were added to `PowerSampler.summary()` afterwards and this
+line was never revisited, so both have sat in every result file at **eight times** one request's
+worth. Nothing published is wrong, because `decode_energy` reads `energy_j`. But the first analysis
+that reached for the instantaneous field -- the one three paragraphs up -- returned a decode-energy
+saving of **43.7 %** against a true 36.3 %, and it looked plausible enough to nearly publish. The
+fix normalises a named tuple of fields; the guard is stronger than the fix, asserting that the tuple
+covers every `energy_j*` key `summary()` emits, so the next field added there cannot repeat it. It
+was watched failing on the pre-fix tuple and on a tuple naming a field that does not exist, because
+a guard that has only ever passed has not been tested.
+
+**The headline correction used the wrong arithmetic.** `decode_energy` is a difference of two
+integrals, so its correction is `d_req - d_pre` joules; scaling `decode_energy` by the request
+window's percentage is not the same operation. It gave 36.4 % where the right method gives 36.3 %.
+The number moved by a tenth of a point and the method was wrong at any size.
+
+**"The counter and the instantaneous sensor share no circuitry" was invented.** They are readout
+paths over one on-board sensor. `harness/matrices/phase_e.py` had it right in its own docstring --
+"they read the same silicon at the same instant" -- and the prose written four hours later
+contradicted the file it was describing, and contradicted the sentence in the README limitations
+list that says the same thing correctly.
+
+**The comment this correction is about was left in place.** The paragraph above describes numbers
+that lived only in a `telemetry.py` comment and had drifted against themselves. That comment was
+still there, with its stale table, in the commit that published the correction saying so. It now
+points at `analysis/nvml_polling.txt` and states no watts of its own.
+
+**Three claims did not survive checking against the files.** "Five context lengths" was one: four of
+the five `phase_l` files carry no window span and are excluded, which the artifact itself reports
+and the prose describing it did not read. "Within every cap the speculative arm shows the larger
+offset" fails at 150 W. "98-99 % of the cap" is 97.6 to 99.0 %; `dflash2-n4` is the arm that makes
+it false, at 409.8 W.
+
+**And one thing that was right was nearly reported as an error.** `results/phase_a.json` has no
+`subtracted` key in its `prefill_power`, and reading that absent key as `False` said Phase A had not
+subtracted prefill at all -- which would have made every comparison here a mismatch. The key
+postdates the run. That is the ninth self-inflicted false signal of this work and the same shape as
+the other eight: a value read from the wrong place and believed. It cost twenty minutes, and it is
+in this list because the eight before it were not written down either.
+
+### What is still not settled
+
+Two instruments agreeing bounds their mutual consistency, not their accuracy. Both sit on the same
+board and an external meter remains the only reference that would fix the absolute magnitude. The
+agreement is also specific: this card, this driver, and windows read exactly twice. The idle
+dose-response says what happens when they are not.

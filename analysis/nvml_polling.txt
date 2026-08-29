@@ -1,0 +1,34 @@
+============================================================================================
+DOES READING THE NVML ENERGY COUNTER CHANGE WHAT IT REPORTS?
+============================================================================================
+5 interleaved reps x 8 s windows, idle card, device 0.
+The counter delta is last-read minus first-read; intermediate reads are inside it.
+
+  condition   counter W       integral W      counter/integral   reads   achieved Hz
+  ------------------------------------------------------------------------------------
+  nosmi      32.22 +- 0.12           --                --          2        0.0
+  hz0        32.13 +- 0.25    32.32 +- 0.14       99.4 %          2        0.0
+  hz1        30.17 +- 0.25    32.41 +- 0.08       93.1 %          9        0.9
+  hz10       20.34 +- 3.74    32.44 +- 0.10       62.7 %         81        9.9
+  hz100       2.21 +- 0.81    37.52 +- 0.32        5.9 %        801       99.8
+
+CONTROL -- what the card actually drew, by an instrument that is not under test:
+  hz0 32.32 W   hz1 32.41 W   hz10 32.44 W   hz100 37.52 W
+  spread 5.20 W = 16.1 % of hz0.
+  Not flat, and the direction settles it: the control is HIGHEST at hz100 (37.52 W against 32.32-32.44 W elsewhere).
+  The card draws MORE while the counter reports less, so the counter is
+  losing energy rather than reflecting a quieter device. The extra watts are
+  the cost of the polling itself.
+
+THE HARNESS'S OWN POLLING -- 10 Hz nvidia-smi subprocesses, in every energy
+number this repository reports:
+  no nvidia-smi  32.22 W   vs   nvidia-smi at 10 Hz  32.13 W   difference -0.09 W
+  pooled sd across those 10 windows is 0.19 W.
+
+IS THE LOSS A FIXED COST PER READ? Loss against each condition's OWN integral,
+divided by the reads that condition made:
+  hz1    lost    17.99 J over     9 reads = 1999.11 mJ per read   (retained  93.1 %)
+  hz10   lost    96.91 J over    81 reads = 1196.36 mJ per read   (retained  62.7 %)
+  hz100  lost   282.62 J over   801 reads =  352.83 mJ per read   (retained   5.9 %)
+  Constant across the three rates would support a fixed cost per read. It is
+  reported because it can fail, and what it does is in the numbers above.

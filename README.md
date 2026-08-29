@@ -67,6 +67,7 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 | R2 | 1575 records, complete, 0 incidents | within-run contrasts reported |
 | V | 75 records, complete, 6 incidents | **not evaluable** -- both MTP arms fail during server start on 24 GiB; the baseline served |
 | warp | 1950 records over 13 files, complete, 0 incidents | control -- four builds of one revision differing only in the GENERIC warp table, plus an A6000 replication |
+| E | 450 records, complete, 0 incidents | control -- power limit is the load lever -- 420, 250 and 150 W -- because at stock every arm sits between 409.8 and 415.7 W, 97.6 to 99.0 % of the cap, and a load-dependent instrument error cannot be separated from a constant one when the load never changes |
 <!-- END GENERATED: EVIDENCE_STATUS -->
 
 ### What each phase may not be used to claim
@@ -94,6 +95,7 @@ these are the wider constraints those wordings came from.
 | R2 | a roofline or per-kernel bottleneck attribution |
 | V | an engine-isolated comparison: engine, quantization and checkpoint format differ together<br>a depth-specific engine limitation from the k=2 failure: it is the same allocation failing |
 | warp | generalisation past the tested table, devices, quantized kernels and prompts |
+| E | a speedup or efficiency figure: the 250 W and 150 W arms exist to put the instruments under three loads, not because anyone would run the card there<br>an absolute energy calibration: two instruments agreeing bounds their mutual consistency, not their accuracy against an external meter<br>a generalisation of the counter's agreement past this card, this driver and windows read exactly twice |
 <!-- END GENERATED: FORBIDDEN_CLAIMS -->
 
 Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`
@@ -122,7 +124,7 @@ are all open.
 | **Is it worth enabling?** | For this benchmark, **yes if byte-exact serial-greedy parity is not required.** MTP `n-max 2` is **+59.8 % [+57.0, +62.8]** on server-reported decode. |
 | **Which n-max?** | **2**, for both methods. Chosen and evaluated on the same ladder, so that is a selection-on-the-data figure. |
 | **Does DFlash2 beat the built-in MTP head?** | **Not established.** Best tested point estimates favour MTP (+59.8 % against +51.9 %), the arms run on different llama.cpp trees, and no paired interval separates the methods. |
-| **Energy?** | **-37.1 %** decode energy by board telemetry, nearer **-35 %** after two measured sensitivity adjustments. Uncalibrated, and not an identical-answer comparison. [`docs/ENERGY.md`](docs/ENERGY.md) |
+| **Energy?** | **-37.1 %** decode energy by board telemetry, nearer **-35 %** after two measured sensitivity adjustments and **-36.3 %** on a matched re-reading with a second instrument that separately replicates the headline to 0.03 points. Uncalibrated against an external meter, and not an identical-answer comparison. [`docs/ENERGY.md`](docs/ENERGY.md) |
 | **Bit-exact with serial greedy decoding?** | **No.** At a 1600-token cap, **23 to 25 of 25 prompts diverged** for each arm, deterministically. No record that reached EOS matched its baseline. [`docs/GREEDY_DIVERGENCE.md`](docs/GREEDY_DIVERGENCE.md) |
 | **Why does deeper drafting stop paying?** | Accepted length shows diminishing increments while each extra verified position costs **c ~ 0.25-0.29** of a plain decode step. Arc-average chords over a curved `k(w)`, not constant marginal kernel costs. [`docs/COST_MODEL.md`](docs/COST_MODEL.md) |
 | **Does the predecessor's negative result transfer?** | **Data complete, causal and cost interpretation withheld.** Phase M's preregistered replication anchor does not hold, and the phase's own gate then forbids reading anything in it as a statement about the predecessor or about architecture. [`docs/PHASES.md`](docs/PHASES.md) |
@@ -438,8 +440,12 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
 - **Energy magnitude is provisional, and it is not an identical-answer comparison.** Energy comes
   from sampled board-power telemetry and a separately measured prefill calibration. The audits
   support the direction. The magnitude is not calibrated: an external power meter is the reference
-  that would settle it, and NVML's cumulative-energy counter is worth reading alongside as an
-  independent cross-check where the device supports it, not as ground truth. Most speculative
+  that would settle it. The driver's cumulative-energy counter has now been read alongside, on 450
+  records across a 2.75x power range, and it agrees with the instantaneous power sensor to within
+  0.15 % on every arm while both depart from `power.draw` -- the averaged field every published
+  figure here integrates -- by up to 1.9 %. That gap is not a proportional error and so does not
+  cancel between two arms; on a matched pair at the same cap it moves the headline to -36.3 %.
+  Neither instrument is ground truth: they sit on the same board. Most speculative
   generations also follow a different token trajectory from the baseline they are compared against
   and semantic quality is not scored, so this is not energy for the same answer.
 - **Residual order effects.** Phase A rotates arm order, but 5 passes do not close a 7-arm
