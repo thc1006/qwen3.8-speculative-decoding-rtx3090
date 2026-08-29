@@ -145,6 +145,7 @@ def load(paths):
     """(file, arm) -> list of power dicts that carry both integrals."""
     cells: dict[tuple[str, str], list[dict]] = {}
     dropped: dict[str, int] = {}
+    derived: dict[str, int] = {}
     for p in paths:
         try:
             d = json.loads(p.read_text())
@@ -153,17 +154,24 @@ def load(paths):
             continue
         for r in d.get("records") or []:
             pw = r.get("power") or {}
-            if not (pw.get("energy_j") and pw.get("energy_j_instant")):
-                continue
-            # tau is offset-per-watt and the percentage needs the window, so a record with both
-            # integrals but no span cannot be used. Older files carry exactly that combination.
-            # Counted and named rather than skipped quietly: a denominator that shrinks without
-            # saying so is how a partial sweep reads as a complete one.
-            if pw.get("sample_span_s") and pw.get("power_mean_w"):
-                cells.setdefault((p.name, r.get("arm", "?")), []).append(pw)
-            else:
+            if not (pw.get("energy_j") and pw.get("energy_j_instant") and pw.get("power_mean_w")):
                 dropped[p.name] = dropped.get(p.name, 0) + 1
-    return cells, dropped
+                continue
+            if not pw.get("sample_span_s"):
+                # `sample_span_s` postdates the four shorter phase_l runs, and a first version of
+                # this script dropped all 720 of their records for want of it -- which silently
+                # removed four of the five context lengths from a sweep that then described itself
+                # as spanning five. None of the three quantities that matter needs the span: the
+                # offset in joules, the offset in per cent and tau are all computed without it. It
+                # is used for one display column and one correlation, and the trapezoid divided by
+                # the mean power recovers it -- checked against 2730 records in four files that
+                # carry both, where the median error is 0.06 % and the worst is 0.65 %.
+                pw = dict(pw)
+                pw["sample_span_s"] = pw["energy_j"] / pw["power_mean_w"]
+                pw["_span_derived"] = True
+                derived[p.name] = derived.get(p.name, 0) + 1
+            cells.setdefault((p.name, r.get("arm", "?")), []).append(pw)
+    return cells, dropped, derived
 
 
 def main() -> int:
@@ -179,7 +187,7 @@ def main() -> int:
         every = sorted(Path(ROOT / "results").glob("*.json"))
         paths = [p for p in every if carries_instant(p)]
         skipped = [p.name for p in every if p not in paths]
-    cells, dropped = load(paths)
+    cells, dropped, derived = load(paths)
     if not cells:
         raise SystemExit("no records carry both integrals")
 
@@ -190,9 +198,13 @@ def main() -> int:
     W("=" * 100)
     W(f"{len(cells)} file-arm cells over {len({f for f, _ in cells})} files, "
       f"{sum(len(v) for v in cells.values())} records.")
+    if derived:
+        W(f"{sum(derived.values())} records predate `sample_span_s` and have it recovered as "
+          "energy_j / power_mean_w, which is the trapezoid over its own mean: "
+          + ", ".join(f"{k} {v}" for k, v in sorted(derived.items())))
     if dropped:
-        W(f"{sum(dropped.values())} records carry both integrals but no window span or mean power "
-          "and are not used: " + ", ".join(f"{k} {v}" for k, v in sorted(dropped.items())))
+        W(f"{sum(dropped.values())} records carry both integrals but no mean power and are not "
+          "used: " + ", ".join(f"{k} {v}" for k, v in sorted(dropped.items())))
     if skipped:
         # A prefix probe, so a file that gained the field partway through a run reads as not
         # having it. Naming the skipped files is the difference between a scope and a silent gap.

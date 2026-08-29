@@ -142,8 +142,13 @@ def run_condition(name: str, use_smi: bool, hz: float, *, window_s: float, index
             else:
                 time.sleep(min(0.0005, max(0.0, nxt - now)))
     else:
+        # The SAME loop granularity as the polled conditions, which sleep 0.5 ms between checks.
+        # A first version slept 5 ms here, so `hz0` differed from `hz1` in two things at once --
+        # the reads AND a ten-fold slower Python loop -- and the one step of the dose-response
+        # that matters most for the harness's own configuration was the one with a confound in
+        # it. Every condition now spins identically and only the reads differ.
         while time.perf_counter() - t0 < window_s:
-            time.sleep(0.005)
+            time.sleep(0.0005)
     e1 = nvml.read_mj()
     reads += 1
     t1 = time.perf_counter()

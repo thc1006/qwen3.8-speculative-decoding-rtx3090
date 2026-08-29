@@ -1,8 +1,8 @@
 ====================================================================================================
 THREE INSTRUMENTS ON THE SAME WINDOWS
 ====================================================================================================
-73 file-arm cells over 11 files, 5355 records.
-720 records carry both integrals but no window span or mean power and are not used: phase_l_32768.json 180, phase_l_65536.json 180, phase_l_8192.json 180, phase_l_81920.json 180
+89 file-arm cells over 15 files, 6075 records.
+720 records predate `sample_span_s` and have it recovered as energy_j / power_mean_w, which is the trapezoid over its own mean: phase_l_32768.json 180, phase_l_65536.json 180, phase_l_8192.json 180, phase_l_81920.json 180
 23 result files carry no instantaneous field in their first 300 kB and are not read: dryrun_phase_a.json, phase_a.json, phase_a.pre_repair.json, phase_a_hostB.json, phase_c.json, phase_kv.json, phase_nmax.json, phase_r.json, phase_r2.json, phase_v.json, phase_warp_control.json, phase_warp_control_hostB.json, phase_warp_control_repeat.json, phase_warp_forced_down.json, phase_warp_forced_down2.json, phase_warp_forced_down2_hostB.json, phase_warp_forced_down_hostB.json, phase_warp_forced_up.json, phase_warp_forced_up_hostB.json, phase_warp_v2_control.json, phase_warp_v2_control2.json, phase_warp_v2_forced_down2.json, phase_warp_v2_forced_up.json
 
 tau = (instant - averaged) / mean_power: the offset expressed as SECONDS of the window's own
@@ -31,6 +31,22 @@ move when the window length does.
   phase_e.json                   mtp-n2@pw150         75   30.93  149.8      0.22    +0.006  0.0015
   phase_e.json                   mtp-n2@pw250         75    9.43  248.3      6.28    +0.278  0.0253
   phase_e.json                   mtp-n2@pw420         75    6.45  404.6     48.41    +1.880  0.1196
+  phase_l_32768.json             baseline@32k         45    4.56  413.6      2.01    +0.107  0.0049
+  phase_l_32768.json             baseline@32k-pr      45    4.56  413.7      2.48    +0.132  0.0060
+  phase_l_32768.json             dflash2-n4@32k       45    3.38  402.9     17.78    +1.396  0.0441
+  phase_l_32768.json             mtp-n2@32k           45    3.08  403.5     15.54    +1.283  0.0385
+  phase_l_65536.json             baseline@64k         45    5.37  412.0      6.31    +0.285  0.0153
+  phase_l_65536.json             baseline@64k-pr      45    5.37  412.0      7.10    +0.321  0.0172
+  phase_l_65536.json             dflash2-n4@64k       45    3.89  402.9     19.18    +1.316  0.0476
+  phase_l_65536.json             mtp-n2@64k           45    3.70  396.8     18.57    +1.312  0.0468
+  phase_l_8192.json              baseline@8k          45    4.07  415.1      1.29    +0.076  0.0031
+  phase_l_8192.json              baseline@8k-pr       45    4.07  415.2      2.26    +0.135  0.0054
+  phase_l_8192.json              dflash2-n4@8k        45    2.97  401.4     23.03    +2.064  0.0574
+  phase_l_8192.json              mtp-n2@8k            45    2.67  408.9      9.17    +0.835  0.0224
+  phase_l_81920.json             baseline@80k         45    5.74  411.1      4.83    +0.205  0.0117
+  phase_l_81920.json             baseline@80k-pr      45    5.85  408.6     11.26    +0.471  0.0276
+  phase_l_81920.json             dflash2-n4@80k       45    3.92  400.9     18.66    +1.286  0.0466
+  phase_l_81920.json             mtp-n2@80k           45    3.93  396.1     17.25    +1.121  0.0436
   phase_l_98304.json             baseline@96k         45    6.17  409.9      6.68    +0.264  0.0163
   phase_l_98304.json             baseline@96k-pr      45    6.23  408.5      8.09    +0.316  0.0198
   phase_l_98304.json             dflash2-n4@96k       45    4.21  397.3     24.64    +1.590  0.0620
@@ -86,8 +102,8 @@ move when the window length does.
   phase_qsmall_Q8_0.json         mtp-n6@Q8_0          75    3.77  407.2     29.45    +2.101  0.0723
 
 TAU BY ARM TYPE
-  baseline arms     n= 16  tau 0.0040 to 0.0830 s  median 0.0373
-  speculative arms  n= 57  tau -0.0928 to 0.1393 s  median 0.0755
+  baseline arms     n= 24  tau 0.0031 to 0.0830 s  median 0.0303
+  speculative arms  n= 65  tau -0.0928 to 0.1393 s  median 0.0722
   separation: THE RANGES OVERLAP
 
 IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, different files.
@@ -102,6 +118,22 @@ IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, diffe
                phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x3.2, tau x1.32
   baseline     phase_e.json             9.91 s 412.0 W  tau +0.0830
                phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x3.2, tau x0.82
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x6.9, tau x14.08
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x6.9, tau x11.41
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x5.8, tau x4.46
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x5.8, tau x3.97
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x7.7, tau x22.08
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x7.7, tau x12.58
+  baseline     phase_l_81920.json       5.74 s 411.1 W  tau +0.0117
+               phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x5.5, tau x5.82
+  baseline     phase_l_81920.json       5.85 s 408.6 W  tau +0.0276
+               phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x5.4, tau x2.48
   baseline     phase_l_98304.json       6.17 s 409.9 W  tau +0.0163
                phase_a_cap1600.json    31.28 s 416.4 W  tau +0.0684   -> span x5.1, tau x4.19
   baseline     phase_l_98304.json       6.23 s 408.5 W  tau +0.0198
@@ -120,6 +152,22 @@ IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, diffe
                phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x3.2, tau x1.23
   baseline     phase_e.json             9.91 s 412.0 W  tau +0.0830
                phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x3.2, tau x0.77
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x6.9, tau x13.15
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x6.9, tau x10.66
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x5.8, tau x4.17
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x5.8, tau x3.71
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x7.7, tau x20.63
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x7.7, tau x11.76
+  baseline     phase_l_81920.json       5.74 s 411.1 W  tau +0.0117
+               phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x5.5, tau x5.44
+  baseline     phase_l_81920.json       5.85 s 408.6 W  tau +0.0276
+               phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x5.4, tau x2.32
   baseline     phase_l_98304.json       6.17 s 409.9 W  tau +0.0163
                phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x5.1, tau x3.92
   baseline     phase_l_98304.json       6.23 s 408.5 W  tau +0.0198
@@ -136,6 +184,22 @@ IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, diffe
                phase_a_cap1600.json    31.30 s 416.5 W  tau +0.0639   -> span x6.6, tau x1.78
   baseline     phase_b.json             9.85 s 414.7 W  tau +0.0518
                phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x1.0, tau x1.60
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x2.2, tau x10.66
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x2.2, tau x8.65
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x1.8, tau x3.38
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x1.8, tau x3.00
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x2.4, tau x16.73
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x2.4, tau x9.53
+  baseline     phase_l_81920.json       5.74 s 411.1 W  tau +0.0117
+               phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x1.7, tau x4.41
+  baseline     phase_l_81920.json       5.85 s 408.6 W  tau +0.0276
+               phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x1.7, tau x1.88
   baseline     phase_l_98304.json       6.17 s 409.9 W  tau +0.0163
                phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x1.6, tau x3.18
   baseline     phase_l_98304.json       6.23 s 408.5 W  tau +0.0198
@@ -150,6 +214,22 @@ IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, diffe
                phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x2.4, tau x1.57
   baseline     phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358
                phase_b.json             9.85 s 414.7 W  tau +0.0518   -> span x2.1, tau x1.45
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x2.2, tau x17.09
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x2.2, tau x13.85
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x1.8, tau x5.42
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x1.8, tau x4.82
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x2.4, tau x26.80
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x2.4, tau x15.27
+  baseline     phase_l_81920.json       5.74 s 411.1 W  tau +0.0117
+               phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x1.7, tau x7.06
+  baseline     phase_l_81920.json       5.85 s 408.6 W  tau +0.0276
+               phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x1.7, tau x3.01
   baseline     phase_l_98304.json       6.17 s 409.9 W  tau +0.0163
                phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x1.6, tau x5.09
   baseline     phase_l_98304.json       6.23 s 408.5 W  tau +0.0198
@@ -164,6 +244,170 @@ IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, diffe
                phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x2.4, tau x2.51
   baseline     phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358
                phase_e.json             9.91 s 412.0 W  tau +0.0830   -> span x2.1, tau x2.32
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0153   -> span x1.2, tau x3.15
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0172   -> span x1.2, tau x3.55
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_l_32768.json       4.56 s 413.6 W  tau +0.0049   -> span x1.1, tau x1.57
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_l_32768.json       4.56 s 413.6 W  tau +0.0049   -> span x1.1, tau x0.89
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_l_81920.json       5.74 s 411.1 W  tau +0.0117   -> span x1.3, tau x2.42
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_l_81920.json       5.85 s 408.6 W  tau +0.0276   -> span x1.3, tau x5.68
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_l_98304.json       6.17 s 409.9 W  tau +0.0163   -> span x1.4, tau x3.36
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_l_98304.json       6.23 s 408.5 W  tau +0.0198   -> span x1.4, tau x4.08
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_q_UD-Q4_K_XL.jso   9.73 s 415.2 W  tau +0.0420   -> span x2.1, tau x8.65
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_q_UD-Q5_K_XL.jso  11.28 s 414.5 W  tau +0.0569   -> span x2.5, tau x11.72
+  baseline     phase_qsmall_Q4_K_M.js   3.33 s 413.1 W  tau +0.0387
+               phase_l_32768.json       4.56 s 413.6 W  tau +0.0049   -> span x1.4, tau x0.13
+  baseline     phase_qsmall_Q6_K.json   4.05 s 415.0 W  tau +0.0331
+               phase_l_32768.json       4.56 s 413.6 W  tau +0.0049   -> span x1.1, tau x0.15
+  baseline     phase_l_32768.json       4.56 s 413.6 W  tau +0.0049
+               phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358   -> span x1.0, tau x7.37
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0153   -> span x1.2, tau x2.56
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0172   -> span x1.2, tau x2.88
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_l_32768.json       4.56 s 413.7 W  tau +0.0060   -> span x1.1, tau x1.93
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_l_32768.json       4.56 s 413.7 W  tau +0.0060   -> span x1.1, tau x1.10
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_l_81920.json       5.74 s 411.1 W  tau +0.0117   -> span x1.3, tau x1.96
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_l_81920.json       5.85 s 408.6 W  tau +0.0276   -> span x1.3, tau x4.60
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_l_98304.json       6.17 s 409.9 W  tau +0.0163   -> span x1.4, tau x2.72
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_l_98304.json       6.23 s 408.5 W  tau +0.0198   -> span x1.4, tau x3.31
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_q_UD-Q4_K_XL.jso   9.73 s 415.2 W  tau +0.0420   -> span x2.1, tau x7.01
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_q_UD-Q5_K_XL.jso  11.28 s 414.5 W  tau +0.0569   -> span x2.5, tau x9.50
+  baseline     phase_qsmall_Q4_K_M.js   3.33 s 413.1 W  tau +0.0387
+               phase_l_32768.json       4.56 s 413.7 W  tau +0.0060   -> span x1.4, tau x0.15
+  baseline     phase_qsmall_Q6_K.json   4.05 s 415.0 W  tau +0.0331
+               phase_l_32768.json       4.56 s 413.7 W  tau +0.0060   -> span x1.1, tau x0.18
+  baseline     phase_l_32768.json       4.56 s 413.7 W  tau +0.0060
+               phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358   -> span x1.0, tau x5.98
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0153   -> span x1.3, tau x4.95
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0153   -> span x1.3, tau x2.82
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_l_81920.json       5.74 s 411.1 W  tau +0.0117   -> span x1.1, tau x0.77
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_l_81920.json       5.85 s 408.6 W  tau +0.0276   -> span x1.1, tau x1.80
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_l_98304.json       6.17 s 409.9 W  tau +0.0163   -> span x1.1, tau x1.07
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_l_98304.json       6.23 s 408.5 W  tau +0.0198   -> span x1.2, tau x1.29
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_q_UD-Q4_K_XL.jso   9.73 s 415.2 W  tau +0.0420   -> span x1.8, tau x2.74
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0153
+               phase_q_UD-Q5_K_XL.jso  11.28 s 414.5 W  tau +0.0569   -> span x2.1, tau x3.72
+  baseline     phase_qsmall_Q4_K_M.js   3.33 s 413.1 W  tau +0.0387
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0153   -> span x1.6, tau x0.40
+  baseline     phase_qsmall_Q6_K.json   4.05 s 415.0 W  tau +0.0331
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0153   -> span x1.3, tau x0.46
+  baseline     phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0153   -> span x1.1, tau x0.43
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0172   -> span x1.3, tau x5.57
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0172   -> span x1.3, tau x3.17
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_l_81920.json       5.74 s 411.1 W  tau +0.0117   -> span x1.1, tau x0.68
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_l_81920.json       5.85 s 408.6 W  tau +0.0276   -> span x1.1, tau x1.60
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_l_98304.json       6.17 s 409.9 W  tau +0.0163   -> span x1.1, tau x0.95
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_l_98304.json       6.23 s 408.5 W  tau +0.0198   -> span x1.2, tau x1.15
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_q_UD-Q4_K_XL.jso   9.73 s 415.2 W  tau +0.0420   -> span x1.8, tau x2.44
+  baseline     phase_l_65536.json       5.37 s 412.0 W  tau +0.0172
+               phase_q_UD-Q5_K_XL.jso  11.28 s 414.5 W  tau +0.0569   -> span x2.1, tau x3.30
+  baseline     phase_qsmall_Q4_K_M.js   3.33 s 413.1 W  tau +0.0387
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0172   -> span x1.6, tau x0.45
+  baseline     phase_qsmall_Q6_K.json   4.05 s 415.0 W  tau +0.0331
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0172   -> span x1.3, tau x0.52
+  baseline     phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358
+               phase_l_65536.json       5.37 s 412.0 W  tau +0.0172   -> span x1.1, tau x0.48
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_l_81920.json       5.74 s 411.1 W  tau +0.0117   -> span x1.4, tau x3.79
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_l_81920.json       5.85 s 408.6 W  tau +0.0276   -> span x1.4, tau x8.90
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_l_98304.json       6.17 s 409.9 W  tau +0.0163   -> span x1.5, tau x5.27
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_l_98304.json       6.23 s 408.5 W  tau +0.0198   -> span x1.5, tau x6.40
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_q_UD-Q4_K_XL.jso   9.73 s 415.2 W  tau +0.0420   -> span x2.4, tau x13.57
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_q_UD-Q5_K_XL.jso  11.28 s 414.5 W  tau +0.0569   -> span x2.8, tau x18.39
+  baseline     phase_qsmall_Q4_K_M.js   3.33 s 413.1 W  tau +0.0387
+               phase_l_8192.json        4.07 s 415.1 W  tau +0.0031   -> span x1.2, tau x0.08
+  baseline     phase_qsmall_Q6_K.json   4.05 s 415.0 W  tau +0.0331
+               phase_l_8192.json        4.07 s 415.1 W  tau +0.0031   -> span x1.0, tau x0.09
+  baseline     phase_l_8192.json        4.07 s 415.1 W  tau +0.0031
+               phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358   -> span x1.2, tau x11.56
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_l_81920.json       5.74 s 411.1 W  tau +0.0117   -> span x1.4, tau x2.16
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_l_81920.json       5.85 s 408.6 W  tau +0.0276   -> span x1.4, tau x5.07
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_l_98304.json       6.17 s 409.9 W  tau +0.0163   -> span x1.5, tau x3.00
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_l_98304.json       6.23 s 408.5 W  tau +0.0198   -> span x1.5, tau x3.65
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_q_UD-Q4_K_XL.jso   9.73 s 415.2 W  tau +0.0420   -> span x2.4, tau x7.73
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_q_UD-Q5_K_XL.jso  11.28 s 414.5 W  tau +0.0569   -> span x2.8, tau x10.48
+  baseline     phase_qsmall_Q4_K_M.js   3.33 s 413.1 W  tau +0.0387
+               phase_l_8192.json        4.07 s 415.2 W  tau +0.0054   -> span x1.2, tau x0.14
+  baseline     phase_qsmall_Q6_K.json   4.05 s 415.0 W  tau +0.0331
+               phase_l_8192.json        4.07 s 415.2 W  tau +0.0054   -> span x1.0, tau x0.16
+  baseline     phase_l_8192.json        4.07 s 415.2 W  tau +0.0054
+               phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358   -> span x1.2, tau x6.59
+  baseline     phase_l_81920.json       5.74 s 411.1 W  tau +0.0117
+               phase_l_98304.json       6.17 s 409.9 W  tau +0.0163   -> span x1.1, tau x1.39
+  baseline     phase_l_81920.json       5.74 s 411.1 W  tau +0.0117
+               phase_l_98304.json       6.23 s 408.5 W  tau +0.0198   -> span x1.1, tau x1.69
+  baseline     phase_l_81920.json       5.74 s 411.1 W  tau +0.0117
+               phase_q_UD-Q4_K_XL.jso   9.73 s 415.2 W  tau +0.0420   -> span x1.7, tau x3.58
+  baseline     phase_l_81920.json       5.74 s 411.1 W  tau +0.0117
+               phase_q_UD-Q5_K_XL.jso  11.28 s 414.5 W  tau +0.0569   -> span x2.0, tau x4.85
+  baseline     phase_l_81920.json       5.74 s 411.1 W  tau +0.0117
+               phase_qsmall_BF16.json   8.06 s 391.3 W  tau +0.0353   -> span x1.4, tau x3.01
+  baseline     phase_qsmall_Q4_K_M.js   3.33 s 413.1 W  tau +0.0387
+               phase_l_81920.json       5.74 s 411.1 W  tau +0.0117   -> span x1.7, tau x0.30
+  baseline     phase_qsmall_Q6_K.json   4.05 s 415.0 W  tau +0.0331
+               phase_l_81920.json       5.74 s 411.1 W  tau +0.0117   -> span x1.4, tau x0.36
+  baseline     phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358
+               phase_l_81920.json       5.74 s 411.1 W  tau +0.0117   -> span x1.2, tau x0.33
+  baseline     phase_l_81920.json       5.85 s 408.6 W  tau +0.0276
+               phase_l_98304.json       6.17 s 409.9 W  tau +0.0163   -> span x1.1, tau x0.59
+  baseline     phase_l_81920.json       5.85 s 408.6 W  tau +0.0276
+               phase_l_98304.json       6.23 s 408.5 W  tau +0.0198   -> span x1.1, tau x0.72
+  baseline     phase_l_81920.json       5.85 s 408.6 W  tau +0.0276
+               phase_q_UD-Q4_K_XL.jso   9.73 s 415.2 W  tau +0.0420   -> span x1.7, tau x1.52
+  baseline     phase_l_81920.json       5.85 s 408.6 W  tau +0.0276
+               phase_q_UD-Q5_K_XL.jso  11.28 s 414.5 W  tau +0.0569   -> span x1.9, tau x2.07
+  baseline     phase_l_81920.json       5.85 s 408.6 W  tau +0.0276
+               phase_qsmall_BF16.json   8.06 s 391.3 W  tau +0.0353   -> span x1.4, tau x1.28
+  baseline     phase_qsmall_Q4_K_M.js   3.33 s 413.1 W  tau +0.0387
+               phase_l_81920.json       5.85 s 408.6 W  tau +0.0276   -> span x1.8, tau x0.71
+  baseline     phase_qsmall_Q6_K.json   4.05 s 415.0 W  tau +0.0331
+               phase_l_81920.json       5.85 s 408.6 W  tau +0.0276   -> span x1.4, tau x0.83
+  baseline     phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358
+               phase_l_81920.json       5.85 s 408.6 W  tau +0.0276   -> span x1.2, tau x0.77
   baseline     phase_l_98304.json       6.17 s 409.9 W  tau +0.0163
                phase_q_UD-Q4_K_XL.jso   9.73 s 415.2 W  tau +0.0420   -> span x1.6, tau x2.58
   baseline     phase_l_98304.json       6.17 s 409.9 W  tau +0.0163
@@ -208,10 +452,46 @@ IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, diffe
                phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358   -> span x1.4, tau x0.92
   baseline     phase_qsmall_Q6_K.json   4.05 s 415.0 W  tau +0.0331
                phase_qsmall_Q8_0.json   4.77 s 414.0 W  tau +0.0358   -> span x1.2, tau x1.08
+  dflash2-n4   phase_l_32768.json       3.38 s 402.9 W  tau +0.0441
+               phase_a_cap1600.json    20.91 s 413.4 W  tau +0.1157   -> span x6.2, tau x2.62
+  dflash2-n4   phase_l_65536.json       3.89 s 402.9 W  tau +0.0476
+               phase_a_cap1600.json    20.91 s 413.4 W  tau +0.1157   -> span x5.4, tau x2.43
+  dflash2-n4   phase_l_8192.json        2.97 s 401.4 W  tau +0.0574
+               phase_a_cap1600.json    20.91 s 413.4 W  tau +0.1157   -> span x7.0, tau x2.02
+  dflash2-n4   phase_l_81920.json       3.92 s 400.9 W  tau +0.0466
+               phase_a_cap1600.json    20.91 s 413.4 W  tau +0.1157   -> span x5.3, tau x2.49
   dflash2-n4   phase_l_98304.json       4.21 s 397.3 W  tau +0.0620
                phase_a_cap1600.json    20.91 s 413.4 W  tau +0.1157   -> span x5.0, tau x1.87
+  dflash2-n4   phase_l_32768.json       3.38 s 402.9 W  tau +0.0441
+               phase_l_65536.json       3.89 s 402.9 W  tau +0.0476   -> span x1.2, tau x1.08
+  dflash2-n4   phase_l_8192.json        2.97 s 401.4 W  tau +0.0574
+               phase_l_32768.json       3.38 s 402.9 W  tau +0.0441   -> span x1.1, tau x0.77
+  dflash2-n4   phase_l_32768.json       3.38 s 402.9 W  tau +0.0441
+               phase_l_81920.json       3.92 s 400.9 W  tau +0.0466   -> span x1.2, tau x1.06
+  dflash2-n4   phase_l_32768.json       3.38 s 402.9 W  tau +0.0441
+               phase_l_98304.json       4.21 s 397.3 W  tau +0.0620   -> span x1.2, tau x1.41
+  dflash2-n4   phase_l_8192.json        2.97 s 401.4 W  tau +0.0574
+               phase_l_65536.json       3.89 s 402.9 W  tau +0.0476   -> span x1.3, tau x0.83
+  dflash2-n4   phase_l_65536.json       3.89 s 402.9 W  tau +0.0476
+               phase_l_81920.json       3.92 s 400.9 W  tau +0.0466   -> span x1.0, tau x0.98
+  dflash2-n4   phase_l_65536.json       3.89 s 402.9 W  tau +0.0476
+               phase_l_98304.json       4.21 s 397.3 W  tau +0.0620   -> span x1.1, tau x1.30
+  dflash2-n4   phase_l_8192.json        2.97 s 401.4 W  tau +0.0574
+               phase_l_81920.json       3.92 s 400.9 W  tau +0.0466   -> span x1.3, tau x0.81
+  dflash2-n4   phase_l_8192.json        2.97 s 401.4 W  tau +0.0574
+               phase_l_98304.json       4.21 s 397.3 W  tau +0.0620   -> span x1.4, tau x1.08
+  dflash2-n4   phase_l_81920.json       3.92 s 400.9 W  tau +0.0466
+               phase_l_98304.json       4.21 s 397.3 W  tau +0.0620   -> span x1.1, tau x1.33
   mtp-n2       phase_e.json             6.45 s 404.6 W  tau +0.1196
                phase_a_cap1600.json    19.07 s 414.1 W  tau +0.0984   -> span x3.0, tau x0.82
+  mtp-n2       phase_l_32768.json       3.08 s 403.5 W  tau +0.0385
+               phase_a_cap1600.json    19.07 s 414.1 W  tau +0.0984   -> span x6.2, tau x2.56
+  mtp-n2       phase_l_65536.json       3.70 s 396.8 W  tau +0.0468
+               phase_a_cap1600.json    19.07 s 414.1 W  tau +0.0984   -> span x5.1, tau x2.10
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_a_cap1600.json    19.07 s 414.1 W  tau +0.0984   -> span x7.1, tau x4.39
+  mtp-n2       phase_l_81920.json       3.93 s 396.1 W  tau +0.0436
+               phase_a_cap1600.json    19.07 s 414.1 W  tau +0.0984   -> span x4.8, tau x2.26
   mtp-n2       phase_q_UD-Q4_K_XL.jso   6.26 s 410.0 W  tau +0.0817
                phase_a_cap1600.json    19.07 s 414.1 W  tau +0.0984   -> span x3.0, tau x1.20
   mtp-n2       phase_q_UD-Q5_K_XL.jso   6.98 s 406.7 W  tau +0.0928
@@ -222,6 +502,14 @@ IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, diffe
                phase_a_cap1600.json    19.07 s 414.1 W  tau +0.0984   -> span x6.9, tau x1.69
   mtp-n2       phase_qsmall_Q8_0.json   3.10 s 406.4 W  tau +0.0686
                phase_a_cap1600.json    19.07 s 414.1 W  tau +0.0984   -> span x6.1, tau x1.43
+  mtp-n2       phase_l_32768.json       3.08 s 403.5 W  tau +0.0385
+               phase_e.json             6.45 s 404.6 W  tau +0.1196   -> span x2.1, tau x3.11
+  mtp-n2       phase_l_65536.json       3.70 s 396.8 W  tau +0.0468
+               phase_e.json             6.45 s 404.6 W  tau +0.1196   -> span x1.7, tau x2.56
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_e.json             6.45 s 404.6 W  tau +0.1196   -> span x2.4, tau x5.34
+  mtp-n2       phase_l_81920.json       3.93 s 396.1 W  tau +0.0436
+               phase_e.json             6.45 s 404.6 W  tau +0.1196   -> span x1.6, tau x2.75
   mtp-n2       phase_l_98304.json       4.26 s 390.3 W  tau +0.0667
                phase_e.json             6.45 s 404.6 W  tau +0.1196   -> span x1.5, tau x1.79
   mtp-n2       phase_q_UD-Q4_K_XL.jso   6.26 s 410.0 W  tau +0.0817
@@ -234,6 +522,70 @@ IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, diffe
                phase_e.json             6.45 s 404.6 W  tau +0.1196   -> span x2.3, tau x2.06
   mtp-n2       phase_qsmall_Q8_0.json   3.10 s 406.4 W  tau +0.0686
                phase_e.json             6.45 s 404.6 W  tau +0.1196   -> span x2.1, tau x1.74
+  mtp-n2       phase_l_32768.json       3.08 s 403.5 W  tau +0.0385
+               phase_l_65536.json       3.70 s 396.8 W  tau +0.0468   -> span x1.2, tau x1.21
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_l_32768.json       3.08 s 403.5 W  tau +0.0385   -> span x1.2, tau x1.72
+  mtp-n2       phase_l_32768.json       3.08 s 403.5 W  tau +0.0385
+               phase_l_81920.json       3.93 s 396.1 W  tau +0.0436   -> span x1.3, tau x1.13
+  mtp-n2       phase_l_32768.json       3.08 s 403.5 W  tau +0.0385
+               phase_l_98304.json       4.26 s 390.3 W  tau +0.0667   -> span x1.4, tau x1.73
+  mtp-n2       phase_l_32768.json       3.08 s 403.5 W  tau +0.0385
+               phase_q_UD-Q4_K_XL.jso   6.26 s 410.0 W  tau +0.0817   -> span x2.0, tau x2.12
+  mtp-n2       phase_l_32768.json       3.08 s 403.5 W  tau +0.0385
+               phase_q_UD-Q5_K_XL.jso   6.98 s 406.7 W  tau +0.0928   -> span x2.3, tau x2.41
+  mtp-n2       phase_qsmall_Q4_K_M.js   2.55 s 403.7 W  tau +0.0746
+               phase_l_32768.json       3.08 s 403.5 W  tau +0.0385   -> span x1.2, tau x0.52
+  mtp-n2       phase_qsmall_Q6_K.json   2.76 s 407.9 W  tau +0.0582
+               phase_l_32768.json       3.08 s 403.5 W  tau +0.0385   -> span x1.1, tau x0.66
+  mtp-n2       phase_l_32768.json       3.08 s 403.5 W  tau +0.0385
+               phase_qsmall_Q8_0.json   3.10 s 406.4 W  tau +0.0686   -> span x1.0, tau x1.78
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_l_65536.json       3.70 s 396.8 W  tau +0.0468   -> span x1.4, tau x2.09
+  mtp-n2       phase_l_65536.json       3.70 s 396.8 W  tau +0.0468
+               phase_l_81920.json       3.93 s 396.1 W  tau +0.0436   -> span x1.1, tau x0.93
+  mtp-n2       phase_l_65536.json       3.70 s 396.8 W  tau +0.0468
+               phase_l_98304.json       4.26 s 390.3 W  tau +0.0667   -> span x1.1, tau x1.43
+  mtp-n2       phase_l_65536.json       3.70 s 396.8 W  tau +0.0468
+               phase_q_UD-Q4_K_XL.jso   6.26 s 410.0 W  tau +0.0817   -> span x1.7, tau x1.75
+  mtp-n2       phase_l_65536.json       3.70 s 396.8 W  tau +0.0468
+               phase_q_UD-Q5_K_XL.jso   6.98 s 406.7 W  tau +0.0928   -> span x1.9, tau x1.98
+  mtp-n2       phase_l_65536.json       3.70 s 396.8 W  tau +0.0468
+               phase_qsmall_BF16.json   5.17 s 377.3 W  tau +0.0653   -> span x1.4, tau x1.40
+  mtp-n2       phase_qsmall_Q4_K_M.js   2.55 s 403.7 W  tau +0.0746
+               phase_l_65536.json       3.70 s 396.8 W  tau +0.0468   -> span x1.5, tau x0.63
+  mtp-n2       phase_qsmall_Q6_K.json   2.76 s 407.9 W  tau +0.0582
+               phase_l_65536.json       3.70 s 396.8 W  tau +0.0468   -> span x1.3, tau x0.80
+  mtp-n2       phase_qsmall_Q8_0.json   3.10 s 406.4 W  tau +0.0686
+               phase_l_65536.json       3.70 s 396.8 W  tau +0.0468   -> span x1.2, tau x0.68
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_l_81920.json       3.93 s 396.1 W  tau +0.0436   -> span x1.5, tau x1.94
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_l_98304.json       4.26 s 390.3 W  tau +0.0667   -> span x1.6, tau x2.98
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_q_UD-Q4_K_XL.jso   6.26 s 410.0 W  tau +0.0817   -> span x2.3, tau x3.65
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_q_UD-Q5_K_XL.jso   6.98 s 406.7 W  tau +0.0928   -> span x2.6, tau x4.14
+  mtp-n2       phase_qsmall_Q4_K_M.js   2.55 s 403.7 W  tau +0.0746
+               phase_l_8192.json        2.67 s 408.9 W  tau +0.0224   -> span x1.0, tau x0.30
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_qsmall_Q6_K.json   2.76 s 407.9 W  tau +0.0582   -> span x1.0, tau x2.60
+  mtp-n2       phase_l_8192.json        2.67 s 408.9 W  tau +0.0224
+               phase_qsmall_Q8_0.json   3.10 s 406.4 W  tau +0.0686   -> span x1.2, tau x3.06
+  mtp-n2       phase_l_81920.json       3.93 s 396.1 W  tau +0.0436
+               phase_l_98304.json       4.26 s 390.3 W  tau +0.0667   -> span x1.1, tau x1.53
+  mtp-n2       phase_l_81920.json       3.93 s 396.1 W  tau +0.0436
+               phase_q_UD-Q4_K_XL.jso   6.26 s 410.0 W  tau +0.0817   -> span x1.6, tau x1.88
+  mtp-n2       phase_l_81920.json       3.93 s 396.1 W  tau +0.0436
+               phase_q_UD-Q5_K_XL.jso   6.98 s 406.7 W  tau +0.0928   -> span x1.8, tau x2.13
+  mtp-n2       phase_l_81920.json       3.93 s 396.1 W  tau +0.0436
+               phase_qsmall_BF16.json   5.17 s 377.3 W  tau +0.0653   -> span x1.3, tau x1.50
+  mtp-n2       phase_qsmall_Q4_K_M.js   2.55 s 403.7 W  tau +0.0746
+               phase_l_81920.json       3.93 s 396.1 W  tau +0.0436   -> span x1.5, tau x0.58
+  mtp-n2       phase_qsmall_Q6_K.json   2.76 s 407.9 W  tau +0.0582
+               phase_l_81920.json       3.93 s 396.1 W  tau +0.0436   -> span x1.4, tau x0.75
+  mtp-n2       phase_qsmall_Q8_0.json   3.10 s 406.4 W  tau +0.0686
+               phase_l_81920.json       3.93 s 396.1 W  tau +0.0436   -> span x1.3, tau x0.63
   mtp-n2       phase_l_98304.json       4.26 s 390.3 W  tau +0.0667
                phase_q_UD-Q5_K_XL.jso   6.98 s 406.7 W  tau +0.0928   -> span x1.6, tau x1.39
   mtp-n2       phase_l_98304.json       4.26 s 390.3 W  tau +0.0667
@@ -334,11 +686,11 @@ IS TAU A PROPERTY OF THE ARM OR OF THE WINDOW? Same arm at the SAME POWER, diffe
   A span multiple far larger than the tau multiple is what a per-window offset looks
   like. A tau that tracked span would show the two multiples together.
 
-WHAT THE OFFSET TRACKS, over all 5355 records:
-  offset J  vs  mean power P        r = +0.623   <- per-window edge effect predicts this
-  offset J  vs  total energy P*span r = +0.085   <- proportional gain error predicts this
-  offset J  vs  window length span  r = -0.112
-  offset %  vs  SM-clock spread     r = -0.120   <- power-fluctuation story predicts this
+WHAT THE OFFSET TRACKS, over all 6075 records:
+  offset J  vs  mean power P        r = +0.542   <- per-window edge effect predicts this
+  offset J  vs  total energy P*span r = +0.120   <- proportional gain error predicts this
+  offset J  vs  window length span  r = -0.060
+  offset %  vs  SM-clock spread     r = -0.096   <- power-fluctuation story predicts this
   SM-clock spread is the fluctuation proxy that the power cap does NOT pin; power_max minus
   power_mean is (cap minus mean) whenever the card is at its limit, which is most of a run.
 
@@ -385,6 +737,14 @@ it -- which is the arm every speedup claim here puts in the numerator.
   phase_e.json               mtp-n2@pw150   vs baseline@pw150   [nearest power]  +0.006 % vs +0.009 %  ->  energy ratio understated by -0.003 %
   phase_e.json               mtp-n2@pw250   vs baseline@pw250   [nearest power]  +0.278 % vs +0.112 %  ->  energy ratio understated by 0.165 %
   phase_e.json               mtp-n2@pw420   vs baseline@pw420   [nearest power]  +1.880 % vs +0.837 %  ->  energy ratio understated by 1.035 %
+  phase_l_32768.json         dflash2-n4@32k vs baseline@32k-pr  [pr tree]  +1.396 % vs +0.132 %  ->  energy ratio understated by 1.262 %
+  phase_l_32768.json         mtp-n2@32k     vs baseline@32k     [master tree]  +1.283 % vs +0.107 %  ->  energy ratio understated by 1.175 %
+  phase_l_65536.json         dflash2-n4@64k vs baseline@64k-pr  [pr tree]  +1.316 % vs +0.321 %  ->  energy ratio understated by 0.992 %
+  phase_l_65536.json         mtp-n2@64k     vs baseline@64k     [master tree]  +1.312 % vs +0.285 %  ->  energy ratio understated by 1.024 %
+  phase_l_8192.json          dflash2-n4@8k  vs baseline@8k-pr   [pr tree]  +2.064 % vs +0.135 %  ->  energy ratio understated by 1.927 %
+  phase_l_8192.json          mtp-n2@8k      vs baseline@8k      [master tree]  +0.835 % vs +0.076 %  ->  energy ratio understated by 0.758 %
+  phase_l_81920.json         dflash2-n4@80k vs baseline@80k-pr  [pr tree]  +1.286 % vs +0.471 %  ->  energy ratio understated by 0.811 %
+  phase_l_81920.json         mtp-n2@80k     vs baseline@80k     [master tree]  +1.121 % vs +0.205 %  ->  energy ratio understated by 0.914 %
   phase_l_98304.json         dflash2-n4@96k vs baseline@96k-pr  [pr tree]  +1.590 % vs +0.316 %  ->  energy ratio understated by 1.270 %
   phase_l_98304.json         mtp-n2@96k     vs baseline@96k     [master tree]  +1.598 % vs +0.264 %  ->  energy ratio understated by 1.330 %
   phase_m.json               dense-draft08b vs baseline-dense   [same dense]  -0.001 % vs +0.537 %  ->  energy ratio understated by -0.535 %
