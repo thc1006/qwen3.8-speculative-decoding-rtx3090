@@ -3757,3 +3757,155 @@ this round was required to be confirmed by cropping and enlarging first, and two
 that way.** The measurements that survived -- 119 px, 3.65:1, 17 px, 159 px of blank -- are all
 pixel counts or computed ratios, because by that point nothing that was merely looked at was being
 believed.
+
+## Correction 43, 2026-08-29: seven blockers in a tagged version, and what let each one through
+
+An external review of `v1.0.1` found seven correctness blockers. Every one was verified against the
+files before being accepted, and every one held. The tag was signed and pushed; it was **not**
+deposited, and the corrections below are why. The next deposit is v1.0.2.
+
+**The measurements are untouched.** Phase A's `results/phase_a.json` is byte-identical to the copy
+in the v1.0.0 deposit -- SHA-256 `93d5dbabd78b...` on both -- and every number the review touched
+was recomputed from the files. The failures were in prose, in generated reports, in figures and in
+the analysis code.
+
+### 1. One README said Phase B had 0 incidents and 2 incidents
+
+The generated evidence block computed 0 from `results/phase_b.json`. The hand-written later-phases
+row said 2, and had been true of the file that a clean re-measurement replaced on 2026-08-28.
+
+Worse than the contradiction: `analysis/phase_b_mechanism.txt` was still the report generated from
+the retired file, and the README quoted its coefficients under a bolded **"The cost tracks tokens
+drafted, not tokens rejected."** Regenerated from the replacement, every figure moves and the
+ordering does not:
+
+| | retired file | replacement |
+|---|---:|---:|
+| r2, cost per drafted / rejected | 0.9781 / 0.8242 | **0.9802 / 0.8256** |
+| step + drafted, ms/step and ms/token | 4.229, 6.112 | **4.064, 6.167** |
+| RSS difference, one-parameter | 18.49 half-widths | **21.14** |
+| RSS difference, two-parameter | 3.57 half-widths | **4.22** |
+| the one near-matched pair | 0.97 half-widths | **1.19** |
+
+That last row settles the claim. The matched pair is the only place the two counts move apart, and
+it clears zero by **1.19 half-widths -- under this repository's own 1.3 threshold**, which its own
+rule calls too close to lean on. The row is an in-sample fit comparison now and says so, alongside
+the +0.9963 correlation that makes the joint fit unidentified.
+
+### 2. A censoring comparison changed populations halfway
+
+"Right-censoring falls from 260 of 750 records at a 400-token cap to 9 of 375." The 750 included
+125 cross-tree control records; the 375 did not. Recomputed on matched populations, and on cells
+rather than records because the output is deterministic across passes:
+
+| | 400-token cap | 1600-token cap |
+|---|---:|---:|
+| speculative records | 135 / 625 | 9 / 375 |
+| speculative arm-prompt cells | **27 / 125** | **3 / 125** |
+| cross-tree control | 125 / 125 | 39 / 75 |
+
+Divergence is reported the same way now -- **23 to 25 of 25 prompts per arm** at the 1600 cap, not
+"92-100 % of requests". Counting requests treats one deterministic observation as five.
+
+### 3. The coverage simulation calibrated an estimand the headline does not use
+
+`coverage_sim.py` called `paired_cluster_bootstrap` with `relative=False`; `analyze.py` computes the
+Phase A effect with `relative=True`. The 87.5-92.0 % figures were quoted as though they applied to
+the headline, and coverage of a nonlinear ratio does not follow from the absolute case.
+
+Measured rather than hedged. The data-generating process is fitted to this data's own shape --
+per-prompt baseline CV **0.001**, per-prompt relative effect **+59.77 % with sd 21.85**, pass-level
+noise 0.15 %, all read off `results/phase_a.json` -- and the relative-ratio estimand covers at
+**90.2 % +- 0.7** at 2000 replications, inside the band the four absolute processes occupy. A ratio
+misbehaves when its denominator can approach zero; on 25 prompts spanning 41.4 to 41.7 tok/s it
+cannot. That is what the concern was worth, and it is now a row in
+`analysis/bootstrap_coverage.txt` rather than an argument.
+
+### 4. Token fork positions were an average dressed as a measurement
+
+Each was an exact character offset divided by the output's **mean** characters per token. A
+tokenizer is variable-length.
+
+Recording the emitted token ids would settle it and is unreachable: `return_tokens` exists in the
+pinned server and is safe -- it guards a single `push_back`, touching neither sampling nor
+speculation -- but `tokens` is returned by the native `to_json()` and not by
+`to_json_oaicompat_chat()`, and this harness posts to `/v1/chat/completions`. **Checking that
+before running anything is what stopped a two-hour measurement that would have produced the same
+file it started with.**
+
+Tokenizing the two stored outputs settles it without new data, because they share a byte-identical
+prefix and a BPE tokenizer segments identical text identically. `harness/exact_forks.py`, run
+against a CPU-only server for its `/tokenize` endpoint:
+
+| | 400-token cap | 1600-token cap |
+|---|---|---|
+| divergent records | 490 | 366 |
+| fork earliest / median / latest | **6 / 91 / 359** | **6 / 113 / 1406** |
+| old estimate off by > 5 tokens | **48.0 %** | **56.6 %** |
+| off by > 20 tokens | 10.2 % | 15.6 % |
+
+The documents said "roughly token 334" and "roughly token 1396". They are 359 and 1406. The median
+error is +1 and +0, which is exactly why the estimate looked serviceable.
+
+### 5. An energy argument was arithmetically wrong
+
+The text said the sensor's proportional error "does not cancel in a ratio by construction". Both
+arms run on the same board, so a common multiplicative gain `g` divides out exactly:
+`gE_A / gE_B = E_A / E_B`. What does not divide out is gain that varies with load -- and the two
+arms do not draw the same power -- nor an additive offset, a nonlinearity, or a phase lag that
+differs with workload shape. The conclusion (the magnitude is provisional) survives; the reason
+given for it did not.
+
+`nvmlDeviceGetTotalEnergyConsumption` was dismissed in advance on the strength of one forum report.
+Probed on this card it returns **NVML_SUCCESS**. It is named as a cross-check worth reading now,
+with an external meter as the reference that would actually settle the magnitude.
+
+### 6. The cost coefficients confounded the drafter with the source tree
+
+Every `mtp-*` arm runs llama.cpp master and every `dflash2-*` arm runs PR #27342.
+`c(dflash) - c(mtp)` is a difference between two pinned **configurations**, and no arm separates
+them, because `draft-dflash` cannot be run on master at all. `docs/COST_MODEL.md` mentioned trees
+**zero times**. It does now, as do the README and both figures.
+
+### 7. The reproduction script did not reproduce
+
+It compared tag *names* with `git describe --tags --exact-match`, which does not say which of the
+two tags on that commit comes back -- `v1.0.0` and `phase-a-v1` both point at it -- and then only
+printed a warning. So `./scripts/reproduce_phase_a.sh` on a later master pinned llama.cpp, CUDA, the
+models and the card, and ran them through whatever the harness had since become. It compares
+commits and stops now; `ALLOW_HARNESS_DRIFT=1` runs an independent replication, which is a weaker
+claim and is labelled as one.
+
+### What let five of these through
+
+`verify_everything.sh` section 9 guessed each artifact's generator from its filename suffix and
+counted anything it could not map as `no_source`, then passed. **Fifteen artifacts sat in that
+bucket. Seven recorded no inputs of their own. Four had no generator findable anywhere in the
+tree.** `analysis/MANIFEST.json` names them all, each mapping established by running the command and
+requiring a byte-identical result, and an unmapped artifact is now a failure. The count of reports
+actually checked went from 55 to 62.
+
+### Four guards added, each watched failing first
+
+The hand-written phase table must agree with the result files. Every `Correction N` reference must
+resolve. The prose must not carry the high-ratio markers from Kobak et al.'s excess-vocabulary
+study, distinguishing a word quoted in backticks from a word used. And `CITATION.cff` may not name a
+version absent from `repro/DEPOSITS.json`.
+
+That last one was written because the file was doing it: it said `version: 1.0.1` beside a DOI while
+Zenodo held only 1.0.0. The version had been bumped preparing a deposit that was then correctly not
+cut, and the guard at the time checked only that a git tag of that name existed. **A tag is not a
+deposit.**
+
+### On the reviewing
+
+Three claims made during this work were withdrawn after checking. Two came from a scanner that
+looked for `^## Correction N` and could not see `### CORRECTION 1:` -- a level down, in upper case --
+and so reported the README and PREREGISTRATION as citing corrections that do exist. One was mine by
+eye: I read the `37 %` label in `plot_phase_m.png` as struck through by the zero line, and an 8x crop
+showed the line stopping cleanly either side of a background box that had been there since the day
+it was fixed. A fourth, that `plot_cost_model`'s label patch was harmless, fell to a pixel count:
+119 px of the orange series' line had no orange pixel in it.
+
+Every measurement in this correction is a pixel count, a byte comparison, a computed ratio or a line
+number. By the end of it nothing that was merely looked at was being believed.
