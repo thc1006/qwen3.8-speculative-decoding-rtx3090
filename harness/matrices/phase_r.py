@@ -52,7 +52,13 @@ def _check_device(index: int = 0) -> None:
             f"than reusing these numbers.")
 
 
-_check_device(0)
+
+# NOT called at import. A module-level hardware call makes the matrix definition unreadable without
+# a GPU: it broke the CPU-only CI job on its first run, and with it every test that imports the
+# matrices to check their arms against their baselines. `bench.py` calls this after importing the
+# matrix and before measuring anything, so the protection is unchanged and the file can be read
+# anywhere.
+PRECHECK = _check_device
 
 REPO = Path(__file__).resolve().parent.parent.parent
 

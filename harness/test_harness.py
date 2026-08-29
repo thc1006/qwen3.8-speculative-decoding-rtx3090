@@ -5035,5 +5035,72 @@ class ThePrefillCalibrationMustNormaliseEveryEnergyFieldItCarries(unittest.TestC
                                 f"not emit it; the guard would pass while covering nothing.")
 
 
+class EveryMatrixMustBeReadableOnAMachineWithNoGpu(unittest.TestCase):
+    """A matrix definition is a document. Reading it must not require the hardware it describes.
+
+    `phase_r.py` called its device check as a module-level statement and `phase_r2.py` had the
+    same check as two bare statements, so neither module could be imported without a GPU. That
+    broke the CPU-only CI job on its first ever run -- and with it `_matrices()`, which imports
+    every matrix to check each arm against a baseline on its own model. The check itself was
+    right: those conditions hard-code this 3090's 420 W default and 9751 MHz stock memory clock,
+    and running them elsewhere would silently mean something else. Only its position was wrong,
+    and it is now a `PRECHECK` callable that `bench.py` invokes before it measures anything.
+
+    This runs in a subprocess with an `nvidia-smi` shim that exits 127, which is what
+    `devices.enumerate_devices` sees on a runner: it returns [] and every consumer must cope.
+    Simulating the condition rather than trusting the fix is the point -- the fix was verified
+    this way before it was committed, because the CI run that found the bug was the only thing
+    that had ever exercised the path.
+    """
+
+    ACCEPTABLE = ("is missing", "not found")   # a matrix may refuse a model file it needs
+
+    def test_every_matrix_imports_with_no_device_visible(self):
+        import os
+        import subprocess
+        import tempfile
+        root = Path(__file__).parent.parent
+        with tempfile.TemporaryDirectory() as td:
+            shim = Path(td) / "nvidia-smi"
+            shim.write_text("#!/bin/sh\nexit 127\n")
+            shim.chmod(0o755)
+            env = dict(os.environ, PATH=f"{td}:{os.environ.get('PATH', '')}")
+            code = (
+                "import sys, importlib, pathlib, json\n"
+                "sys.path.insert(0, 'harness'); sys.path.insert(0, 'harness/matrices')\n"
+                "import devices\n"
+                "assert devices.enumerate_devices() == [], 'the shim did not mask nvidia-smi'\n"
+                "bad = {}\n"
+                "for f in sorted(pathlib.Path('harness/matrices').glob('phase_*.py')):\n"
+                "    try: importlib.import_module(f.stem)\n"
+                "    except Exception as e: bad[f.stem] = f'{type(e).__name__}: {e}'\n"
+                "print(json.dumps(bad))\n")
+            r = subprocess.run([sys.executable, "-c", code], cwd=root, env=env,
+                               capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0,
+                         f"the no-GPU import probe itself failed:\n{r.stdout}\n{r.stderr}")
+        bad = json.loads(r.stdout.strip().splitlines()[-1])
+        offenders = {k: v for k, v in bad.items()
+                     if not any(a in v for a in self.ACCEPTABLE)}
+        self.assertEqual(offenders, {},
+                         "a matrix cannot be imported on a machine with no GPU, so the CPU-only "
+                         "verification job cannot read it and every test that imports the "
+                         "matrices fails with it. Move the hardware check into a PRECHECK "
+                         f"callable that bench.py runs before measuring:\n{offenders}")
+
+    def test_the_calibrated_matrices_still_refuse_a_card_they_are_not_for(self):
+        """Moving the check must not have removed it."""
+        sys.path.insert(0, str(Path(__file__).parent / "matrices"))
+        import importlib
+        for name in ("phase_r", "phase_r2"):
+            mod = importlib.import_module(name)
+            fn = getattr(mod, "PRECHECK", None)
+            self.assertTrue(callable(fn), f"{name} declares no PRECHECK, so nothing stops it "
+                                          f"running its 3090-specific conditions on another card")
+            with self.assertRaises(Exception, msg=f"{name}.PRECHECK accepted a device index that "
+                                                  f"does not exist on this machine"):
+                fn(99)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

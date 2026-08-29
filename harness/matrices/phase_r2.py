@@ -48,11 +48,22 @@ from gpustate import GpuState  # noqa: E402
 import devices as _devices     # noqa: E402
 
 _EXPECT_DEVICE = "3090"
-_d = _devices.get_device(0)
-if _EXPECT_DEVICE not in _d.name.replace(" ", ""):
-    raise RuntimeError(
-        f"phase_r2's clock ladder (600/1200/1700 MHz) and 420 W limit are this RTX 3090's "
-        f"numbers; device 0 is {_d.name!r}. Pick rungs for that card instead of reusing these.")
+
+
+def PRECHECK(index: int = 0) -> None:
+    """Refuse a card these rungs were not chosen for. Called by bench.py before it measures.
+
+    NOT run at import. This was two module-level statements, so the matrix could not be read at
+    all without a GPU: it broke the CPU-only CI job on its first run, and with it every test that
+    imports the matrices to check their arms against their baselines. The protection is unchanged
+    and now fires when the matrix is about to run rather than when the file is read.
+    """
+    d = _devices.get_device(index)
+    if _EXPECT_DEVICE not in d.name.replace(" ", ""):
+        raise RuntimeError(
+            f"phase_r2's clock ladder (600/1200/1700 MHz) and 420 W limit are this RTX 3090's "
+            f"numbers; device {index} is {d.name!r}. Pick rungs for that card instead of reusing "
+            f"these.")
 
 REPO = Path(__file__).resolve().parent.parent.parent
 TREES = {"master": REPO / "llamacpp-master"}

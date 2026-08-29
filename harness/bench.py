@@ -926,6 +926,17 @@ def main() -> None:
     sys.path.insert(0, str(HERE / "matrices"))
     mod = importlib.import_module(args.matrix)
 
+    # A matrix whose conditions are calibrated for one specific card says so here rather than at
+    # import time. phase_r and phase_r2 hard-code this 3090's 420 W default and 9751 MHz stock
+    # memory clock, and used to call their device check as a module-level statement -- so the
+    # module could not be imported at all without a GPU, and the CPU-only CI job could not read
+    # the matrix definitions it was written to check. The check is the same and still runs before
+    # anything is measured; only its position moved, from "when this file is read" to "when this
+    # matrix is about to run".
+    precheck = getattr(mod, "PRECHECK", None)
+    if callable(precheck):
+        precheck(args.gpu)
+
     # A matrix may declare a reduced prompt set as part of its design: Phase L varies context
     # depth, not prompt class, and a full 25-prompt arm at 96 K would run for hours. That is a
     # different thing from --prompts-per-class, which exists to dry-run a matrix cheaply, and the

@@ -4226,6 +4226,41 @@ against a pooled standard deviation of 0.15 W, about 1.6 standard errors. It is 
 0.5 %, against 3.8 % for reading the counter once a second. Bounded is not zero, and the sentence
 now says which one it is.
 
+### And one the CI found, on the first run it had ever had
+
+The workflow in `.github/workflows/verify.yml` was written on 2026-08-29 and its own comments call
+it a signal rather than a gate. It had never executed. The push above was its first run, and it
+failed in 39 seconds:
+
+    phase_r failed to import: no GPU at index 0; visible: []
+
+`harness/matrices/phase_r.py` called its device check as a module-level statement, and
+`phase_r2.py` had the same check as two bare statements. **Neither module could be imported without
+a GPU**, so the CPU-only job could not read the matrix definitions -- and `_matrices()`, which
+imports every matrix to check each arm against a baseline on its own model, failed with them. The
+check itself is right: those conditions hard-code this card's 420 W default and 9751 MHz stock
+memory clock, and running them elsewhere would silently mean something else. Only its position was
+wrong. It is now a `PRECHECK` callable that `bench.py` invokes after importing a matrix and before
+measuring anything, so the protection is unchanged and a matrix definition can be read anywhere.
+
+**Three things about this are worth more than the fix.**
+
+The failing step was the first of eight, and GitHub stops there, so **seven steps had never run
+either**. Rather than push a fix and find the next one, the whole workflow was run locally against
+an `nvidia-smi` shim that exits 127 -- which is exactly what `devices.enumerate_devices` sees on a
+runner, since it returns `[]` on any exception. All eight pass. That is a reproduction of the
+environment, not a hope about it.
+
+The guard added for it runs in that same subprocess with that same shim, so it fails the way CI
+failed rather than by a different route that happens to agree. It was watched failing on the
+restored module-level call, with the identical message, and a second guard was watched failing when
+`PRECHECK` is removed -- because moving a check and deleting it look the same from the outside.
+
+And the shape is the one this correction keeps finding. A check that has never run is not a check.
+The manifest's `no_source` bucket, the phase table's hand-maintained map, the exemption reasons
+nothing read, and now a CI workflow that had never been executed: four instances, all of the same
+thing, all found only when something finally exercised them.
+
 ### What is still not settled
 
 Two instruments agreeing bounds their mutual consistency, not their accuracy. Both sit on the same
