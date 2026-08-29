@@ -121,7 +121,11 @@ def lock_state():
     # the file is only how it announces itself.
     running = bench_process()
     if running:
-        where = "a running bench.py, with no lock file"
+        # Name what was actually found. This said "a running bench.py" whatever it had matched, so
+        # a CPU-only llama-server started to tokenize stored text was announced for an hour as a
+        # measurement in progress. A guard that misdescribes what it found is a guard people learn
+        # to read past.
+        where = f"a running {running[2]}, with no lock file"
         return where, {"path": where, "pid": running[0], "since": None, "body": running[1]}
     return None, None
 
@@ -148,11 +152,33 @@ def bench_process():
         if not argv:
             continue
         exe = os.path.basename(argv[0])
-        hit = exe in ("llama-server", "llama-bench") or (
-            exe.startswith("python")
-            and any(os.path.basename(a) == "bench.py" for a in argv[1:4]))
-        if hit:
-            return int(pid), " ".join(argv)[:90]
+        if exe in ("llama-server", "llama-bench"):
+            # `-ngl 0` puts no layer on the card. Such a server is a tokenizer or a CPU smoke test,
+            # not something whose timing can be disturbed, and treating it as a measurement made
+            # every command for an hour carry a warning that was not true. The check is on the
+            # VALUE after the flag, so `-ngl 999` still counts.
+            if _n_gpu_layers(argv) == 0:
+                continue
+            return int(pid), " ".join(argv)[:90], exe
+        if exe.startswith("python") and any(os.path.basename(a) == "bench.py" for a in argv[1:4]):
+            return int(pid), " ".join(argv)[:90], "bench.py"
+    return None
+
+
+def _n_gpu_layers(argv):
+    """The value of -ngl / --n-gpu-layers, or None when the flag is absent (the default is not 0)."""
+    for i, a in enumerate(argv):
+        if a in ("-ngl", "--n-gpu-layers", "--gpu-layers") and i + 1 < len(argv):
+            try:
+                return int(argv[i + 1])
+            except ValueError:
+                return None
+        for pre in ("-ngl=", "--n-gpu-layers=", "--gpu-layers="):
+            if a.startswith(pre):
+                try:
+                    return int(a[len(pre):])
+                except ValueError:
+                    return None
     return None
 
 

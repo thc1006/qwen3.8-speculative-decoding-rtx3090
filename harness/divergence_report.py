@@ -109,6 +109,12 @@ def report(result: dict) -> None:
     print("BYTE-LEVEL DIVERGENCE FROM THE NON-SPECULATIVE BASELINE (greedy, same prompt & pass)")
     print("=" * 100)
 
+    # `~tokens` carries a tilde because it is not measured. It divides the exact character offset
+    # by the output's MEAN characters per token, and a tokenizer is variable-length, so the figure
+    # locates the fork to within a stretch of output rather than to a token. The character column
+    # beside it is exact and is what the width partition is built on. See
+    # truncation_audit.chars_per_token.
+    #
     # The earliest fork is the one number here taken across prompts rather than within one, and
     # a character index does not mean the same thing in each class: measured on Phase A the
     # output runs 1.56 characters per token in Chinese against 4.65 in prose, a spread of 3.0.
@@ -128,7 +134,7 @@ def report(result: dict) -> None:
 
     print("\n--- prevalence ---")
     print(f"{'arm':22s} {'n':>5s} {'identical':>10s} {'rate':>7s} "
-          f"{'median shared prefix':>21s}  {'earliest fork':>13s} {'tokens':>8s}")
+          f"{'median shared prefix':>21s}  {'earliest fork':>13s} {'~tokens':>8s}")
     for arm in sorted(div):
         flat = [d for p in div[arm].values() for d in p.values()]
         ident = sum(1 for d in flat if d["identical"])

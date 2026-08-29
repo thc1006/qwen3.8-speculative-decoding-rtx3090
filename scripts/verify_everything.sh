@@ -232,7 +232,7 @@ hdr "9. every generated report and figure is what its generator writes now"
 # published the k, c and k0 that cost_model.py now refuses to compute for that matrix. A generated
 # file is a claim, and a claim nobody rechecks is the thing this script exists for.
 python3 - <<'PY' || bad "a generated report is not what its analyser writes now"
-import pathlib, subprocess, sys
+import json, pathlib, subprocess, sys
 TOOLS = {"_report.txt": "analyze", "_cost.txt": "cost_model", "_divergence.txt": "divergence_report",
          "_stability.txt": "pass_stability", "_width_groups.txt": "width_groups"}
 SKIP = {"bootstrap_coverage.txt", "phase_m_anchor.txt"}   # section 8 covers the anchor
@@ -245,24 +245,46 @@ def resolve(name):
     return "analyze", name[:-4]
 
 
-stale, checked, no_source = [], 0, 0
+# `no_source` used to be a counter and nothing else: an artifact whose generator the suffix rules
+# could not guess was tallied and skipped, and the section still passed. Fifteen files sat in that
+# bucket. phase_b_mechanism.txt was one, and it kept supplying the coefficients under a bolded
+# causal claim in the README for a day after results/phase_b.json had been replaced by a clean
+# re-measurement. analysis/MANIFEST.json now names the generator for each of them, established by
+# running the command and requiring a byte-identical result, and anything in neither the manifest
+# nor the suffix rules is a FAILURE.
+manifest = json.loads(pathlib.Path("analysis/MANIFEST.json").read_text())
+regen, external = manifest["regenerate"], manifest["external"]
+
+stale, checked, unmapped = [], 0, []
 for art in sorted(pathlib.Path("analysis").glob("*.txt")):
-    if art.name in SKIP:
+    key = f"analysis/{art.name}"
+    if art.name in SKIP or key in external:
         continue
-    tool, stem = resolve(art.name)
-    if stem == "analysis_hostB":
-        stem = "phase_a_hostB"
-    res = pathlib.Path(f"results/{stem}.json")
-    if not res.exists():
-        no_source += 1
-        continue
-    r = subprocess.run([sys.executable, f"harness/{tool}.py", str(res)],
-                       capture_output=True, text=True)
+    if key in regen:
+        argv = [sys.executable] + regen[key]
+        label = " ".join(regen[key][:1])
+    else:
+        tool, stem = resolve(art.name)
+        if stem == "analysis_hostB":
+            stem = "phase_a_hostB"
+        res = pathlib.Path(f"results/{stem}.json")
+        if not res.exists():
+            unmapped.append(art.name)
+            continue
+        argv = [sys.executable, f"harness/{tool}.py", str(res)]
+        label = f"{tool}.py"
+    r = subprocess.run(argv, capture_output=True, text=True)
     checked += 1
     if r.stdout + r.stderr != art.read_text():
-        stale.append(f"{art.name} (from {tool}.py)")
-print(f"   {checked} reports regenerated and compared, {no_source} have no single result file "
-      f"to regenerate from, {len(stale)} differ")
+        stale.append(f"{art.name} (from {label})")
+if unmapped:
+    print(f"   FAIL: {len(unmapped)} generated artifact(s) have no generator, in neither the suffix")
+    print(f"         rules nor analysis/MANIFEST.json. Add them, with the argv that reproduces them:")
+    for u in unmapped:
+        print(f"           {u}")
+    sys.exit(1)
+print(f"   {checked} reports regenerated and compared, {len(external)} declared not rebuildable "
+      f"here, {len(stale)} differ")
 for x in stale:
     print("   FAIL:", x)
 raise SystemExit(1 if stale else 0)

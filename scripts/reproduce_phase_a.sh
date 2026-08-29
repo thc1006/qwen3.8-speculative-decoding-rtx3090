@@ -34,13 +34,36 @@ echo "== 1b. this repository's own version, and the toolchain"
 # that carries it. Without this the script pins llama.cpp, CUDA, the models and the card, and
 # leaves the harness that drives all of them free to be any later version of itself.
 WANT_TAG=$(val "['repo_tag']")
-HAVE_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
-if [ "$HAVE_TAG" = "$WANT_TAG" ]; then
-  echo "  repository at $WANT_TAG"
+# Compare COMMITS, not tag names, and stop rather than warn.
+#
+# `git describe --tags --exact-match` was here and it is wrong twice over. It answers "what is one
+# name for this commit", and two tags point at the commit phase-a-v1 marks -- phase-a-v1 and
+# v1.0.0 -- so which name comes back is not something the caller controls. And it only printed a
+# warning, so `./scripts/reproduce_phase_a.sh` on a later master pinned llama.cpp, CUDA, the models
+# and the card, and then ran them through whatever the harness had since become. That is not the
+# experiment the lock file describes, and it looked like it was.
+WANT_COMMIT=$(git rev-parse "${WANT_TAG}^{commit}" 2>/dev/null || true)
+HAVE_COMMIT=$(git rev-parse HEAD)
+if [ -z "$WANT_COMMIT" ]; then
+  die "the lock names tag '$WANT_TAG' and this clone has no such tag; run: git fetch --tags"
+fi
+if [ "$HAVE_COMMIT" = "$WANT_COMMIT" ]; then
+  echo "  repository at $WANT_TAG ($WANT_COMMIT)"
+elif [ "${ALLOW_HARNESS_DRIFT:-0}" = "1" ]; then
+  echo "  WARNING: ALLOW_HARNESS_DRIFT=1"
+  echo "           HEAD is $HAVE_COMMIT, the lock was written for $WANT_TAG ($WANT_COMMIT)"
+  echo "           llama.cpp, CUDA, the models and the card are pinned; the HARNESS is not."
+  echo "           This is an independent replication with a later analysis path, not an exact rerun."
 else
-  echo "  WARNING: HEAD is $(git rev-parse HEAD)"
-  echo "           the lock was written for tag '$WANT_TAG'${HAVE_TAG:+, this tree is at '$HAVE_TAG'}"
-  echo "           a rerun from another commit uses another harness; that is a different experiment"
+  echo "FAIL: exact reproduction needs the harness the measurement ran on." >&2
+  echo "      lock names $WANT_TAG -> $WANT_COMMIT" >&2
+  echo "      HEAD is    $HAVE_COMMIT" >&2
+  echo "" >&2
+  echo "  git fetch --tags && git switch --detach $WANT_TAG && git tag -v $WANT_TAG" >&2
+  echo "" >&2
+  echo "      or set ALLOW_HARNESS_DRIFT=1 to run an independent replication instead, which pins" >&2
+  echo "      everything except this repository and is a different claim." >&2
+  exit 1
 fi
 python3 - "$LOCK" <<'PY'
 import json, re, shutil, subprocess, sys

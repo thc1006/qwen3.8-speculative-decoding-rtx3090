@@ -1407,11 +1407,23 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
 
     ROOT = Path(__file__).parent.parent
 
+    # The README was split on 2026-08-29: at 10,400 words it was doing eight jobs at once, and every
+    # internal contradiction the external review found came out of that. These checks read the
+    # front page AND the documents its content moved into, because a claim does not stop needing
+    # checking when it changes file. Reading only README.md turned four of them from passing to
+    # vacuous the moment the move happened -- "no Phase M row to check" is not a pass.
+    SURFACES = ("README.md", "docs/PHASES.md", "docs/ENERGY.md",
+                "docs/STATISTICAL_SCOPE.md", "docs/REPRODUCIBILITY.md")
+
+    def _surfaces(self):
+        return "\n".join((self.ROOT / f).read_text(encoding="utf-8")
+                          for f in self.SURFACES if (self.ROOT / f).exists())
+
     def _readme(self):
         f = self.ROOT / "README.md"
         if not f.exists():
             self.skipTest("no README.md")
-        return f.read_text(encoding="utf-8")
+        return self._surfaces()
 
     def _prose(self):
         """README plus every docs page, as one string.
@@ -3761,11 +3773,23 @@ class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
 
     ROOT = Path(__file__).parent.parent
 
+    # The README was split on 2026-08-29: at 10,400 words it was doing eight jobs at once, and every
+    # internal contradiction the external review found came out of that. These checks read the
+    # front page AND the documents its content moved into, because a claim does not stop needing
+    # checking when it changes file. Reading only README.md turned four of them from passing to
+    # vacuous the moment the move happened -- "no Phase M row to check" is not a pass.
+    SURFACES = ("README.md", "docs/PHASES.md", "docs/ENERGY.md",
+                "docs/STATISTICAL_SCOPE.md", "docs/REPRODUCIBILITY.md")
+
+    def _surfaces(self):
+        return "\n".join((self.ROOT / f).read_text(encoding="utf-8")
+                          for f in self.SURFACES if (self.ROOT / f).exists())
+
     def setUp(self):
         f = self.ROOT / "README.md"
         if not f.exists():
             self.skipTest("no README.md")
-        self.readme = f.read_text(encoding="utf-8")
+        self.readme = self._surfaces()
 
     def _artifact(self, name):
         f = self.ROOT / "analysis" / name
@@ -4461,6 +4485,21 @@ class TheCitationFileMayNotNameAThingThatDoesNotExist(unittest.TestCase):
                             f"CITATION.cff declares version {v!r} and neither {v!r} nor "
                             f"'v{v}' is a git tag (tags: {tags}). Tag the commit first, or take "
                             f"the key back out.")
+        # A tag is not a deposit. The check below used to end at "a git tag of that name exists",
+        # and on 2026-08-29 that let CITATION.cff say `version: 1.0.1` beside a DOI while Zenodo
+        # held only 1.0.0 -- the version had been bumped for a release that was then correctly not
+        # cut, and every citation tool reading the file was told the identifier named 1.0.1.
+        # repro/DEPOSITS.json is the offline record of what has actually been archived.
+        if "version" in declared and "doi" in declared:
+            deposits = json.loads((root / "repro" / "DEPOSITS.json").read_text())
+            archived = {d["version"] for d in deposits["versions"]}
+            v = str(data["version"] if data else "")
+            self.assertIn(v, archived,
+                          f"CITATION.cff names version {v!r} together with a DOI, which asserts "
+                          f"that the identifier resolves to it. repro/DEPOSITS.json records only "
+                          f"{sorted(archived)} as deposited. Either cut and verify the deposit and "
+                          f"add it there, or name a version that exists.")
+
         if "doi" in declared:
             # This used to fail unconditionally, as a tripwire against naming a deposit that did
             # not exist. That was right while there was no deposit and wrong the moment one is
@@ -4733,6 +4772,102 @@ class TheProseDoesNotCarryTheLLMLexicalSignature(unittest.TestCase):
         self.assertEqual(len(quoted), len("The markers checked are `delve`, `intricate` and "
                                           "`pivotal`."),
                          "blanking must preserve length, or reported line numbers drift")
+
+
+class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
+    """The later-phases table states record and incident counts, by hand, next to a generated block
+    that states them from the files. They disagreed.
+
+    On 2026-08-29 the generated block said Phase B had `525 records, complete, 0 incidents` and the
+    hand-written row four screens further down said `525 request records ... 2 recorded
+    host-contention incidents`. Both were in the same README. The generated one was right; the
+    hand-written one had been true of a result file that was replaced by a clean re-measurement and
+    was never revisited. A reader had no way to tell which to believe, and nothing in the
+    verification could see the disagreement because only one of the two came from the data.
+
+    This is the check that would have caught it. It is deliberately narrow: it reads only the
+    numbers a file can settle -- how many records, how many incidents -- and leaves every
+    interpretive word in the table alone.
+    """
+
+    # Which result files each hand-written row is about. A row naming a count that no file backs is
+    # the failure this exists for, so the map is explicit rather than guessed from the row label.
+    ROWS = {
+        "B":     ["results/phase_b.json"],
+        "R":     ["results/phase_r.json"],
+        "R2":    ["results/phase_r2.json"],
+        "n-max": ["results/phase_nmax.json"],
+        "C":     ["results/phase_c.json"],
+        "KV":    ["results/phase_kv.json"],
+        "V":     ["results/phase_v.json"],
+    }
+
+    # Where the table lives, not where it lived. It moved from README.md to docs/PHASES.md when the
+    # README was split, and this test read only the README, so it went from checking seven rows to
+    # checking none and said nothing -- the failure it exists to prevent, in its own machinery.
+    # Both files are read, so the check survives the table moving again.
+    TABLE_FILES = ("README.md", "docs/PHASES.md")
+
+    def _rows(self):
+        import re
+        root = Path(__file__).parent.parent
+        text = "\n".join((root / f).read_text() for f in self.TABLE_FILES
+                          if (root / f).exists())
+        out = {}
+        for line in text.splitlines():
+            m = re.match(r"\|\s*\*\*([A-Za-z0-9-]+)\*\*\s*\|", line)
+            if m and m.group(1) in self.ROWS:
+                out[m.group(1)] = line
+        return out
+
+    def test_every_mapped_row_is_present(self):
+        rows = self._rows()
+        missing = sorted(set(self.ROWS) - set(rows))
+        self.assertEqual(missing, [],
+                         f"the table no longer has rows for {missing}; either the table changed or "
+                         f"this map is stale, and a silently-skipped row is how the last one drifted")
+
+    def test_record_counts_match_the_files(self):
+        import re
+        root = Path(__file__).parent.parent
+        bad = []
+        for name, line in self._rows().items():
+            files = [root / f for f in self.ROWS[name]]
+            if not all(f.exists() for f in files):
+                continue
+            real = sum(len(json.loads(f.read_text())["records"]) for f in files)
+            # Only the phase TOTAL, not the per-arm subsets these rows also quote. The first draft
+            # of this test pulled "75 records" out of "`ngram-mod` emitted no drafts at all on 75
+            # of 75 records" and reported the Phase C row as wrong when it was right: 75 is one
+            # arm's 25 prompts times 3 passes, and the row's own total, 750, sat two clauses away.
+            # A checker that fires on correct text costs more than no checker.
+            claims = re.findall(r"(?<!of )\b(\d[\d,]*)\s+(?:request\s+)?records\b", line)
+            claims = [c for c in claims
+                      if not re.search(rf"\d+\s+of\s+{re.escape(c)}\s+records", line)]
+            # A row that states no count has nothing to check. The Phase KV row is one: it says
+            # "complete" and stops. Requiring a count here was this test's third wrong assertion in
+            # a row -- first it read per-arm subsets as totals, then it demanded a number the
+            # document had never claimed. The job is to check claims that are made, not to compel
+            # them.
+            for claimed in claims:
+                self.assertEqual(int(claimed.replace(",", "")), real,
+                                 f"Phase {name} row says {claimed} records; the files hold {real}")
+
+    def test_incident_counts_match_the_files(self):
+        import re
+        root = Path(__file__).parent.parent
+        for name, line in self._rows().items():
+            files = [root / f for f in self.ROWS[name]]
+            if not all(f.exists() for f in files):
+                continue
+            real = sum(len(json.loads(f.read_text()).get("incidents") or []) for f in files)
+            claims = [int(x) for x in re.findall(r"(\d+)\s+(?:recorded\s+)?"
+                                                 r"(?:host-contention\s+)?incidents?", line)]
+            for c in claims:
+                self.assertEqual(c, real,
+                                 f"Phase {name} row says {c} incident(s); the file records {real}. "
+                                 f"The generated evidence block above it reads from the same file, "
+                                 f"so one of the two is telling the reader something untrue.")
 
 
 if __name__ == "__main__":

@@ -56,11 +56,18 @@ def _draw(process: str, rng: random.Random, mean: float) -> float:
         return rng.gauss(mean, 10.0 if rng.random() < 0.10 else 1.0)
     if process == "binary":
         return 1.0 if rng.random() < mean else 0.0
+    if process == "throughput":
+        # Pass-level noise only; the prompt-level structure is drawn by the caller, because for a
+        # ratio the baseline and the effect have to vary separately rather than share one additive
+        # offset. 0.15 % is measured: repeated passes of one prompt in results/phase_a.json have a
+        # coefficient of variation with median 0.0010 and maximum 0.0021.
+        return rng.gauss(mean, abs(mean) * 0.0015)
     raise ValueError(process)
 
 
 def coverage(process: str, *, n_prompts: int, passes: int, replications: int, n_boot: int,
-             base_mean: float, arm_mean: float, seed: int = 20260824) -> dict:
+             base_mean: float, arm_mean: float, seed: int = 20260824,
+             relative: bool = False) -> dict:
     """Fraction of replications whose interval contains the true effect.
 
     The true effect is `arm_mean - base_mean` for an absolute interval. Prompt-level offsets are
@@ -69,7 +76,18 @@ def coverage(process: str, *, n_prompts: int, passes: int, replications: int, n_
     """
     tags, cls = _design(n_prompts)
     rng = random.Random(seed)
-    truth = arm_mean - base_mean
+    # The estimand has to match the one being calibrated. `analyze.py` computes the Phase A
+    # headline with relative=True -- a per-prompt percentage change, which is a ratio with a random
+    # denominator -- while this file only ever ran relative=False. So the coverage it reported was
+    # for the ABSOLUTE difference, and was quoted in the README as though it applied to the
+    # headline. It does not follow: a nonlinear statistic can undercover by a different amount, in
+    # a different direction, and asymmetrically.
+    if process == "throughput":
+        truth = arm_mean          # arm_mean IS the percentage for this process
+    elif relative:
+        truth = 100.0 * (arm_mean / base_mean - 1.0)
+    else:
+        truth = arm_mean - base_mean
     covered = 0
     usable = 0
     margins: list[float] = []
@@ -88,13 +106,22 @@ def coverage(process: str, *, n_prompts: int, passes: int, replications: int, n_
                 span = min(base_mean, arm_mean, 1.0 - base_mean, 1.0 - arm_mean) * 0.75
                 shift = rng.uniform(-span, span)
                 bm, am = base_mean + shift, arm_mean + shift
+            elif process == "throughput":
+                # Phase A's own shape, measured rather than invented: the baseline is nearly flat
+                # across prompts (CV 0.001, sd 0.06 tok/s on a mean of 41.55) while the effect is
+                # not (per-prompt relative effect mean +59.77 %, sd 21.85, range +26.2 to +95.3).
+                # A ratio estimand misbehaves when its denominator can wander toward zero. This
+                # one cannot, and the point of running it is to measure that instead of assuming
+                # it either way. `arm_mean` is read as a PERCENTAGE here, not a level.
+                bm = rng.gauss(base_mean, base_mean * 0.0015)
+                am = bm * (1.0 + rng.gauss(arm_mean, 21.85) / 100.0)
             else:
                 shift = rng.gauss(0.0, 2.0)
                 bm, am = base_mean + shift, arm_mean + shift
             base[t] = [_draw(process, rng, bm) for _ in range(passes)]
             arm[t] = [_draw(process, rng, am) for _ in range(passes)]
         try:
-            iv = stats.paired_cluster_bootstrap(base, arm, cls, n_boot=n_boot, relative=False)
+            iv = stats.paired_cluster_bootstrap(base, arm, cls, n_boot=n_boot, relative=relative)
         except ValueError:
             continue
         usable += 1
@@ -104,7 +131,8 @@ def coverage(process: str, *, n_prompts: int, passes: int, replications: int, n_
         if not iv.spans_zero:
             margins.append(iv.margin_half_widths)
     return {
-        "process": process, "n_prompts": n_prompts, "passes": passes,
+        "process": process, "relative": relative,
+        "n_prompts": n_prompts, "passes": passes,
         "replications": usable, "n_boot": n_boot,
         "truth": truth,
         "coverage": covered / usable if usable else float("nan"),
@@ -124,7 +152,8 @@ def _fmt(row: dict) -> str:
     # to derive which differences are real.
     p, k = row["coverage"], row["replications"]
     mcse = math.sqrt(p * (1.0 - p) / k) if k and 0.0 <= p <= 1.0 else float("nan")
-    return (f"  {row['process']:8s} n={row['n_prompts']:<3d} passes={row['passes']}  "
+    return (f"  {row['process']:8s} {'ratio' if row.get('relative') else 'abs  '} "
+            f"n={row['n_prompts']:<3d} passes={row['passes']}  "
             f"coverage {p * 100:5.1f} % +- {mcse * 100:.1f} (MCSE)  "
             f"(mean width {row['mean_width']:.3f}, {k} replications x "
             f"{row['n_boot']} resamples)")
@@ -166,6 +195,23 @@ def main() -> None:
                                base_mean=0.0, arm_mean=1.0)
             print(_fmt(row))
         print()
+
+    # The row that calibrates the estimand the Phase A headline actually uses. Everything above is
+    # relative=False -- an ABSOLUTE difference -- and the README quoted those figures as though they
+    # applied to the headline, which is relative=True: a per-prompt percentage change. They do not
+    # follow from one another, and this row is what settles it rather than hedging about it. The
+    # data-generating process is calibrated to results/phase_a.json: baseline 41.55 tok/s with a
+    # per-prompt CV of 0.001, a per-prompt relative effect of +59.77 % with sd 21.85, and 0.15 %
+    # pass-level noise.
+    print("RELATIVE-RATIO ESTIMAND -- the one analyze.py uses for the Phase A headline")
+    rel_row = coverage("throughput", n_prompts=25, passes=3,
+                       replications=args.replications, n_boot=args.n_boot,
+                       base_mean=41.55, arm_mean=59.77, relative=True)
+    print(_fmt(rel_row))
+    print("  A ratio estimand is badly behaved when its denominator can wander toward zero. This")
+    print("  one does not: the measured per-prompt baseline CV is 0.001. The figure above is what")
+    print("  that is worth, not an argument that it should not matter.")
+    print()
 
     for row in binary_rows:
         m = row["margins"]

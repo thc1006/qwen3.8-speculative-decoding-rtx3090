@@ -1,5 +1,13 @@
 # The verification-step cost model
 
+> **Scope note on the method comparison.** The `mtp-*` arms in every ladder here run llama.cpp
+> master and the `dflash2-*` arms run the PR #27342 branch. Drafter and source tree therefore vary
+> together, and no arm exists that separates them: `draft-dflash` cannot be run on master at all.
+> Any difference in `c` between the two is a **reduced-form difference between two pinned
+> configurations**, not a drafter-specific marginal cost. The same-tree baselines remove the
+> branch's no-speculation main effect and nothing more. This document said nothing about the trees
+> until 2026-08-29, which let the coefficient difference read as a property of the drafters.
+
 Extracted from the README so the front page stays readable. Part of
 [`thc1006/qwen3.8-speculative-decoding-rtx3090`](https://github.com/thc1006/qwen3.8-speculative-decoding-rtx3090).
 

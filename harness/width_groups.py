@@ -158,7 +158,7 @@ def main() -> int:
               f"{window}-token cap,")
         print(f"  so it means 'did not diverge within {window} tokens', not 'identical'. Forks here "
               f"have been")
-        print(f"  resolved as late as token {latest:.0f} ({100.0*latest/window:.0f} % of the window) "
+        print(f"  resolved as late as roughly token {latest:.0f} ({100.0*latest/window:.0f} % of the window) "
               f"when {window} is the cap.")
         print(f"  {len(censored)} of {len(prompts)} prompts carry at least one. The censoring is "
               f"uniform across")

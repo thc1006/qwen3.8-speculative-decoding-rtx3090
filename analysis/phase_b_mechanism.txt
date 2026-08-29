@@ -8,12 +8,12 @@ forward-pass counts are DERIVED, not exact, on 450 of 450 requests (the server d
 1. IDENTIFICATION: can these arms tell the two regressors apart?
 ------------------------------------------------------------------------------------------------
 arm                       n  drafted/fwd  rejected/fwd   accept    ms/fwd    excess
-mtp-n3-p.00              75        2.985         1.320    0.558    42.335   +18.123
-mtp-n3-p.50              75        2.067         0.601    0.683    39.868   +15.655
-mtp-n3-p.75              75        1.343         0.174    0.848    36.613   +12.400
-mtp-n7-p.00              75        6.930         4.689    0.323    72.029   +47.816
-mtp-n7-p.50              75        3.567         1.581    0.526    52.233   +28.020
-mtp-n7-p.75              75        1.911         0.422    0.768    41.534   +17.321
+mtp-n3-p.00              75        2.985         1.320    0.558    42.644   +18.284
+mtp-n3-p.50              75        2.067         0.601    0.683    40.046   +15.686
+mtp-n3-p.75              75        1.343         0.174    0.848    36.527   +12.167
+mtp-n7-p.00              75        6.930         4.689    0.323    72.318   +47.957
+mtp-n7-p.50              75        3.567         1.581    0.526    52.456   +28.096
+mtp-n7-p.75              75        1.911         0.422    0.768    41.873   +17.513
 
 drafted-to-rejected ratio per arm, which is what tells the two one-parameter models apart:
     mtp-n7-p.00              1.48
@@ -36,7 +36,7 @@ fit at the end of this report, which is why that section is reported last and he
 ------------------------------------------------------------------------------------------------
 mtp-n3-p.50 -> mtp-n7-p.75
     drafted/fwd  2.067 ->  1.911 (-0.155), rejected/fwd  0.601 ->  0.422 (-0.180)
-    rejected moves, drafted held. ms/fwd change: +1.67 [+0.84, +2.56]  <-- clears zero by only 0.97 half-widths
+    rejected moves, drafted held. ms/fwd change: +1.83 [+1.01, +2.71]  <-- clears zero by only 1.19 half-widths
 
 ------------------------------------------------------------------------------------------------
 3. MODEL COMPARISON: two one-parameter models, fitted and scored separately
@@ -47,20 +47,20 @@ single free parameter, so each is identified whatever the two regressors' correl
 Fitted on the extensive form: excess_ms = coefficient * count, where excess_ms is
 total decode time minus what the same number of plain forwards cost on that prompt.
 model                         ms per token           RSS   R2 (origin)
-H2'  cost per drafted               7.2083  146740745.43        0.9781
-H2   cost per rejected             10.1835 1176732389.79        0.8242
+H2'  cost per drafted               7.2204  133020089.15        0.9802
+H2   cost per rejected             10.1986 1168750337.97        0.8256
 
-  RSS(rejected model) - RSS(drafted model) = +1029991644.36 [+976369690.50, +1081965484.35]   clears zero by 18.49 half-widths
+  RSS(rejected model) - RSS(drafted model) = +1035730248.82 [+987243421.64, +1080656400.06]   clears zero by 21.14 half-widths
   Positive means the drafted-token model fits better.
 
   per-arm mean residual, so a reader can see WHERE each model fails:
     arm                        obs ms    H2 pred  H2-prime pred
-    mtp-n3-p.00                2818.2     2243.6         3344.1
-    mtp-n3-p.50                2606.8     1084.3         2414.5
-    mtp-n3-p.75                2311.4      347.1         1701.1
-    mtp-n7-p.00                6544.4     6989.5         6836.9
-    mtp-n7-p.50                3801.3     2268.1         3395.1
-    mtp-n7-p.75                2727.8      657.0         2022.3
+    mtp-n3-p.00                2840.5     2247.0         3349.7
+    mtp-n3-p.50                2606.6     1085.9         2418.6
+    mtp-n3-p.75                2257.2      347.6         1704.0
+    mtp-n7-p.00                6560.2     6999.9         6848.4
+    mtp-n7-p.50                3803.2     2271.4         3400.8
+    mtp-n7-p.75                2752.5      658.0         2025.8
 
   A one-token model cannot be the whole story: the drafter runs its own forward pass every
   step whether or not the gate lets it extend, so part of the excess is per STEP, not per
@@ -68,10 +68,10 @@ H2   cost per rejected             10.1835 1176732389.79        0.8242
   like. Adding the step term to each:
 
     model                                ms/step   ms/token             RSS       R2
-    step + drafted   (H2-prime)            4.229      6.112     58599877.53   0.9912
-    step + rejected  (H2)                 10.740      6.889    209452431.54   0.9687
+    step + drafted   (H2-prime)            4.064      6.167     51645850.77   0.9923
+    step + rejected  (H2)                 10.660      6.928    215702754.54   0.9678
 
-    RSS(step+rejected) - RSS(step+drafted) = +150852554.01 [+117785290.18, +183815059.03]   clears zero by 3.57 half-widths
+    RSS(step+rejected) - RSS(step+drafted) = +164056903.77 [+132119341.39, +194805884.31]   clears zero by 4.22 half-widths
 
   WHY THIS SURVIVES A FORWARD-PASS COUNT THAT cost_model.py REFUSES TO USE.
   F comes from the same derivation whose integrity check fails on this phase, and
@@ -82,10 +82,10 @@ H2   cost per rejected             10.1835 1176732389.79        0.8242
   regressors. Refitting with F shifted, which is the direction and size the
   derivation is known to be wrong by:
      F shift   one-parameter winner   ms/step  ms/token
-          -2                drafted     4.481     6.140
-          -1                drafted     4.355     6.126
-          +0                drafted     4.229     6.112
-          +1                drafted     4.105     6.098
+          -2                drafted     4.315     6.195
+          -1                drafted     4.189     6.181
+          +0                drafted     4.064     6.167
+          +1                drafted     3.940     6.153
   The winner does not change and the coefficients move by about a percent, so the
   comparison does not rest on F being exact. What it would still take from an exact
   count is the ABSOLUTE ms/step and ms/token, which are offsets away from it.
@@ -93,8 +93,8 @@ H2   cost per rejected             10.1835 1176732389.79        0.8242
 ------------------------------------------------------------------------------------------------
 4. JOINT FIT, reported last because it is the part that is NOT identified
 ------------------------------------------------------------------------------------------------
-  beta_drafted : +7.57 [+7.42, +7.74]  ms per token per forward
-  beta_rejected: -0.87 [-1.12, -0.68]  ms per token per forward
+  beta_drafted : +7.64 [+7.55, +7.76]  ms per token per forward
+  beta_rejected: -0.96 [-1.13, -0.83]  ms per token per forward
 
   One coefficient is NEGATIVE. Rejecting a draft cannot save time and neither can drafting
   one, so this is not a measurement: it is what least squares does when two regressors point

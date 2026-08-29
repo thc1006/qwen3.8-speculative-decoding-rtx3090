@@ -1,5 +1,23 @@
 # Greedy output divergence
 
+> **On units.** Fork positions are exact in two senses now. The **character** offset into the
+> generated text is exact and always was, and it is what the width partition compares. The **token**
+> position is exact as of 2026-08-29: `harness/exact_forks.py` tokenizes both stored outputs and
+> takes the first index at which they differ, which is well defined because the two share a
+> byte-identical prefix and a BPE tokenizer segments identical text identically.
+>
+> It was not exact before. Token positions were the character offset divided by the output's mean
+> characters per token, and measured against the exact answer that estimate is off by more than five
+> tokens on **48 %** of the 400-token records and **57 %** of the 1600-token ones, by more than
+> twenty on **10 %** and **16 %**, with errors ranging from -36 to +61. Its median error is +1 and
+> +0, which is what made it look serviceable.
+>
+> Recording the emitted token ids during the run would have been better still and is not available:
+> `return_tokens` exists in the pinned server and is safe -- it guards a single `push_back` and
+> touches neither sampling nor speculation -- but `tokens` is returned by the native `to_json()` and
+> not by `to_json_oaicompat_chat()`, and this harness posts to `/v1/chat/completions`. Changing
+> endpoints would change the request path and the chat-template handling for every future run.
+
 Extracted from the README so the front page stays readable. Part of
 [`thc1006/qwen3.8-speculative-decoding-rtx3090`](https://github.com/thc1006/qwen3.8-speculative-decoding-rtx3090).
 
@@ -62,11 +80,11 @@ the 10 that were not. The design fixes the window in tokens, and characters per 
 **0 that reached EOS**: at that cap no record anywhere stopped on its own, so no identity was
 exact and every one meant "did not diverge within 400 tokens". There was no clean subset, because
 the censoring was uniform, and the robustness check the earlier text claimed could not be run on
-that data at all. Forks resolved between token 6 and token 334, the latest at 83 % of the window.
+that data at all. Forks resolved between **token 6 and token 359**, median 91, the latest at 90 % of the window. Those are exact: `harness/exact_forks.py` tokenizes the two stored outputs and takes the first index where they differ, over 490 divergent records.
 
 The larger budget that settles it has since been run (`results/phase_a_cap1600.json`, cap 1600,
 Correction 33). Right-censoring falls to **9 of 375 records** on 2 of 25 prompts, **267 of 525
-records reach EOS**, and forks resolve as late as token 1396. Divergence per arm rises to 100 %
+records reach EOS**, and forks resolve as late as **token 1406**, median 113, over 366 divergent records. Divergence per arm rises to 100 %
 for dflash2-n4, dflash2-n7 and mtp-n5, 96 % for mtp-n2 and 92 % for mtp-n3. Still **0 exact
 identities**: of the records that ran to EOS, not one matched its baseline. The width partition
 {3,4} / {5,6,8} is unchanged and rests on more determined cells than before.

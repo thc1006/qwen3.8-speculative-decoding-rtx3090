@@ -1,0 +1,101 @@
+# The parts of scripts/verify_everything.sh that need no GPU.
+#
+# That script is the strongest thing in this repository and until now it was also the easiest to
+# skip: it ran when someone remembered to run it. Nothing enforced it, `master` carries no branch
+# protection, and the commits are unsigned. Sections 1 to 9 need only Python and the committed
+# result files, so they can run here on every push and every pull request; section 10 reads the
+# card and cannot.
+#
+# What this cannot do is make the repository's guarantees machine-enforced on its own. That needs
+# the workflow set as a required status check on `master`, which is a repository setting rather
+# than a file. Until that is done this is a signal, not a gate, and the README says so.
+name: verify
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the correction-reference and version guards read git history
+          fetch-tags: true        # CITATION.cff's version must match a tag that exists
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install the two optional third-party packages
+        # matplotlib for the figures, PyYAML for the CITATION.cff structural check. Neither is
+        # needed to reproduce the numbers; both are needed to check every artifact here.
+        run: python -m pip install --quiet matplotlib pyyaml
+
+      - name: Test suite
+        run: cd harness && python test_harness.py
+
+      - name: Evidence block matches the result files
+        run: python harness/render_evidence.py --check
+
+      - name: CITATION.cff parses and names nothing that does not exist
+        run: cd harness && python -m unittest test_harness.TheCitationFileMayNotNameAThingThatDoesNotExist
+
+      - name: Every correction reference resolves
+        run: cd harness && python -m unittest test_harness.EveryCorrectionReferencePointsAtACorrectionThatExists
+
+      - name: The hand-written phase table agrees with the files
+        run: cd harness && python -m unittest test_harness.TheHandWrittenPhaseTableAgreesWithTheFiles
+
+      - name: The prose carries no LLM lexical signature
+        run: cd harness && python -m unittest test_harness.TheProseDoesNotCarryTheLLMLexicalSignature
+
+      - name: Result audit
+        run: python harness/audit_results.py
+
+      - name: Every generated report is what its generator writes now
+        # The manifest-driven check. An artifact under analysis/ that is in neither the suffix rules
+        # nor analysis/MANIFEST.json fails here rather than being counted and skipped, which is how
+        # a stale mechanism report survived a result-file replacement for a day.
+        run: |
+          python - <<'PY'
+          import json, pathlib, subprocess, sys
+          TOOLS = {"_report.txt": "analyze", "_cost.txt": "cost_model",
+                   "_divergence.txt": "divergence_report", "_stability.txt": "pass_stability",
+                   "_width_groups.txt": "width_groups"}
+          SKIP = {"bootstrap_coverage.txt", "phase_m_anchor.txt"}
+          m = json.loads(pathlib.Path("analysis/MANIFEST.json").read_text())
+          regen, external = m["regenerate"], m["external"]
+          stale, unmapped, checked = [], [], 0
+          for art in sorted(pathlib.Path("analysis").glob("*.txt")):
+              key = f"analysis/{art.name}"
+              if art.name in SKIP or key in external:
+                  continue
+              if key in regen:
+                  argv = [sys.executable] + regen[key]
+              else:
+                  tool, stem = next(((t, art.name[:-len(s)]) for s, t in TOOLS.items()
+                                     if art.name.endswith(s)), ("analyze", art.name[:-4]))
+                  if stem == "analysis_hostB":
+                      stem = "phase_a_hostB"
+                  if not pathlib.Path(f"results/{stem}.json").exists():
+                      unmapped.append(art.name); continue
+                  argv = [sys.executable, f"harness/{tool}.py", f"results/{stem}.json"]
+              r = subprocess.run(argv, capture_output=True, text=True)
+              checked += 1
+              if r.stdout + r.stderr != art.read_text():
+                  stale.append(art.name)
+          print(f"{checked} regenerated, {len(external)} declared external, {len(stale)} differ")
+          if unmapped:
+              print("no generator, in neither the suffix rules nor MANIFEST.json:", unmapped)
+          if stale:
+              print("stale:", stale)
+          sys.exit(1 if (stale or unmapped) else 0)
+          PY

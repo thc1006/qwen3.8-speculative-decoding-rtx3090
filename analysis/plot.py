@@ -403,7 +403,10 @@ def fig_cost_model(result):
                "point here is the better of two. The completed n-max ladder supersedes both "
                "coefficients and both optima: it fits c = 0.2904 for draft-mtp over widths 2-8 and "
                "c = 0.2481 for draft-dflash over 3, 5 and 7, and puts the best width at 3 for both "
-               "methods. The dispatch-boundary figure shows that fit.")
+               "methods. The dispatch-boundary figure shows that fit. The two series also run on "
+               "different llama.cpp trees -- every draft-mtp arm on master, every draft-dflash arm "
+               "on PR #27342 -- so drafter and source tree vary together and any gap between them "
+               "is a difference between two pinned configurations, not a drafter-specific cost.")
 
 
 # ------------------------------------------------------------------ 4. the width partition
@@ -487,7 +490,11 @@ def fig_dispatch_boundary(result_nmax):
     ax.legend(loc="lower right", bbox_to_anchor=(0.99, 0.02), frameon=False, fontsize=9.5)
     _despine(ax)
     _save(fig, "plot_dispatch_boundary", bottom=0.13,
-          note="A width past the dispatch limit takes a different kernel family. Its marker is "
+          note="The two series run on different llama.cpp trees: every draft-mtp arm on master, "
+               "every draft-dflash arm on PR #27342. Drafter and source tree vary together and no "
+               "arm separates them, because draft-dflash cannot be run on master at all, so the "
+               "gap between the two fits is a configuration difference rather than a drafter one. "
+               "A width past the dispatch limit takes a different kernel family. Its marker is "
                "open, it is excluded from the fit, and the arrow is the distance from the line "
                "the widths below define. The two open markers are not the same measurement: at "
                "n-max 8 draft-mtp fills 8.93 of its 9 columns and does leave the kernel, while "
@@ -592,7 +599,8 @@ def fig_bound_by(res):
                      xytext=(dx, dy), fontsize=9.6, color=col, va="center", ha=ha)
     ax1.plot([0, 1], [1, 0], color=C("mut"), ls=":", lw=1.0, zorder=1)
     # The dotted 1:1 line runs through the glyphs of its own label, in the same colour.
-    ax1.annotate("the two elasticities sum to 1", (0.62, 0.38), fontsize=8.4, color=C("mut"),
+    ax1.annotate("x + y = 1 (visual reference; no conservation law is implied)", (0.62, 0.38),
+                 fontsize=7.8, color=C("mut"),
                  path_effects=_halo(2.6),
                  rotation=-31, rotation_mode="anchor", ha="center", va="bottom")
     ax1.set_xlim(-0.03, 1.0); ax1.set_ylim(-0.03, 1.0)

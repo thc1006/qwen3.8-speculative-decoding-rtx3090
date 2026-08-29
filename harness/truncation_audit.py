@@ -36,6 +36,22 @@ DIVERGED, IDENTICAL_EOS, CENSORED = "diverged", "identical_eos", "right_censored
 
 
 def chars_per_token(rec):
+    """Mean characters per token over the WHOLE output. An average, and only that.
+
+    Everything downstream that turns a character offset into a "token position" divides by this,
+    and the result is an ESTIMATE that must never be reported as a measurement. A tokenizer is
+    variable-length: the same output can run three characters per token through a run of Chinese
+    and six through a stretch of English prose, so a single whole-output ratio cannot locate the
+    token boundary a given character sits in. Rounding it makes that worse, not better -- it can
+    merge two token boundaries or split one.
+
+    The character offset itself IS exact, and it is what the width-partition matrix compares. Fork
+    positions are reported in characters for that reason; the token figure exists only to give a
+    reader a sense of scale and is labelled approximate everywhere it appears.
+
+    Settling it needs the emitted token IDs recorded at benchmark time and compared directly, which
+    is a re-run, not a re-analysis.
+    """
     n = rec.get("predicted_n") or 0
     t = len(rec.get("text") or "")
     return (t / n) if (n and t) else None

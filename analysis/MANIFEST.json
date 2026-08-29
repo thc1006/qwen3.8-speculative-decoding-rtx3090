@@ -1,0 +1,67 @@
+{
+  "_comment": [
+    "Every generated artifact under analysis/, with the exact argv that produces it.",
+    "",
+    "This exists because verify_everything.sh section 9 used to GUESS the generator from the",
+    "filename suffix -- _report.txt to analyze.py, _cost.txt to cost_model.py -- and counted",
+    "anything it could not map as `no_source`, then passed. Fifteen artifacts were in that bucket.",
+    "One of them, phase_b_mechanism.txt, had been generated from results/phase_b.json before that",
+    "file was replaced by a clean re-measurement, and it went on supplying the coefficients behind a",
+    "bolded causal claim in the README for a day after the result it described had been retired.",
+    "Seven of the fifteen recorded no inputs of their own, and four had no generator findable",
+    "anywhere in the tree. The mapping below was established by running each candidate command and",
+    "requiring the output to match the committed file byte for byte.",
+    "",
+    "`regenerate` runs `python3 <argv>` and compares stdout+stderr against the file.",
+    "`external` names an artifact that cannot be rebuilt on this host, and says why. An artifact",
+    "under analysis/ that appears in neither is a FAILURE, not a skip."
+  ],
+  "regenerate": {
+    "analysis/phase_b_mechanism.txt": [
+      "harness/mechanism_b.py",
+      "results/phase_b.json"
+    ],
+    "analysis/phase_l_ladder.txt": [
+      "harness/analyze_depth.py"
+    ],
+    "analysis/phase_r_elasticity.txt": [
+      "harness/elasticity.py",
+      "results/phase_r.json"
+    ],
+    "analysis/phase_r2_elasticity.txt": [
+      "harness/elasticity.py",
+      "results/phase_r2.json"
+    ],
+    "analysis/phase_q_cross_rung.txt": [
+      "harness/cross_rung.py",
+      "results/phase_q_UD-Q4_K_XL.json",
+      "results/phase_q_UD-Q5_K_XL.json"
+    ],
+    "analysis/phase_qsmall_cross_Q4_BF16.txt": [
+      "harness/cross_rung.py",
+      "results/phase_qsmall_Q4_K_M.json",
+      "results/phase_qsmall_BF16.json"
+    ],
+    "analysis/phase_qsmall_ladder_trend.txt": [
+      "harness/ladder_trend.py",
+      "results/phase_qsmall_Q4_K_M.json",
+      "results/phase_qsmall_Q6_K.json",
+      "results/phase_qsmall_Q8_0.json",
+      "results/phase_qsmall_BF16.json"
+    ]
+  },
+  "external": {
+    "analysis/bootstrap_coverage.txt": "harness/coverage_sim.py at its 2000-replication default; about two and a half minutes, so it is checked on demand rather than in every verification pass",
+    "analysis/phase_m_anchor.txt": "regenerated and compared byte for byte by section 8, which exists for it alone",
+    "analysis/rerun_agreement.txt": "its two reference inputs are deleted by the commit that adds it; the file's own footer names the commit they can be recovered from and the exact commands",
+    "analysis/control_determinism.txt": "produced by a heredoc inside scripts/warp/collect_control_repeat.sh, which first fetches results over ssh from a second host",
+    "analysis/warp_intervention.txt": "scripts/warp/collect_warp_hostc.sh; needs the third host",
+    "analysis/warp_intervention_hostB.txt": "scripts/warp/collect_warp_hostb.sh; needs host B",
+    "analysis/warp_intervention_down2.txt": "scripts/warp/collect_down2_hostc.sh; needs the third host",
+    "analysis/warp_intervention_down2_hostB.txt": "scripts/warp/collect_down2_hostb.sh; needs host B",
+    "analysis/warp_intervention_v2.txt": "scripts/warp/collect_warp_v2.sh; needs the third host",
+    "analysis/warp_intervention_v2_collector3.txt": "scripts/warp/collect_warp_v2.sh with the third collector; its inputs cannot be reconstructed from its header and it has not been regenerated since 2026-08-25",
+    "analysis/phase_a_exact_forks.txt": "harness/exact_forks.py against the matching result file, with a CPU-only llama-server (`-ngl 0 -c 512 --port 18899`) up for its /tokenize endpoint. No GPU is used; it is external only because it needs a server process the verification does not start.",
+    "analysis/phase_a_cap1600_exact_forks.txt": "harness/exact_forks.py against the matching result file, with a CPU-only llama-server (`-ngl 0 -c 512 --port 18899`) up for its /tokenize endpoint. No GPU is used; it is external only because it needs a server process the verification does not start."
+  }
+}
