@@ -487,7 +487,8 @@ Three different things get confused here, so they are named separately.
 |---|---|
 | **Archived release** | Zenodo **v1.0.0**, [`10.5281/zenodo.22149942`](https://doi.org/10.5281/zenodo.22149942), from commit `e9444b01b4...`. The only deposit that exists. |
 | **Concept DOI** | [`10.5281/zenodo.22149941`](https://doi.org/10.5281/zenodo.22149941) — resolves to whichever version is newest, which today is v1.0.0. Cite this one unless you need to pin. |
-| **Current source** | signed tag `v1.0.1`, commit `dba40dcf78...`. **Tagged, pushed, and deliberately not deposited**: an external review found seven correctness blockers in it. The next deposit is v1.0.2. |
+| **Current source** | signed tag `v1.0.2`. **Tagged and not yet deposited** — a tag is cheap and revocable, a Zenodo record is neither, so the deposit is a separate deliberate step and this row says which one has happened. `git rev-parse v1.0.2^{}` gives the commit. |
+| **Previous tag** | signed tag `v1.0.1`, commit `dba40dcf78...`. **Tagged, pushed, and deliberately not deposited**: an external review found seven correctness blockers in it, and the tag is kept as the record of that rather than deleted. Corrections 42 and 43. |
 | **Phase A harness** | signed tag `phase-a-v1`, commit `e9444b01b4...`. Not a release — it is the tree Phase A was measured on, and `scripts/reproduce_phase_a.sh` requires it for an exact rerun. |
 
 `repro/DEPOSITS.json` is the machine-readable version of that table, and a test refuses to let
