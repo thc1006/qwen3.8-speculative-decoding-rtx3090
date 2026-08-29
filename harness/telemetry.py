@@ -119,6 +119,84 @@ def gpu_snapshot(index: int = 0) -> dict[str, float]:
     return snap
 
 
+class NvmlEnergy:
+    """The driver's own cumulative energy counter, read through NVML.
+
+    `PowerSampler` integrates `power.draw` sampled by an nvidia-smi subprocess every 100 ms. That
+    is one instrument, and until 2026-08-29 it was the only one, while the README asserted a
+    -37.1 % decode-energy figure and separately argued that NVIDIA's cumulative counter "would not
+    settle the magnitude either" -- on the strength of one developer-forum report about a different
+    card. That is dismissing an instrument in advance instead of reading it.
+
+    Probed on this RTX 3090 it returns NVML_SUCCESS. `nvmlDeviceGetTotalEnergyConsumption` is
+    defined as millijoules accumulated since the last driver reload, so a delta across a request is
+    that request's energy as the driver counts it. It is device-wide, which is exactly why the run
+    holds a lock and refuses to start beside another tenant.
+
+    Why this is worth having beside the integral rather than instead of it: the two disagree in
+    ways that are diagnostic. A common multiplicative calibration error cancels in a same-board
+    ratio and neither instrument would show it. What does NOT cancel is gain that varies with load,
+    and the arms in this study do not draw the same power -- so two independent readings of the same
+    requests are the only thing here that can see it.
+
+    ctypes rather than pynvml: no new dependency, and the harness's own README says matplotlib and
+    PyYAML are the only third-party packages. Fail-open throughout. An unsupported device, a driver
+    without the symbol, or any error at all leaves `available` False and the run unaffected; a
+    measurement must not stop because a second opinion was unavailable.
+    """
+
+    _LIB = None
+    _ERR = None
+
+    def __init__(self, index: int = 0):
+        self.index = index
+        self.available = False
+        self.error = None
+        self._handle = None
+        self._init()
+
+    def _init(self):
+        import ctypes
+        cls = type(self)
+        try:
+            if cls._LIB is None:
+                cls._LIB = ctypes.CDLL("libnvidia-ml.so.1")
+                if cls._LIB.nvmlInit_v2() != 0:
+                    cls._LIB, cls._ERR = None, "nvmlInit_v2 failed"
+            if cls._LIB is None:
+                self.error = cls._ERR
+                return
+            h = ctypes.c_void_p()
+            if cls._LIB.nvmlDeviceGetHandleByIndex_v2(self.index, ctypes.byref(h)) != 0:
+                self.error = f"no NVML handle for device {self.index}"
+                return
+            self._handle = h
+            # Probe rather than assume. GeForce support for this counter is not guaranteed, and
+            # assuming either way is what the earlier text did.
+            e = ctypes.c_ulonglong()
+            rc = cls._LIB.nvmlDeviceGetTotalEnergyConsumption(h, ctypes.byref(e))
+            if rc != 0:
+                self.error = f"nvmlDeviceGetTotalEnergyConsumption rc={rc}"
+                return
+            self.available = True
+        except Exception as exc:                                   # noqa: BLE001
+            self.error = repr(exc)[:160]
+
+    def read_mj(self):
+        """Cumulative millijoules since driver reload, or None."""
+        if not self.available:
+            return None
+        import ctypes
+        e = ctypes.c_ulonglong()
+        try:
+            if type(self)._LIB.nvmlDeviceGetTotalEnergyConsumption(self._handle,
+                                                                   ctypes.byref(e)) != 0:
+                return None
+        except Exception:                                          # noqa: BLE001
+            return None
+        return int(e.value)
+
+
 @dataclass
 class PowerSampler:
     """Background nvidia-smi poller. Integrates power over the sampled window -> joules.
@@ -140,6 +218,8 @@ class PowerSampler:
 
     def __enter__(self) -> "PowerSampler":
         self._samples.clear(); self._samples_instant.clear()
+        self._nvml_samples = []
+        self._nvml_last_at = None
         self._temps.clear(); self._sm_clocks.clear()
         self._mem_clocks.clear()
         self._stop.clear()
@@ -153,11 +233,40 @@ class PowerSampler:
             self._thread.join(timeout=5)
 
     def _run(self) -> None:
+        nvml = NvmlEnergy(self.index)
+        self._nvml_reader = nvml
         while not self._stop.is_set():
             snap = gpu_snapshot(self.index)
             now = time.perf_counter()
             if "power.draw" in snap:
                 self._samples.append((now, snap["power.draw"]))
+                # Read the counter at the SAME instant as the power sample it will be compared
+                # against. The first version read it outside the `with` block, so its window was
+                # the whole wall-clock span plus the thread join while the integral's window is
+                # first-sample-to-last -- a mismatch the README already puts at about 4 % of a
+                # request. NVML came out 1.08 to 2.59 % high on every record of a trial run, which
+                # at 415 W is about 0.1 s, the poll period. That was the instrumentation, not the
+                # instruments. Aligned here, a remaining difference is the thing being looked for.
+                # EXACTLY TWICE per window: beside the first power sample and beside the last.
+                # Never in between, and this is measured rather than assumed. Reading the counter
+                # makes it lose energy, and the loss scales with how often it is read.
+                #
+                # The measurement is `harness/nvml_polling.py` and the numbers are in
+                # `analysis/nvml_polling.txt`. They are NOT repeated here. This comment used to
+                # carry its own table of watts, which is the defect Correction 43 section 3 raised
+                # against the coverage figures -- quotable, not recheckable -- and it had drifted
+                # against itself, giving the undisturbed window as 31.82 W in the table and 31.74 W
+                # in the sentence below it. A number with no generator does that.
+                #
+                # A first version sampled it beside every power sample, which is 10 Hz, and it read
+                # about a third low. That is the counter being disturbed by the reading, not the
+                # two instruments disagreeing, and it reproduces with a dose-response curve the
+                # developer-forum report this repository had cited as a reason to dismiss the
+                # counter unread -- "the gap widens the more often power is polled".
+                if not self._nvml_samples:
+                    mj = nvml.read_mj()
+                    if mj is not None:
+                        self._nvml_samples.append((now, mj))
             if "power.draw.instant" in snap:
                 self._samples_instant.append((now, snap["power.draw.instant"]))
             if "temperature.gpu" in snap:
@@ -168,8 +277,26 @@ class PowerSampler:
                 self._mem_clocks.append(snap["clocks.current.memory"])
             self._stop.wait(self.interval_s)
 
+        # The closing pair, taken together once the loop has stopped. Both instruments' windows
+        # have to END at the same instant as well as start there. An earlier version took this
+        # read after `join()` and then timestamped it with the LAST power sample, which is a
+        # value from one moment wearing another moment's label: the counter had gone on
+        # accumulating through the remaining sleep and the join. At idle that hid inside noise;
+        # at 415 W one poll interval is about 41 J against a 4000 J request, which is one per
+        # cent -- the same size as the disagreement this is built to detect.
+        now = time.perf_counter()
+        mj = nvml.read_mj()
+        snap = gpu_snapshot(self.index)
+        if mj is not None and self._nvml_samples:
+            self._nvml_samples.append((now, mj))
+        if "power.draw" in snap:
+            self._samples.append((now, snap["power.draw"]))
+        if "power.draw.instant" in snap:
+            self._samples_instant.append((now, snap["power.draw.instant"]))
+
     # -- results -----------------------------------------------------------
     @property
+
     def n_samples(self) -> int:
         return len(self._samples)
 
@@ -204,8 +331,26 @@ class PowerSampler:
         watts = [w for _, w in self._samples]
         ei = self.energy_j_instant()
         e = self.energy_j()
+        # A second, independent reading of the same window. `energy_j` is an integral of a field
+        # nvidia-smi reports as a one-second rolling average, sampled every 100 ms by a subprocess;
+        # this is the driver's own accumulator. Both are on the same board at the same instant, so a
+        # common multiplicative calibration error cancels in either and neither can see it -- what
+        # a disagreement between them CAN show is error that varies with load, which is the one
+        # kind that does not cancel in a ratio between two arms drawing different power.
+        # First NVML reading to last, which are taken beside the first and last power samples, so
+        # both instruments describe the identical window.
+        ns = getattr(self, "_nvml_samples", [])
+        nvml_j = ((ns[-1][1] - ns[0][1]) / 1000.0) if len(ns) >= 2 and ns[-1][1] >= ns[0][1] else None
+        nerr = None if ns else "no NVML samples"
         return {
             "energy_j": e,
+            "energy_j_nvml": nvml_j,
+            "nvml_vs_integral_pct": (100.0 * (nvml_j - e) / e) if (e and nvml_j) else None,
+            "nvml_error": nerr,
+            "n_nvml_samples": len(ns),
+            # The two spans must match. If they ever do not, the comparison above is measuring
+            # window mismatch again and this is how a reader finds out.
+            "nvml_span_s": (ns[-1][0] - ns[0][0]) if len(ns) >= 2 else None,
             "sample_span_s": self.sample_span_s(),
             "energy_j_instant": ei,
             "energy_instant_vs_average_pct": (100.0 * (ei - e) / e) if (e and ei) else None,
@@ -230,6 +375,13 @@ class PowerSampler:
 
 @contextlib.contextmanager
 def sampling(index: int = 0, interval_s: float = 0.10):
+    """Integrate power over a window, and read the driver's own energy counter across the same one.
+
+    The NVML delta is taken here rather than at each call site so that both the prefill calibration
+    and the measured request get it without either remembering to. It is a single library call at
+    each end -- microseconds, no subprocess -- against the 100 ms nvidia-smi poll the integral
+    already runs, so it cannot be what perturbs a measurement.
+    """
     s = PowerSampler(index=index, interval_s=interval_s)
     with s:
         yield s
