@@ -61,6 +61,14 @@ class Arm:
     model: "Path | None" = None
 
 
+# Every field of PowerSampler.summary() that is an absolute quantity of energy over the sampled
+# window. The prefill calibration's window covers several requests, so each of these has to be
+# divided by that count before one request's worth is subtracted from the measured request. A test
+# asserts this tuple covers every `energy_j*` key summary() emits: the defect it exists to stop was
+# two such fields being added to summary() while the call site kept normalising only the first.
+PREFILL_ABSOLUTE_ENERGY_FIELDS = ("energy_j", "energy_j_instant", "energy_j_nvml")
+
+
 def _atomic_write_json(path: Path, obj: dict) -> None:
     """Write the result file atomically.
 
@@ -627,8 +635,20 @@ def run_matrix(
                                         max_tokens=1, temperature=arm.temperature,
                                         think=pr.think, cache_prompt=cache_prompt)
                     prefill_power = pfs.summary()
-                    if prefill_power.get("energy_j") is not None:
-                        prefill_power["energy_j"] /= reps_here
+                    # EVERY absolute-energy field, not just the one that existed when this was
+                    # written. The window covers `reps_here` calibration requests and the figure
+                    # subtracted below is one request's worth, so an unnormalised sibling is
+                    # `reps_here` times too large. `energy_j_instant` and `energy_j_nvml` were
+                    # added to PowerSampler.summary() later and this line was not revisited, so
+                    # both sat in every result file at 8x. Nothing published used them, because
+                    # `decode_energy` reads `energy_j`; the first analysis that did use them
+                    # produced a decode-energy saving of 43.7 % against a true 36.3 %.
+                    # The percentage fields are NOT touched: summary() computes them from the raw
+                    # integrals before this runs, and a ratio of two quantities scaled alike is
+                    # already right.
+                    for _k in PREFILL_ABSOLUTE_ENERGY_FIELDS:
+                        if prefill_power.get(_k) is not None:
+                            prefill_power[_k] /= reps_here
                     prefill_power["reps"] = reps_here
 
                     with T.sampling(index=gpu_index, interval_s=power_interval_s) as ps:

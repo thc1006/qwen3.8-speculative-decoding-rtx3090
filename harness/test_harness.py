@@ -4870,5 +4870,41 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
                                  f"so one of the two is telling the reader something untrue.")
 
 
+class ThePrefillCalibrationMustNormaliseEveryEnergyFieldItCarries(unittest.TestCase):
+    """The prefill window covers several requests; each absolute energy in it must be divided.
+
+    `bench.py` divided `energy_j` by the repetition count and nothing else. `energy_j_instant` and
+    `energy_j_nvml` were added to `PowerSampler.summary()` later, and that line was not revisited,
+    so both sat in every result file at eight times one request's worth. Nothing published was
+    wrong, because `decode_energy` reads `energy_j` -- but the first analysis that reached for the
+    instantaneous field computed a decode-energy saving of 43.7 % against a true 36.3 %.
+
+    The specific fix is a tuple. This test is the general one: whatever `summary()` grows next, if
+    its name says it is an absolute energy then the call site has to handle it.
+    """
+
+    def test_the_field_list_covers_every_absolute_energy_summary_emits(self):
+        import bench
+        import telemetry
+        emitted = set(telemetry.PowerSampler().summary())
+        absolute = {k for k in emitted if k.startswith("energy_j")}
+        missing = absolute - set(bench.PREFILL_ABSOLUTE_ENERGY_FIELDS)
+        self.assertFalse(
+            missing,
+            f"PowerSampler.summary() emits {sorted(missing)}, which name absolute energies over "
+            f"the sampled window, and bench.PREFILL_ABSOLUTE_ENERGY_FIELDS does not list them. "
+            f"The prefill calibration's window covers several requests, so an unnormalised field "
+            f"lands in every result file multiplied by that count.")
+
+    def test_the_listed_fields_are_all_really_emitted(self):
+        """A stale name in the tuple would pass the test above while normalising nothing."""
+        import bench
+        import telemetry
+        emitted = set(telemetry.PowerSampler().summary())
+        stale = set(bench.PREFILL_ABSOLUTE_ENERGY_FIELDS) - emitted
+        self.assertFalse(stale, f"{sorted(stale)} is listed for normalisation and summary() does "
+                                f"not emit it; the guard would pass while covering nothing.")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
