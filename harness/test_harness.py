@@ -4800,7 +4800,63 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
         "C":     ["results/phase_c.json"],
         "KV":    ["results/phase_kv.json"],
         "V":     ["results/phase_v.json"],
+        # L, M and Q had rows in the table and no entry here, so three of the most heavily
+        # quantified rows in the document were not checked against anything. Patterns are expanded
+        # as globs: L and Q are ladders across several files, and a literal path with a `*` in it
+        # simply does not exist, which the `all(f.exists())` guard below would have read as
+        # "skip this row" rather than as an error.
+        "L":     ["results/phase_l_*.json"],
+        "M":     ["results/phase_m.json"],
+        "Q":     ["results/phase_q_*.json"],
+        "E":     ["results/phase_e.json"],
+        # Qs was first written into NOT_TABLED as "covered by the Phase Q row", and the guard that
+        # rejects a stale exemption failed on it in the same run: it has had its own row in
+        # docs/PHASES.md all along, four rungs and 1500 records, checked against nothing.
+        "Qs":    ["results/phase_qsmall_*.json"],
     }
+
+    # A registry phase with no hand-written row is not automatically wrong -- the primary and its
+    # replications are written up in prose rather than as table rows -- but it must be a decision
+    # rather than an omission. Adding a phase to evidence/registry.json and forgetting the table is
+    # how Phase E shipped with a generated status line and nothing saying what it found.
+    # id -> (file that covers it, a string that file must contain, why there is no row).
+    #
+    # The reason used to be free text and nothing read it, which is how it stayed wrong. Two of the
+    # five entries first written here were false: `Qs` was said to be covered by the Phase Q row
+    # and has had its own row all along, and `warp` was said to be written up in docs/DISCOVERY.md,
+    # which contains the word zero times. An exemption is a claim about the document, so it is
+    # checked like one.
+    NOT_TABLED = {
+        "A":       ("README.md", "Phase A",
+                    "the primary result; the README gives it its own sections rather than a row"),
+        "A-1600":  ("docs/GREEDY_DIVERGENCE.md", "1600",
+                    "the 1600-token cap re-run, written up inside the divergence discussion"),
+        "A-hostB": ("README.md", "hostB",
+                    "a cross-host replication, written up under the pooling limitation"),
+        "warp":    ("docs/GREEDY_DIVERGENCE.md", "warp",
+                    "the forced-warp intervention, written up with the partition it tests"),
+    }
+
+    def test_every_exemption_names_a_file_that_covers_the_phase(self):
+        """An exemption is a claim that the phase is written up somewhere. Check the somewhere."""
+        root = Path(__file__).parent.parent
+        bad = []
+        for pid, (fname, token, _why) in sorted(self.NOT_TABLED.items()):
+            f = root / fname
+            if not f.exists():
+                bad.append(f"{pid}: {fname} does not exist")
+            elif token not in f.read_text():
+                bad.append(f"{pid}: {fname} does not contain {token!r}")
+        self.assertEqual(bad, [], "an exemption from the phase table names a document that does "
+                                  "not cover the phase:\n  " + "\n  ".join(bad))
+
+    def _files(self, name):
+        import glob
+        root = Path(__file__).parent.parent
+        out = []
+        for pat in self.ROWS[name]:
+            out.extend(sorted(Path(x) for x in glob.glob(str(root / pat))))
+        return out
 
     # Where the table lives, not where it lived. It moved from README.md to docs/PHASES.md when the
     # README was split, and this test read only the README, so it went from checking seven rows to
@@ -4820,6 +4876,55 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
                 out[m.group(1)] = line
         return out
 
+    def _registry_ids(self):
+        root = Path(__file__).parent.parent
+        return [ph["id"] for ph in
+                json.loads((root / "evidence" / "registry.json").read_text())["phases"]]
+
+    def _table_ids(self):
+        """Every `| **X** |` row id in the table files, whatever this map knows about."""
+        import re
+        root = Path(__file__).parent.parent
+        text = "\n".join((root / f).read_text() for f in self.TABLE_FILES
+                          if (root / f).exists())
+        return {m.group(1) for m in
+                re.finditer(r"^\|\s*\*\*([A-Za-z0-9-]+)\*\*\s*\|", text, re.M)}
+
+    def test_every_registry_phase_is_tabled_or_exempted(self):
+        """A phase can be absent from the table. It cannot be absent by accident.
+
+        Phase E was added to evidence/registry.json, which put a generated status line in the
+        README, and no hand-written row was written -- so the document reported the phase's record
+        count and said nothing about what it found or what it must not be used for. Nothing
+        noticed, because the map below is hand-maintained and a missing key is not a failure.
+        """
+        missing = [i for i in self._registry_ids()
+                   if i not in self._table_ids() and i not in self.NOT_TABLED]
+        self.assertEqual(missing, [],
+                         f"evidence/registry.json declares {missing} and the phase table has no "
+                         f"row for them. Write the row, or add the id to NOT_TABLED with the "
+                         f"reason it is written up elsewhere.")
+
+    def test_no_exemption_is_stale(self):
+        """An id in both NOT_TABLED and the table means the exemption stopped being true."""
+        both = sorted(set(self.NOT_TABLED) & self._table_ids())
+        self.assertEqual(both, [],
+                         f"{both} are listed as not tabled and have table rows. The exemption is "
+                         f"stale, and while it stands those rows are checked by nothing.")
+
+    def test_every_tabled_registry_phase_has_its_counts_checked(self):
+        """A row in the table and no entry in ROWS is a row nothing verifies.
+
+        L, M and Q were in exactly that state: three of the most heavily quantified rows in the
+        document, checked against no file. The two count tests iterate ROWS, so an id they have
+        never heard of costs them nothing and says nothing.
+        """
+        unchecked = sorted((self._table_ids() & set(self._registry_ids())) - set(self.ROWS))
+        self.assertEqual(unchecked, [],
+                         f"the table has rows for {unchecked}, which name registry phases, and "
+                         f"ROWS does not map them to result files, so their record and incident "
+                         f"counts are checked against nothing.")
+
     def test_every_mapped_row_is_present(self):
         rows = self._rows()
         missing = sorted(set(self.ROWS) - set(rows))
@@ -4832,8 +4937,8 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
         root = Path(__file__).parent.parent
         bad = []
         for name, line in self._rows().items():
-            files = [root / f for f in self.ROWS[name]]
-            if not all(f.exists() for f in files):
+            files = self._files(name)
+            if not files:
                 continue
             real = sum(len(json.loads(f.read_text())["records"]) for f in files)
             # Only the phase TOTAL, not the per-arm subsets these rows also quote. The first draft
@@ -4841,9 +4946,33 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
             # of 75 records" and reported the Phase C row as wrong when it was right: 75 is one
             # arm's 25 prompts times 3 passes, and the row's own total, 750, sat two clauses away.
             # A checker that fires on correct text costs more than no checker.
+            # A count qualified by "each" is per FILE, not the phase total. The ladders say it --
+            # Phase L "five of five rungs, 180 records each", Phase Q "300 records and 0 incidents
+            # each" -- and reading those as totals made this test report two correct rows as wrong
+            # the moment they were added to ROWS. Checked against every file rather than dropped,
+            # which is a stronger assertion than the total: 5 x 180 also sums to 900 if one rung
+            # holds 200 and another 160.
+            per_file, subset = [], []
+            for m in re.finditer(r"(?<!of )\b(\d[\d,]*)\s+(?:request\s+)?records\b", line):
+                tail = line[m.end():m.end() + 60].split("|")[0]
+                if re.match(r"[^.]{0,40}\beach\b", tail):
+                    per_file.append(m.group(1))
+                elif re.match(r"\s+(?:are\s+|were\s+)?excluded\b", tail):
+                    # "33 records are excluded from the per-protocol series" is a subset of the
+                    # phase, stated three clauses after its 1575 total. Same shape as the "N of M"
+                    # case above: the row is right and a checker that reads it as a total is not.
+                    subset.append(m.group(1))
             claims = re.findall(r"(?<!of )\b(\d[\d,]*)\s+(?:request\s+)?records\b", line)
             claims = [c for c in claims
-                      if not re.search(rf"\d+\s+of\s+{re.escape(c)}\s+records", line)]
+                      if not re.search(rf"\d+\s+of\s+{re.escape(c)}\s+records", line)
+                      and c not in per_file and c not in subset]
+            for claimed in per_file:
+                want = int(claimed.replace(",", ""))
+                for f in files:
+                    got = len(json.loads(f.read_text())["records"])
+                    self.assertEqual(got, want,
+                                     f"Phase {name} row says {claimed} records each; "
+                                     f"{f.name} holds {got}")
             # A row that states no count has nothing to check. The Phase KV row is one: it says
             # "complete" and stops. Requiring a count here was this test's third wrong assertion in
             # a row -- first it read per-arm subsets as totals, then it demanded a number the
@@ -4857,8 +4986,8 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
         import re
         root = Path(__file__).parent.parent
         for name, line in self._rows().items():
-            files = [root / f for f in self.ROWS[name]]
-            if not all(f.exists() for f in files):
+            files = self._files(name)
+            if not files:
                 continue
             real = sum(len(json.loads(f.read_text()).get("incidents") or []) for f in files)
             claims = [int(x) for x in re.findall(r"(\d+)\s+(?:recorded\s+)?"

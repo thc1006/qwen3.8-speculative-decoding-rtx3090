@@ -401,10 +401,23 @@ there was omission, not misstatement.
       every position exactly once. Also off by default, since it changes how many passes a matrix
       runs. With the ordinal now recorded, the other route - adjust for position in the model
       rather than balance it by design - is open too.
-- [x] **C3** done, by a different route than the audit proposed. There is no total-energy
-      counter reachable from here: `nvidia-smi` rejects `total_energy_consumption` on this driver
-      and neither `pynvml` nor any nvidia python package is installed, so the counter would mean a
-      new dependency in a harness that deliberately has none.
+- [x] **C3** done, by a different route than the audit proposed -- and the reason given for that
+      route was wrong, which 2026-08-30 established rather than argued. What follows is kept as it
+      was written, with the correction under it.
+
+      ~~There is no total-energy counter reachable from here: `nvidia-smi` rejects
+      `total_energy_consumption` on this driver and neither `pynvml` nor any nvidia python package
+      is installed, so the counter would mean a new dependency in a harness that deliberately has
+      none.~~
+
+      **Both clauses are false.** `nvidia-smi` rejecting a query field says nothing about the
+      library behind it: `nvmlDeviceGetTotalEnergyConsumption` returns `NVML_SUCCESS` on this card,
+      and `telemetry.NvmlEnergy` reads it through `ctypes` against `libnvidia-ml.so.1`, which is
+      the standard library and not a dependency. The counter and the `power.draw.instant` integral
+      agree to within 0.15 % on every arm of `results/phase_e.json` across a 2.75x power range,
+      which is the cross-check this item concluded could not be had. See Correction 44. The reason
+      it looked unreachable is that one tool's refusal was read as the platform's, and the
+      dependency argument was never checked against what `ctypes` can do.
 
       `power.draw.instant` does the job instead. Querying `power.draw` beside `power.draw.average`
       returns the same number on every sample, which is the averaging the audit named; `instant`
@@ -478,6 +491,21 @@ there was omission, not misstatement.
       90.6 % (2.3). The earlier 300-replication pass had put the discrepancy on `normal` at 2.0 SE;
       that was Monte Carlo noise. Binary at n=25 is 90.2 %, inside the continuous band.
 - [ ] **D4** full re-run of Phase A under the C1/C2/C3 harness, once those land.
+- [ ] **D6** what the averaged-field offset actually is. Phase E establishes what it is not: not
+      proportional (r = +0.120 against total energy over 89 cells and 6075 windows), not power
+      alone (+0.542, and within a cap the arm drawing LESS power carries the larger offset), not
+      power fluctuation (-0.096 against SM-clock spread), and not a per-window constant -- an
+      earlier reading with an arm-dependent time constant was refused by nine files and by the
+      negative offsets on `phase_m`'s `moe-draft08b-*` arms. The context ladder adds a dimension
+      none of them covers: at a nearly constant 400 to 415 W the offset per watt rises from
+      0.0031 s at 8k to 0.0163 s at 96k. Identifying it needs the raw power traces, which the
+      harness summarises away -- `power_sd_w` and the sample series are not recorded. Adding them
+      is cheap and is the prerequisite. Until then `energy_j` cannot be corrected by formula and
+      the instantaneous field or the counter has to be read instead.
+- [ ] **D7** an external power meter. Phase E compares three READOUT PATHS over one on-board
+      sensor, so their agreement bounds the processing and says nothing about the proportional
+      bidirectional sensor error the measurement literature reports. Nothing inside this machine
+      can settle the absolute magnitude, and no figure here should be read as though it had.
 - [ ] **D5** factorial prompts: class crossed with thinking, language crossed with matched task,
       short and medium output lengths alongside the 400-token regime.
 

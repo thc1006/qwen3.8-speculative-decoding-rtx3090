@@ -3965,46 +3965,61 @@ an 8 s window, varying only what happens between the two end reads:
 
 | between the end reads | counter | `power.draw` integral | counter retains | reads |
 |---|---:|---:|---:|---:|
-| no nvidia-smi at all | 32.22 +- 0.12 W | -- | -- | 2 |
-| nvidia-smi at 10 Hz | 32.13 +- 0.25 W | 32.32 +- 0.14 W | 99.4 % | 2 |
-| plus the counter at 1 Hz | 30.17 +- 0.25 W | 32.41 +- 0.08 W | 93.1 % | 9 |
-| plus the counter at 10 Hz | 20.34 +- 3.74 W | 32.44 +- 0.10 W | 62.7 % | 81 |
-| plus the counter at 100 Hz | 2.21 +- 0.81 W | **37.52 +- 0.32 W** | **5.9 %** | 801 |
+| no nvidia-smi at all | 31.74 +- 0.11 W | -- | -- | 2 |
+| nvidia-smi at 10 Hz | 31.60 +- 0.15 W | 31.93 +- 0.12 W | 99.0 % | 2 |
+| plus the counter at 1 Hz | 30.70 +- 0.65 W | 31.91 +- 0.14 W | 96.2 % | 9 |
+| plus the counter at 10 Hz | 17.37 +- 12.95 W | 31.95 +- 0.19 W | 54.4 % | 81 |
+| plus the counter at 100 Hz | 2.72 +- 0.67 W | **36.96 +- 0.30 W** | **7.4 %** | 801 |
+
+This is a measurement and not a computation, so it is one run of that script and the watts are new
+each time. What reproduces is the ordering, the control's direction and the size of the steps; the
+individual figures do not, and `analysis/MANIFEST.json` records it as not byte-comparable for that
+reason. The 10 Hz row's own standard deviation, 12.95 W on a mean of 17.37, is the loudest thing in
+the table: at that rate the loss is not just large but erratic.
 
 **The control is what makes this a measurement rather than an anecdote.** "The counter loses energy"
 and "polling makes the card draw less" predict the same counter values. Only the second instrument
-separates them, and it separates them the strong way: at 100 Hz the card draws *more* -- 37.52 W
-against 32.3 W everywhere else, the polling's own cost -- while the counter reports 5.9 % of it.
+separates them, and it separates them the strong way: at 100 Hz the card draws *more* -- 36.96 W
+against 31.9 W everywhere else, the polling's own cost -- while the counter reports 7.4 % of it.
 
 Two consequences.
 
-**The harness's own polling is clear.** Every energy number this repository has published rests on
-an nvidia-smi subprocess sampling at 10 Hz. With no nvidia-smi at all the counter reads 32.22 W;
-with it, 32.13 W. A difference of -0.09 W against a pooled standard deviation of 0.19 W across
-those ten windows. That assumption had never been tested.
+**The harness's own polling is bounded, which had never been tested.** Every energy number this
+repository has published rests on an nvidia-smi subprocess sampling at 10 Hz. With no nvidia-smi at
+all the counter reads 31.74 W; with it, 31.60 W. That is -0.15 W, against a pooled standard
+deviation of 0.15 W across those ten windows and about 1.6 standard errors of the difference -- so
+it is not resolved as zero, and calling it "clear" was more than the numbers say. What it is, is
+**bounded at about 0.5 %**, against 3.8 % for reading the counter itself once a second. All five
+conditions now spin their Python loop at the same 0.5 ms granularity; a first version slept 5 ms in
+the two unpolled ones, so this comparison varied the loop rate and the reads together.
 
 **`PowerSampler` reads the counter exactly twice per window** -- beside the first power sample and
-beside the last -- which is the 99.4 % row. An earlier version read it beside every power sample,
+beside the last -- which is the 99.0 % row. An earlier version read it beside every power sample,
 which is 10 Hz, and came out 34 % low.
 
 A fixed cost per read would explain the ordering, and does not: the loss divided by the reads that
-produced it is 1999, 1196 and 353 mJ per read at 1, 10 and 100 Hz. The dose-response is established;
+produced it is 1075, 1442 and 342 mJ per read at 1, 10 and 100 Hz. The dose-response is established;
 the mechanism behind it is not, and the file says so where the numbers are.
 
 ### The averaged field's offset is not proportional, and nothing measured predicts its size
 
-`analysis/energy_instruments.txt` puts the two integrals against each other over 73 file-arm cells,
-11 files, 5355 records, spanning both base models, six named quantizations across two model
-sizes, and three power caps. It is one file short of a context-length sweep: four of the five
-`phase_l` files carry both integrals and no window span, so 720 records cannot be used and only the
-98304 file is in. The report names them rather than shrinking its denominator quietly.
+`analysis/energy_instruments.txt` puts the two integrals against each other over 89 file-arm cells,
+15 files, 6075 records, spanning both base models, six named quantizations across two model sizes,
+five context lengths from 8k to 96k, and three power caps.
+
+720 of those records are in only because a first version of this analysis dropped them. Four of the
+five `phase_l` files predate `sample_span_s`, and requiring it removed four of the five context
+lengths from a sweep that then described itself as spanning five. None of the three quantities that
+matter needs the span -- the offset in joules, the offset in per cent and tau are all computed
+without it -- and where it is wanted it is recovered as the trapezoid over its own mean power,
+checked against 2730 records in four files that carry both: median error 0.06 %, worst 0.65 %.
 
 | the offset in joules tracks | r |
 |---|---:|
-| total energy `P x span` -- what a proportional gain error predicts | **+0.085** |
-| window length | -0.112 |
-| SM-clock spread -- what a power-fluctuation story predicts | -0.120 |
-| mean power | +0.623 |
+| total energy `P x span` -- what a proportional gain error predicts | **+0.120** |
+| window length | -0.060 |
+| SM-clock spread -- what a power-fluctuation story predicts | -0.096 |
+| mean power | +0.542 |
 
 The first row is the useful one and it is a negative result: **the offset is not a proportional
 error, so it cannot be corrected by scaling.** A same-board multiplicative gain would cancel in a
@@ -4013,9 +4028,11 @@ identified as the one that survives its own arithmetic.
 
 An earlier reading of two files had it as a per-window edge effect with a time constant that
 separated baselines (about 0.07 s) from speculative arms (about 0.11 s). Nine more files refuse it.
-Across all 73 cells the two ranges overlap -- baselines 0.0040 to 0.0830 s, speculative -0.0928 to
+Across all 89 cells the two ranges overlap -- baselines 0.0031 to 0.0830 s, speculative -0.0928 to
 0.1393 s -- and `phase_m`'s `moe-draft08b-*` arms carry a *negative* offset of 11 to 24 J, which a
-per-window loss cannot produce. Neither can it be power alone: at the 420 and 250 W caps the
+per-window loss cannot produce. The recovered `phase_l` files add a dimension none of the candidate
+explanations has: at a nearly constant 400 to 415 W, tau on the baselines rises from 0.0031 s at 8k
+context to 0.0163 s at 96k. Neither can it be power alone: at the 420 and 250 W caps the
 speculative arm draws less power than its baseline and shows the *larger* offset, which no
 monotone function of power gives. At 150 W that ordering does not hold either -- baseline +0.009 %
 against mtp-n2 +0.006 % -- but at that cap both offsets are within noise of zero and the pair
@@ -4152,6 +4169,62 @@ subtracted prefill at all -- which would have made every comparison here a misma
 postdates the run. That is the ninth self-inflicted false signal of this work and the same shape as
 the other eight: a value read from the wrong place and believed. It cost twenty minutes, and it is
 in this list because the eight before it were not written down either.
+
+### And six more from a third pass, after the second one had also been called done
+
+The section above was written, the commits rewritten, 223 tests and a green verification run again.
+Asked to keep looking, a third pass found six more. Two of them make the phase stronger; the rest
+are the same failure repeating.
+
+**720 records had been thrown away for a reason that did not apply.** Four of the five `phase_l`
+files predate `sample_span_s`, and requiring it removed four of the five context lengths -- while
+the prose describing the sweep said it spanned five, and the artifact itself listed the exclusions
+where anyone could read them. None of the three quantities that matter needs the span. Recovered as
+the trapezoid over its own mean power, checked against 2730 records in four files that carry both
+(median error 0.06 %, worst 0.65 %), the sweep goes from 73 cells and 5355 records to **89 and
+6075**, and the context ladder turns out to say something none of the candidate explanations covers:
+at a nearly constant 400 to 415 W, the offset per watt on the baselines rises from 0.0031 s at 8k
+context to 0.0163 s at 96k.
+
+**The strongest thing about this phase had not been checked.** At 150, 250 and 420 W the arms
+produce **byte-identical output** -- 50 of 50 arm-prompt cells across the three caps, 150 of 150
+across the three passes. The power limit changes the rate and nothing else, so the energy comparison
+is one computation at three speeds rather than three computations. That is the phase's internal
+validity and it was published without it.
+
+**Phase E had no row in the phase table.** Adding it to `evidence/registry.json` produced a
+generated status line and nothing saying what it found or what it may not be used for. Chasing that
+found worse: the test that checks the table against the files reads a hand-maintained map, and
+**L, M and Q had rows in the table and no entry in it** -- three of the most quantified rows in the
+document, verified against nothing. The map is now checked against the registry in both directions,
+and a phase may be absent from the table only by being named with a reason. The first version of
+that exemption list claimed `Qs` was covered by the Phase Q row; the guard against a stale exemption
+failed on it in the same run, because `Qs` has had its own row all along -- four rungs, 1500
+records, also checked against nothing.
+
+**`TODO.md` item C3 said the counter was unreachable, and was marked done.** "There is no
+total-energy counter reachable from here: `nvidia-smi` rejects `total_energy_consumption` on this
+driver and neither `pynvml` nor any nvidia python package is installed." One tool's refusal was read
+as the platform's, and the dependency argument was never checked against `ctypes`, which is the
+standard library. A closed item is one nobody revisits.
+
+**The polling measurement had a confound in the step that matters most.** The two unpolled
+conditions slept 5 ms between checks and the three polled ones 0.5 ms, so `hz0` to `hz1` varied the
+Python loop rate and the counter reads together -- and `hz0` is the harness's own configuration. All
+five now spin identically. Re-measured, every conclusion holds and every number moved, which is what
+a stochastic measurement does and why the manifest records it as not byte-comparable.
+
+**Two of the five exemptions written in that same fix were false.** The list that lets a phase
+skip the table carried a free-text reason and nothing read it, so it stayed wrong: `Qs` was said to
+be covered by the Phase Q row and has its own row, and `warp` was said to be written up in
+`docs/DISCOVERY.md`, which contains the word zero times. An exemption is a claim about a document,
+so it is now checked like one -- the entry names the file and a string that file must contain, and
+the guard was watched failing on both a wrong filename and a wrong claim about a real file.
+
+**"The harness's own polling is clear" was more than the numbers said.** The difference is -0.15 W
+against a pooled standard deviation of 0.15 W, about 1.6 standard errors. It is bounded at roughly
+0.5 %, against 3.8 % for reading the counter once a second. Bounded is not zero, and the sentence
+now says which one it is.
 
 ### What is still not settled
 
