@@ -243,6 +243,21 @@
     "a mechanism for the offset: this phase settles which reading is wrong, not why the averaging loses what it loses",
     "generalising the counter's agreement past this card, this driver and windows read exactly twice"
    ]
+  },
+  {
+   "id": "E4",
+   "question": "does the averaged field lose its energy at the window's edges, and is the cost the width of its own average?",
+   "results": [
+    "results/phase_e4_*.json"
+   ],
+   "inference": "control",
+   "note": "Phase E3's two 420 W arms re-run with idle held around the sampling window, so both of its ends sit in the same steady state. Committed data already said the offset is per-window rather than per-second -- across 35 file-arm cells the longest third of each has a 1.81x window and a 1.01x offset -- but window length varies inside a cell because prompts generate at different speeds, which is a correlation with the window and not a manipulation of it. This manipulates it. The power traces are recorded, so `power.draw` can be deconvolved against `power.draw.instant` and the averaging width read off directly rather than quoted",
+   "forbidden": [
+    "any energy, efficiency or tok/J figure: a rolled window's `energy_j`, `decode_energy_j` and `sample_span_s` all include the roll, so they describe an object no other phase measured. `energy_instruments.py` refuses to sweep a file that declares one",
+    "a speedup figure, and any difference between the two arms: under --passes 1 the arm order does not rotate, so arm and position within an invocation are collinear",
+    "a mechanism for whatever offset survives the roll: this phase measures that residual and does not explain it",
+    "generalising the measured averaging width past this card and this driver version; it is a property of one firmware, read through one nvidia-smi"
+   ]
   }
  ]
 }

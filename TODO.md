@@ -492,9 +492,9 @@ there was omission, not misstatement.
       that was Monte Carlo noise. Binary at n=25 is 90.2 %, inside the continuous band.
 - [ ] **D4** full re-run of Phase A under the C1/C2/C3 harness, once those land.
 - [ ] **D6** what the averaged-field offset actually is. Phase E establishes what it is not, over
-      113 file-arm cells and 6975 measured windows in `analysis/energy_instruments.txt`: not proportional
-      (r = +0.082 against total energy), not power alone (r = +0.549, and within a cap the arm
-      drawing LESS power carries the larger offset), not power fluctuation (-0.110 against
+      119 file-arm cells and 7125 measured windows in `analysis/energy_instruments.txt`: not proportional
+      (r = +0.078 against total energy), not power alone (r = +0.548, and within a cap the arm
+      drawing LESS power carries the larger offset), not power fluctuation (-0.106 against
       SM-clock spread), and not a per-window constant -- an
       earlier reading with an arm-dependent time constant was refused by nine files and by the
       negative offsets on `phase_m`'s `moe-draft08b-*` arms. The context ladder adds a dimension
@@ -528,12 +528,31 @@ there was omission, not misstatement.
       move (0.999x, 1.000x) and stays within **0.23 %** of the counter; the averaged integral sits
       **0.31 to 1.86 %** below it and moves *further* away as the grid refines. Correction 47.
 
-      What would move D6 now is a design that varies the spread ON PURPOSE at a fixed mean power,
-      which a power cap cannot do because capping moves both. Until then `energy_j` cannot be
-      corrected by formula and the instantaneous field or the counter has to be read instead --
-      and the reason that matters is that the loss is arm-dependent, 0.31 to 0.66 % on
-      `baseline@pw420` against 1.41 to 1.86 % on `mtp-n2@pw420`, so it does not cancel in a
-      ratio.
+      **D6 is answered for the part that was asked, by Phase E4.** The spread was the wrong axis.
+      `power.draw` is a boxcar average of `power.draw.instant`, and deconvolving one against the
+      other measures its width directly, needing no assumption about the window's ends: **1.00 to
+      1.10 s**, the same on both arms at every setting, rms 1.2 to 1.6 W. That figure had only
+      ever been quoted from a paper as "about a second". Averaging over T is linear and preserves
+      the integral of what it averages; integrating the RESULT across a window does not, and loses
+      `(T/2)` times the difference between the window's two ends whatever the trace does in
+      between. With T measured there is no free parameter and the closed form reproduces the whole
+      unrolled offset -- 1.06 and 1.08 predicted against observed -- with 98 % and 93 % of it
+      accruing inside the first T seconds and the middle carrying 0.06 and 3.56 J. Holding idle
+      around the window collapses it 24.11 -> 6.43 J and 46.03 -> 6.35 J while the window
+      LENGTHENS, which refuses a per-second loss and a spread-driven one in the same measurement.
+      The arm-dependence needed no per-arm time constant, which is the thing nine files refused:
+      T is one number and `mtp-n2`'s window ends differ by more. Correction 48.
+
+      **What is still open under D6 is smaller and sharper: a residual of 5.7 J on both arms**,
+      the same on one drawing 4690 J over 13.9 s and one drawing 3200 J over 10.4 s, surviving the
+      longest roll and not accounted for by the boxcar. An arm-independent fixed quantity is a
+      different kind of object from the edge term and probably wants a different experiment.
+
+      `energy_j` is now correctable in principle rather than only avoidable -- the correction is
+      `(T/2)` times an end-to-end difference and both terms are recorded from Phase E4 onward --
+      but no committed figure applies it, because the fields it needs (`power_first_w` and the
+      trace) postdate every other result file. Reading the instantaneous field or the counter
+      instead remains what the published numbers do.
 - [ ] **D7** an external power meter. Phase E compares three READOUT PATHS over one on-board
       sensor, so their agreement bounds the processing and says nothing about the proportional
       bidirectional sensor error the measurement literature reports. Nothing inside this machine

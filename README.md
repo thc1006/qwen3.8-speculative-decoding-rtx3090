@@ -70,6 +70,7 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 | E | 450 records, complete, 0 incidents | control -- power limit is the load lever -- 420, 250 and 150 W -- because at stock every arm sits between 409.8 and 415.7 W, 97.6 to 99.0 % of the cap, and a load-dependent instrument error cannot be separated from a constant one when the load never changes |
 | E2 | 450 records, complete, 0 incidents | control -- Phase E re-run with the spread of the power trace recorded. The three earlier candidates were each tested against a proxy because the record carried no spread; `power_max_w - power_mean_w` is `cap - mean` while the card sits at its limit, and understated the true spread by a factor of two |
 | E3 | 450 records over 9 files, complete, 0 incidents | control -- Phase E's two 420 W arms re-run at three sampler periods over three rounds with the order rotated. `power.draw` is a one-second rolling average whatever rate it is queried at and `power.draw.instant` is not, so refining the grid separates a real energy difference from what trapezoidal integration does to two signals with different frequency content |
+| E4 | 450 records over 9 files, complete, 0 incidents | control -- Phase E3's two 420 W arms re-run with idle held around the sampling window, so both of its ends sit in the same steady state. Committed data already said the offset is per-window rather than per-second -- across 35 file-arm cells the longest third of each has a 1.81x window and a 1.01x offset -- but window length varies inside a cell because prompts generate at different speeds, which is a correlation with the window and not a manipulation of it. This manipulates it. The power traces are recorded, so `power.draw` can be deconvolved against `power.draw.instant` and the averaging width read off directly rather than quoted |
 <!-- END GENERATED: EVIDENCE_STATUS -->
 
 ### What each phase may not be used to claim
@@ -100,6 +101,7 @@ these are the wider constraints those wordings came from.
 | E | a speedup or efficiency figure: the 250 W and 150 W arms exist to put the instruments under three loads, not because anyone would run the card there<br>an absolute energy calibration: two instruments agreeing bounds their mutual consistency, not their accuracy against an external meter<br>a generalisation of the counter's agreement past this card, this driver and windows read exactly twice |
 | E2 | a speedup or efficiency figure: the arms exist to put the instruments under three loads<br>a mechanism for the offset: this phase refuted a fourth candidate and identified none<br>reading the pooled correlations as within-arm ones; the two disagree, and for mean power they disagree in sign |
 | E3 | a speedup or efficiency figure: the arms exist to vary the sampler, and under --passes 1 the arm order does not rotate, so arm and position within an invocation are collinear<br>a difference in thermal behaviour between the two arms, for the same reason<br>a mechanism for the offset: this phase settles which reading is wrong, not why the averaging loses what it loses<br>generalising the counter's agreement past this card, this driver and windows read exactly twice |
+| E4 | any energy, efficiency or tok/J figure: a rolled window's `energy_j`, `decode_energy_j` and `sample_span_s` all include the roll, so they describe an object no other phase measured. `energy_instruments.py` refuses to sweep a file that declares one<br>a speedup figure, and any difference between the two arms: under --passes 1 the arm order does not rotate, so arm and position within an invocation are collinear<br>a mechanism for whatever offset survives the roll: this phase measures that residual and does not explain it<br>generalising the measured averaging width past this card and this driver version; it is a property of one firmware, read through one nvidia-smi |
 <!-- END GENERATED: FORBIDDEN_CLAIMS -->
 
 Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`
@@ -454,10 +456,23 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
   0.23 % of the driver's cumulative counter -- read exactly twice per window and so unable to
   move with the rate -- while the averaged field sat 0.31 to 1.86 % below that counter and drifted
   further from it as the grid refined. So the offset is a real energy difference and `power.draw`
-  is the reading that loses it. What the averaging loses it TO is still unmodelled: Phase E2
-  refuted the candidate that it is the variation the smoothing discarded, and no mechanism has
-  been identified. The loss is arm-dependent -- 0.31 to 0.66 % on the baseline against 1.41 to
-  1.86 % on the speculative arm at the same cap -- which is why it survives a ratio.
+  is the reading that loses it. **Phase E4 then measured what it loses it to.** `power.draw` is a
+  boxcar average of `power.draw.instant`, and deconvolving one against the other puts its median
+  width at **1.00 to 1.10 s** on both arms -- measured on this card and this driver, where the
+  figure had only ever been quoted as "about a second". Thirteen of the 75 unrolled baseline
+  records fit at the search grid's ceiling instead, which is what a flat trace does to a
+  deconvolution rather than evidence of a wider filter; every window with a roll in it is 0 of 75. Averaging over a width T is linear and preserves
+  the integral under it, but integrating the RESULT across a window loses `(T/2)` times the
+  difference between the window's two ends, whatever the trace does in between. With T measured
+  there is no free parameter left, and the closed form accounts for the whole unrolled offset:
+  predicted against observed is **1.06** on the baseline and **1.08** on the speculative arm, with
+  98 % and 93 % of it accruing inside the first T seconds. Holding idle around the window so both
+  ends sit in one state collapses it, **24.11 to 6.43 J and 46.03 to 6.35 J**, while the window
+  itself gets LONGER -- which refuses a per-second loss and a loss unchanged by flat idle in the
+  same measurement. The arm-dependence needs no separate explanation: T is one number, and the
+  speculative arm's window ends differ by more. What is left unexplained at the longest roll is **5.7 J on
+  both arms**, the same on one drawing 4690 J and one drawing 3200 J; at the 1.5 s roll the
+  baseline still carries 12.4 J.
   Neither instrument is ground truth: they sit on the same board. Most speculative
   generations also follow a different token trajectory from the baseline they are compared against
   and semantic quality is not scored, so this is not energy for the same answer.

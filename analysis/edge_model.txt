@@ -1,0 +1,153 @@
+================================================================================================
+DOES THE AVERAGED FIELD LOSE ENERGY AT THE WINDOW'S EDGES?
+================================================================================================
+450 records over 9 invocation(s), 2 arm(s), rolls 0 s, 1.5 s, 4 s.
+
+  1. THE INTERVENTION. Idle held inside the window on both sides, so both ends sit in
+     one steady state. LAG predicts the offset collapses, LEAK that it grows, SPREAD
+     that it does not move. The cell is (arm, roll); records inside one share the arm,
+     the server process and the session.
+
+  arm               roll s    n  span s  offset J  off/E %  dp inst W  d = off/dp
+  ----------------------------------------------------------------------------------
+  baseline@pw420      0.00   75    9.89     24.11    0.588       46.6      0.5175
+  baseline@pw420      1.50   75   11.40     12.49    0.287      -20.4     -0.6132
+  baseline@pw420      4.00   75   13.89      6.43    0.137      -12.1     -0.5333
+  mtp-n2@pw420        0.00   75    6.46     46.03    1.758      108.3      0.4250
+  mtp-n2@pw420        1.50   75    7.92      5.59    0.193      -16.4     -0.3408
+  mtp-n2@pw420        4.00   75   10.40      6.35    0.198       -1.3     -4.7372
+
+  slowest to fastest -- no roll to the longest roll, per arm:
+    baseline@pw420      24.11 J at roll 0 ->     6.43 J at roll 4   (0.267x, -17.67 J)
+    mtp-n2@pw420        46.03 J at roll 0 ->     6.35 J at roll 4   (0.138x, -39.68 J)
+
+  A ratio near 0 is LAG. Near 1 is SPREAD. Above 1 is LEAK.
+
+  2. THE COEFFICIENT. offset = d * (p_last - p_first) on the INSTANTANEOUS field, which
+     is the undelayed one. The model has no intercept, so `d origin` and `d ratio` are
+     the estimates and the free fit is a DIAGNOSTIC ONLY: dp is about 380 W on every
+     record because every window opens near idle and closes at full decode, and its own
+     spread is the last column. Fitting an intercept against an x that does not move
+     puts the relationship in the intercept and estimates the slope from the leftovers.
+     On synthetic traces with a lag planted at 0.10 and at 0.25 s the free fit returned
+     0.0485 and 0.0467 -- the same wrong number twice. The two estimators below return
+     the planted value. Read them, not it.
+
+  subset                         n  d origin  d ratio   free d  free c J       r   dp CV
+  ------------------------------------------------------------------------------------
+  all records                  450    0.1576   0.3452   0.1043     15.01  +0.334   3.896
+  arm baseline@pw420           225    0.0190   0.2474   0.0023     14.33  +0.008  13.469
+  arm mtp-n2@pw420             225    0.2542   0.3825   0.1822     13.82  +0.530   2.320
+  roll 0 s                     150    0.3728   0.4074   0.1717     21.77  +0.616   0.633
+  roll 1.5 s                   150   -0.1087  -2.6596  -0.0819      7.53  -0.371   3.791
+  roll 4 s                     150   -0.1988   0.3206  -0.1696      5.26  -0.279   5.103
+    baseline@pw4 @ roll 0       75    0.3260   0.4735   0.0924     19.80  +0.466   0.912
+    baseline@pw4 @ roll 1.5     75   -0.1022  -3.3579  -0.0627     11.21  -0.306   3.622
+    baseline@pw4 @ roll 4       75   -0.1946  -0.2370  -0.1727      4.35  -0.374   3.955
+    mtp-n2@pw420 @ roll 0       75    0.3872   0.3965  -0.0195     48.15  -0.083   0.307
+    mtp-n2@pw420 @ roll 1.5     75   -0.1170  -0.6093  -0.1029      3.90  -0.453   4.011
+    mtp-n2@pw420 @ roll 4       75   -0.6579   3.4146  -0.2918      5.96  -0.067   3.361
+
+  The card's sensor has a 100 ms update period. A d near it, the same across arms and
+  rolls, is the model holding. A d that changes with the arm is a per-arm time constant,
+  which nine files already refused once. A d that changes with the ROLL is the model
+  failing outright, because a lag is a property of the instrument and not of the window.
+
+  3. WHERE IN THE WINDOW the two integrals separate, in JOULES. The boxcar's
+     weight ramps across the first T seconds and the last T, so those are the
+     regions to ask about -- not a round number. T is measured in 3b below and
+     used here; the head window is the first T seconds and the tail the last T.
+
+     Joules, not the fraction of each record's own offset. That fraction is what
+     this printed first and it was unreadable: the roll drives the denominator to
+     near zero ON PURPOSE, so the rows for roll 1.5 and 4 came out at 491.6 % and
+     -299.6 %. A ratio whose denominator the experiment is designed to abolish is
+     not a measurement of anything.
+
+  arm               roll s    n   T s   head J  middle J   tail J  total J
+  --------------------------------------------------------------------------
+  baseline@pw420      0.00   75  1.10    23.38      0.06    -0.10    23.82
+  baseline@pw420      1.50   75  1.05   156.04    -70.07   -74.09    11.00
+  baseline@pw420      4.00   75  1.00   168.67   -158.68    -4.88     5.28
+  mtp-n2@pw420        0.00   75  1.05    43.58      3.56    -0.25    46.88
+  mtp-n2@pw420        1.50   75  1.05   150.72    -70.21   -74.53     5.24
+  mtp-n2@pw420        4.00   75  1.05   173.56   -159.32    -4.70     7.04
+
+  Medians per column, so they need not sum to the total exactly. The model says
+  the head carries the offset and the middle carries nothing; what the middle
+  carries instead is the residual table 3c also finds.
+
+  3b. HOW WIDE IS THE AVERAGE? `power.draw` is a filtered `power.draw.instant`, so
+      the width that best reproduces one from the other is a direct read of the
+      filter -- with no assumption about the window's ends, which is what every
+      other line here depends on. The documented figure is 'about a second' and
+      nothing in this repository had measured it. A boxcar of width T behaves at a
+      window edge like a delay of T/2, so this is where the coefficient in table 2
+      should come from.
+
+  arm               roll s    n  median T s         quartiles   rms W  at edge
+  ------------------------------------------------------------------------
+  baseline@pw420      0.00   75       1.100    1.050 / 1.900     1.20    13/75 
+  baseline@pw420      1.50   75       1.050    1.000 / 1.100     7.95     0/75 
+  baseline@pw420      4.00   75       1.000    1.000 / 1.050     9.19     0/75 
+  mtp-n2@pw420        0.00   75       1.050    1.000 / 1.050     1.55     3/75 
+  mtp-n2@pw420        1.50   75       1.050    1.000 / 1.100    10.34     0/75 
+  mtp-n2@pw420        4.00   75       1.050    1.000 / 1.100    10.40     0/75 
+
+  A T that is the same on both arms and at every roll is a property of the driver,
+  which is what it should be. One that moves with the arm is not a filter width and
+  the name would be wrong.
+
+  `at edge` counts records whose best width lands on the grid's first or last value.
+  Those are not evidence of a wider filter, they are records the deconvolution
+  cannot pin -- and a nearly constant trace is exactly that, because a flat signal
+  carries no information about the width of a filter applied to it, so every T fits
+  it about equally well and the argmin follows the noise. Checked rather than
+  asserted, on the 75 unrolled baseline@pw420 records: the 13 that sit at the
+  ceiling already fit no better than the rest -- best rms 1.20 W against 1.18 --
+  and forcing them to 1.00 s costs a median 0.50 W more, where the 62 that do not
+  hit it pay 0.11 W. The two penalties overlap, 0.66 W at worst against 0.60 W, on
+  a 410 W signal. A shallow surface, not a wider filter. Read the median; the
+  count is here so that a cell where MOST records hit an edge cannot be read as a
+  measurement at all -- and every cell with a roll is 0 of 75.
+
+  3c. THE WHOLE MODEL, PREDICTED PER RECORD AND COMPARED. With T measured above,
+      the boxcar's loss has a closed form and no free parameter left:
+
+          loss = (T/2) * ( mean of the last T s inside  -  the averaged field's
+                           own first sample )
+
+      the second term being, by definition of a T-wide trailing average, the mean
+      of the instantaneous field over the T seconds BEFORE the window -- which is
+      not sampled and does not need to be. A ratio near 1.00 at roll 0 is the model
+      accounting for the offset. What survives at the longer rolls is what it does
+      not account for, and that residual is the phase's second result.
+
+  arm               roll s    n  observed J  predicted J  ratio  residual J
+  --------------------------------------------------------------------------
+  baseline@pw420      0.00   75       24.11        25.58   1.06       -1.48
+  baseline@pw420      1.50   75       12.49         0.08   0.01       12.41
+  baseline@pw420      4.00   75        6.43         0.66   0.10        5.78
+  mtp-n2@pw420        0.00   75       46.03        49.70   1.08       -3.67
+  mtp-n2@pw420        1.50   75        5.59        -0.28  -0.05        5.87
+  mtp-n2@pw420        4.00   75        6.35         0.65   0.10        5.70
+
+  4. THE NOISE FLOOR. Same arm, same roll, across the three rounds. The offset is a
+     small difference of two large numbers, so a change smaller than this is not one.
+
+  arm               roll s  rounds  energy_j CV  offset CV
+  ----------------------------------------------------------
+  baseline@pw420      0.00       3       0.200 %     18.08 %
+  baseline@pw420      1.50       3       0.111 %     24.47 %
+  baseline@pw420      4.00       3       0.096 %     29.99 %
+  mtp-n2@pw420        0.00       3       0.053 %     10.52 %
+  mtp-n2@pw420        1.50       3       0.115 %     18.81 %
+  mtp-n2@pw420        4.00       3       0.077 %     11.79 %
+
+  5. THE ROUNDS, which the rotation exists to make interchangeable. A round effect the
+     size of the roll effect would mean the schedule did not do its job.
+   round     n   offset J   span s
+  ----------------------------------
+       1   150      18.52     9.99
+       2   150      16.62     9.99
+       3   150      15.36     9.99

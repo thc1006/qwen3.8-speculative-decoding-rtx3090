@@ -27,6 +27,7 @@ the offset tracks how much the power FLUCTUATES -- is tested against SM-clock sp
 """
 from __future__ import annotations
 
+import re
 import argparse
 import glob
 import json
@@ -42,6 +43,36 @@ PROBE_BYTES = 300_000        # cheap prefix test, so 61 MB of JSON is not parsed
 def carries_instant(p: Path) -> bool:
     with p.open("rb") as fh:
         return b"energy_instant_vs_average_pct" in fh.read(PROBE_BYTES)
+
+
+ROLL_RE = re.compile(rb'"power_roll_s"\s*:\s*([0-9.eE+-]+)')
+
+
+def declares_roll(p: Path) -> float:
+    """Seconds of idle this file's design held inside each sampling window. 0.0 if none.
+
+    Phase E4 holds idle on BOTH sides of the measured request, so its windows are not the same
+    object as every other phase's: the energy includes the roll, `sample_span_s` includes it,
+    and the offset is deliberately driven toward zero. Sweeping those in with the rest would
+    move every figure in this report and the prose that quotes it, silently, in the direction
+    of "the offset got smaller".
+
+    A file written before the flag existed has no such key, and absence here really does mean
+    no roll -- unlike `prefill_power.get('subtracted')`, which was absent because the key
+    postdated the run rather than because the thing had not happened. The difference is that
+    the roll is an INSTRUCTION the run was given, not a property discovered about it, so a run
+    that could not have been given it did not have it. `design` sits about 2 kB into every
+    result file and the probe reads 300 kB, so its absence from the probe means the probe is
+    wrong rather than that the file is unrolled, and that raises rather than defaulting.
+    """
+    with p.open("rb") as fh:
+        head = fh.read(PROBE_BYTES)
+    if b'"design"' not in head:
+        raise SystemExit(f"{p.name}: no `design` block in the first {PROBE_BYTES} bytes, so "
+                         f"whether it declares a power roll cannot be read. Raise PROBE_BYTES "
+                         f"rather than letting this default to unrolled.")
+    m = ROLL_RE.search(head)
+    return float(m.group(1)) if m else 0.0
 
 
 def is_baseline(arm: str) -> bool:
@@ -182,11 +213,14 @@ def main() -> int:
 
     if args.files:
         paths = [Path(f) for f in args.files]
-        skipped = []
+        skipped, rolled = [], []
     else:
         every = sorted(Path(ROOT / "results").glob("*.json"))
-        paths = [p for p in every if carries_instant(p)]
-        skipped = [p.name for p in every if p not in paths]
+        with_field = [p for p in every if carries_instant(p)]
+        rolled = [p for p in with_field if declares_roll(p)]
+        paths = [p for p in with_field if p not in rolled]
+        skipped = [p.name for p in every if p not in with_field]
+        rolled = [f"{p.name} ({declares_roll(p)} s)" for p in rolled]
     cells, dropped, derived = load(paths)
     if not cells:
         raise SystemExit("no records carry both integrals")
@@ -210,6 +244,11 @@ def main() -> int:
         # having it. Naming the skipped files is the difference between a scope and a silent gap.
         W(f"{len(skipped)} result files carry no instantaneous field in their first "
           f"{PROBE_BYTES // 1000} kB and are not read: " + ", ".join(skipped))
+    if rolled:
+        W(f"{len(rolled)} result files hold idle inside the sampling window and are NOT swept: "
+          + ", ".join(rolled) + ". A rolled window is a different object -- its energy includes "
+          "the roll and its offset is driven toward zero on purpose -- so mixing it in here "
+          "would move every figure below in one direction and say nothing about why.")
     W("")
     W("tau = (instant - averaged) / mean_power: the offset expressed as SECONDS of the window's own")
     W("power. If the offset is a per-window edge effect, tau is a property of the arm and does not")

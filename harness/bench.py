@@ -294,6 +294,8 @@ def run_matrix(
     warmup: int = 1,
     max_tokens: int = P.MAX_TOKENS,
     power_interval_s: float = 0.10,
+    power_roll_s: float = 0.0,
+    power_trace: bool = False,
     prefill_reps: int = 8,
     baseline_map: dict[str, str] | None = None,
     matrix_provenance: dict | None = None,
@@ -397,6 +399,12 @@ def run_matrix(
             # three runs that differ only in this would have been three files
             # with no way to tell them apart.
             "power_interval_s": power_interval_s,
+            # Seconds of idle held INSIDE the sampling window on either side of the
+            # measured request. A rolled window is not comparable to an unrolled one --
+            # its energy includes the roll -- so it is recorded here and
+            # energy_instruments.py refuses to sweep a file that declares one.
+            "power_roll_s": power_roll_s,
+            "power_trace_recorded": power_trace,
             "thermal_settle_target_c": settle_temp_c,
             "thermal_settle_margin_c": settle_margin_c,
             "device": {"index": dev.index, "name": dev.name, "tag": dev.short,
@@ -667,11 +675,35 @@ def run_matrix(
                             prefill_power[_k] /= reps_here
                     prefill_power["reps"] = reps_here
 
+                    # THE ROLL, and it goes on both sides of the WINDOW rather than both
+                    # sides of the request. `power.draw` smooths and lags; smoothing is
+                    # linear and preserves the integral under it, a lag of d seconds loses
+                    # d * (p_end - p_start) however the trace moves in between. The point of
+                    # the roll is to make p_end - p_start zero by putting both ends in the
+                    # same idle steady state.
+                    #
+                    # This sleep is OUTSIDE the `with`, and that is the whole of what makes
+                    # it work. The sampler takes its first snapshot at __enter__, so a sleep
+                    # placed inside cannot affect what that snapshot sees: it still catches
+                    # the card falling back from the prefill calibration. A dry run at
+                    # roll 1.5 with the sleep inside opened at 357 W and closed at 131 W and
+                    # returned an offset of -97.7 J -- larger than the unrolled one and the
+                    # other way up, because the intervention had made the two ends MORE
+                    # different rather than less. The trace showed it directly: the averaged
+                    # field needed about eight samples to follow the step down.
+                    if power_roll_s:
+                        time.sleep(power_roll_s)
                     with T.sampling(index=gpu_index, interval_s=power_interval_s) as ps:
                         r = S.chat(port, pr.system, _with_filler(filler_text, pr.user),
                                    max_tokens=max_tokens, temperature=arm.temperature,
                                    think=pr.think, cache_prompt=cache_prompt)
+                        # And inside at the end, because the last sample has to be taken
+                        # after the averaged field has caught up with the card going quiet,
+                        # which cannot happen once the window is closed.
+                        if power_roll_s:
+                            time.sleep(power_roll_s)
                     power = ps.summary()
+                    power_trace_rec = ps.trace() if power_trace else None
 
                     text = (r.get("reasoning_content") or "") + (r.get("content") or "")
                     predicted_n = int(r.get("t_predicted_n") or r.get("completion_tokens") or 0)
@@ -763,6 +795,11 @@ def run_matrix(
                         "wall_ms": r.get("wall_ms"),
                         "timings": {k: v for k, v in r.items() if k.startswith("t_")},
                         "power": power,
+                        # Absent unless --power-trace asked for it, and `design` records
+                        # which. A key that is sometimes missing and sometimes null is the
+                        # shape that got read as False elsewhere in this harness, so the
+                        # declaration lives in `design` where it is always present.
+                        **({"power_trace": power_trace_rec} if power_trace_rec else {}),
                         "prefill_power": prefill_power,
                         "prefill_predicted_n": int(pf.get("t_predicted_n") or 0),
                         "decode_energy_j": decode_energy,
@@ -946,7 +983,31 @@ def main() -> None:
                          "samples: `power.draw` is a one-second rolling average whatever "
                          "the query rate, `power.draw.instant` is not, so a coarse grid "
                          "aliases one and not the other. Recorded in the result.")
+    ap.add_argument("--power-roll", type=float, default=0.0,
+                    help="seconds of idle held INSIDE the sampling window on either side "
+                         "of the measured request (default 0.0, which every phase before "
+                         "E4 used). It is the intervention that separates a window-EDGE "
+                         "offset from a per-second one: `power.draw` lags as well as "
+                         "smooths, and a lag costs the integral d * (p_end - p_start) "
+                         "however the trace moves in between, so putting both ends in the "
+                         "same idle state should drive the offset to zero. A per-second "
+                         "leak would instead grow with the longer window. A rolled window "
+                         "is NOT comparable to an unrolled one -- its energy includes the "
+                         "roll -- so it is recorded in `design` and the cross-file "
+                         "instrument sweep refuses any file that declares it.")
+    ap.add_argument("--power-trace", action="store_true",
+                    help="store both power series per record, timestamped from the "
+                         "window's start. Roughly seven times the size of the rest of a "
+                         "record, and the only way to say WHERE in the window the two "
+                         "integrals separate: one total is produced by a step at the "
+                         "start, a step at the end, or a drift throughout, and those are "
+                         "three different mechanisms.")
     args = ap.parse_args()
+    if not 0.0 <= args.power_roll <= 30.0:
+        raise SystemExit(f"--power-roll {args.power_roll} is outside [0.0, 30.0]; a roll "
+                         f"longer than that spends more of the run idle than measuring, "
+                         f"and the thermal settle gate is the thing that owns the card's "
+                         f"entry state, not this")
     if not 0.005 <= args.power_interval <= 5.0:
         # `raise SystemExit`, not `sys.exit`: `main()` imports sys further down,
         # which makes the name local to the whole function, so referring to it
@@ -1024,6 +1085,8 @@ def main() -> None:
         cache_prompt=getattr(mod, "CACHE_PROMPT", False),
         settle_temp_c=(None if args.settle_floor else 60.0),
         power_interval_s=args.power_interval,
+        power_roll_s=args.power_roll,
+        power_trace=args.power_trace,
     )
 
 

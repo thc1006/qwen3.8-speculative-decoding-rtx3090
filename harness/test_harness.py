@@ -808,6 +808,19 @@ class TestAlgebraicInvariants(unittest.TestCase):
         # does, and on a loaded host the gap is real: this assertion failed at 0.60029 against
         # 0.6 while the machine was running a benchmark. Asserting against the requested value
         # rather than the realised one is the same mistake this suite exists to catch elsewhere.
+        # THE ONLY TEST IN THIS SUITE THAT DRIVES THE CARD. It opens a real sampler, which
+        # spawns nvidia-smi at 10 Hz for six tenths of a second. Run during a measurement
+        # that is exactly the host contention the CPU guard exists to stop -- and the guard
+        # does not stop it, because `python3 -m unittest` is not on its heavy list. It was
+        # run during Phase E4 on 2026-08-31 for that reason. It is also timing-sensitive
+        # under load: the assertion below wants a period above the 0.10 s interval and got
+        # 0.0965 s on the loaded host, which is the flake, not a finding. Both problems have
+        # the same answer, which is not to run it while the card is busy.
+        lock = Path(__file__).parent.parent / ".gpu-in-use.lock"
+        if lock.exists():
+            self.skipTest(f"a measurement holds {lock.name}; this test drives the card at "
+                          f"10 Hz and would be recorded as contention against it. "
+                          f"Lock: {lock.read_text().strip().splitlines()[0]}")
         t0 = time.monotonic()
         with T.sampling(0, interval_s=0.10) as s:
             time.sleep(0.6)
@@ -4822,6 +4835,7 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
         "E":     ["results/phase_e.json"],
         "E2":    ["results/phase_e2.json"],
         "E3":    ["results/phase_e3_*.json"],
+        "E4":    ["results/phase_e4_*.json"],
         # Qs was first written into NOT_TABLED as "covered by the Phase Q row", and the guard that
         # rejects a stale exemption failed on it in the same run: it has had its own row in
         # docs/PHASES.md all along, four rungs and 1500 records, checked against nothing.
@@ -5437,6 +5451,175 @@ class TheDocsMustQuoteTheReportTheyCiteAndNotAPastOne(unittest.TestCase):
                         bad.append(f"{name}:{n} says {got} {what}, the report says {want}")
         self.assertGreater(checked, 0, "no counts found beside a citation")
         self.assertEqual(bad, [], "\n  ".join([""] + bad))
+
+
+class ThePhaseE4EstimatorMustRecoverALagThatWasPutThere(unittest.TestCase):
+    """A ruler nobody has measured a known length with is not a ruler.
+
+    `edge_model.py` estimates how long `power.draw` lags, from `offset = d * dp` where dp is
+    the window's end-to-end change in the instantaneous field. Its first version fitted that
+    with a free intercept, on the reasoning that a large intercept would show the model
+    failing. It cannot: dp is about 380 W on every record, because every window opens near
+    idle and closes at full decode, so an intercept absorbs the whole relationship and the
+    slope is left to the residual wobble. Against traces built with a lag planted at 0.10 s
+    and at 0.25 s the free fit returned 0.0485 and 0.0467 -- the same wrong number twice,
+    which is what an estimator that is measuring nothing looks like when it still returns a
+    plausible number. Found before the run rather than after two hours of card time.
+
+    So the estimators are no-intercept, and this plants a lag and requires it back.
+    """
+
+    @staticmethod
+    def _mod():
+        import importlib
+        return importlib.import_module("edge_model")
+
+    def _planted(self, delta, seed=11, idle=30.0, load=410.0, span=10.0, dt=0.1, n=40):
+        """(dp, offset) per record for a trace whose averaged field IS the instant field
+        delayed by `delta`. Nothing else differs, so anything recovered is the lag."""
+        import math
+        import random
+        E = self._mod()
+        rng = random.Random(seed)
+        xs, ys = [], []
+        for _ in range(n):
+            ts = [round(i * dt, 4) for i in range(int(span / dt) + 1)]
+            ramp = 0.3 + rng.uniform(-0.05, 0.05)
+            inst = [idle if t < ramp else load + 12 * math.sin(9 * t) + rng.gauss(0, 3)
+                    for t in ts]
+            avg = [E.at(ts, inst, t - delta) if t - delta > ts[0] else inst[0] for t in ts]
+            ci, ca = E.cumulative(ts, inst), E.cumulative(ts, avg)
+            xs.append(inst[-1] - inst[0])
+            ys.append(ci[-1] - ca[-1])
+        return xs, ys
+
+    def test_both_estimators_return_the_planted_lag(self):
+        E = self._mod()
+        for planted in (0.05, 0.10, 0.20):
+            xs, ys = self._planted(planted)
+            for name, got in (("through_origin", E.through_origin(xs, ys)),
+                              ("ratio_delta", E.ratio_delta(xs, ys))):
+                self.assertAlmostEqual(
+                    got, planted, delta=0.005,
+                    msg=f"{name} returned {got:.4f} for a planted lag of {planted}")
+
+    def test_no_lag_returns_no_lag(self):
+        """The other half. An estimator that always answers 0.1 would pass the test above."""
+        E = self._mod()
+        xs, ys = self._planted(0.0)
+        self.assertAlmostEqual(E.through_origin(xs, ys), 0.0, delta=0.005)
+        self.assertAlmostEqual(E.ratio_delta(xs, ys), 0.0, delta=0.005)
+
+    def test_the_free_fit_is_labelled_as_a_diagnostic_and_is_not_the_estimate(self):
+        """It is still printed, because a reader should see what it does. It must never be
+        the thing the report calls the coefficient."""
+        E = self._mod()
+        xs, ys = self._planted(0.10)
+        free, _, _ = E.fit(xs, ys)
+        self.assertLess(free, 0.08,
+                        "the free fit no longer misbehaves on this data, so the reason the "
+                        "report gives for ignoring it is stale -- recheck the reasoning")
+        src = (Path(__file__).parent / "edge_model.py").read_text()
+        self.assertIn("DIAGNOSTIC ONLY", src)
+
+    @staticmethod
+    def _boxcar_pair(T, seed=3, span=12.0, dt=0.1, idle=140.0, load=412.0, start=1.0):
+        """(ts, instant, averaged) over a window, where averaged is a TRUE trailing boxcar.
+
+        The signal is generated from -T so that the average at the window's own first sample
+        has real history behind it, and only [0, span] is returned. That is what the card
+        does: power exists before the sampler opens, it is simply not sampled, and the
+        averaged field's first reading is the only evidence of it. A first version generated
+        from 0 and let the average grow over the first T seconds, which is not a boxcar at
+        all -- it made the averaged field too high early, understated the loss, and returned
+        a predicted/actual ratio of 1.73 on a fixture that was supposed to be exact.
+        """
+        import math
+        import random
+        import importlib
+        E = importlib.import_module("edge_model")
+        rng = random.Random(seed)
+        pre = int(round(T / dt)) + 1
+        full = [round((i - pre) * dt, 4) for i in range(pre + int(span / dt) + 1)]
+        wf = [idle if t < start else load + 14 * math.sin(11 * t) + rng.gauss(0, 4)
+              for t in full]
+        cum = E.cumulative(full, wf)
+        wav = [(E.at(full, cum, t) - E.at(full, cum, t - T)) / T if t - T >= full[0]
+               else float("nan") for t in full]
+        ts = full[pre:]
+        return ts, wf[pre:], wav[pre:]
+
+    def test_the_filter_width_estimator_recovers_a_planted_boxcar(self):
+        """Section 3b measures the averaging window, which every other line depends on.
+        `power.draw` being 'about a second' had been quoted from a paper and never checked."""
+        E = self._mod()
+        grid = [round(0.1 + 0.05 * i, 3) for i in range(38)]
+        for planted in (0.30, 0.60, 0.90, 1.40):
+            ts, wi, wa = self._boxcar_pair(planted)
+            T, rms, n = E.fit_window(ts, wi, ts, wa, grid)
+            self.assertAlmostEqual(T, planted, delta=0.051,
+                                   msg=f"recovered {T} for a planted width of {planted}")
+            self.assertLess(rms, 1.0)
+
+    def test_an_unfiltered_series_reports_no_width(self):
+        """The other half: an estimator that always answers 1.0 s would pass the test above,
+        and 1.0 s is the answer this study expects."""
+        E = self._mod()
+        grid = [round(0.1 + 0.05 * i, 3) for i in range(38)]
+        ts, wi, _ = self._boxcar_pair(0.5)
+        T, _, _ = E.fit_window(ts, wi, ts, wi, grid)
+        self.assertEqual(T, grid[0],
+                         "with no filtering at all the best width must fall to the grid floor")
+
+    def test_the_closed_form_predicts_a_planted_boxcars_own_loss(self):
+        """Section 3c has no free parameter once T is measured, so it is either right or it
+        is not. Built on a series whose averaged field IS a boxcar of known width, the
+        predicted loss must equal the loss that boxcar actually causes."""
+        E = self._mod()
+        for planted in (0.5, 1.0):
+            ts, wi, wa = self._boxcar_pair(planted)
+            actual = E.cumulative(ts, wi)[-1] - E.cumulative(ts, wa)[-1]
+            pred = E.predicted_loss(ts, wi, wa[0], planted)
+            self.assertIsNotNone(pred)
+            self.assertAlmostEqual(
+                pred / actual, 1.0, delta=0.12,
+                msg=f"T={planted}: predicted {pred:.1f} J against an actual {actual:.1f} J")
+
+    def test_the_closed_form_uses_the_pre_window_mean_and_not_the_in_window_one(self):
+        """The distinction that made it wrong by a factor of nine. `avg[0]` is the mean over
+        the T seconds BEFORE the window; the first T seconds INSIDE it are a different
+        quantity whenever power moves across the boundary, which is the only case that
+        matters. Pinned by showing the two disagree and that the right one is used."""
+        E = self._mod()
+        # Idle at the window's first sample, load through the first T seconds inside it:
+        # that is the only shape in which the two candidate means differ, and it is the
+        # shape every unrolled record has.
+        ts, wi, wa = self._boxcar_pair(1.0, start=0.15)
+        cum = E.cumulative(ts, wi)
+        in_window_head = (E.at(ts, cum, ts[0] + 1.0) - cum[0]) / 1.0
+        self.assertGreater(abs(in_window_head - wa[0]), 100.0,
+                           "this fixture no longer separates the two means, so the test "
+                           "cannot tell which one the code uses")
+        actual = cum[-1] - E.cumulative(ts, wa)[-1]
+        self.assertAlmostEqual(E.predicted_loss(ts, wi, wa[0], 1.0) / actual, 1.0, delta=0.12)
+
+    def test_the_running_difference_finds_a_lag_at_the_window_edges(self):
+        """Section 3's claim: with a lag and nothing else, essentially all of the offset
+        accrues in the first fraction of a second."""
+        import math
+        import random
+        E = self._mod()
+        rng = random.Random(5)
+        ts = [round(i * 0.1, 4) for i in range(101)]
+        inst = [30.0 if t < 0.3 else 410.0 + 12 * math.sin(9 * t) + rng.gauss(0, 3)
+                for t in ts]
+        avg = [E.at(ts, inst, t - 0.1) if t - 0.1 > ts[0] else inst[0] for t in ts]
+        ci, ca = E.cumulative(ts, inst), E.cumulative(ts, avg)
+        total = ci[-1] - ca[-1]
+        head = (E.at(ts, ci, 0.5) - E.at(ts, ca, 0.5)) / total
+        self.assertGreater(head, 0.80,
+                           f"only {head:.1%} of the offset accrued in the first 0.5 s of a "
+                           f"trace whose only defect is a 0.1 s lag")
 
 
 if __name__ == "__main__":

@@ -340,6 +340,32 @@ class PowerSampler:
             return None
         return self._samples[-1][0] - self._samples[0][0]
 
+    def trace(self) -> dict[str, list[float]] | None:
+        """Both power series, timestamped from the window's own start, or None if empty.
+
+        Not part of `summary()` and not stored unless asked for: at 14 Hz over a ten-second
+        request this is roughly 140 triples per record, which is seven times the size of
+        everything else a record holds. It exists because the edge model makes a claim about
+        WHERE in the window the two integrals separate, and an aggregate cannot answer that
+        -- the same total offset is produced by a step at the start, a step at the end, or a
+        drift throughout, and those are three different mechanisms.
+
+        The two series are sampled in the same loop iteration but appended under separate
+        `if` guards, so they can differ in length by one when a snapshot is missing a field.
+        They are returned with their own timestamps rather than zipped, because pairing them
+        by index would silently shift one against the other in exactly that case.
+        """
+        if not self._samples and not self._samples_instant:
+            return None
+        t0 = min([t for t, _ in self._samples] + [t for t, _ in self._samples_instant])
+        rnd = lambda xs: [round(x, 4) for x in xs]      # noqa: E731
+        return {
+            "t_avg_s": rnd([t - t0 for t, _ in self._samples]),
+            "avg_w": rnd([w for _, w in self._samples]),
+            "t_instant_s": rnd([t - t0 for t, _ in self._samples_instant]),
+            "instant_w": rnd([w for _, w in self._samples_instant]),
+        }
+
     def summary(self) -> dict[str, float | int | None]:
         watts = [w for _, w in self._samples]
         watts_i = [w for _, w in self._samples_instant]
@@ -387,6 +413,19 @@ class PowerSampler:
                            (0.0 if watts else None)),
             "power_sd_instant_w": (statistics.pstdev(watts_i) if len(watts_i) > 1
                                    else (0.0 if watts_i else None)),
+            # THE WINDOW'S TWO ENDS, which is what a delay costs and nothing else does.
+            # `power.draw` both smooths and lags. Smoothing is linear and preserves the
+            # integral of the signal under it; a lag of d seconds does not -- integrating a
+            # delayed signal over [t0, t1] loses exactly d * (p(t1) - p(t0)), whatever the
+            # trace does in between. So a per-window offset is predicted by the two ENDS
+            # alone, and 6255 committed windows already say the offset is per-window: across
+            # 35 cells the long third of each cell has a 1.81x window and a 1.01x offset.
+            # None of them could be checked against this model, because the ends were never
+            # recorded. Four numbers per window is the entire cost of asking.
+            "power_first_w": watts[0] if watts else None,
+            "power_last_w": watts[-1] if watts else None,
+            "power_instant_first_w": watts_i[0] if watts_i else None,
+            "power_instant_last_w": watts_i[-1] if watts_i else None,
             "temp_max_c": max(self._temps) if self._temps else None,
             "temp_mean_c": statistics.fmean(self._temps) if self._temps else None,
             "sm_clock_mean_mhz": statistics.fmean(self._sm_clocks) if self._sm_clocks else None,

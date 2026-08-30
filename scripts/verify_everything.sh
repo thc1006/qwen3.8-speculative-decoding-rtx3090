@@ -291,8 +291,22 @@ for art in sorted(pathlib.Path("analysis").glob("*.txt")):
         label = f"{tool}.py"
     r = subprocess.run(argv, capture_output=True, text=True)
     checked += 1
-    if r.stdout + r.stderr != art.read_text():
-        stale.append(f"{art.name} (from {label})")
+    got, want = r.stdout + r.stderr, art.read_text()
+    if got != want:
+        # Say WHY. This reported only a filename, and on 2026-08-30 it flagged
+        # phase_nmax_cost.txt once and passed on the identical tree a minute later.
+        # cost_model.py is deterministic -- every seed in it is a literal and five
+        # reruns are byte-identical -- so the run had failed rather than drifted,
+        # and there was nothing in the output to tell those apart. A flake that
+        # cannot be distinguished from a real difference gets waved away, and then
+        # a real one does too.
+        first = next((f"line {i}: committed {a!r} / computed {b!r}"
+                      for i, (a, b) in enumerate(zip(want.splitlines(),
+                                                     got.splitlines()), 1) if a != b),
+                     f"identical for {min(len(want.splitlines()), len(got.splitlines()))} "
+                     f"lines, then one ends: committed {len(want)} bytes, "
+                     f"computed {len(got)}")
+        stale.append(f"{art.name} (from {label}, exit {r.returncode}) {first}")
 if unmapped:
     print(f"   FAIL: {len(unmapped)} generated artifact(s) have no generator, in neither the suffix")
     print(f"         rules nor analysis/MANIFEST.json. Add them, with the argv that reproduces them:")

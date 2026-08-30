@@ -4630,3 +4630,180 @@ power, which the power cap cannot do because capping moves both together.
 **D7 is untouched.** All three readout paths sit on one sensor. Their agreement
 bounds the processing and leaves the proportional, bidirectional, per-board
 calibration error exactly where it was. Only an external meter resolves it.
+
+## Correction 48, 2026-08-31: the averaging window is 1.0 s, and that is the whole of the offset
+
+Correction 47 settled that the offset between integrating `power.draw` and integrating
+`power.draw.instant` is a real energy difference and not an artefact of the sampling
+grid, and left what the averaging loses it TO unmodelled with four candidates refused.
+The fifth was in the committed data the whole time and nothing had asked for it.
+
+### The offset does not accumulate with the window; it happens at the edges
+
+Three corrections looked for a rate: how much is lost per second, or per joule, or per
+watt of spread. Over 6255 committed windows the answer is that none of those is the
+shape. Splitting each file-arm cell at its own tertiles of window length, in the 35
+cells where the long third is at least 1.5x the short third, the **window grows 1.81x
+and the offset grows 1.01x**. Across 68 cells at a near-constant 400 to 415 W the
+regression is `offset_J = 28.79 + 0.339 * span_s` -- almost all intercept. The single
+strongest case is `phase_a_cap1600 baseline@master`, where the window nearly doubles,
+20.3 to 39.0 s, and the offset FALLS from 32.20 to 25.48 J.
+
+That is observational. Window length varies inside a cell because prompts generate at
+different speeds, which is a correlation with the window rather than a manipulation of
+it. Phase E4 manipulates it.
+
+### `power.draw` is a boxcar 1.00 to 1.10 s wide, measured rather than quoted
+
+This repository has said "a rolling average of about a second" since the first energy
+figure, sourced from the sensor literature and never checked here. It is checkable
+directly and cheaply: `power.draw` is a filtered `power.draw.instant`, so the width
+that best reproduces one from the other IS the filter, and the question needs no
+assumption about the window's ends -- which is what every other line of this correction
+depends on.
+
+Recording both traces and deconvolving gives a median of **1.00 to 1.10 s**, the same on
+both arms at all three roll settings, with an rms residual of **1.2 to 1.6 W** on the
+unrolled windows against a 410 W signal. Thirteen of the 75 unrolled baseline records fit
+at the search grid's ceiling instead. That is what a flat trace does to a deconvolution --
+a constant signal carries no information about the width of a filter applied to it, so the
+argmin follows the noise -- and not evidence of a wider filter: those records already fit
+no better than the rest, 1.20 W against 1.18, and forcing them to 1.00 s costs a median
+0.50 W where the other 62 pay 0.11, two penalties that overlap at their extremes. Every
+cell with a roll in it is 0 of 75. The estimator was calibrated before it was used: on
+series built with a boxcar planted at 0.30, 0.60, 0.90 and 1.40 s it returns 0.300,
+0.600, 0.900 and 1.400, and on an unfiltered series it falls to the grid floor rather
+than returning a plausible number.
+
+### With T measured the model has no free parameter, and it accounts for all of it
+
+A boxcar is linear, so it preserves the integral of the signal underneath it. That is
+why Correction 46's candidate -- that the offset is the variation the smoothing removed
+-- could not have worked and did not. Integrating the RESULT across a finite window is
+a different operation and does not preserve it: the weight ramps 0 to 1 across
+`[t0-T, t0]` and 1 to 0 across `[t1-T, t1]`, so the loss is
+
+    (T/2) * ( mean of p over the last T seconds  -  mean of p over the T BEFORE t0 )
+
+whatever the trace does in between. Per window. Scaling with the two ENDS and not with
+length, mean, spread or total. Free to be negative, which is what `phase_m`'s
+`dense-draft08b-n4` arm does and what no other candidate allows.
+
+The second term is not inside the window and is not sampled. It does not need to be:
+a T-wide trailing average READ AT `t0` is by definition the mean of p over `[t0-T, t0]`,
+so the averaged field's own first sample supplies it. A first version used the first T
+seconds INSIDE the window instead and was wrong by a factor of nine on rolled records;
+the two are the same quantity only when power is flat across the boundary, which is the
+case the roll exists to destroy.
+
+Predicted against observed, on the unrolled windows and with nothing fitted:
+
+| | observed | predicted | ratio |
+|---|---:|---:|---:|
+| `baseline@pw420` | 24.11 J | 25.58 J | **1.06** |
+| `mtp-n2@pw420` | 46.03 J | 49.70 J | **1.08** |
+
+And it accrues where the model says. Of the baseline's 23.82 J, **23.38 lands in the
+first T seconds**, 0.06 in the middle and -0.10 in the last T. Of `mtp-n2`'s 46.88 J,
+**43.58** in the first T.
+
+**The arm-dependence needs no separate mechanism.** Correction 47 reported the loss as
+0.31 to 0.66 % on the baseline against 1.41 to 1.86 % on `mtp-n2` and called it
+arm-dependent. It is, but not because the instrument has a per-arm time constant -- a
+reading nine files had already refused. T is one number. `mtp-n2` carries the larger
+offset because its window's two ends differ by more.
+
+### The intervention, and what it refuses
+
+`--power-roll S` holds idle around the sampling window so both ends sit in one steady
+state. 450 records over nine invocations, three rolls over three rounds with the order
+rotated, 0 incidents.
+
+| arm | roll 0 | roll 1.5 s | roll 4.0 s | |
+|---|---:|---:|---:|---:|
+| `baseline@pw420` | 24.11 J | 12.49 J | **6.43 J** | 0.267x |
+| `mtp-n2@pw420` | 46.03 J | 5.59 J | **6.35 J** | 0.138x |
+
+Against a round-to-round noise floor on the offset of 10.5 to 30 %, both clear it by a
+wide margin. And the window LENGTHENS while the offset falls -- 9.89 to 13.89 s and 6.46
+to 10.40 s -- so one measurement refuses a per-second loss, which would have grown, and
+a loss unchanged by flat idle, which would not have moved.
+
+The collapse is visible in the decomposition rather than only in the total. With a roll
+the window contains a full up-ramp near its start and a full down-ramp near its end, and
+the boxcar's loss on the first is very nearly cancelled by its gain on the second: at
+roll 1.5 the head carries +156 J and the tail -74 J, at roll 4.0 the down-ramp has moved
+out of the tail and into the middle, +169 and -159. The totals are 11.00 and 5.28 J.
+
+### What is left, and it is not explained here
+
+**5.7 J survives on both arms** at the longest roll -- 5.78 on the baseline and 5.70 on
+`mtp-n2` -- against energies of 4690 and 3200 J over windows of 13.9 and 10.4 s. The
+same absolute quantity on an arm drawing a third less power over a window a third
+shorter. An arm-independent fixed residual is a different kind of object from the edge
+term and this phase does not identify it.
+
+### Two limits of this harness, found while running it and applying to every result file
+
+**The host-contention check runs before the measurement, not during it.** `bench.py`
+samples `host_load()` once per arm-pass, after the thermal settle and *before*
+`S.start()` -- its own message is "host contended at arm entry". So a run is checked at
+exactly two instants, both of them before the server exists and therefore before any of
+the 25 measured requests. It catches a machine that was already busy when the arm began.
+It is structurally blind to contention that starts afterwards, which is the whole
+measured period. This was found by running the unit suite during Phase E4 and then
+discovering that the file's `contended: false` could not have detected it either way.
+`roll40_r1` was kept, but on other evidence: across the three rounds its throughput is
+41.11 against 41.08 and 41.06, its energy the lowest of the three and its window the
+shortest, and contention makes generation slower rather than faster. The three rounds
+exist so that a disturbed one can be spotted, and that is the reading that settled it,
+not the detector.
+
+**The suite drives the card.** One test opens a real sampler and spawns nvidia-smi at
+10 Hz for six tenths of a second. The CPU guard does not stop it, because
+`python3 -m unittest` is not on its heavy list. It also flakes under load, wanting a
+sampling period above the 0.10 s interval and getting 0.0965 s on a busy host, which is
+the flake and not a finding. It now skips while `.gpu-in-use.lock` exists, and says so.
+
+**And a rung driver restarts python for every invocation**, so editing anything on the
+measurement path mid-run does not fail loudly -- it silently applies to the remaining
+invocations and not the earlier ones, leaving a file set measured with two different
+instruments that all look complete and all report zero incidents. Nothing on that path
+was touched during E4: `bench.py`, `telemetry.py`, `server.py`, `gpustate.py`,
+`devices.py`, `prompts.py`, `filler.py` and the matrix all carry mtimes before the
+launch at 23:33:54.
+
+### Three defects in the analysis, all found before the numbers were believed
+
+- **The coefficient was estimated with a free intercept**, against an x -- the
+  end-to-end power difference -- that barely varies, because every unrolled window opens
+  near idle and closes at full decode. The intercept absorbs the relationship and the
+  slope is left to the residual wobble. On synthetic traces with a lag planted at 0.10
+  and at 0.25 s it returned **0.0485 and 0.0467**: the same wrong number twice, which is
+  what an estimator measuring nothing looks like when it still returns something
+  plausible. The no-intercept estimators return the planted value. The free fit is still
+  printed, labelled a diagnostic, beside the spread of x that makes it one.
+- **The intervention was placed inside the window and did the opposite of its job.** The
+  sampler takes its first snapshot at `__enter__`, so a sleep placed after that cannot
+  change what it sees: the window still opened on the card falling back from the prefill
+  calibration. A dry run at roll 1.5 opened at 357 W, closed at 131 W and returned
+  **-97.7 J** -- larger than the unrolled offset and the other way up, because the two
+  ends had been made more different rather than less. The pre-roll now precedes the
+  `with`.
+- **"Where in the window" was reported as a fraction of each record's own offset**, and
+  the roll drives that denominator toward zero on purpose, so the rolled rows came out at
+  491.6 % and -299.6 %. It also asked about a hardcoded first 0.5 s when the measured T
+  is 1.05 s -- a region narrower than the one the model names. It now reports joules over
+  the measured T.
+
+### What is still open
+
+**D7 is untouched and unchanged by any of this.** All three readout paths sit on one
+sensor. Measuring the width of one path's filter says nothing about the sensor's own
+proportional, bidirectional, per-board calibration error, and only an external meter
+does.
+
+`energy_j` is now correctable in principle rather than merely avoidable: the correction
+is `(T/2)` times an end-to-end difference and both terms are recorded. No committed
+figure applies it, because `power_first_w` and the traces postdate every other result
+file. The published numbers still read the instantaneous field or the counter instead.
