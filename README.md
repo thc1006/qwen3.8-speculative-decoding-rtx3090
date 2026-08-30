@@ -68,6 +68,7 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 | V | 75 records, complete, 6 incidents | **not evaluable** -- both MTP arms fail during server start on 24 GiB; the baseline served |
 | warp | 1950 records over 13 files, complete, 0 incidents | control -- four builds of one revision differing only in the GENERIC warp table, plus an A6000 replication |
 | E | 450 records, complete, 0 incidents | control -- power limit is the load lever -- 420, 250 and 150 W -- because at stock every arm sits between 409.8 and 415.7 W, 97.6 to 99.0 % of the cap, and a load-dependent instrument error cannot be separated from a constant one when the load never changes |
+| E2 | 450 records, complete, 0 incidents | control -- Phase E re-run with the spread of the power trace recorded. The three earlier candidates were each tested against a proxy because the record carried no spread; `power_max_w - power_mean_w` is `cap - mean` while the card sits at its limit, and understated the true spread by a factor of two |
 <!-- END GENERATED: EVIDENCE_STATUS -->
 
 ### What each phase may not be used to claim
@@ -96,6 +97,7 @@ these are the wider constraints those wordings came from.
 | V | an engine-isolated comparison: engine, quantization and checkpoint format differ together<br>a depth-specific engine limitation from the k=2 failure: it is the same allocation failing |
 | warp | generalisation past the tested table, devices, quantized kernels and prompts |
 | E | a speedup or efficiency figure: the 250 W and 150 W arms exist to put the instruments under three loads, not because anyone would run the card there<br>an absolute energy calibration: two instruments agreeing bounds their mutual consistency, not their accuracy against an external meter<br>a generalisation of the counter's agreement past this card, this driver and windows read exactly twice |
+| E2 | a speedup or efficiency figure: the arms exist to put the instruments under three loads<br>a mechanism for the offset: this phase refuted a fourth candidate and identified none<br>reading the pooled correlations as within-arm ones; the two disagree, and for mean power they disagree in sign |
 <!-- END GENERATED: FORBIDDEN_CLAIMS -->
 
 Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`

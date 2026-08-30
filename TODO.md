@@ -507,10 +507,17 @@ there was omission, not misstatement.
       the mean sits and not how much the draw moves -- which is exactly the confound that made an
       r of +0.97 look like a mechanism in the first place.
 
-      What is still needed is a RUN. No committed file carries the new fields, so the first
-      question -- does the offset track the spread of the trace rather than its mean -- cannot be
-      asked of existing data. Until then `energy_j` cannot be corrected by formula and the
-      instantaneous field or the counter has to be read instead.
+      **The run happened and the candidate died.** `results/phase_e2.json`, 450 records and 0
+      incidents, carries both spreads. The variation the smoothing removed correlates with the
+      offset at -0.342 pooled and -0.250 within arms -- the wrong sign -- and the quantitative
+      test, `offset_J / (sd_lost x span)`, spans 0.012 to 6.807 across the six arms. Four
+      candidates are now refused rather than three. Correction 46.
+
+      The same run convicts Correction 44's best number: mean power is +0.863 pooled and **-0.239
+      within arms**. What would move D6 now is a design that varies the spread ON PURPOSE at a
+      fixed mean power, which a power cap cannot do because capping moves both. Until then
+      `energy_j` cannot be corrected by formula and the instantaneous field or the counter has to
+      be read instead.
 - [ ] **D7** an external power meter. Phase E compares three READOUT PATHS over one on-board
       sensor, so their agreement bounds the processing and says nothing about the proportional
       bidirectional sensor error the measurement literature reports. Nothing inside this machine

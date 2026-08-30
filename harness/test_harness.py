@@ -4820,6 +4820,7 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
         "M":     ["results/phase_m.json"],
         "Q":     ["results/phase_q_*.json"],
         "E":     ["results/phase_e.json"],
+        "E2":    ["results/phase_e2.json"],
         # Qs was first written into NOT_TABLED as "covered by the Phase Q row", and the guard that
         # rejects a stale exemption failed on it in the same run: it has had its own row in
         # docs/PHASES.md all along, four rungs and 1500 records, checked against nothing.

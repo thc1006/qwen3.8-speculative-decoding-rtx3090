@@ -4350,3 +4350,99 @@ refused it.
 
 No committed file carries the new fields. The question they exist to ask cannot
 be asked of existing data, and D6 says so.
+
+
+## Correction 46, 2026-08-30: a fourth candidate refuted, and a correlation Correction 44 reported that was the wrong kind
+
+Correction 45 recorded `power_sd_w` and `power_sd_instant_w` because Correction
+44 had named the shape of the power trace as what identifying the averaged
+field's offset would need, and the record carried only its mean and its max.
+`results/phase_e2.json` is Phase E run again with them: 450 records, 6 arms x 25
+prompts x 3 passes, **0 incidents**, the same matrix and the same caps, so it is
+directly comparable with `results/phase_e.json`.
+
+### The candidate this run existed to test, and it is dead
+
+`power.draw` is a one-second rolling average and `power.draw.instant` is not, so
+`power_sd_instant_w - power_sd_w` is **directly** how much of the trace's
+movement the averaging discarded. If integrating a smoothed signal loses energy
+in proportion to what the smoothing took out, that difference predicts the
+offset.
+
+It does not. Pooled over 450 records it correlates at **-0.342** -- the wrong
+sign -- and within arms the median is **-0.250**. The largest offset in the run,
+`mtp-n2@pw420` at 41.12 J, sits on the *smallest* discarded spread of any arm,
+0.939 W. That is the opposite of the prediction, and it is what carries the
+negative correlation.
+
+The quantitative test finishes it. A spread in watts integrated over a window in
+seconds is joules, so if the offset IS the discarded variation then
+`offset_J / (sd_lost x span)` is about 1 and does not move between arms. It runs
+from **0.012 to 6.807, a factor of 574**.
+
+Four candidates have now been named and refused: a proportional error, power
+level, power fluctuation as seen through SM-clock spread, and the variation the
+smoothing removed. The offset is real, systematically signed for MTP arms, and
+unexplained.
+
+### And the check that killed it also convicts Correction 44's best number
+
+This run added the correlation Correction 44's did not have: **the same
+correlations computed WITHIN each arm**, where differences between arms cannot
+produce them.
+
+| | pooled | within-arm median |
+|---|---:|---:|
+| spread of the averaged field, `power_sd_w` | **+0.960** | +0.323 |
+| spread of the instantaneous field | +0.910 | +0.113 |
+| mean power | +0.863 | **-0.239** |
+| the discarded variation | -0.342 | -0.250 |
+
+`power_sd_w` at +0.960 pooled is the strongest number this study has produced
+for the offset, and within arms it is +0.323. It describes how the six arms
+differ from one another, not what the offset is inside any of them.
+
+**Mean power changes sign.** Correction 44 reported it as "r = +0.542, the
+strongest of a weak set". Within arms it is **-0.239**. It was not merely weak:
+it was a between-arm relationship being read as a statement about the mechanism,
+and the number that looked like the best evidence was the wrong kind of evidence.
+That sentence in Correction 44 stands as written -- it was true of the
+calculation it described -- and is superseded here.
+
+This is the third time in this work that a correlation has been produced by
+something the analysis did not hold fixed. `max - mean` gave +0.97 while max was
+pinned at the power cap. An arm-dependent time constant separated baselines from
+speculative arms on two files and was refused by nine more. Mean power gave
++0.542 pooled and -0.239 within. The instrument that caught all three was the
+same one each time: asking what else varies with the thing being correlated, and
+holding it.
+
+### What the spread fields did establish
+
+The proxy this study used for four days was wrong by a factor of two. On the
+first record of the dry run that preceded this phase, the true spread of the
+averaged trace was **16.11 W** while `power_max_w - power_mean_w` was **7.20**.
+While the card sits at its limit, max IS the cap, so that difference measures how
+far below the cap the mean sits rather than how much the draw moves -- which is
+exactly why it produced an r of +0.97 and the appearance of a mechanism.
+
+### The cross-file sweep grew, and Correction 44's figures are of the set before it
+
+`analysis/energy_instruments.txt` globs every result file carrying the
+instantaneous field, so adding `phase_e2.json` moved it from 89 file-arm cells
+and 6075 windows to **95 and 6525**. The correlations barely shift -- mean power
++0.542 to **+0.556**, total energy +0.120 to **+0.091**, window length -0.060 to
+**-0.142**, SM-clock spread -0.096 to **-0.119** -- and the negative result they
+carry is unchanged: the offset is still not proportional.
+
+Correction 44's numbers are of the 89-cell set and stay as written. An artifact
+must match the generator that writes it and a correction must match the day it
+was written, and those are different obligations.
+
+### What is still open
+
+D6 stays open with one fewer candidate and one more instrument. What would move
+it now is not another correlation over the same six arms: it is a design where
+the spread is *varied on purpose* at a fixed mean power, which the power cap
+cannot do because capping changes both together. D7, the external meter, is
+untouched by any of this.
