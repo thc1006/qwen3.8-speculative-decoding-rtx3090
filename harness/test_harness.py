@@ -4821,6 +4821,7 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
         "Q":     ["results/phase_q_*.json"],
         "E":     ["results/phase_e.json"],
         "E2":    ["results/phase_e2.json"],
+        "E3":    ["results/phase_e3_*.json"],
         # Qs was first written into NOT_TABLED as "covered by the Phase Q row", and the guard that
         # rejects a stale exemption failed on it in the same run: it has had its own row in
         # docs/PHASES.md all along, four rungs and 1500 records, checked against nothing.
@@ -5114,6 +5115,71 @@ class EveryMatrixMustBeReadableOnAMachineWithNoGpu(unittest.TestCase):
                 fn(99)
 
 
+class AZeroWidthIntervalMustNotBeReportedAsNearZero(unittest.TestCase):
+    """`analyze.py` read one of the two flags and gave the wrong diagnosis.
+
+    `stats.Interval` says of a class holding a single prompt that it "makes the
+    interval narrower than the design can justify" and that "callers must say so
+    rather than print it as if it were estimated". The primary analyser consulted
+    `near_zero` and never `width_understated`.
+
+    Under `--prompts-per-class 1` -- the runner's own dry-run flag -- every class
+    holds one prompt, resampling one item with replacement returns that item, and
+    the interval collapses to zero width. `margin_half_widths` divides by a
+    half-width of zero and returns 0.0, so `near_zero` fires and the line reads
+
+        +55.00 [+55.00, +55.00]  FASTER  (margin 0.00 half-widths, see below)
+
+    which tells the reader the effect might not clear zero. The truth is that the
+    design could not estimate precision at all. That is a wrong diagnosis rather
+    than a silence, and a wrong diagnosis reads like a warning with content.
+    """
+
+    def test_the_degenerate_case_sets_both_flags(self):
+        """Which is why the ORDER of the two branches decides what gets said."""
+        import stats as ST
+        iv = ST.paired_cluster_bootstrap(
+            {"p1": [100.0], "p2": [100.0]}, {"p1": [160.0], "p2": [150.0]},
+            {"p1": "code", "p2": "prose"}, relative=True, n_boot=200)
+        self.assertEqual(iv.hi - iv.lo, 0.0, "a singleton design should collapse")
+        self.assertTrue(iv.width_understated)
+        self.assertTrue(iv.near_zero, "near_zero fires too, which is the trap")
+
+    def test_analyze_consults_width_before_near_zero(self):
+        """Source-level and structural: the width branch must come first.
+
+        Asserted on the AST rather than on a substring, because both names appear
+        in the comment that explains the fix and a grep cannot tell the fix from
+        its own rationale -- a distinction this suite has had to learn twice.
+        """
+        import ast
+        src = (Path(__file__).parent / "analyze.py").read_text()
+        tree = ast.parse(src)
+        found = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.If):
+                continue
+            t = ast.unparse(node.test)
+            if "width_understated" not in t:
+                continue
+            # the near_zero branch has to be reachable only when width is fine
+            tail = " ".join(ast.unparse(x) for x in node.orelse)
+            found.append(("near_zero" in tail, tail[:60]))
+        self.assertTrue(found, "analyze.py does not consult width_understated at all; "
+                               "a zero-width interval will be reported as near zero")
+        self.assertTrue(any(f[0] for f in found),
+                        f"width_understated is consulted but near_zero is not in its "
+                        f"else branch, so the two verdicts can both print or the wrong "
+                        f"one can win: {found}")
+
+    def test_it_names_the_classes_that_carried_no_variance(self):
+        """A flag that does not say WHICH class is a flag the reader cannot act on."""
+        src = (Path(__file__).parent / "analyze.py").read_text()
+        self.assertIn("singleton_classes", src,
+                      "the report does not name the single-prompt classes")
+        self.assertIn("WIDTH NOT ESTIMATED", src)
+
+
 class EveryTagDepositsJsonNamesMustPointWhereItSays(unittest.TestCase):
     """The commit hashes in `repro/DEPOSITS.json` are right and nothing keeps them.
 
@@ -5212,6 +5278,165 @@ class EverySubprocessOnTheMeasurementPathMustBeBounded(unittest.TestCase):
         import telemetry
         self.assertGreaterEqual(telemetry.NVSMI_TIMEOUT_S, 5.0)
         self.assertLessEqual(telemetry.NVSMI_TIMEOUT_S, 60.0)
+
+
+class TheNoiseFloorMustNotBeComputedWithThePopulationSd(unittest.TestCase):
+    """Phase E3's noise floor is a bar, and the bar was set 22 % too low.
+
+    `sampling_rate.py` prints the round-to-round CV and then says of it: "a rate
+    effect on the offset smaller than the second number is not an effect." That
+    makes it a decision threshold, so the direction of an error in it is not
+    neutral. It used `st.pstdev` on three round-means. Three rounds are a sample
+    from the runs this study could have made, not the population of them; pstdev
+    divides by n rather than n-1, understating the spread by sqrt(3/2) at n=3 --
+    and a too-low bar is the direction in which a rate effect gets to clear it.
+    """
+
+    @staticmethod
+    def _mod():
+        import importlib
+        return importlib.import_module("sampling_rate")
+
+    def test_it_is_the_sample_sd_and_the_two_actually_differ_here(self):
+        import statistics as st
+        sr = self._mod()
+        z = [100.0, 103.0, 106.0]
+        m = st.fmean(z)
+        sample, population = st.stdev(z) / m, st.pstdev(z) / m
+        # If these were close the test would pass on either implementation and
+        # prove nothing, so pin that they are far apart before comparing.
+        self.assertGreater(sample / population, 1.2)
+        self.assertAlmostEqual(sr.round_cv(z), sample, places=12)
+        self.assertNotAlmostEqual(sr.round_cv(z), population, places=6)
+
+    def test_a_single_round_is_not_a_spread(self):
+        import math
+        sr = self._mod()
+        self.assertTrue(math.isnan(sr.round_cv([1.0])))
+        self.assertTrue(math.isnan(sr.round_cv([])))
+
+    def test_a_zero_mean_does_not_divide(self):
+        import math
+        sr = self._mod()
+        self.assertTrue(math.isnan(sr.round_cv([-1.0, 1.0])))
+
+    def test_the_analyser_calls_no_population_sd_anywhere(self):
+        """telemetry.py's two pstdev calls are right -- there the samples
+        collected ARE the population described. This file has no such use, so
+        any pstdev call in it is the confusion coming back. Checked on the AST,
+        not the text, because round_cv's own docstring names pstdev to explain
+        why it is not used."""
+        import ast
+        tree = ast.parse((Path(__file__).parent / "sampling_rate.py").read_text())
+        bad = [f"line {n.lineno}" for n in ast.walk(tree)
+               if isinstance(n, ast.Attribute) and n.attr == "pstdev"]
+        bad += [f"line {n.lineno}" for n in ast.walk(tree)
+                if isinstance(n, ast.Name) and n.id == "pstdev"]
+        self.assertEqual(bad, [],
+                         "the round-to-round spread is a sample sd; see "
+                         "round_cv's docstring for why the direction matters")
+
+
+class TheDocsMustQuoteTheReportTheyCiteAndNotAPastOne(unittest.TestCase):
+    """A regenerated artifact leaves every number quoted from it behind.
+
+    Adding a phase changes analysis/energy_instruments.txt, because its glob picks
+    up every result file carrying the instantaneous field. Phase E2 added nine
+    files and eighteen cells; the report was regenerated and the prose was not.
+    For one commit docs/PHASES.md asserted 89 cells, 6075 windows and r = +0.120
+    against a committed artifact saying 95, 6525 and +0.091, and docs/ENERGY.md
+    carried four correlations from a still older run plus an r = +0.910 that no
+    version of the report has ever printed. Every one had been right when written.
+    Nothing re-read them.
+
+    So: any line that cites the report may only quote correlations the report
+    contains. Scoped to lines that name the file, because both documents also
+    quote correlations from other analyses and this must not fire on those.
+    """
+
+    CITES = "analysis/energy_instruments.txt"
+    DOCS = ("docs/PHASES.md", "docs/ENERGY.md", "README.md", "TODO.md")
+
+    def setUp(self):
+        self.root = Path(__file__).parent.parent
+        self.report = (self.root / self.CITES).read_text()
+
+    def _citing_lines(self):
+        """Every passage that names the report, as (file, line, text).
+
+        Scoped by PASSAGE, not by line. The first version checked the citing line
+        alone and TODO.md's D6 entry wraps: the citation sits on one line and the
+        three correlations it introduces sit on the next three, so the guard found
+        nothing there and passed on a paragraph it was written to check. A guard
+        that cannot fire is the defect Correction 45 was about; it should not be
+        in the thing built to stop it.
+
+        A table row is its own passage -- PHASES.md's rows sit adjacent with no
+        blank line between them, and joining them would let one row's figures
+        satisfy another's citation. Anything else runs to the next blank line or
+        the next top-level list item.
+        """
+        for name in self.DOCS:
+            lines = (self.root / name).read_text().splitlines()
+            for n, line in enumerate(lines, 1):
+                if self.CITES not in line:
+                    continue
+                if line.startswith("|"):
+                    yield name, n, line
+                    continue
+                buf, i = [line], n          # n is 1-based, so lines[n] is the NEXT line
+                while i < len(lines):
+                    nxt = lines[i]
+                    if not nxt.strip() or nxt[:1] in ("-", "#", "|") or nxt.startswith("- ["):
+                        break
+                    buf.append(nxt)
+                    i += 1
+                # And backwards, for a citation that lands mid-paragraph.
+                j = n - 1
+                while j > 0:
+                    prv = lines[j - 1]
+                    if not prv.strip() or prv[:1] in ("#", "|"):
+                        break
+                    buf.insert(0, prv)
+                    if prv.lstrip().startswith("- ["):
+                        break
+                    j -= 1
+                yield name, n, " ".join(buf)
+
+    def test_every_correlation_quoted_beside_the_citation_is_in_the_report(self):
+        import re
+        bad, checked = [], 0
+        for name, n, line in self._citing_lines():
+            for v in re.findall(r"r = ([+-]?[01]\.\d+)", line):
+                checked += 1
+                if f"r = {v}" not in self.report:
+                    bad.append(f"{name}:{n} quotes r = {v}")
+        self.assertGreater(checked, 0,
+                           "no correlations found beside a citation; has the "
+                           "prose been rewritten so this guard checks nothing?")
+        self.assertEqual(
+            bad, [],
+            "these cite " + self.CITES + " and quote a correlation it does not "
+            "contain. Regenerate the report, or bring the prose to it -- a figure "
+            "in neither place is one nobody can check:\n  " + "\n  ".join(bad))
+
+    def test_the_cell_and_window_counts_are_the_reports_own(self):
+        import re
+        head = re.search(r"(\d+) file-arm cells over (\d+) files, (\d+) records",
+                         self.report)
+        self.assertTrue(head, f"{self.CITES} has no summary line to check against")
+        bad, checked = [], 0
+        for name, n, line in self._citing_lines():
+            for pat, want, what in ((r"(\d+) file-arm cells", head.group(1), "cells"),
+                                    (r"(\d+) measured windows", head.group(3), "windows"),
+                                    (r"(\d+) records in `analysis/energy", head.group(3),
+                                     "records")):
+                for got in re.findall(pat, line):
+                    checked += 1
+                    if got != want:
+                        bad.append(f"{name}:{n} says {got} {what}, the report says {want}")
+        self.assertGreater(checked, 0, "no counts found beside a citation")
+        self.assertEqual(bad, [], "\n  ".join([""] + bad))
 
 
 if __name__ == "__main__":

@@ -4446,3 +4446,187 @@ it now is not another correlation over the same six arms: it is a design where
 the spread is *varied on purpose* at a fixed mean power, which the power cap
 cannot do because capping changes both together. D7, the external meter, is
 untouched by any of this.
+
+## Correction 47, 2026-08-30: the offset is a real energy difference, not an integration artefact
+
+Correction 44 re-read the headline with a less-smoothed instrument and moved it
+from -37.1 % to **-36.3 %**. Correction 46 refuted a fourth candidate mechanism
+and left D6 open. Both rested on something neither had tested: that the
+difference between integrating `power.draw` and integrating `power.draw.instant`
+is a difference in the ENERGY those two paths report, rather than a difference in
+what trapezoidal integration over a fixed grid does to two signals with different
+frequency content. A linear moving average preserves the integral of a stationary
+signal, so a purely oscillating trace should contribute nothing at all -- and the
+fact that the offset scaled with the trace's spread said either the averaging is
+not what it is documented to be, or the offset is not an energy difference.
+
+If it were the grid, `-36.3 %` would be a correction toward an artefact.
+
+### The design, and the rule written before the run
+
+Phase E3 varies nothing but the sampler's period: Phase E's two 420 W arms, three
+requested intervals over three rounds with the interval order rotated each round
+so no interval sits in one part of the session. 450 records over nine
+invocations, 50 each, 0 incidents, 0 host-contention events.
+
+**The requested interval is not the achieved rate.** The sampler queries and then
+waits, so the period is the query plus the interval: 0.05 s gives **14.30 Hz**,
+not 20. The three land at **14.30 / 8.43 / 4.71 Hz** and everything below is
+computed against the rate each record actually got.
+
+The two predictions were written into `harness/matrices/phase_e3.py` and
+`harness/sampling_rate.py` before anything ran:
+
+- **PHYSICAL** -- both integrals converge as the grid refines, the offset
+  settles, `offset / sd` does not move with the rate.
+- **ARTEFACT** -- the smooth field is already resolved at 5 Hz and barely moves;
+  the sharp one is not, so `energy_j_instant` grows with the rate while
+  `energy_j` stays put.
+
+### ARTEFACT is refused by its own rule
+
+The arbitrator is `nvmlDeviceGetTotalEnergyConsumption`, read **exactly twice per
+window**. It is the one reading in this experiment the experiment cannot move,
+and Correction 44's own polling measurement is why: the counter loses energy when
+it is read often, so reading it twice is not a convenience, it is the condition
+under which it means anything.
+
+| slowest to fastest sampling | vs the counter | moved |
+|---|---|---|
+| `baseline@pw420` instantaneous | +0.057 % -> -0.031 % | **-0.026** |
+| `baseline@pw420` averaged | -0.452 % -> -0.661 % | **+0.209** |
+| `mtp-n2@pw420` instantaneous | -0.087 % -> -0.135 % | **+0.048** |
+| `mtp-n2@pw420` averaged | -1.406 % -> -1.859 % | **+0.453** |
+
+The instantaneous integral **does not move**: 0.999x and 1.000x across a threefold
+change of grid, staying within **0.23 % of the counter at every rate**. ARTEFACT
+required exactly the opposite of that, and it is the whole of what ARTEFACT
+required. The averaged integral sits **0.31 to 1.86 % below** the counter and
+moves *further* from it as the grid refines.
+
+So `power.draw` is the under-resolved reading, the offset is a real energy
+difference, and the -36.3 % re-reading corrects toward the counter rather than
+away from it.
+
+### The loss is arm-dependent, which is why it survives a ratio
+
+Across E3's nine invocations the averaged field's departure from the counter runs
+**0.31 to 0.66 %** on `baseline@pw420` and **1.41 to 1.86 %** on `mtp-n2@pw420`.
+A per-arm error of unequal size does not cancel in an arm-to-arm ratio, and this
+one is roughly threefold unequal.
+
+Re-reading `results/phase_e.json` per arm says where it comes from, and it is not
+where a reader would guess. The instantaneous integral agrees with the counter on
+**all six arms at all three caps**, +0.01 to +0.15 %. The averaged field agrees
+too -- at 150 W and 250 W:
+
+| | 150 W | 250 W | 420 W |
+|---|---:|---:|---:|
+| `baseline` averaged vs counter | +0.085 % | +0.024 % | **-0.738 %** |
+| `mtp-n2` averaged vs counter | +0.144 % | -0.151 % | **-1.835 %** |
+
+At a low cap the card is pinned AT the cap and the trace is nearly flat, so a
+one-second rolling average discards nothing. At the stock 420 W limit the draw is
+free to move and the average loses what it smooths. The offset is therefore not a
+property of the instrument alone but of the instrument **and** how much the trace
+under it swings, which is why `mtp-n2` -- the arm with roughly twice the
+within-window power spread -- carries roughly three times the loss.
+
+### The -36.3 % derivation, checked against its own inputs
+
+Correction 44's table was recomputed from `results/phase_e.json` for this
+correction. Every figure reproduces: `d_req` +34.19 and +48.41, `d_pre` -2.93 and
+-5.09, decode 4005.0 and 2520.6, saving **36.32 %**.
+
+One thing needed checking that was not obvious. `phase_e.json` predates Correction
+45's fix to the prefill calibration, so its `prefill_power` block still carries
+`energy_j` divided by `reps` while `energy_j_instant` and `energy_j_nvml` are
+totals -- 82.27 against 634.72 on `baseline@pw420`, a factor of eight apart. A
+`d_pre` taken from those fields as they sit would have been wrong by that factor.
+It was not: 634.72 / 8 = 79.34, and 79.34 - 82.27 = **-2.93**, the published
+number. The derivation divided. The defect did not reach the headline.
+
+### Two documents were quoting a report that had moved
+
+`analysis/energy_instruments.txt` globs every result file carrying the
+instantaneous field, so each new phase changes it. Correction 46 recorded that
+Phase E2 moved it from 89 cells and 6075 windows to 95 and 6525, and stated the
+policy that a correction is a dated snapshot and stays as written. That policy is
+right and is unchanged.
+
+It does not extend to `docs/PHASES.md` and `docs/ENERGY.md`, which describe the
+current state. Both were left quoting the pre-E2 report:
+
+- the Phase E row asserted 89 cells, 6075 windows and r = +0.120 against a
+  committed artifact in the same commit saying 95, 6525 and +0.091;
+- `docs/ENERGY.md` carried the same three plus mean power +0.542, window length
+  -0.060 and SM-clock spread -0.096, all from a still older run;
+- and both cited **r = +0.910** for the NVML-on-instant regression, a figure **no
+  version of that report has ever printed**. The report said +0.900 when the
+  claim was written and +0.831 now. It was also attributed to `phase_e.json`
+  alone while the report computes it over every file, so it was unverifiable in
+  the way a number becomes unverifiable: by being nearly right.
+
+Every one had been correct when written. Nothing re-read them. This is the
+failure this repository exists to catch and it happened inside it, in a commit
+made the same day.
+
+All are now brought to the regenerated report -- 113 cells, 6975 windows,
+r = +0.082, +0.549, -0.148, -0.110, +0.831 -- and the regression is attributed to
+the scope that computes it. `TheDocsMustQuoteTheReportTheyCiteAndNotAPastOne`
+guards it: any line naming the report may only quote correlations and counts the
+report contains. Both shipped states fail it.
+
+### Three defects in the analyser, one of which set a bar too low
+
+- **The noise floor used the population standard deviation.**
+  `sampling_rate.py` prints the round-to-round CV and then says in as many words
+  that a rate effect smaller than it is not an effect, which makes it a decision
+  threshold. Three rounds are a sample from the runs this study could have made;
+  `pstdev` divides by n rather than n-1 and understates the spread by sqrt(3/2),
+  **22 % at n=3**, in the direction that lets a rate effect clear a bar set too
+  low. Every other analyser here already uses `statistics.stdev`; the two
+  `pstdev` calls in `telemetry.py` are correct, because there the samples
+  collected ARE the population described. This was the only place the two uses
+  were confused.
+- **A truthiness test where None was meant.** `r.get("nvml")` drops a record
+  whose counter reads exactly 0.0. The same shape as `prefill_power.get('subtracted')`.
+- **A fallback that could not fire.** `x['n'] if 'n' in x else ...` -- `load()`
+  writes no `'n'` key, so the conditional always took the else while reading as
+  though it had a preferred path.
+
+### What the noise floor was, once measured properly
+
+One integral reproduces to **0.153 %** across rounds. The offset, a small
+difference of two large numbers, reproduces only to **9.4 %** -- which is what
+dividing that wobble by a difference of half a per cent does. The offset's own
+movement with the rate is 1.240x and 1.299x, so it clears the floor; but the
+instantaneous integral's movement, 0.999x and 1.000x, is the quantity ARTEFACT
+was about, and it does not.
+
+The rotation did its job. Round means of `offset / sd` are 1.716, 1.649 and 1.690
+against an interval effect of 0.955x and 1.149x.
+
+### What this phase may not be used for
+
+Under `--passes 1` the arm order does not rotate, so all nine invocations ran
+`baseline` first and `mtp-n2` second. Arm and position within an invocation are
+collinear. This does not touch E3's estimand, which is within-arm across
+intervals, and the thermal settle gate removes most of it -- `baseline` entered at
+54 C and waited 0 s, `mtp-n2` entered at 65 C and waited 15.1 s to reach 60 C,
+and the measured window ran 77.5 C against 78.8 C. But **E3 cannot be read for any
+difference between the two arms**, thermal or otherwise, and the arm-dependence
+quoted above is Phase E's finding re-read, not E3's.
+
+### What is still open
+
+**D6 is narrower, not closed.** What the averaging loses the energy TO is still
+unmodelled. What is settled is which of the two readings is wrong, and that the
+question is about a real quantity rather than about arithmetic on a grid. Four
+candidate mechanisms are now refused; none is identified. The design that would
+move it further is one that varies the trace's spread on purpose at a fixed mean
+power, which the power cap cannot do because capping moves both together.
+
+**D7 is untouched.** All three readout paths sit on one sensor. Their agreement
+bounds the processing and leaves the proportional, bidirectional, per-board
+calibration error exactly where it was. Only an external meter resolves it.

@@ -230,6 +230,7 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
               "throughput.")
 
     near_zero_seen: list = []
+    width_understated_seen: list = []
     print("\n--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---")
     print(f"{'arm':28s} {'vs':22s} {'delta %':>22s}  verdict")
     for a in present:
@@ -249,10 +250,37 @@ def report(result: dict, baseline_map: dict[str, str] | None = None,
         # measurement.
         verdict = ("no detected effect" if iv.spans_zero
                    else ("FASTER" if iv.point > 0 else "SLOWER"))
-        if iv.near_zero:
+        # WIDTH FIRST, and it is a different complaint from being near zero.
+        # `stats.Interval` says of singleton classes that "callers must say so
+        # rather than print it as if it were estimated", and this caller -- the
+        # primary one -- read `near_zero` and not `width_understated`. Under
+        # `--prompts-per-class 1` every class holds one prompt, resampling one
+        # item with replacement returns that item, and the interval collapses to
+        # zero width: +55.00 [+55.00, +55.00]. `margin_half_widths` divides by a
+        # half-width of zero and returns 0.0, so `near_zero` fired and the line
+        # read "FASTER (margin 0.00 half-widths)" -- telling the reader the
+        # effect might not clear zero when the truth is that the design could not
+        # estimate precision at all. A wrong diagnosis, not a silence.
+        if iv.width_understated:
+            verdict += ("  WIDTH NOT ESTIMATED: single-prompt class(es) "
+                        + ",".join(iv.singleton_classes)
+                        + " contributed no variance, so the bounds are the point")
+            width_understated_seen.append((a, iv))
+        elif iv.near_zero:
             verdict += f"  (margin {iv.margin_half_widths:.2f} half-widths, see below)"
-        near_zero_seen.append((a, iv)) if iv.near_zero else None
+            near_zero_seen.append((a, iv))
         print(f"{a:28s} {b:22s} {str(iv):>22s}  {verdict}")
+
+    if width_understated_seen:
+        print("\n  WIDTH NOT ESTIMATED. A class holding one prompt contributes no")
+        print("  variance to a cluster bootstrap: drawing one item with replacement")
+        print("  always returns that item. The bounds below are the point estimate,")
+        print("  not an interval, and no verdict about precision can be read off them.")
+        print("  This is what --prompts-per-class does, and a dry run analysed like a")
+        print("  result is why it is named here rather than left to the margin.")
+        for a, iv in width_understated_seen:
+            print(f"    {a:24s} {str(iv):>22s}   classes "
+                  f"{','.join(iv.singleton_classes)}")
 
     if near_zero_seen:
         # This printed the 800-replication figures, and a t-interval coverage of 94.1 % that

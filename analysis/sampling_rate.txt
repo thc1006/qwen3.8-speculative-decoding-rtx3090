@@ -1,0 +1,94 @@
+================================================================================================
+DOES THE OFFSET DEPEND ON HOW OFTEN THE POWER IS SAMPLED?
+================================================================================================
+450 records over 9 invocation(s), 2 arm(s), 3 intervals.
+
+  requested interval against the rate it actually achieved
+   interval s     n   achieved Hz  samples/window
+  ------------------------------------------------
+        0.050   150         14.30           116.6
+        0.100   150          8.43            68.7
+        0.200   150          4.71            38.4
+
+  per arm and interval. THE CELL IS THE UNIT: records inside one share the
+  arm, the server process and the session, so 450 records are not 450
+  independent points and the cell count is what any of this rests on.
+
+  arm                  Hz   energy_j    instant  offset J      sd  tau=off/sd   tok/s
+  ------------------------------------------------------------------------------------
+  baseline@pw420    14.06     4092.0     4118.0     25.96   14.27       1.819   41.05
+  baseline@pw420     8.33     4102.3     4124.4     22.10   10.76       2.053   41.03
+  baseline@pw420     4.65     4099.7     4120.7     20.94   10.98       1.906   41.03
+  mtp-n2@pw420      14.54     2617.1     2662.4     45.31   27.39       1.654   65.31
+  mtp-n2@pw420       8.53     2626.4     2667.1     40.79   25.25       1.615   65.31
+  mtp-n2@pw420       4.78     2626.4     2661.3     34.89   24.24       1.439   65.34
+
+  WHAT MOVES WITH THE RATE. Slowest to fastest sampling, per arm:
+
+  arm                   Hz lo -> hi   energy_j    instant     offset        sd       tau
+  ------------------------------------------------------------------------------------
+  baseline@pw420        4.6 -> 14.1     0.998x     0.999x     1.240x    1.299x    0.955x
+  mtp-n2@pw420          4.8 -> 14.5     0.996x     1.000x     1.299x    1.130x    1.149x
+
+  PHYSICAL predicts every column near 1.000: both integrals converge and
+  the offset is what it is. ARTEFACT predicts energy_j near 1.000 and the
+  instantaneous integral, the offset and tau all moving with the rate.
+
+    baseline@pw420   averaged 0.998x, instantaneous 0.999x, tau 0.955x
+    mtp-n2@pw420     averaged 0.996x, instantaneous 1.000x, tau 1.149x
+
+  THE NOISE FLOOR. Same arm, same interval, across the three rounds --
+  which is what one integral is reproducible to. The offset is a small
+  difference of two large numbers, so a rate effect must clear this.
+
+  arm                 iv  rounds  energy_j CV  instant CV  offset CV  offset/energy
+  --------------------------------------------------------------------------------
+  baseline@pw420    0.05       3       0.145 %      0.181 %      7.89 %          0.63 %
+  baseline@pw420    0.10       3       0.089 %      0.084 %     13.55 %          0.54 %
+  baseline@pw420    0.20       3       0.077 %      0.131 %     11.03 %          0.51 %
+  mtp-n2@pw420      0.05       3       0.456 %      0.297 %      9.29 %          1.73 %
+  mtp-n2@pw420      0.10       3       0.084 %      0.228 %     10.45 %          1.55 %
+  mtp-n2@pw420      0.20       3       0.068 %      0.021 %      4.29 %          1.33 %
+
+  An integral reproduces to 0.153 % across rounds. The offset
+  reproduces to 9.4 %, which is what dividing that wobble by a
+  difference of half a per cent does. A rate effect on the offset
+  smaller than the second number is not an effect.
+
+  AGAINST THE COUNTER, which is read twice per window and therefore does
+  not move with the sampling rate. Per cent difference from it:
+
+  arm                  Hz    n   averaged vs NVML   instant vs NVML
+  ------------------------------------------------------------------
+  baseline@pw420    14.06   75            -0.661 %           -0.031 %
+  baseline@pw420     8.33   75            -0.312 %           +0.225 %
+  baseline@pw420     4.65   75            -0.452 %           +0.057 %
+  mtp-n2@pw420      14.54   75            -1.859 %           -0.135 %
+  mtp-n2@pw420       8.53   75            -1.556 %           -0.004 %
+  mtp-n2@pw420       4.78   75            -1.406 %           -0.087 %
+
+  slowest to fastest sampling, how far each integral moved from the counter:
+    baseline@pw420   averaged -0.452 -> -0.661 % (moved +0.209), instant +0.057 -> -0.031 % (moved -0.026)
+    mtp-n2@pw420     averaged -1.406 -> -1.859 % (moved +0.453), instant -0.087 -> -0.135 % (moved +0.048)
+
+  A NEGATIVE 'moved' is convergence on the counter. If the instantaneous
+  integral converges while the averaged one does not, the averaged field
+  is the under-resolved reading and the offset is real. If the
+  instantaneous one diverges, it is the grid, and the -36.3 % correction
+  in Correction 44 rests on an artefact.
+
+  record-level correlations against the achieved rate, for the shape only:
+    energy_j               r = -0.039
+    energy_j_instant       r = -0.035
+    offset                 r = +0.222
+    power_sd_w             r = +0.212
+    power_sd_instant_w     r = +0.137
+
+  THE ROUNDS, which the rotation exists to make interchangeable. A round
+  effect of the same size as the interval effect would mean the schedule
+  did not do its job.
+   round     n   offset J       sd       tau
+  ------------------------------------------
+       1   150      29.58    17.23     1.716
+       2   150      34.19    20.74     1.649
+       3   150      31.22    18.48     1.690

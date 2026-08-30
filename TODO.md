@@ -491,10 +491,11 @@ there was omission, not misstatement.
       90.6 % (2.3). The earlier 300-replication pass had put the discrepancy on `normal` at 2.0 SE;
       that was Monte Carlo noise. Binary at n=25 is 90.2 %, inside the continuous band.
 - [ ] **D4** full re-run of Phase A under the C1/C2/C3 harness, once those land.
-- [ ] **D6** what the averaged-field offset actually is. Phase E establishes what it is not: not
-      proportional (r = +0.120 against total energy over 89 cells and 6075 windows), not power
-      alone (+0.542, and within a cap the arm drawing LESS power carries the larger offset), not
-      power fluctuation (-0.096 against SM-clock spread), and not a per-window constant -- an
+- [ ] **D6** what the averaged-field offset actually is. Phase E establishes what it is not, over
+      113 file-arm cells and 6975 measured windows in `analysis/energy_instruments.txt`: not proportional
+      (r = +0.082 against total energy), not power alone (r = +0.549, and within a cap the arm
+      drawing LESS power carries the larger offset), not power fluctuation (-0.110 against
+      SM-clock spread), and not a per-window constant -- an
       earlier reading with an arm-dependent time constant was refused by nine files and by the
       negative offsets on `phase_m`'s `moe-draft08b-*` arms. The context ladder adds a dimension
       none of them covers: at a nearly constant 400 to 415 W the offset per watt rises from
@@ -514,10 +515,25 @@ there was omission, not misstatement.
       candidates are now refused rather than three. Correction 46.
 
       The same run convicts Correction 44's best number: mean power is +0.863 pooled and **-0.239
-      within arms**. What would move D6 now is a design that varies the spread ON PURPOSE at a
-      fixed mean power, which a power cap cannot do because capping moves both. Until then
-      `energy_j` cannot be corrected by formula and the instantaneous field or the counter has to
-      be read instead.
+      within arms**.
+
+      **And the offset is a real energy difference, not an artefact of the grid.** That had been
+      the live alternative to all of the above: a linear moving average preserves the integral of
+      a stationary signal, so an oscillating trace should contribute nothing, and an offset that
+      scales with the spread anyway could have been what trapezoidal integration does to two
+      signals with different frequency content. `results/phase_e3_*.json` -- 450 records over nine
+      invocations, three sampler periods over three rotated rounds -- settles it against the
+      driver's cumulative counter, which is read exactly twice per window and therefore cannot
+      move with the rate. Across a threefold change of grid the instantaneous integral does not
+      move (0.999x, 1.000x) and stays within **0.23 %** of the counter; the averaged integral sits
+      **0.31 to 1.86 %** below it and moves *further* away as the grid refines. Correction 47.
+
+      What would move D6 now is a design that varies the spread ON PURPOSE at a fixed mean power,
+      which a power cap cannot do because capping moves both. Until then `energy_j` cannot be
+      corrected by formula and the instantaneous field or the counter has to be read instead --
+      and the reason that matters is that the loss is arm-dependent, 0.31 to 0.66 % on
+      `baseline@pw420` against 1.41 to 1.86 % on `mtp-n2@pw420`, so it does not cancel in a
+      ratio.
 - [ ] **D7** an external power meter. Phase E compares three READOUT PATHS over one on-board
       sensor, so their agreement bounds the processing and says nothing about the proportional
       bidirectional sensor error the measurement literature reports. Nothing inside this machine

@@ -69,6 +69,7 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 | warp | 1950 records over 13 files, complete, 0 incidents | control -- four builds of one revision differing only in the GENERIC warp table, plus an A6000 replication |
 | E | 450 records, complete, 0 incidents | control -- power limit is the load lever -- 420, 250 and 150 W -- because at stock every arm sits between 409.8 and 415.7 W, 97.6 to 99.0 % of the cap, and a load-dependent instrument error cannot be separated from a constant one when the load never changes |
 | E2 | 450 records, complete, 0 incidents | control -- Phase E re-run with the spread of the power trace recorded. The three earlier candidates were each tested against a proxy because the record carried no spread; `power_max_w - power_mean_w` is `cap - mean` while the card sits at its limit, and understated the true spread by a factor of two |
+| E3 | 450 records over 9 files, complete, 0 incidents | control -- Phase E's two 420 W arms re-run at three sampler periods over three rounds with the order rotated. `power.draw` is a one-second rolling average whatever rate it is queried at and `power.draw.instant` is not, so refining the grid separates a real energy difference from what trapezoidal integration does to two signals with different frequency content |
 <!-- END GENERATED: EVIDENCE_STATUS -->
 
 ### What each phase may not be used to claim
@@ -98,6 +99,7 @@ these are the wider constraints those wordings came from.
 | warp | generalisation past the tested table, devices, quantized kernels and prompts |
 | E | a speedup or efficiency figure: the 250 W and 150 W arms exist to put the instruments under three loads, not because anyone would run the card there<br>an absolute energy calibration: two instruments agreeing bounds their mutual consistency, not their accuracy against an external meter<br>a generalisation of the counter's agreement past this card, this driver and windows read exactly twice |
 | E2 | a speedup or efficiency figure: the arms exist to put the instruments under three loads<br>a mechanism for the offset: this phase refuted a fourth candidate and identified none<br>reading the pooled correlations as within-arm ones; the two disagree, and for mean power they disagree in sign |
+| E3 | a speedup or efficiency figure: the arms exist to vary the sampler, and under --passes 1 the arm order does not rotate, so arm and position within an invocation are collinear<br>a difference in thermal behaviour between the two arms, for the same reason<br>a mechanism for the offset: this phase settles which reading is wrong, not why the averaging loses what it loses<br>generalising the counter's agreement past this card, this driver and windows read exactly twice |
 <!-- END GENERATED: FORBIDDEN_CLAIMS -->
 
 Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`
@@ -447,9 +449,15 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
   0.15 % on every arm while both depart from `power.draw` -- the averaged field every published
   figure here integrates -- by up to 1.9 %. That gap is not a proportional error and so does not
   cancel between two arms; on a matched pair at the same cap it moves the headline to -36.3 %.
-  What that offset IS remains unmodelled, and the statistic that would separate the
-  candidates -- the spread of the power trace rather than its mean -- has been recorded
-  only since 2026-08-30, so no committed file carries it.
+  It is not an integration artefact either: Phase E3 varied nothing but the sampler's period
+  over a 3x range of achieved rates and the instantaneous integral did not move, staying within
+  0.23 % of the driver's cumulative counter -- read exactly twice per window and so unable to
+  move with the rate -- while the averaged field sat 0.31 to 1.86 % below that counter and drifted
+  further from it as the grid refined. So the offset is a real energy difference and `power.draw`
+  is the reading that loses it. What the averaging loses it TO is still unmodelled: Phase E2
+  refuted the candidate that it is the variation the smoothing discarded, and no mechanism has
+  been identified. The loss is arm-dependent -- 0.31 to 0.66 % on the baseline against 1.41 to
+  1.86 % on the speculative arm at the same cap -- which is why it survives a ratio.
   Neither instrument is ground truth: they sit on the same board. Most speculative
   generations also follow a different token trajectory from the baseline they are compared against
   and semantic quality is not scored, so this is not energy for the same answer.

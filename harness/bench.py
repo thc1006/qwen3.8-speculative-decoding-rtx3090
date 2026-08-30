@@ -391,6 +391,12 @@ def run_matrix(
             "common_args": common_args,
             "warmup_requests_discarded": warmup,
             "prefill_calibration_reps": prefill_reps,
+            # The sampler's period, which decides how finely both power fields
+            # are integrated. It was a function default nothing passed, so every
+            # phase before E3 ran at 0.10 s and the file never said so -- and
+            # three runs that differ only in this would have been three files
+            # with no way to tell them apart.
+            "power_interval_s": power_interval_s,
             "thermal_settle_target_c": settle_temp_c,
             "thermal_settle_margin_c": settle_margin_c,
             "device": {"index": dev.index, "name": dev.name, "tag": dev.short,
@@ -930,7 +936,26 @@ def main() -> None:
                     help="dry-run aid: keep only the first N prompts of each class. "
                          "0 = use the full frozen set. Any value other than 0 is recorded in "
                          "the result so a reduced run can never be mistaken for a full one.")
+    ap.add_argument("--power-interval", type=float, default=0.10,
+                    help="seconds the power sampler waits between nvidia-smi queries "
+                         "(default 0.10, which every phase before E3 used). It was a "
+                         "function parameter that nothing passed, so the rate was fixed "
+                         "at 10 Hz in practice. It is a knob because it is the one that "
+                         "separates a physical energy difference from an artefact of "
+                         "integrating two differently-smoothed fields over the same "
+                         "samples: `power.draw` is a one-second rolling average whatever "
+                         "the query rate, `power.draw.instant` is not, so a coarse grid "
+                         "aliases one and not the other. Recorded in the result.")
     args = ap.parse_args()
+    if not 0.005 <= args.power_interval <= 5.0:
+        # `raise SystemExit`, not `sys.exit`: `main()` imports sys further down,
+        # which makes the name local to the whole function, so referring to it
+        # above that line is an UnboundLocalError rather than an exit. Caught by
+        # running the validation instead of trusting it.
+        raise SystemExit(f"--power-interval {args.power_interval} is outside "
+                         f"[0.005, 5.0]; below that the sampler spends the run "
+                         f"spawning subprocesses and above it a 6-second "
+                         f"generation gets one sample")
 
     import importlib, sys
     sys.path.insert(0, str(HERE / "matrices"))
@@ -998,6 +1023,7 @@ def main() -> None:
         context_filler_tokens=getattr(mod, "CONTEXT_FILLER_TOKENS", 0),
         cache_prompt=getattr(mod, "CACHE_PROMPT", False),
         settle_temp_c=(None if args.settle_floor else 60.0),
+        power_interval_s=args.power_interval,
     )
 
 
