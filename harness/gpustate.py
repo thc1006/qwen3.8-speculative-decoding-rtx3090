@@ -58,18 +58,30 @@ class GpuState:
         return self.mem_transfer_offset / 2.0
 
 
+# Bounded, like every nvidia-smi call in telemetry.py. These run at arm-pass
+# boundaries rather than ten times a second, so the cost of a hang is a stalled
+# run rather than a corrupted record -- but the state-SETTING calls below have no
+# exception handler at all, and `sudo` with a TTY waits for a password for ever.
+# A timeout turns an indefinite block into a failure that names itself, which is
+# what a call that leaves the card in an unknown state should do. Thirty seconds
+# is far beyond anything these take and far short of a run left hanging.
+SMI_TIMEOUT_S = 30.0
+
+
 def _settings(args: list[str]) -> str:
     env = dict(os.environ)
     env.setdefault("DISPLAY", ":0")
     return subprocess.check_output(["nvidia-settings", *args], text=True,
-                                   stderr=subprocess.DEVNULL, env=env)
+                                   stderr=subprocess.DEVNULL, env=env,
+                                   timeout=SMI_TIMEOUT_S)
 
 
 def _smi_uuid(index: int) -> str | None:
     try:
         return subprocess.check_output(
             ["nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader", "-i", str(index)],
-            text=True, stderr=subprocess.DEVNULL).strip() or None
+            text=True, stderr=subprocess.DEVNULL,
+            timeout=SMI_TIMEOUT_S).strip() or None
     except Exception:
         return None
 
@@ -211,7 +223,7 @@ def read_state(index: int = 0) -> dict:
             ["nvidia-smi", "--query-gpu=power.limit,clocks.max.memory,clocks.max.graphics,"
              "clocks.current.graphics,fan.speed",
              "--format=csv,noheader,nounits", "-i", str(index)],
-            text=True, stderr=subprocess.DEVNULL).strip()
+            text=True, stderr=subprocess.DEVNULL, timeout=SMI_TIMEOUT_S).strip()
         # fan.speed rides along on the query that was already being made, so the actual speed
         # costs nothing. The control mode needs nvidia-settings and is fetched separately below.
         pl, mem, gr, cur, fan = [float(x) for x in csv.split(",")]
@@ -296,14 +308,16 @@ def apply(state, index: int = 0, *, force: bool = False,
     _settings(["-a", f"[gpu:{sidx}]/GPUGraphicsClockOffset[4]={state.core_offset}"])
     subprocess.check_output(["sudo", "nvidia-smi", "-i", str(index),
                              "-pl", str(state.power_limit_w)],
-                            text=True, stderr=subprocess.DEVNULL)
+                            text=True, stderr=subprocess.DEVNULL,
+                            timeout=SMI_TIMEOUT_S)
     if state.lock_sm_mhz:
         subprocess.check_output(["sudo", "nvidia-smi", "-i", str(index),
                                  "-lgc", f"{state.lock_sm_mhz},{state.lock_sm_mhz}"],
-                                text=True, stderr=subprocess.DEVNULL)
+                                text=True, stderr=subprocess.DEVNULL,
+                                timeout=SMI_TIMEOUT_S)
     else:
         subprocess.run(["sudo", "nvidia-smi", "-i", str(index), "-rgc"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, timeout=SMI_TIMEOUT_S)
     time.sleep(settle_s)
 
     got = read_state(index)

@@ -120,7 +120,8 @@ def _pid_tree(pid: int) -> tuple[int, ...]:
     """The server pid plus its descendants (llama-server may fork)."""
     pids = {pid}
     try:
-        out = subprocess.check_output(["ps", "-eo", "pid,ppid", "--no-headers"], text=True)
+        out = subprocess.check_output(["ps", "-eo", "pid,ppid", "--no-headers"],
+                                      text=True, timeout=15)
         children: dict[int, list[int]] = {}
         for line in out.splitlines():
             a, b = line.split()
@@ -139,7 +140,7 @@ def _pid_tree(pid: int) -> tuple[int, ...]:
 def _rev(path: Path) -> str:
     try:
         return subprocess.check_output(["git", "-C", str(path), "rev-parse", "--short", "HEAD"],
-                                       text=True, stderr=subprocess.DEVNULL).strip()
+                                       text=True, stderr=subprocess.DEVNULL, timeout=30).strip()
     except Exception:
         return "unknown"
 
@@ -165,7 +166,13 @@ def _sha256(path: Path) -> str:
         except Exception:
             pass
     try:
-        h = subprocess.check_output(["sha256sum", str(path)], text=True).split()[0]
+        # TEN MINUTES, not the fifteen seconds the nvidia-smi calls get. This
+        # hashes MODEL files: twenty gigabytes off cold storage is minutes of
+        # honest work, and a short bound here would manufacture the failure it
+        # is meant to prevent. It is cached by mtime, so it runs once per model
+        # per change, and it already degrades to "unknown" rather than raising.
+        h = subprocess.check_output(["sha256sum", str(path)], text=True,
+                                    timeout=600).split()[0]
     except Exception:
         return "unknown"
     try:
@@ -191,7 +198,10 @@ def _size(path: Path) -> int | None:
 def environment_snapshot(trees: dict[str, Path], model: Path) -> dict:
     def _cmd(*c) -> str:
         try:
-            return subprocess.check_output(c, text=True, stderr=subprocess.DEVNULL).strip()
+            # environment probes: uname, a version string, a driver query. All
+            # of them return at once or are broken.
+            return subprocess.check_output(c, text=True, stderr=subprocess.DEVNULL,
+                                           timeout=30).strip()
         except Exception:
             return "unknown"
     return {

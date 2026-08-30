@@ -445,6 +445,9 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
   0.15 % on every arm while both depart from `power.draw` -- the averaged field every published
   figure here integrates -- by up to 1.9 %. That gap is not a proportional error and so does not
   cancel between two arms; on a matched pair at the same cap it moves the headline to -36.3 %.
+  What that offset IS remains unmodelled, and the statistic that would separate the
+  candidates -- the spread of the power trace rather than its mean -- has been recorded
+  only since 2026-08-30, so no committed file carries it.
   Neither instrument is ground truth: they sit on the same board. Most speculative
   generations also follow a different token trajectory from the baseline they are compared against
   and semantic quality is not scored, so this is not energy for the same answer.

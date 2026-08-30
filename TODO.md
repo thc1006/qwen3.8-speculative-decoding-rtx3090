@@ -498,10 +498,19 @@ there was omission, not misstatement.
       earlier reading with an arm-dependent time constant was refused by nine files and by the
       negative offsets on `phase_m`'s `moe-draft08b-*` arms. The context ladder adds a dimension
       none of them covers: at a nearly constant 400 to 415 W the offset per watt rises from
-      0.0031 s at 8k to 0.0163 s at 96k. Identifying it needs the raw power traces, which the
-      harness summarises away -- `power_sd_w` and the sample series are not recorded. Adding them
-      is cheap and is the prerequisite. Until then `energy_j` cannot be corrected by formula and
-      the instantaneous field or the counter has to be read instead.
+      0.0031 s at 8k to 0.0163 s at 96k.
+
+      **The prerequisite is done.** This said identifying it needs the shape of the power trace,
+      which the record did not carry, and that adding it was cheap. `power_sd_w` and
+      `power_sd_instant_w` are recorded from 2026-08-30. `power_max_w` could never supply it: while
+      the card sits at its limit, max IS the cap, so `max - mean` measures how far below the cap
+      the mean sits and not how much the draw moves -- which is exactly the confound that made an
+      r of +0.97 look like a mechanism in the first place.
+
+      What is still needed is a RUN. No committed file carries the new fields, so the first
+      question -- does the offset track the spread of the trace rather than its mean -- cannot be
+      asked of existing data. Until then `energy_j` cannot be corrected by formula and the
+      instantaneous field or the counter has to be read instead.
 - [ ] **D7** an external power meter. Phase E compares three READOUT PATHS over one on-board
       sensor, so their agreement bounds the processing and says nothing about the proportional
       bidirectional sensor error the measurement literature reports. Nothing inside this machine

@@ -37,7 +37,8 @@ def pid_owning_port(port: int) -> int | None:
     """PID listening on `port`, via `ss`. None if nothing is listening."""
     try:
         out = subprocess.check_output(
-            ["ss", "-ltnpH", f"sport = :{port}"], text=True, stderr=subprocess.DEVNULL)
+            ["ss", "-ltnpH", f"sport = :{port}"], text=True,
+            stderr=subprocess.DEVNULL, timeout=15)
     except Exception:
         return None
     for line in out.splitlines():
@@ -72,7 +73,7 @@ def assert_port_owned_by(port: int, pid: int) -> None:
     for _ in range(8):
         try:
             ppid = int(subprocess.check_output(
-                ["ps", "-o", "ppid=", "-p", str(cur)], text=True).strip())
+                ["ps", "-o", "ppid=", "-p", str(cur)], timeout=15, text=True).strip())
         except Exception:
             break
         if ppid == pid:
@@ -101,12 +102,24 @@ _NVSMI_FIELDS = (
 )
 
 
+# Every nvidia-smi call in this file is bounded. None of them was, and
+# `gpu_snapshot` runs TEN TIMES A SECOND for the whole of a measurement -- so a
+# wedged driver blocked the sampler thread for ever, the power integral stopped
+# accumulating, and the record came back with a short window and no failure. A
+# normal query here takes 10 to 50 ms against a 100 ms sampling interval, so 15
+# seconds is three hundred times generous: it cannot fire while the machine is
+# merely busy, and it cannot let a hang run past the point where the run is
+# already ruined. Each site already degrades on any exception, and
+# `TimeoutExpired` is one, so the failure path is the one that was there.
+NVSMI_TIMEOUT_S = 15.0
+
+
 def gpu_snapshot(index: int = 0) -> dict[str, float]:
     try:
         out = subprocess.check_output(
             ["nvidia-smi", f"--query-gpu={','.join(_NVSMI_FIELDS)}",
              "--format=csv,noheader,nounits", "-i", str(index)],
-            text=True, stderr=subprocess.DEVNULL).strip()
+            text=True, stderr=subprocess.DEVNULL, timeout=NVSMI_TIMEOUT_S).strip()
     except Exception:
         return {}
     parts = [p.strip() for p in out.split(",")]
@@ -329,6 +342,7 @@ class PowerSampler:
 
     def summary(self) -> dict[str, float | int | None]:
         watts = [w for _, w in self._samples]
+        watts_i = [w for _, w in self._samples_instant]
         ei = self.energy_j_instant()
         e = self.energy_j()
         # A second, independent reading of the same window. `energy_j` is an integral of a field
@@ -357,6 +371,22 @@ class PowerSampler:
             "n_power_samples_instant": len(self._samples_instant),
             "power_mean_w": statistics.fmean(watts) if watts else None,
             "power_max_w": max(watts) if watts else None,
+            # The SPREAD, which the record has never carried. Phase E establishes
+            # what the averaged field's offset is NOT -- not proportional to the
+            # energy (r = +0.120), not power level alone, not window length, not
+            # a per-window constant -- and every candidate left needs the shape
+            # of the power trace rather than its mean. `power_max_w` cannot
+            # supply it: while the card sits at its limit, max IS the cap, so
+            # `max - mean` measures how far below the cap the mean is and not how
+            # much the draw moves. TODO D6 is blocked on exactly this, and the
+            # cost of unblocking it is two lines.
+            #
+            # Population sd, not sample: these are every sample in the window,
+            # not a draw from a larger set.
+            "power_sd_w": (statistics.pstdev(watts) if len(watts) > 1 else
+                           (0.0 if watts else None)),
+            "power_sd_instant_w": (statistics.pstdev(watts_i) if len(watts_i) > 1
+                                   else (0.0 if watts_i else None)),
             "temp_max_c": max(self._temps) if self._temps else None,
             "temp_mean_c": statistics.fmean(self._temps) if self._temps else None,
             "sm_clock_mean_mhz": statistics.fmean(self._sm_clocks) if self._sm_clocks else None,
@@ -393,7 +423,7 @@ def gpu_compute_processes(index: int = 0) -> list[tuple[int, str, int]]:
         out = subprocess.check_output(
             ["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory",
              "--format=csv,noheader,nounits", "-i", str(index)],
-            text=True, stderr=subprocess.DEVNULL).strip()
+            text=True, stderr=subprocess.DEVNULL, timeout=NVSMI_TIMEOUT_S).strip()
     except Exception:
         return []
     procs = []
@@ -587,7 +617,7 @@ def overclock_state(index: int = 0) -> dict:
              "--query-gpu=power.limit,power.default_limit,power.min_limit,power.max_limit,"
              "clocks.max.graphics,clocks.max.memory,clocks.max.sm",
              "--format=csv,noheader,nounits", "-i", str(index)],
-            text=True, stderr=subprocess.DEVNULL).strip()
+            text=True, stderr=subprocess.DEVNULL, timeout=NVSMI_TIMEOUT_S).strip()
         keys = ("power_limit_w", "power_default_limit_w", "power_min_limit_w",
                 "power_max_limit_w", "clocks_max_graphics_mhz", "clocks_max_memory_mhz",
                 "clocks_max_sm_mhz")
@@ -618,7 +648,8 @@ def overclock_state(index: int = 0) -> dict:
         try:
             out = subprocess.check_output(
                 ["nvidia-settings", "-q", f"[gpu:{sidx}]/{attr}[4]"],
-                text=True, stderr=subprocess.DEVNULL, env=env)
+                text=True, stderr=subprocess.DEVNULL, env=env,
+                timeout=NVSMI_TIMEOUT_S)
             val = None
             for line in out.splitlines():
                 if "):" in line:

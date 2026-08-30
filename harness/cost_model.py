@@ -707,7 +707,7 @@ def report(result: dict) -> None:
     if confounded:
         print(f"  Excluded from the bound as confounded: {', '.join(confounded)}.")
 
-    _CO.warn_if_incomplete(result)
+    _CO.require_complete(result)
     mmvq_max, from_record = recorded_mmvq_max(result)
     print("\n--- TEST 2: k vs verification width, per method ---")
     print("    MMVQ dispatch limit %d, %s" % (

@@ -323,11 +323,22 @@ class TestAlgebraicInvariants(unittest.TestCase):
         function name.
         """
         import analyze, analyze_depth, cost_model, width_groups
-        for mod in (analyze, analyze_depth, cost_model, width_groups):
+        # The three that PUBLISH numbers must gate, not consult. They called
+        # `warn_if_incomplete`, which prints and returns False, and each of them
+        # ignored the return and went on to compute -- so a run interrupted at
+        # 800 of 875 produced a report shaped exactly like a finished one with a
+        # paragraph of prose above it. Prose above a table is not a gate.
+        for mod in (analyze, cost_model, width_groups):
             src = inspect.getsource(mod)
-            self.assertTrue("warn_if_incomplete" in src or "completeness(" in src,
-                            f"{mod.__name__} can be pointed at a half-written file and would say "
-                            f"nothing about it")
+            self.assertIn("require_complete", src,
+                          f"{mod.__name__} publishes numbers and does not refuse a "
+                          f"half-written file; warn_if_incomplete only prints")
+        # analyze_depth reads completeness per rung and gates the cliff verdict
+        # on it rather than printing the generic notice, so the assertion there
+        # is on the module being consulted.
+        self.assertIn("completeness(", inspect.getsource(analyze_depth),
+                      "analyze_depth can be pointed at a half-written file and "
+                      "would say nothing about it")
 
     def test_the_cache_check_tests_what_the_matrix_declared(self):
         """The detector asserted one invariant and reported it as the other.
@@ -5100,6 +5111,106 @@ class EveryMatrixMustBeReadableOnAMachineWithNoGpu(unittest.TestCase):
             with self.assertRaises(Exception, msg=f"{name}.PRECHECK accepted a device index that "
                                                   f"does not exist on this machine"):
                 fn(99)
+
+
+class EveryTagDepositsJsonNamesMustPointWhereItSays(unittest.TestCase):
+    """The commit hashes in `repro/DEPOSITS.json` are right and nothing keeps them.
+
+    That file is the offline record of what has been archived, and the guard on
+    `CITATION.cff` reads it to refuse a version Zenodo does not hold. It also
+    records, for each tag, the commit that tag names -- which is the part a
+    reader without the repository has to rely on, and the part nothing checked.
+    All four were correct when this was written. A record that is correct by
+    luck is the shape this repository keeps finding.
+    """
+
+    def _deposits(self):
+        return json.loads((Path(__file__).parent.parent / "repro"
+                           / "DEPOSITS.json").read_text())
+
+    def test_every_recorded_commit_is_the_one_the_tag_resolves_to(self):
+        import subprocess
+        root = Path(__file__).parent.parent
+        if not (root / ".git").exists():
+            self.skipTest("no git metadata here (source tarball)")
+        d = self._deposits()
+        bad = []
+        for entry in d["versions"] + d["tagged_but_not_deposited"]:
+            tag, want = entry.get("git_tag"), entry.get("commit")
+            if not tag or not want:
+                continue
+            r = subprocess.run(["git", "-C", str(root), "rev-parse", f"{tag}^{{commit}}"],
+                               capture_output=True, text=True, timeout=30)
+            if r.returncode:
+                bad.append(f"{tag}: not a tag in this repository")
+            elif r.stdout.strip() != want:
+                bad.append(f"{tag}: records {want[:12]}, resolves to "
+                           f"{r.stdout.strip()[:12]}")
+        self.assertEqual(bad, [], "repro/DEPOSITS.json names a commit a tag does "
+                                  "not point at:\n  " + "\n  ".join(bad))
+
+    def test_a_deposited_version_records_its_commit_at_all(self):
+        """A deposited row without a commit is a DOI nobody can tie to a tree."""
+        missing = [v.get("version") for v in self._deposits()["versions"]
+                   if not v.get("commit")]
+        self.assertEqual(missing, [], f"deposited version(s) {missing} record no "
+                                      f"commit, so the archive cannot be tied to "
+                                      f"a revision offline")
+
+
+class EverySubprocessOnTheMeasurementPathMustBeBounded(unittest.TestCase):
+    """A wedged `nvidia-smi` blocked the sampler thread for ever.
+
+    `gpu_snapshot` runs ten times a second for the whole of a measurement and
+    called `subprocess.check_output` with no timeout. A hung driver did not fail
+    the run: the sampler stopped appending, the power integral stopped
+    accumulating, and the record came back with a short window and no signal
+    that anything had gone wrong. The state-SETTING calls in `gpustate.py` were
+    worse -- they have no exception handler at all, and `sudo` with a TTY waits
+    for a password indefinitely, leaving the card configured and the run stopped.
+
+    The bound is per call and sized to the work: 15 s for a query that normally
+    takes 10 to 50 ms, 30 s for setting a clock or reading an environment
+    string, and 600 s for hashing a model file, where a short bound would
+    manufacture the failure it is meant to catch.
+
+    This asserts the property rather than the three numbers, so a new call is
+    caught rather than a new constant.
+    """
+
+    FILES = ("telemetry.py", "gpustate.py", "bench.py", "server.py")
+    BOUNDED = ("subprocess.run", "subprocess.check_output", "subprocess.call")
+
+    def test_no_unbounded_subprocess_call(self):
+        import ast
+        root = Path(__file__).parent
+        bad = []
+        for name in self.FILES:
+            f = root / name
+            if not f.exists():
+                continue
+            for node in ast.walk(ast.parse(f.read_text())):
+                if not isinstance(node, ast.Call):
+                    continue
+                if ast.unparse(node.func) not in self.BOUNDED:
+                    continue
+                if "timeout" not in {k.arg for k in node.keywords}:
+                    bad.append(f"{name}:{node.lineno} "
+                               f"{ast.unparse(node)[:60].replace(chr(10), ' ')}")
+        self.assertEqual(
+            bad, [],
+            "these subprocess calls can block for ever. gpu_snapshot runs at "
+            "10 Hz during a measurement and a hung driver there produces a "
+            "short window rather than a failure:\n  " + "\n  ".join(bad))
+
+    def test_the_hot_path_bound_is_generous_enough_not_to_fire(self):
+        """A bound that fires on a merely busy machine would change what is
+        measured. 15 s against a 100 ms sampling interval is 150 intervals: by
+        the time it fires the run is already ruined, so it cannot be the thing
+        that ruins it."""
+        import telemetry
+        self.assertGreaterEqual(telemetry.NVSMI_TIMEOUT_S, 5.0)
+        self.assertLessEqual(telemetry.NVSMI_TIMEOUT_S, 60.0)
 
 
 if __name__ == "__main__":

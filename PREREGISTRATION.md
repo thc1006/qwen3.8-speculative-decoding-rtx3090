@@ -4267,3 +4267,86 @@ Two instruments agreeing bounds their mutual consistency, not their accuracy. Bo
 board and an external meter remains the only reference that would fix the absolute magnitude. The
 agreement is also specific: this card, this driver, and windows read exactly twice. The idle
 dose-response says what happens when they are not.
+
+
+## Correction 45, 2026-08-30: four guards that could not fail, and a measurement that could hang for ever
+
+An external review of a sibling repository -- the MoE study on the same card --
+returned twenty findings. Ten were blockers there. This entry is what happened
+when each was treated as a defect CLASS and checked against this repository
+rather than read as being about that one, because the two were built by the same
+hand with the same habits and a defect found in one is a hypothesis about the
+other.
+
+Four of the twenty transfer. Six do not, and are recorded below as not applying
+rather than left to look unexamined.
+
+### The one that could corrupt a measurement
+
+`gpu_snapshot` calls `nvidia-smi` through `subprocess.check_output` **ten times a
+second for the whole of a measurement**, and had no timeout. A wedged driver did
+not fail the run: the sampler thread blocked, the power integral stopped
+accumulating, and the record came back with a short window and nothing saying
+so. The state-setting calls in `gpustate.py` were worse -- they have no exception
+handler at all, so a hung `sudo nvidia-smi -pl` waiting on a password stops the
+run with the card configured and no message.
+
+Every `subprocess` call in `telemetry.py`, `gpustate.py`, `bench.py` and
+`server.py` is bounded now, sized to the work rather than to a single constant:
+15 s for a query that normally takes 10 to 50 ms, 30 s for setting a clock or
+reading an environment string, **600 s for hashing a model file**, where a tight
+bound would manufacture the failure it exists to prevent -- twenty gigabytes off
+cold storage is minutes of honest work.
+
+The guard asserts the property, not the numbers: an AST walk over those four
+files requiring `timeout` on every `subprocess.run`, `check_output` and `call`.
+It was watched failing on a removed bound and, separately, on a bound set to 1 s
+-- because a limit that fires on a merely busy machine changes what is measured,
+which is the other way to get this wrong.
+
+### Three guards that were correct and could not fail
+
+**`warn_if_incomplete` printed and returned False, and every caller ignored the
+return.** `analyze.py`, `cost_model.py` and `width_groups.py` all went on to
+compute and publish, so a run interrupted at 800 of 875 produced a report shaped
+exactly like a finished one with a paragraph of prose above it. Prose above a
+table is not a gate. They call `require_complete` now, which exits;
+`ALLOW_INCOMPLETE=1` analyses it anyway and puts **NOT PUBLISHABLE** in the
+report. The escape exists because `results/snapshots/` holds four deliberate
+partial copies of Phase A, kept to show how the numbers move as a run fills --
+nothing automatic reads them, and by hand is where the escape belongs.
+
+**`analysis/MANIFEST.json` was never checked for entries naming a file that is
+gone.** Section 9 walks `analysis/*.txt` -- the artifacts that EXIST -- so its
+scope is whatever is on disk: deleting a report removes it from the check
+silently, and a stale entry is invisible. All 21 entries were correct. A registry
+that is correct by luck is the shape this repository keeps finding, and it is the
+mirror of the sibling's finding that a re-derivation took its scope from the
+artifact it was checking.
+
+**`repro/DEPOSITS.json` records the commit each tag names and nothing verified
+it.** That field is what a reader without the repository has to rely on. All four
+were right. Both new guards were watched failing on a planted entry.
+
+### Six that do not apply, checked rather than assumed
+
+`bench.py` has no concurrent request path, so the argument dropped on one branch
+and passed on another cannot happen here. Nothing is sharded, so there is no
+union to attest. `--apply` in `repair_cache_incidents.py` defaults to a dry run,
+which is the safe direction. Every run script handles exit codes, and
+`verify_everything.sh` exits on its aggregate verdict. No archive is unpacked. No
+document still carries a claim Phase E overturned. The prefill normalisation
+defect the sibling had is already fixed here, by Correction 44.
+
+### And the prerequisite Correction 44 said it would add and had not
+
+Correction 44 closed with the offset unmodelled and named the raw power traces as
+what identifying it would need. `power_sd_w` and `power_sd_instant_w` are
+recorded from today. `power_max_w` could never have served: while the card sits
+at its limit, max IS the cap, so `max - mean` measures how far below the cap the
+mean sits rather than how much the draw moves -- and that is precisely the
+confound that made an r of +0.97 look like a mechanism before the clock proxy
+refused it.
+
+No committed file carries the new fields. The question they exist to ask cannot
+be asked of existing data, and D6 says so.

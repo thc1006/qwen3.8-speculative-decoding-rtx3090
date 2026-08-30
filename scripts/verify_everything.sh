@@ -255,6 +255,22 @@ def resolve(name):
 manifest = json.loads(pathlib.Path("analysis/MANIFEST.json").read_text())
 regen, external = manifest["regenerate"], manifest["external"]
 
+# The loop below walks `analysis/*.txt` -- the artifacts that EXIST -- so its
+# scope is whatever is on disk. Deleting a report removes it from the check
+# silently, and a manifest entry naming a file that is gone is never noticed:
+# the guard cannot fail in that direction at all. Both are checked here, before
+# the loop, because a registry that describes something absent is a claim about
+# a document that is not there.
+missing = sorted(k for k in list(regen) + list(external)
+                 if not pathlib.Path(k).exists())
+if missing:
+    print(f"   FAIL: {len(missing)} manifest entr(ies) name a file that does not "
+          f"exist. Either the artifact was deleted and its entry is stale, or it "
+          f"was renamed and the entry was not:")
+    for m in missing:
+        print(f"           {m}")
+    sys.exit(1)
+
 stale, checked, unmapped = [], 0, []
 for art in sorted(pathlib.Path("analysis").glob("*.txt")):
     key = f"analysis/{art.name}"

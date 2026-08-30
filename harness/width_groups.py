@@ -110,7 +110,7 @@ def spec_of(arm: str, meta: dict) -> str:
 def main() -> int:
     path = sys.argv[1] if len(sys.argv) > 1 else "results/phase_nmax.json"
     d = json.load(open(path))
-    _CO.warn_if_incomplete(d, path)
+    _CO.require_complete(d, path)
     arms = d.get("arms", {})
 
     if is_intervention_file(d, path):

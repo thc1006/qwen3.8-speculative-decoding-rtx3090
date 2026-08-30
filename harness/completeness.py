@@ -19,6 +19,7 @@ count and says so in the note rather than silently.
 """
 
 import json
+import os
 import sys
 
 
@@ -76,6 +77,38 @@ def warn_if_incomplete(result, path=""):
     if note:
         print(f"             {note}")
     return False
+
+
+ALLOW_INCOMPLETE_ENV = "ALLOW_INCOMPLETE"
+
+
+def require_complete(result, path="") -> None:
+    """Refuse to publish numbers from a file that is still short.
+
+    `warn_if_incomplete` printed and returned False, and every caller ignored
+    the return: `analyze.py`, `cost_model.py` and `width_groups.py` all went on
+    to compute and print. So a run interrupted at 800 of 875 produced a report
+    that looks exactly like a finished one with a paragraph of prose above it,
+    and prose above a table is not a gate. The sibling repository's fourth
+    review found the same shape in its crossover analyser: printed the sessions
+    it dropped, carried on, published seven of eight.
+
+    `ALLOW_INCOMPLETE=1` analyses it anyway and says so in a line the report
+    carries, because there is a legitimate use -- `results/snapshots/` holds
+    four deliberate partial copies of Phase A, kept to show how the numbers move
+    as a run fills up. Nothing automatic reads them; they are read by hand, and
+    by hand is where the escape belongs.
+    """
+    if warn_if_incomplete(result, path):
+        return
+    if os.environ.get(ALLOW_INCOMPLETE_ENV) == "1":
+        print(f"             {ALLOW_INCOMPLETE_ENV}=1 is set: analysing it anyway. "
+              f"NOT PUBLISHABLE.")
+        return
+    n, expected, _ = completeness(result)
+    sys.exit(f"\n{path or 'this file'} holds {n} of {expected} records, so the "
+             f"numbers below would move as it fills. Set {ALLOW_INCOMPLETE_ENV}=1 "
+             f"to analyse it anyway, and do not publish the result.")
 
 
 if __name__ == "__main__":
