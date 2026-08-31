@@ -19,7 +19,13 @@ units of a plain decode step, as `speedup = mean_len / k` with `k(w) = k0 + c*(w
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../analysis/plot_cost_model_dark.png">
-  <img alt="Three stacked panels against verification width, from Phase A only. Top: tokens accepted per target pass rises from 2.3 to 3.3 but falls far below a dotted line showing growth in proportion to width. Middle: the cost of one target pass rises with width, with the chord c equal to 0.2829 for draft-mtp and 0.2784 for draft-dflash over these five arms; the completed ladder supersedes both at 0.2904 and 0.2481, and k(w) is concave rather than a line. Bottom: speedup, the ratio of the two, falls from 1.60 to 1.23 across the widths measured here." src="../analysis/plot_cost_model.png">
+  <img alt="Three stacked panels against verification width, from Phase A only. Top: tokens
+  accepted per target pass rises from 2.3 to 3.3 but falls far below a dotted line showing
+  growth in proportion to width. Middle: the cost of one target pass rises with width, with the
+  chord c equal to 0.2829 for draft-mtp and 0.2784 for draft-dflash over these five arms; the
+  completed ladder supersedes both at 0.2904 and 0.2481, and k(w) is concave rather than a
+  line. Bottom: speedup, the ratio of the two, falls from 1.60 to 1.23 across the widths
+  measured here." src="../analysis/plot_cost_model.png">
 </picture>
 
 | phase | method | widths | k0 | **c** | r^2 |
@@ -35,7 +41,12 @@ holds at r^2 = 0.9958 with five residual degrees of freedom.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../analysis/plot_dispatch_boundary_dark.png">
-  <img alt="The cost of one verification step against verification width, from the n-max ladder. Widths 2 through 8 for draft-mtp and 3, 5 and 7 for draft-dflash rise on a straight line, with c equal to 0.2904 at r-squared 0.9958 and 0.2481 at 0.9947. A vertical line marks MMVQ_MAX_BATCH_SIZE at 8. Width 9 sits past it with an open marker, 26 percent below the line for draft-mtp and 7 percent below for draft-dflash." src="../analysis/plot_dispatch_boundary.png">
+  <img alt="The cost of one verification step against verification width, from the n-max
+  ladder. Widths 2 through 8 for draft-mtp and 3, 5 and 7 for draft-dflash rise on a straight
+  line, with c equal to 0.2904 at r-squared 0.9958 and 0.2481 at 0.9947. A vertical line marks
+  MMVQ_MAX_BATCH_SIZE at 8. Width 9 sits past it with an open marker, 26 percent below the line
+  for draft-mtp and 7 percent below for draft-dflash."
+  src="../analysis/plot_dispatch_boundary.png">
 </picture>
 
 The two fits stop at width 8 deliberately. `MMVQ_MAX_BATCH_SIZE` is 8, so a wider verification
@@ -179,7 +190,8 @@ the completed ladder goes shallower still: n-max 2 at 1.537x.
 The model says both can be true, and says what would have to differ. For width 8 to beat width 5
 on this measured acceptance curve, `c` would have to be below **0.0543**. Phase A's two DFlash2
 points give 0.2784, 5.1 times too large; the completed ladder gives 0.2481 over widths 3, 5 and 7,
-4.6 times too large. Either way the shallower setting wins by a wide margin. Phase R2 shows what `c` responds to: over the tested GA102 clock ranges the baseline responds to
+4.6 times too large. Either way the shallower setting wins by a wide margin. Phase R2 shows
+what `c` responds to: over the tested GA102 clock ranges the baseline responds to
 core clock with an elasticity of 0.27 while the speculative arms sit at 0.76-0.81. That is
 consistent with `c` being dominated by compute, but clock elasticity is not a bottleneck
 measurement - it also moves with the voltage-frequency curve, power headroom, occupancy and launch

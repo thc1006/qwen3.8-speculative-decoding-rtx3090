@@ -16,10 +16,12 @@ data is labelled exploratory where that applies. Registered hypotheses have sinc
 unsupported, falsified, withdrawn, reopened and unresolved; the dated disposition of each is in
 that file.
 
-Successor to [`thc1006/qwen3.6-speculative-decoding-rtx3090`](https://github.com/thc1006/qwen3.6-speculative-decoding-rtx3090),
+Successor to
+[`thc1006/qwen3.6-speculative-decoding-rtx3090`](https://github.com/thc1006/qwen3.6-speculative-decoding-rtx3090),
 where the same question on a 3B-active MoE came out net negative on llama.cpp. That write-up
 attributed the loss to expert saturation: a draft of K tokens well below the ~94-token
-saturation threshold forces the verify pass to load the union of K positions' expert slices. [`Qwen/Qwen3.8-27B`](https://huggingface.co/Qwen/Qwen3.8-27B)
+saturation threshold forces the verify pass to load the union of K positions' expert slices.
+[`Qwen/Qwen3.8-27B`](https://huggingface.co/Qwen/Qwen3.8-27B)
 is dense-hybrid - no experts, no routing, no union - so that mechanism cannot decide the answer
 here, and the question was open again.
 
@@ -109,7 +111,9 @@ these are the wider constraints those wordings came from.
 <!-- END GENERATED: FORBIDDEN_CLAIMS -->
 
 Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`
-serves and gives a vLLM baseline datapoint for the compressed-tensors checkpoint used in Phase V -- not a cross-engine anchor, because engine, checkpoint format, quantization and runtime all change together and no arm separates them -- and both MTP arms fail to load on this card
+serves and gives a vLLM baseline datapoint for the compressed-tensors checkpoint used in Phase
+V -- not a cross-engine anchor, because engine, checkpoint format, quantization and runtime all
+change together and no arm separates them -- and both MTP arms fail to load on this card
 because the MTP module allocates its own bf16 `embed_tokens` and `lm_head`, 2.37 GiB each, on top
 of a 17.33 GiB target, filed as
 [vllm#53887](https://github.com/vllm-project/vllm/issues/53887). And Phase Q sits at two rungs of
@@ -124,7 +128,10 @@ are all open.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_headline_dark.png">
-  <img alt="Dot-and-whisker plot of five speculative arms against a non-speculative baseline of 41.55 tok/s. mtp-n2 at verification width 3 is +59.8 % with a nominal 95 % interval of +57.0 to +62.8; mtp-n3 +52.3 %; dflash2-n4 +51.9 %; mtp-n5 +32.1 %; dflash2-n7 +22.6 %. Every interval lies clear of zero." src="analysis/plot_headline.png">
+  <img alt="Dot-and-whisker plot of five speculative arms against a non-speculative baseline of
+  41.55 tok/s. mtp-n2 at verification width 3 is +59.8 % with a nominal 95 % interval of +57.0
+  to +62.8; mtp-n3 +52.3 %; dflash2-n4 +51.9 %; mtp-n5 +32.1 %; dflash2-n7 +22.6 %. Every
+  interval lies clear of zero." src="analysis/plot_headline.png">
 </picture>
 
 ## Findings
@@ -198,7 +205,9 @@ What the intervals are and are not, where those figures come from, and what none
 | mtp-n5 | 6 | 54.89 | +32.1 % [+26.4, +37.8] | 0.1343 | 3228 |
 | dflash2-n7 | 8 | 50.95 | +22.6 % [+14.7, +30.4] | 0.1251 | 3786 |
 
-The two trees agree to 41.55 tok/s and **show no divergence from each other on 125/125 prompt-passes**, all of which stopped on the 400-token cap, so that is agreement through the measured window rather than through a whole answer,
+The two trees agree to 41.55 tok/s and **show no divergence from each other on 125/125
+prompt-passes**, all of which stopped on the 400-token cap, so that is agreement through the
+measured window rather than through a whole answer,
 so no no-speculation offset between the branches was detected here, and every DFlash2 arm is
 estimated against its same-tree baseline. That controls the branch's baseline main effect. It
 cannot rule out an interaction between the branch and the DFlash2 method itself, because
@@ -222,7 +231,11 @@ The instrument, what bounds it, and why the magnitude stays provisional: [`docs/
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_per_class_dark.png">
-  <img alt="Heatmap of throughput change against baseline for five speculative arms across five prompt classes. Code and reasoning are strongly positive for every arm, from +55 % to +117 %. Chat, prose and Chinese fall towards zero as verification width grows and turn negative for dflash2-n7 at width 8: minus 4 % on chat, minus 11 % on prose, minus 29 % on Chinese." src="analysis/plot_per_class.png">
+  <img alt="Heatmap of throughput change against baseline for five speculative arms across five
+  prompt classes. Code and reasoning are strongly positive for every arm, from +55 % to +117 %.
+  Chat, prose and Chinese fall towards zero as verification width grows and turn negative for
+  dflash2-n7 at width 8: minus 4 % on chat, minus 11 % on prose, minus 29 % on Chinese."
+  src="analysis/plot_per_class.png">
 </picture>
 
 <details>
@@ -272,12 +285,17 @@ targets.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_dispatch_boundary_dark.png">
-  <img alt="Cost of one verification step against verification width, for draft-mtp over widths 2 to 8 and draft-dflash over 3, 5 and 7. Both are close to straight, fitted at c = 0.2904 and c = 0.2481 with r-squared above 0.994. A vertical rule marks MMVQ_MAX_BATCH_SIZE = 8; the width-9 points are drawn as open markers, excluded from the fits, and sit 26 % and 7 % below the line the widths under the limit define." src="analysis/plot_dispatch_boundary.png">
+  <img alt="Cost of one verification step against verification width, for draft-mtp over widths
+  2 to 8 and draft-dflash over 3, 5 and 7. Both are close to straight, fitted at c = 0.2904 and
+  c = 0.2481 with r-squared above 0.994. A vertical rule marks MMVQ_MAX_BATCH_SIZE = 8; the
+  width-9 points are drawn as open markers, excluded from the fits, and sit 26 % and 7 % below
+  the line the widths under the limit define." src="analysis/plot_dispatch_boundary.png">
 </picture>
 
 This is the completed ladder. `plot_cost_model.png`
 ([light](analysis/plot_cost_model.png), [dark](analysis/plot_cost_model_dark.png) -- a plain link
-cannot switch on the reader's theme the way the figures above do) fits the same model to Phase A alone, which reaches `c = 0.2829` and `0.2784` and puts DFlash2's best width at
+cannot switch on the reader's theme the way the figures above do) fits the same model to Phase
+A alone, which reaches `c = 0.2829` and `0.2784` and puts DFlash2's best width at
 5; the ladder above supersedes both coefficients and both optima, and that figure is kept because the
 Phase A subset is what the earlier write-ups quoted.
 
@@ -302,7 +320,11 @@ grouping.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_width_partition_dark.png">
-  <img alt="Matrix of the 25 prompts on which each pair of arms shows the same first-divergence or censoring signature, at the 400-token cap. Two blocks appear, widths 3 and 4 against widths 5, 6 and 8, agreeing within a block on 100 % of prompts and across the blocks on 44 %. The blocks span both drafters, so verification width predicts the grouping and drafter identity does not." src="analysis/plot_width_partition.png">
+  <img alt="Matrix of the 25 prompts on which each pair of arms shows the same first-divergence
+  or censoring signature, at the 400-token cap. Two blocks appear, widths 3 and 4 against
+  widths 5, 6 and 8, agreeing within a block on 100 % of prompts and across the blocks on 44 %.
+  The blocks span both drafters, so verification width predicts the grouping and drafter
+  identity does not." src="analysis/plot_width_partition.png">
 </picture>
 
 Fork positions are exact: `harness/exact_forks.py` tokenizes the two stored outputs and takes the
@@ -326,7 +348,12 @@ hardware limit.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_bound_by_dark.png">
-  <img alt="Two panels. The first plots SM-clock elasticity against memory-clock elasticity: the non-speculative baseline sits at (0.80, 0.27) and the two speculative arms at (0.14, 0.76) and (0.18, 0.80), on opposite sides of a dotted line where the two elasticities sum to 1. The second gives SM-clock elasticity per interval: below 1200 MHz all three track the clock at 0.80 to 0.93, above it the baseline falls to 0.27 while the speculative arms stay at 0.76 and 0.80." src="analysis/plot_bound_by.png">
+  <img alt="Two panels. The first plots SM-clock elasticity against memory-clock elasticity:
+  the non-speculative baseline sits at (0.80, 0.27) and the two speculative arms at (0.14,
+  0.76) and (0.18, 0.80), on opposite sides of a dotted line where the two elasticities sum to
+  1. The second gives SM-clock elasticity per interval: below 1200 MHz all three track the
+  clock at 0.80 to 0.93, above it the baseline falls to 0.27 while the speculative arms stay at
+  0.76 and 0.80." src="analysis/plot_bound_by.png">
 </picture>
 
 Per-interval intervals and the pinning method: [`docs/RESOURCE_RESPONSE.md`](docs/RESOURCE_RESPONSE.md).
@@ -465,7 +492,8 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
   width at **1.00 to 1.10 s** on both arms -- measured on this card and this driver, where the
   figure had only ever been quoted as "about a second". Thirteen of the 75 unrolled baseline
   records fit at the search grid's ceiling instead, which is what a flat trace does to a
-  deconvolution rather than evidence of a wider filter; every window with a roll in it is 0 of 75. Averaging over a width T is linear and preserves
+  deconvolution rather than evidence of a wider filter; every window with a roll in it is 0 of
+  75. Averaging over a width T is linear and preserves
   the integral under it, but integrating the RESULT across a window loses `(T/2)` times the
   difference between the window's two ends, whatever the trace does in between. With T measured
   there is no free parameter left, and the closed form accounts for the whole unrolled offset:
@@ -485,7 +513,8 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
   E6 held the cap and moved the generation length instead, and the 1/span reading required the
   residual to fall where it rose -- but only by **2.5 standard errors on two degrees of
   freedom**, which is a lean and not a refusal. **The split remains model-dependent**, and
-  settling it would take about ten rounds against the three E6 ran. Windows holding no load transition at all put the two fields **0.499 W** apart at the
+  settling it would take about ten rounds against the three E6 ran. Windows holding no load
+  transition at all put the two fields **0.499 W** apart at the
   idle floor with the joules scaling with the window, which no linear filter can produce --
   though it belongs to the lowest clock state and only there: pinning the graphics clock to
   the 1860 MHz a request leaves behind for 15 to 20 s collapses it eighteenfold, to 0.030 W,

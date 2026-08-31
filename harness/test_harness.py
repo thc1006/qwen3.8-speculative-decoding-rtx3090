@@ -5453,6 +5453,40 @@ class TheDocsMustQuoteTheReportTheyCiteAndNotAPastOne(unittest.TestCase):
             "contain. Regenerate the report, or bring the prose to it -- a figure "
             "in neither place is one nobody can check:\n  " + "\n  ".join(bad))
 
+    def test_no_document_quotes_a_correlation_that_no_artifact_produces(self):
+        """Passage scoping catches staleness against ONE report. This catches invention.
+
+        The passage rule was written so a correlation from a different analysis would not be
+        checked against the wrong report. It has a cost: it only sees numbers that sit beside
+        a citation, and breaking `docs/ENERGY.md`'s 11,883-character paragraph into sections
+        moved `r = +0.548` into a passage that names no report, so it silently stopped being
+        checked. A formatting change is not supposed to weaken a guard, and the only reason
+        that was noticed is that the coverage was counted before and after.
+
+        So this is scoped to the file rather than the passage, and asks a different question:
+        does any committed artifact produce this number at all? A correlation nobody can
+        regenerate is the failure this whole family of guards exists for, and it does not
+        matter which report it should have come from.
+
+        Both spellings count. `analysis/step_scaling.txt` prints its three fits as columns,
+        so its +0.846 appears as a bare number and not as `r = +0.846`; the prose quotes it
+        in the other form, and neither is wrong.
+        """
+        import re
+        arts = "\n".join(p.read_text() for p in
+                          sorted((self.root / "analysis").glob("*.txt")))
+        bad = []
+        for name in self.DOCS:
+            text = (self.root / name).read_text()
+            for v in re.findall(r"r = ([+-]?[01]\.\d+)", text):
+                spelled = f"r = {v}" in arts
+                bare = re.search(rf"(?<![\d.]){re.escape(v.lstrip('+'))}(?![\d])", arts)
+                if not (spelled or bare):
+                    bad.append(f"{name} quotes r = {v}")
+        self.assertEqual(sorted(set(bad)), [],
+                         "no artifact under analysis/ produces these, in either spelling, so "
+                         "nobody can check them:\n  " + "\n  ".join(sorted(set(bad))))
+
     def test_the_cell_and_window_counts_are_the_reports_own(self):
         import re
         head = re.search(r"(\d+) file-arm cells over (\d+) files, (\d+) records",
@@ -6087,6 +6121,59 @@ class CIMustRunTheGateAndNotACopyOfIt(unittest.TestCase):
         self.assertTrue(out.startswith("100755"),
                         f"the gate script is committed as {out.split()[0]}, so CI would get "
                         f"permission denied; git update-index --chmod=+x it")
+
+
+class TheProseMustBeWrappedSoADiffIsReadable(unittest.TestCase):
+    """`docs/ENERGY.md` held a single 11,883-character line, and it grew there.
+
+    That line was 6,938 characters before the energy phases and nearly twelve thousand after,
+    because every finding was appended to the end of the same paragraph. A line that long
+    cannot be reviewed: a one-word change shows as the whole line rewritten, so no diff of it
+    says anything, and nothing about the document invites splitting it. Thirty-nine prose
+    lines across eight files were over 120 characters.
+
+    Two things came out of fixing it, and both are the reason this guard exists rather than a
+    style note. Breaking the paragraph moved `r = +0.548` into a passage naming no report, so
+    the citation guard silently stopped checking it -- a formatting change weakening a check.
+    And section 5 of the gate matched withdrawn wordings line by line, so hard-wrapping any of
+    them would have made that scan stop finding them and report zero. Both were fixed before
+    the reflow, not after.
+
+    A markdown table row cannot be wrapped, so rows are exempt and checked by eye; the four
+    written for the energy phases had reached 2,200 to 3,600 characters and their detail now
+    sits in prose below the table. A line whose over-length is one unbreakable token, which
+    is what a long URL is, is exempt too: breaking it would break the link.
+    """
+
+    LIMIT = 120
+
+    def test_no_prose_line_is_longer_than_it_needs_to_be(self):
+        import subprocess
+        root = Path(__file__).parent.parent
+        files = [f for f in subprocess.run(["git", "ls-files", "*.md"], cwd=str(root),
+                                           capture_output=True, text=True).stdout.split()
+                 if not f.startswith(("upstream/", "llamacpp"))]
+        self.assertGreater(len(files), 10, "no markdown found; has the glob broken?")
+        bad, checked = [], 0
+        for name in files:
+            fence = False
+            for i, line in enumerate((root / name).read_text().splitlines(), 1):
+                if line.strip().startswith("```"):
+                    fence = not fence
+                    continue
+                if fence or line.lstrip().startswith("|"):
+                    continue
+                checked += 1
+                if len(line) <= self.LIMIT:
+                    continue
+                # One token that cannot be broken -- a URL -- is not an unwrapped paragraph.
+                if max((len(t) for t in line.split()), default=0) > self.LIMIT - 20:
+                    continue
+                bad.append(f"{name}:{i} is {len(line)} characters")
+        self.assertGreater(checked, 500, "too few lines checked to mean anything")
+        self.assertEqual(bad, [],
+                         f"wrap these to {self.LIMIT} or fewer; a line nobody can diff is a "
+                         f"line nobody reviews:\n  " + "\n  ".join(bad[:15]))
 
 
 if __name__ == "__main__":

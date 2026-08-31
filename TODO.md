@@ -40,13 +40,17 @@ second-host addendum in `PREREGISTRATION.md`.
 
 ## Running now
 
-- [x] **Phase n-max** (host A) - complete, 1050 records. - MTP 1..8 and DFlash2 2,4,6,8. Delivers the H8/H8a verdicts and
+- [x] **Phase n-max** (host A) - complete, 1050 records. - MTP 1..8 and DFlash2 2,4,6,8.
+  Delivers the H8/H8a verdicts and
       the `mtp-n1` arm Phase V needs.
-- [x] **#27572 reproduction** - complete on both hosts; host B's 21 result files are under `repro/hostB/`. - the extended sweep reaches the reported
+- [x] **#27572 reproduction** - complete on both hosts; host B's 21 result files are under
+  `repro/hostB/`. - the extended sweep reaches the reported
       19 000-token prompts and an `-np` sweep beyond 4, which the first pass never covered.
 - [x] **RH2 cross-host replication** (host B) - done. `phase_a_hostB.json`, 175 records: partition
       clean 25/25, groups differ on 14, fork positions identical to host A on all 25 prompts.
-- [x] **Forced-warp replication** (host B) - complete; it reproduced the A6000's pattern, including the failure now attributed to a cmake reconfigure. - the same builds on the second 3090.
+- [x] **Forced-warp replication** (host B) - complete; it reproduced the A6000's pattern,
+  including the failure now attributed to a cmake reconfigure. - the same builds on the second
+  3090.
       control done, forced-up running, then the original forced-down and then forced_down2. The
       A6000 result is one device and the two 3090s agree on fork positions where the A6000 does
       not, so this separates a property of the table from one of that card.
@@ -150,7 +154,8 @@ second-host addendum in `PREREGISTRATION.md`.
       passes. All three checks above held in the run - every arm including the baseline ran at
       1600, and all 25 prompts carry a single `sha_ref` across arms, so each comparison is against
       a baseline under the same cap.
-- [x] **Forced-warp intervention** (host C) - forced-up stands; forced-down withdrawn. See Correction 8. - three builds of the same revision differing only in
+- [x] **Forced-warp intervention** (host C) - forced-up stands; forced-down withdrawn. See
+  Correction 8. - three builds of the same revision differing only in
       the `calc_nwarps` GENERIC table. Registered before any of it ran, with the outcomes and the
       baseline identity control written down first.
 
@@ -199,10 +204,16 @@ second-host addendum in `PREREGISTRATION.md`.
       superseded; the ratio of class-stratified means and the paired bootstrap agree to 0.02
       points on the completed data, so the gap was the partial run, not the estimator.
 - [x] **Phase M** - complete, 1575 records, 21 arms, dense against MoE in one session with
-      matched width ladders so `c` is comparable and not just the levels. The sign belongs to the
-      drafting method rather than the architecture: the built-in MTP head wins on both targets and
-      a 0.8B `draft-simple` drafter loses on both. The registered replication anchor does NOT
-      hold, so none of it is a statement about the predecessor's numbers. Corrections 9 and 10.
+      matched width ladders so `c` is comparable and not just the levels. The built-in MTP head
+      wins on both targets and a 0.8B `draft-simple` drafter loses on both, and acceptance tracks
+      the drafter rather than the target. That is an observation about two drafters on two
+      targets; attributing the sign to the drafting method rather than the architecture is the
+      inference this design cannot make, which is why `docs/PHASES.md` withholds the causal
+      reading and the README states what settling it would take rather than that it is settled.
+      This entry asserted it flatly until 2026-09-01, and the gate could not see it: the phrase
+      is on its withdrawn list but ran across a line break, and the scan matched line by line.
+      The registered replication anchor does NOT hold either, so none of it is a statement about
+      the predecessor's numbers. Corrections 9 and 10.
 - [x] **Phase Q-small** - complete, four rungs, 1500 records: Q4_K_M, Q6_K, Q8_0 and BF16 on
       Qwen3.5-9B-MTP. It supplies the bf16 anchor the 27B ladder structurally cannot reach, and
       its Q4_K_M is the exact file llama.cpp #26750 reports on.
@@ -284,10 +295,13 @@ second-host addendum in `PREREGISTRATION.md`.
       different tasks rather than translations.
 - [x] **A7** the warp section carries the intervention result: forced-up passes every gate and the
       registered prediction held on 3 of 18 discriminating prompts.
-- [x] **A8** done - the docstring describes the design that exists, names the think-class collinearity and the language-task confound, and points at D5. It said "3 x 5 = 15" for a 25-prompt suite and claims
+- [x] **A8** done - the docstring describes the design that exists, names the think-class
+  collinearity and the language-task confound, and points at D5. It said "3 x 5 = 15" for a
+  25-prompt suite and claims
       `think` is crossed with class. Rewrite to describe the design that exists and name the
       collinearity as a limitation.
-- [x] **A9** done - downgraded to a described observation that also says what it does not measure. It asserted "compute-bound verify" as a conclusion. Same downgrade.
+- [x] **A9** done - downgraded to a described observation that also says what it does not
+  measure. It asserted "compute-bound verify" as a conclusion. Same downgrade.
 
 Two audit claims that did not hold: the README never says "compute-bound" (the phrase is in
 `elasticity.py` and, correctly, in the preregistration as the hypothesis under test), and it did

@@ -29,7 +29,12 @@ Speculative arms are byte-identical to their baseline on only 25-30 of 125 promp
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../analysis/plot_width_partition_dark.png">
-  <img alt="Five-by-five matrix giving the share of 25 prompts on which two speculative arms show the same first-divergence or censoring signature. Arms at verification widths 3 and 4 match on 100 percent, of which 24 points are prompts where neither arm diverged inside the 400-token window; widths 5, 6 and 8 match on 100 percent, of which 20 points are censored; across the two groups agreement falls to 44 percent, of which 16 points are censored. The blocks span both drafters." src="../analysis/plot_width_partition.png">
+  <img alt="Five-by-five matrix giving the share of 25 prompts on which two speculative arms
+  show the same first-divergence or censoring signature. Arms at verification widths 3 and 4
+  match on 100 percent, of which 24 points are prompts where neither arm diverged inside the
+  400-token window; widths 5, 6 and 8 match on 100 percent, of which 20 points are censored;
+  across the two groups agreement falls to 44 percent, of which 16 points are censored. The
+  blocks span both drafters." src="../analysis/plot_width_partition.png">
 </picture>
 
 Fork positions partition the arms into exactly two groups by verification width, `{3,4}` against
@@ -80,11 +85,14 @@ the 10 that were not. The design fixes the window in tokens, and characters per 
 **0 that reached EOS**: at that cap no record anywhere stopped on its own, so no identity was
 exact and every one meant "did not diverge within 400 tokens". There was no clean subset, because
 the censoring was uniform, and the robustness check the earlier text claimed could not be run on
-that data at all. Forks resolved between **token 6 and token 359**, median 91, the latest at 90 % of the window. Those are exact: `harness/exact_forks.py` tokenizes the two stored outputs and takes the first index where they differ, over 490 divergent records.
+that data at all. Forks resolved between **token 6 and token 359**, median 91, the latest at 90
+% of the window. Those are exact: `harness/exact_forks.py` tokenizes the two stored outputs and
+takes the first index where they differ, over 490 divergent records.
 
 The larger budget that settles it has since been run (`results/phase_a_cap1600.json`, cap 1600,
 Correction 33). Right-censoring falls to **9 of 375 records** on 2 of 25 prompts, **267 of 525
-records reach EOS**, and forks resolve as late as **token 1406**, median 113, over 366 divergent records. Divergence per arm rises to 100 %
+records reach EOS**, and forks resolve as late as **token 1406**, median 113, over 366
+divergent records. Divergence per arm rises to 100 %
 for dflash2-n4, dflash2-n7 and mtp-n5, 96 % for mtp-n2 and 92 % for mtp-n3. Still **0 exact
 identities**: of the records that ran to EOS, not one matched its baseline. The width partition
 {3,4} / {5,6,8} is unchanged and rests on more determined cells than before.

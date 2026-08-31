@@ -21,7 +21,8 @@ per-prompt baseline CV of 0.001 that `results/phase_a.json` actually shows, a pe
 +59.77 % with sd 21.85, and 0.15 % pass-level noise -- the **relative-ratio estimand covers at
 90.2 % +- 0.7**, inside the band the absolute processes occupy. A ratio misbehaves when its
 denominator can approach zero; on 25 prompts whose baselines span 41.4 to 41.7 tok/s, it cannot.
-The 1.3 half-width rule below remains a sensitivity flag rather than a coverage correction. Those come from [`analysis/bootstrap_coverage.txt`](analysis/bootstrap_coverage.txt):
+The 1.3 half-width rule below remains a sensitivity flag rather than a coverage correction.
+Those come from [`analysis/bootstrap_coverage.txt`](analysis/bootstrap_coverage.txt):
 four synthetic processes at 2000 replications x 2000 resamples each, every row carrying its own
 Monte Carlo standard error of 0.6 to 0.7 points, which is the precision the standard formula
 ([Morris, White and Crowther 2019](https://onlinelibrary.wiley.com/doi/10.1002/sim.8086)) asks

@@ -33,7 +33,13 @@ that the boost difference is not mistaken for something working in the study's f
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../analysis/plot_bound_by_dark.png">
-  <img alt="Two panels. Top: memory-clock elasticity against SM-clock elasticity at the top of the clock range. The baseline sits at 0.80 memory and 0.27 SM; both speculative arms sit near 0.15 memory and 0.78 SM, in the opposite corner, and all three lie close to a dotted line where the two elasticities sum to one. Bottom: SM-clock elasticity by interval. From 600 to 1200 MHz all three are between 0.80 and 0.93; from 1200 to 1710 MHz the baseline falls to 0.27 while the speculative arms stay at 0.76 and 0.80. These are response measurements, not a roofline." src="../analysis/plot_bound_by.png">
+  <img alt="Two panels. Top: memory-clock elasticity against SM-clock elasticity at the top of
+  the clock range. The baseline sits at 0.80 memory and 0.27 SM; both speculative arms sit near
+  0.15 memory and 0.78 SM, in the opposite corner, and all three lie close to a dotted line
+  where the two elasticities sum to one. Bottom: SM-clock elasticity by interval. From 600 to
+  1200 MHz all three are between 0.80 and 0.93; from 1200 to 1710 MHz the baseline falls to
+  0.27 while the speculative arms stay at 0.76 and 0.80. These are response measurements, not a
+  roofline." src="../analysis/plot_bound_by.png">
 </picture>
 
 Phase R varied memory bandwidth and power budget independently, 1125 request records, and confirmed

@@ -18,7 +18,8 @@ GPUs, models, engines and sessions; only within-host contrasts are compared. See
 
 
 Each hypothesis was written down before its data existed, in the addenda to
-[`PREREGISTRATION.md`](PREREGISTRATION.md). Their status is given per row below, and it is mixed -- complete and interpreted, complete with
+[`PREREGISTRATION.md`](PREREGISTRATION.md). Their status is given per row below, and it is
+mixed -- complete and interpreted, complete with
 interpretation withheld, partially complete, running, and blocked. The
 status column says which.
 
@@ -37,19 +38,27 @@ status column says which.
 | **V** | does the same comparison hold on vLLM rather than llama.cpp? | **Run, and what this card can produce is one arm and six recorded failures.** 75 records, `baseline-vllm` only, three passes at 47.52 / 47.53 / 47.52 tok/s -- a 0.02 % spread, and the first decode-only rate this study has from vLLM, taken from `vllm:request_decode_time_seconds` over `vllm:generation_tokens_total` rather than from wall time. Prefill is 1.29 % of inference on these requests, which is what a wall-clock rate would have folded into the comparison. Both MTP arms failed to start on all three passes: the same 2.37 GiB allocation at `qwen3_5_mtp.py:244` every time, which is `vocab_size 248320 x hidden_size 5120 x 2 bytes` for a bf16 `lm_head` the checkpoint does not contain, on top of a 17.33 GiB target. Filed as [vllm#53887](https://github.com/vllm-project/vllm/issues/53887). Design and the memory arithmetic: [`docs/PHASE_V_DESIGN.md`](docs/PHASE_V_DESIGN.md) |
 | **E** | do the three readings of one window agree, and does their disagreement cancel in a ratio? | **complete**, 450 records, 0 incidents, the power limit stepped 420 / 250 / 150 W because at stock every arm sits between 409.8 and 415.7 W and the load never varies enough to separate a load-dependent instrument error from a constant one. **A control on the instruments; it is not a speedup or efficiency result and the 250 W and 150 W arms are not a configuration anyone would run.** The three caps produce **byte-identical output** -- 50 of 50 arm-prompt cells across all three, and 150 of 150 across the three passes -- so this compares one computation at three rates rather than three computations. The driver's cumulative counter and the integral of `power.draw.instant` agree to within **0.15 % on every arm mean**, systematically rather than symmetrically: all six means negative, -0.008 to -0.149 %, against a record-level spread of -1.229 to +0.958 %. The counter's apparent disagreement with `energy_j` runs -0.14 % to **+1.87 %** and regresses on the instantaneous field's own departure, over every file in `analysis/energy_instruments.txt` rather than this one, at **r = +0.839**, so it is that field's offset seen twice. **These are three readout paths over one sensor, not three instruments**, so the agreement bounds the processing and leaves the proportional bidirectional sensor error exactly where it was. The offset is **not proportional** -- over 119 file-arm cells and 7125 measured windows in twenty-eight result files it tracks total energy at r = +0.078 -- so it cannot be corrected by scaling and does not cancel between arms drawing different power; what it IS remains unmodelled. Phase E reproduces Phase A's decode-energy saving before any correction, **37.06 % against 37.10 %**, and correcting it in joules rather than per cent gives **36.3 %**. Reports: [`analysis/energy_instruments.txt`](../analysis/energy_instruments.txt), [`analysis/nvml_polling.txt`](../analysis/nvml_polling.txt). Correction 44 |
 | **E2** | is the averaged field's offset the variation the smoothing removed? | **complete**, 450 records, 0 incidents, the same matrix and caps as Phase E so the two are directly comparable, re-run once `power_sd_w` and `power_sd_instant_w` were recorded. **A control on the instruments; it identifies no mechanism and refutes a fourth candidate.** `power.draw` is a one-second rolling average and `power.draw.instant` is not, so `sd_instant - sd` is directly how much of the trace's movement the averaging discarded. It correlates with the offset at **-0.342** pooled and **-0.250** within arms — the wrong sign — and the run's largest offset, `mtp-n2@pw420` at 41.12 J, sits on the *smallest* discarded spread of any arm. The quantitative test finishes it: a spread in watts over a window in seconds is joules, so `offset_J / (sd_lost × span)` would be about 1 and flat; it spans **0.012 to 6.807, a factor of 574**. This phase also added the correlation Phase E's analysis lacked — **the same correlations within each arm** — and it convicts the earlier best number: mean power is +0.863 pooled and **-0.239 within arms**, a between-arm relationship that had been read as a statement about the mechanism. `power_sd_w` is +0.960 pooled and +0.323 within. Four candidates are now refused and none identified. Report: [`analysis/offset_mechanism.txt`](../analysis/offset_mechanism.txt). Correction 46 |
-| **E3** | does the offset depend on how often the power is sampled? | **complete**, 450 records and 0 incidents. Nine invocations holding 50 records each: three requested sampler periods -- 0.05, 0.10, 0.20 s -- over three rounds with the interval order rotated each round, so no interval sits in one part of the session. **A control on the instruments; it is not a speedup or efficiency result**, and under `--passes 1` the arm order does not rotate, so arm and position within an invocation are collinear and this phase cannot be read for a difference between the arms. **The requested interval is not the achieved rate**: the sampler queries and then waits, so 0.05 s gives **14.30 Hz** rather than 20, and the three land at 14.30 / 8.43 / 4.71 Hz. Both predictions were written down before the run -- PHYSICAL that both integrals converge as the grid refines, ARTEFACT that the instantaneous integral grows with the rate while `energy_j` stays put. **ARTEFACT is refused by its own rule.** The instantaneous integral does not move (**0.999x** and **1.000x** from the slowest sampling to the fastest) and sits within **0.23 % of the driver's cumulative counter at every rate** -- a counter read exactly twice per window, which is the one reading this experiment cannot move. The averaged field sits **0.31 to 1.86 % below** that counter and moves *away* from it as the grid refines, by +0.209 and +0.453 points. So `power.draw` is the under-resolved reading and the offset is a real energy difference rather than an integration artefact. The loss is **arm-dependent** -- 0.31 to 0.66 % on `baseline@pw420` against 1.41 to 1.86 % on `mtp-n2@pw420` -- which is why it does not cancel in a ratio between two arms. The rounds exist to measure the noise floor and do: one integral reproduces to **0.153 %** across rounds while the offset, a small difference of two large numbers, reproduces only to **9.4 %**. The rotation did its job -- round means of `offset/sd` are 1.716 / 1.649 / 1.690 against an interval effect of 0.955x and 1.149x. **No mechanism is identified here either**; what is settled is which of the two readings is wrong. Report: [`analysis/sampling_rate.txt`](../analysis/sampling_rate.txt). Correction 47 |
-| **E4** | does the averaged field lose its energy at the window's edges, and is the cost the width of its own average? | **complete**, 450 records and 0 incidents. Nine invocations holding 50 records each: three settings of idle held around the sampling window -- 0, 1.5 and 4.0 s -- over three rounds with the order rotated. **A control on the instruments; not a speedup, efficiency or tok/J result**, and a rolled window's `energy_j`, `decode_energy_j` and `sample_span_s` all include the roll, so `energy_instruments.py` refuses to sweep any file declaring one. Under `--passes 1` the arm order does not rotate, so this phase cannot be read for any difference between the arms. **The offset collapses.** `baseline@pw420` goes 24.11 -> 12.49 -> **6.43 J** across the three rolls and `mtp-n2@pw420` 46.03 -> 5.59 -> **6.35 J**, which is **0.267x** and **0.138x**, against a round-to-round noise floor on the offset of 10.5 to 30 %. The window LENGTHENS while that happens -- 9.89 to 13.89 s and 6.46 to 10.40 s -- so a per-second loss is refused in the same line that a loss unchanged by flat idle is. **`power.draw` is measured, not quoted: a boxcar with a median width of 1.00 to 1.10 s.** It is a filtered `power.draw.instant`, so the width that reproduces one from the other is a direct read of the filter, needing no assumption about the window's ends. The same value comes back on both arms at every roll, with an rms residual of 1.2 to 1.6 W on the unrolled windows. Thirteen of the 75 unrolled baseline records fit at the grid's ceiling rather than near the median -- a flat trace carries no information about the width of a filter over it, and forcing those to 1.00 s costs 0.50 W of rms where the other 62 pay 0.11 -- and every cell with a roll is 0 of 75. The repository had only ever quoted 'about a second' from a paper. **The model then has no free parameter and accounts for the whole unrolled offset**: a boxcar of width T loses `(T/2) x (the mean of the last T seconds minus the averaged field's own first sample)`, that last term being by definition the mean over the T seconds BEFORE the window, which is not sampled and does not need to be. Predicted against observed gives **1.06** on the baseline and **1.08** on `mtp-n2`. It also disposes of the arm-dependence: T is one number, and `mtp-n2` carries the larger offset only because its window's two ends differ by more. **And the offset accrues where the model says**: of 23.82 J on the baseline, 23.38 lands in the first T seconds, 0.06 in the middle and -0.10 in the last T; of 46.88 J on `mtp-n2`, 43.58 in the first T. **What survives is 5.7 J on both arms** at the longest roll, against energies of 4690 and 3200 J. It is **not** a per-second loss: the plateau -- where the instantaneous field sits above 80 % of its own maximum, trimmed a second at each end so the filter's ramps fall outside -- carries **0.6 to 0.9 J** of it, on an arm whose plateau runs 7.7 s and on one whose runs 4.1 s. The rest is at the edges, which is where the boxcar model already is, so what survives is that model being slightly the wrong SHAPE rather than a second mechanism beside it. **That both arms carry the same residual distinguishes nothing**, and the correction to Correction 48 is that it was read as though it did: at this roll both windows hold the same excursion, idle to the same cap and back, and the head terms above are within 3 % of each other and the middle terms within 0.5 %. Anything sized by that excursion is PREDICTED to be equal on the two arms. Phase E5 varies it on purpose. Report: [`analysis/edge_model.txt`](../analysis/edge_model.txt). Correction 48 |
-| **E5** | does the residual that survives Phase E4's roll scale with the step the window straddles? | **complete**, 225 records and 0 incidents. One baseline arm at three power caps -- 420, 250 and 150 W -- with Phase E4's 4.0 s roll and its traces, three passes so the rotation closes and each cap visits each order position exactly once (verified in the file: positions [0,2,1], [1,0,2], [2,1,0]). **A control on the instruments**: every arm is the baseline and they differ only in the cap, so nothing here is a speedup, an efficiency figure or a statement about speculative decoding, and a rolled window's `energy_j` includes the roll. **The cap sets the step**, measured per record rather than assumed: **287.4, 122.1 and 26.5 W** above an idle-with-model draw of 125 to 131 W, a range of 10.8x against the 1.4x the committed records span on their own. **The answer is BOTH, and neither pre-registered model alone.** Regressing the residual on the step over the nine (arm, pass) cell means -- not the 225 records, which are three steps wearing a crowd -- gives a slope of **+19.7 ms** and an intercept of **+3.56 J**, and fitting each pass separately puts that intercept at 3.30, 3.16 and 4.21 J. **But the split into those two numbers is not established by this design, and Correction 50 withdraws it as a quantity.** The cap is the only lever, and it moves the step and the span together: 287 W over 13.9 s at one end, 26.5 W over 49.4 s at the other, a Spearman of **-0.917** between them across the nine cells. Three models fit the same points about equally -- on the step, intercept **+3.56 J** at r = +0.846; on 1/span, intercept **+1.38 J** at r = **+0.878**, which is the better fit; on the span, intercept **+10.00 J** at r = -0.847. The intercept is a property of the model chosen and not of the data. That the step-scaled reading agrees with Phase E4 -- 5.7 J over a 284 W step is 20.1 ms against 19.7 here -- is consistency inside one model family and not independent confirmation, since E4's figure is attributed to the step by the same assumption. **It is still not a per-second loss.** The caps move the span 4.5x as well, 13.9 to 49.4 s, and the plateau term stays at 0.2, 1.6 and -0.4 J while the plateau itself runs 7.8, 11.3 and 43.3 s. **And the averaging width does not move with the cap**, which is what every number above rests on: median T is **1.050 s at all three**, quartiles 1.000 / 1.100, with 0 of 75 records at the search grid's edge in each. A width that tracked the workload would mean the deconvolution was reading the load rather than the filter. **The non-linearity is named, and it is on one edge.** No linear time-invariant filter can produce any of this: such a filter loses exactly `m x (end level - start level)` over a window whatever happens inside, and at this roll both ends are idle. Fitting the width separately on each edge gives the same 1.00 to 1.10 s, but the rms of that fit is under 2 W on the rise and up to **18 W on the fall**. Stacked on the instantaneous field's own step down, the reported average decays, **stalls for about 0.8 s at 30, 12.5 and 2.5 W above a boxcar** at the three caps, then drops to meet it -- so it describes how power climbs and not how it falls. The stall scales with the step and therefore feeds the slope. **What is left is the 3.56 J intercept**, which no model here explains: an energy per window that scales with neither the step, the span, the plateau nor the total. Reports: [`analysis/step_scaling.txt`](../analysis/step_scaling.txt). Correction 49 |
-| **E6** | does the residual follow the step or the span? Phase E5's cap moved both at once | **complete**, 225 records and 0 incidents. Nine invocations holding 25 records each: one arm at the stock 420 W cap, so the step is held, with the generation length moved instead -- 200, 400 and 800 tokens -- over three rounds with the order rotated. **A control on the instruments**: one arm, no contrast, nothing about speculative decoding, and the lengths are not this study's 400 so no throughput or energy figure here compares with another phase. **The manipulation worked**: the step moves **1.7 %** across the three (289.3, 286.3, 284.5 W) while the span moves **2.57x** (9.04, 13.89, 23.23 s), against Phase E5's Spearman of -0.917 between them. The 400-token cell reproduces E5's top cap to two decimals -- span 13.89 against 13.91, step 286.3 against 287.4 -- so the two phases measure the same object and E5's two models coincide there and diverge either side, which makes this a two-sided test. **Neither model is refused, and Correction 53 withdraws the claim that one was.** The span model predicted the residual would FALL by 6.84 J from the short cell to the long; it rose by **3.54 J**, and fitting 1/span here with the step held gives **-55.03** against E5's +101.14. But the error on that contrast is the scatter of the contrast itself, not of the round means: paired within each round the difference is **+10.22, -4.06, +4.46 J**, so **+3.54 with an sd of 7.19 and a standard error of 4.15 on two degrees of freedom**. That puts the span model at **t = 2.50** -- a lean, not a refusal -- and the step model at **t = 0.85**. The per-round 1/span slopes are -163.7, +69.7 and -72.0, mean **-55.3 with a standard error of 67.9**, which is not distinguishable from zero either. At this scatter, refusing a 6.84 J effect at t = 3 would take about **ten rounds**; this phase ran three. **So Correction 50's withdrawal stands: the split into +19.7 ms and +3.56 J remains model-dependent.** **Temperature is the confound this phase introduces**, since a longer generation is a hotter card -- 74.2, 80.0 and 82.4 C, with the SM clock falling 57 MHz. Within a cell the residual correlates with it at **+0.034, +0.137 and -0.073**, and with position in the pass at +0.041, +0.138 and +0.176; the two are collinear (r 0.35 to 0.79) so neither alone would settle anything, but both being near zero rules out a strong effect of either. **The residual is not monotone** -- 7.31, 11.48, 10.85 J -- which neither model predicts. The 200-token cell has a plateau of only 2.93 s, about three averaging windows, and its fitted width comes out a grid step lower than the other two at 1.000 s against 1.050. Dropping it leaves the residual flat across a 1.67x span change, which is the step model's prediction, but that is a post-hoc exclusion and is not the result. Report: [`analysis/span_at_fixed_step.txt`](../analysis/span_at_fixed_step.txt). Correction 52 |
+| **E3** | does the offset depend on how often the power is sampled? | **complete**, 450 records and 0 incidents. Nine invocations holding 50 records each: three requested sampler periods -- 0.05, 0.10, 0.20 s -- over three rounds with the interval order rotated each round, so no interval sits in one part of the session. Report: [`analysis/sampling_rate.txt`](../analysis/sampling_rate.txt). Correction 47 |
+| **E4** | does the averaged field lose its energy at the window's edges, and is the cost the width of its own average? | **complete**, 450 records and 0 incidents. **That both arms carry the same residual distinguishes nothing**, and the correction to Correction 48 is that it was read as though it did: at this roll both windows hold the same excursion, idle to the same cap and back, and the head terms above are within 3 % of each other and the middle terms within 0.5 %. Report: [`analysis/edge_model.txt`](../analysis/edge_model.txt). Correction 48 |
+| **E5** | does the residual that survives Phase E4's roll scale with the step the window straddles? | **complete**, 225 records and 0 incidents. **But the split into those two numbers is not established by this design, and Correction 50 withdraws it as a quantity.** The cap is the only lever, and it moves the step and the span together: 287 W over 13.9 s at one end, 26.5 W over 49.4 s at the other, a Spearman of **-0.917** between them across the nine cells. Reports: [`analysis/step_scaling.txt`](../analysis/step_scaling.txt). Correction 49 |
+| **E6** | does the residual follow the step or the span? Phase E5's cap moved both at once | **complete**, 225 records and 0 incidents. **Neither model is refused, and Correction 53 withdraws the claim that one was.** The span model predicted the residual would FALL by 6.84 J from the short cell to the long; it rose by **3.54 J**, and fitting 1/span here with the step held gives **-55.03** against E5's +101.14. **So Correction 50's withdrawal stands: the split into +19.7 ms and +3.56 J remains model-dependent.** **Temperature is the confound this phase introduces**, since a longer generation is a hotter card -- 74.2, 80.0 and 82.4 C, with the SM clock falling 57 MHz. Report: [`analysis/span_at_fixed_step.txt`](../analysis/span_at_fixed_step.txt). Correction 52 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_phase_m_dark.png">
-  <img alt="Two panels, MoE and dense, of net effect against requested depth. The built-in MTP head is positive on both targets and peaks at n-max 2; the 0.8B draft-simple arms are negative on both at every depth. Draft acceptance is annotated under each point, and the columns actually verified where they differ from the requested depth. The axis is ordinal and carries a break between 8 and 16." src="analysis/plot_phase_m.png">
+  <img alt="Two panels, MoE and dense, of net effect against requested depth. The built-in MTP
+  head is positive on both targets and peaks at n-max 2; the 0.8B draft-simple arms are
+  negative on both at every depth. Draft acceptance is annotated under each point, and the
+  columns actually verified where they differ from the requested depth. The axis is ordinal and
+  carries a break between 8 and 16." src="analysis/plot_phase_m.png">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="analysis/plot_qsmall_ladder_dark.png">
-  <img alt="Three panels against bits per weight for the Qwen3.5-9B ladder. Acceptance is flat across the four rungs for every depth. The fitted cost chord falls from 0.41 at Q4_K_M to 0.17 at BF16 while wall-time per step does not follow it. The share of requests with no divergence observed through the token cap is 4 to 16 % on the quantized rungs and about 52 % at BF16." src="analysis/plot_qsmall_ladder.png">
+  <img alt="Three panels against bits per weight for the Qwen3.5-9B ladder. Acceptance is flat
+  across the four rungs for every depth. The fitted cost chord falls from 0.41 at Q4_K_M to
+  0.17 at BF16 while wall-time per step does not follow it. The share of requests with no
+  divergence observed through the token cap is 4 to 16 % on the quantized rungs and about 52 %
+  at BF16." src="analysis/plot_qsmall_ladder.png">
 </picture>
 
 Phase M and Phase Q-small in full. Both are also linked from the table above.
@@ -77,3 +86,137 @@ Phase M and Phase Q-small in full. Both are also linked from the table above.
   gguf and is quantized with it, so a rung changes verifier and drafter-head compute together.
   Stable acceptance shows the drafter's proposals did not change; it does not show its forward
   pass cost the same.
+
+## The energy-instrument phases, in detail
+
+The table above carries each phase's counts, its verdict and its report. What a phase
+measured, what it refuses and what it cannot say does not fit in a table cell -- the four
+rows below had grown to between 2,200 and 3,600 characters each, which is a paragraph
+pretending to be a column. The wording is unchanged; it has been moved.
+
+### Phase E3 -- does the offset depend on how often the power is sampled?
+
+**A control on the instruments; it is not a speedup or efficiency result**, and under `--passes
+1` the arm order does not rotate, so arm and position within an invocation are collinear and
+this phase cannot be read for a difference between the arms. **The requested interval is not
+the achieved rate**: the sampler queries and then waits, so 0.05 s gives **14.30 Hz** rather
+than 20, and the three land at 14.30 / 8.43 / 4.71 Hz. Both predictions were written down
+before the run -- PHYSICAL that both integrals converge as the grid refines, ARTEFACT that the
+instantaneous integral grows with the rate while `energy_j` stays put. **ARTEFACT is refused by
+its own rule.** The instantaneous integral does not move (**0.999x** and **1.000x** from the
+slowest sampling to the fastest) and sits within **0.23 % of the driver's cumulative counter at
+every rate** -- a counter read exactly twice per window, which is the one reading this
+experiment cannot move. The averaged field sits **0.31 to 1.86 % below** that counter and moves
+*away* from it as the grid refines, by +0.209 and +0.453 points. So `power.draw` is the
+under-resolved reading and the offset is a real energy difference rather than an integration
+artefact. The loss is **arm-dependent** -- 0.31 to 0.66 % on `baseline@pw420` against 1.41 to
+1.86 % on `mtp-n2@pw420` -- which is why it does not cancel in a ratio between two arms. The
+rounds exist to measure the noise floor and do: one integral reproduces to **0.153 %** across
+rounds while the offset, a small difference of two large numbers, reproduces only to **9.4 %**.
+The rotation did its job -- round means of `offset/sd` are 1.716 / 1.649 / 1.690 against an
+interval effect of 0.955x and 1.149x. **No mechanism is identified here either**; what is
+settled is which of the two readings is wrong.
+
+### Phase E4 -- does the averaged field lose its energy at the window's edges?
+
+Under `--passes 1` the arm order does not rotate, so this phase cannot be read for any
+difference between the arms. **The offset collapses.** `baseline@pw420` goes 24.11 -> 12.49 ->
+**6.43 J** across the three rolls and `mtp-n2@pw420` 46.03 -> 5.59 -> **6.35 J**, which is
+**0.267x** and **0.138x**, against a round-to-round noise floor on the offset of 10.5 to 30 %.
+The window LENGTHENS while that happens -- 9.89 to 13.89 s and 6.46 to 10.40 s -- so a
+per-second loss is refused in the same line that a loss unchanged by flat idle is.
+**`power.draw` is measured, not quoted: a boxcar with a median width of 1.00 to 1.10 s.** It is
+a filtered `power.draw.instant`, so the width that reproduces one from the other is a direct
+read of the filter, needing no assumption about the window's ends. The same value comes back on
+both arms at every roll, with an rms residual of 1.2 to 1.6 W on the unrolled windows. The
+repository had only ever quoted 'about a second' from a paper. **The model then has no free
+parameter and accounts for the whole unrolled offset**: a boxcar of width T loses `(T/2) x (the
+mean of the last T seconds minus the averaged field's own first sample)`, that last term being
+by definition the mean over the T seconds BEFORE the window, which is not sampled and does not
+need to be. Predicted against observed gives **1.06** on the baseline and **1.08** on `mtp-n2`.
+It also disposes of the arm-dependence: T is one number, and `mtp-n2` carries the larger offset
+only because its window's two ends differ by more. **And the offset accrues where the model
+says**: of 23.82 J on the baseline, 23.38 lands in the first T seconds, 0.06 in the middle and
+-0.10 in the last T; of 46.88 J on `mtp-n2`, 43.58 in the first T. **What survives is 5.7 J on
+both arms** at the longest roll, against energies of 4690 and 3200 J. It is **not** a
+per-second loss: the plateau -- where the instantaneous field sits above 80 % of its own
+maximum, trimmed a second at each end so the filter's ramps fall outside -- carries **0.6 to
+0.9 J** of it, on an arm whose plateau runs 7.7 s and on one whose runs 4.1 s. The rest is at
+the edges, which is where the boxcar model already is, so what survives is that model being
+slightly the wrong SHAPE rather than a second mechanism beside it. Anything sized by that
+excursion is PREDICTED to be equal on the two arms. Phase E5 varies it on purpose.
+
+Nine invocations holding 50 records each: three settings of idle held around the sampling
+window -- 0, 1.5 and 4.0 s -- over three rounds with the order rotated. **A control on the
+instruments; not a speedup, efficiency or tok/J result**, and a rolled window's `energy_j`,
+`decode_energy_j` and `sample_span_s` all include the roll, so `energy_instruments.py` refuses
+to sweep any file declaring one. Thirteen of the 75 unrolled baseline records fit at the grid's
+ceiling rather than near the median -- a flat trace carries no information about the width of a
+filter over it, and forcing those to 1.00 s costs 0.50 W of rms where the other 62 pay 0.11 --
+and every cell with a roll is 0 of 75.
+
+### Phase E5 -- does the residual that survives Phase E4's roll scale with the step the window straddles?
+
+**A control on the instruments**: every arm is the baseline and they differ only in the cap, so
+nothing here is a speedup, an efficiency figure or a statement about speculative decoding, and
+a rolled window's `energy_j` includes the roll. Three models fit the same points about equally
+-- on the step, intercept **+3.56 J** at r = +0.846; on 1/span, intercept **+1.38 J** at r =
+**+0.878**, which is the better fit; on the span, intercept **+10.00 J** at r = -0.847. The
+intercept is a property of the model chosen and not of the data. That the step-scaled reading
+agrees with Phase E4 -- 5.7 J over a 284 W step is 20.1 ms against 19.7 here -- is consistency
+inside one model family and not independent confirmation, since E4's figure is attributed to
+the step by the same assumption. **It is still not a per-second loss.** The caps move the span
+4.5x as well, 13.9 to 49.4 s, and the plateau term stays at 0.2, 1.6 and -0.4 J while the
+plateau itself runs 7.8, 11.3 and 43.3 s. A width that tracked the workload would mean the
+deconvolution was reading the load rather than the filter. **The non-linearity is named, and it
+is on one edge.** No linear time-invariant filter can produce any of this: such a filter loses
+exactly `m x (end level - start level)` over a window whatever happens inside, and at this roll
+both ends are idle. Fitting the width separately on each edge gives the same 1.00 to 1.10 s,
+but the rms of that fit is under 2 W on the rise and up to **18 W on the fall**. Stacked on the
+instantaneous field's own step down, the reported average decays, **stalls for about 0.8 s at
+30, 12.5 and 2.5 W above a boxcar** at the three caps, then drops to meet it -- so it describes
+how power climbs and not how it falls. The stall scales with the step and therefore feeds the
+slope. **What is left is the 3.56 J intercept**, which no model here explains: an energy per
+window that scales with neither the step, the span, the plateau nor the total.
+
+One baseline arm at three power caps -- 420, 250 and 150 W -- with Phase E4's 4.0 s roll and
+its traces, three passes so the rotation closes and each cap visits each order position exactly
+once (verified in the file: positions [0,2,1], [1,0,2], [2,1,0]). **The cap sets the step**,
+measured per record rather than assumed: **287.4, 122.1 and 26.5 W** above an idle-with-model
+draw of 125 to 131 W, a range of 10.8x against the 1.4x the committed records span on their
+own. **The answer is BOTH, and neither pre-registered model alone.** Regressing the residual on
+the step over the nine (arm, pass) cell means -- not the 225 records, which are three steps
+wearing a crowd -- gives a slope of **+19.7 ms** and an intercept of **+3.56 J**, and fitting
+each pass separately puts that intercept at 3.30, 3.16 and 4.21 J. **And the averaging width
+does not move with the cap**, which is what every number above rests on: median T is **1.050 s
+at all three**, quartiles 1.000 / 1.100, with 0 of 75 records at the search grid's edge in
+each.
+
+### Phase E6 -- does the residual follow the step or the span? Phase E5's cap moved both at once
+
+**A control on the instruments**: one arm, no contrast, nothing about speculative decoding, and
+the lengths are not this study's 400 so no throughput or energy figure here compares with
+another phase. **The manipulation worked**: the step moves **1.7 %** across the three (289.3,
+286.3, 284.5 W) while the span moves **2.57x** (9.04, 13.89, 23.23 s), against Phase E5's
+Spearman of -0.917 between them. The 400-token cell reproduces E5's top cap to two decimals --
+span 13.89 against 13.91, step 286.3 against 287.4 -- so the two phases measure the same object
+and E5's two models coincide there and diverge either side, which makes this a two-sided test.
+But the error on that contrast is the scatter of the contrast itself, not of the round means:
+paired within each round the difference is **+10.22, -4.06, +4.46 J**, so **+3.54 with an sd of
+7.19 and a standard error of 4.15 on two degrees of freedom**. That puts the span model at **t
+= 2.50** -- a lean, not a refusal -- and the step model at **t = 0.85**. The per-round 1/span
+slopes are -163.7, +69.7 and -72.0, mean **-55.3 with a standard error of 67.9**, which is not
+distinguishable from zero either. At this scatter, refusing a 6.84 J effect at t = 3 would take
+about **ten rounds**; this phase ran three. Within a cell the residual correlates with it at
+**+0.034, +0.137 and -0.073**, and with position in the pass at +0.041, +0.138 and +0.176; the
+two are collinear (r 0.35 to 0.79) so neither alone would settle anything, but both being near
+zero rules out a strong effect of either. **The residual is not monotone** -- 7.31, 11.48,
+10.85 J -- which neither model predicts. The 200-token cell has a plateau of only 2.93 s, about
+three averaging windows, and its fitted width comes out a grid step lower than the other two at
+1.000 s against 1.050. Dropping it leaves the residual flat across a 1.67x span change, which
+is the step model's prediction, but that is a post-hoc exclusion and is not the result.
+
+Nine invocations holding 25 records each: one arm at the stock 420 W cap, so the step is held,
+with the generation length moved instead -- 200, 400 and 800 tokens -- over three rounds with
+the order rotated.
+

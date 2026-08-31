@@ -149,7 +149,15 @@ for f in files:
         ctx = " ".join(lines[max(0, i - 3):i + 2])
         if any(m in ctx for m in marks):
             continue
-        hits += [f"{f}:{i} {c!r}" for c in claims if c in line]
+        # Search a WINDOW with its whitespace collapsed, not the single line. A withdrawn
+        # wording is a phrase, and a phrase survives being hard-wrapped -- but `c in line`
+        # does not: reflow "share the whole trajectory" across a line break and this scan
+        # stops finding it and reports zero, which is the shape of a guard that examined
+        # nothing. Nothing about the reflow would look like a change to a check. The window
+        # is the same one the withdrawal marks above already use, so a claim split over two
+        # lines is found and a withdrawal one line above it still exempts it.
+        window = " ".join(" ".join(lines[i - 1:i + 1]).split())
+        hits += [f"{f}:{i} {c!r}" for c in claims if c in window]
 # What this actually checked, not what it would be nice to have checked. "0 residual claims"
 # reads as "no withdrawn claim survives anywhere"; it means "none of these listed strings appear".
 # The list is hand-maintained and lags every withdrawal until someone adds to it -- three of

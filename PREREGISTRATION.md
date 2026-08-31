@@ -780,7 +780,8 @@ temptation is to treat it as more samples of the same thing, and it is not.
 
 The two cards are different SKUs of the same part: 350 W against 420 W is not a setting, it is the
 board's own `power.default_limit`. The drivers are a major version apart, 610 against 580, which is
-a wider gap than the rest of the table and wider than was first written here. Every absolute throughput number therefore belongs to its host
+a wider gap than the rest of the table and wider than was first written here. Every absolute
+throughput number therefore belongs to its host
 and to nothing else, and no result here pools tok/s across the two. This is the same constraint the
 three-host fleet already imposed and it is restated because the second card makes it tempting to
 forget.
@@ -1832,7 +1833,8 @@ Nothing in the reported comparisons depends on the answer. Within a pass every a
 same baseline whatever its position, so ranking, sign, and `mtp-n2` being the best MTP depth are
 untouched either way.
 
-## Correction 19b, registered 2026-08-26 03:35, still BEFORE `baseline-dense` runs: a session trend, and how 19a is to be scored
+## Correction 19b, registered 2026-08-26 03:35, still BEFORE `baseline-dense` runs: a session
+trend, and how 19a is to be scored
 
 Two things found while the pre-registered test is still pending. Both are registered before the arm
 it turns on has run.
@@ -1948,7 +1950,8 @@ Nothing measured is lost:
 remaining rung, so deleting more would be gratuitous, and five completed phases load those files.
 `models/target` (18 GB) is used by every phase in the study and is not a candidate.
 
-## Correction 21, registered 2026-08-26 14:42, BEFORE the BF16 rung and before any acceptance figure is read: `phase_qsmall`'s hypotheses
+## Correction 21, registered 2026-08-26 14:42, BEFORE the BF16 rung and before any acceptance
+figure is read: `phase_qsmall`'s hypotheses
 
 `phase_qsmall` began running at 14:30 today and no hypothesis for it had been registered. This
 repository registers before it measures, and that did not happen here; the honest repair is to
@@ -3122,7 +3125,8 @@ this by writing the control into the method-effect field. The suite is 192 tests
 **No data yet.** The field is empty until Phase A is re-run at 1600, and that re-run is also what
 clears the two `host_contended` incidents. One run settles all three.
 
-## Correction 35, 2026-08-27 22:15: an external README review, checked line by line, and what the instruments can actually support
+## Correction 35, 2026-08-27 22:15: an external README review, checked line by line, and what
+the instruments can actually support
 
 A reviewer pinned `097f77c` and returned eight correctness blockers. **All eight are real.** Two
 further claims in the same review are not, and one defect it did not raise sits underneath the rest.
@@ -3318,7 +3322,8 @@ was denied, because `\b` before an interpreter name is too weak a boundary: `\bs
 of `_a.sh`, and the rest of the pattern did the work. Command names and file suffixes end in the
 same letters, so the boundary has to exclude `.` and `-` as well.
 
-## Correction 37, 2026-08-28 11:20: twenty-three generated reports were older than the analysers that write them, and one of them refutes Correction 35
+## Correction 37, 2026-08-28 11:20: twenty-three generated reports were older than the
+analysers that write them, and one of them refutes Correction 35
 
 Asked whether every file in the repository was up to date, I checked instead of answering, and the
 answer was no.
@@ -4352,7 +4357,8 @@ No committed file carries the new fields. The question they exist to ask cannot
 be asked of existing data, and D6 says so.
 
 
-## Correction 46, 2026-08-30: a fourth candidate refuted, and a correlation Correction 44 reported that was the wrong kind
+## Correction 46, 2026-08-30: a fourth candidate refuted, and a correlation Correction 44
+reported that was the wrong kind
 
 Correction 45 recorded `power_sd_w` and `power_sd_instant_w` because Correction
 44 had named the shape of the power trace as what identifying the averaged
@@ -4948,7 +4954,8 @@ until the very end -- so it died on `a.stdout` after building the whole report, 
 invisible until the artifact was regenerated. A section was added and its artifact was not
 rebuilt in the same breath.
 
-## Correction 50, 2026-09-01: the split Correction 49 published is one reading of three collinear points, and the fixed part needs no load at all
+## Correction 50, 2026-09-01: the split Correction 49 published is one reading of three
+collinear points, and the fixed part needs no load at all
 
 Correction 49 reported that Phase E5 decomposed the surviving residual into a step-scaled
 part of **+19.7 ms** and a fixed part of **+3.56 J**, and called both real on the strength
@@ -5062,7 +5069,8 @@ check on the grounds that a `llama-server` was running with no lock file, which 
 had just been taught to detect. **A probe that holds the card is a measurement and takes the
 lock.**
 
-## Correction 51, 2026-09-01: the level difference belongs to the lowest clock state, so it is not what Phase E5's fixed term is made of
+## Correction 51, 2026-09-01: the level difference belongs to the lowest clock state, so it is
+not what Phase E5's fixed term is made of
 
 Correction 50 measured a level difference between `power.draw` and `power.draw.instant` of
 **+0.499 W** on windows containing no load transition, and said the levels between the idle
