@@ -478,10 +478,14 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
   model already is. That both arms carry the same amount distinguishes nothing -- at this roll
   both windows hold the same idle-to-cap excursion, so anything sized by it is predicted to be
   equal. **Phase E5 varied that excursion on purpose**, moving the step 10.8x with the power
-  cap, and the residual is two things: a step-scaled part at **+19.7 ms**, which reproduces
-  what E4 implied without being told it, and a fixed part of **3.56 J** whose spread across
-  three independently fitted passes is 1.05. The fixed part is what remains unexplained -- an
-  energy per window that scales with neither the step, the span, the plateau nor the total.
+  cap. The fit gives a step-scaled part at **+19.7 ms** and a fixed part of **+3.56 J** -- but
+  that split is **withdrawn as a quantity**: the cap moves the step and the span together
+  (Spearman -0.917), and a fit on 1/span instead describes the same nine points marginally
+  better with an intercept of 1.38 J. What survives is that something fixed is there, not its
+  size. Windows holding no load transition at all put the two fields **0.499 W** apart at the
+  idle floor with the joules scaling with the window, which no linear filter can produce --
+  though that is measured at 28 W, and under load the same difference is bounded at 0.013 W,
+  so it does not yet account for the term seen at 128 W.
   Neither instrument is ground truth: they sit on the same board. Most speculative
   generations also follow a different token trajectory from the baseline they are compared against
   and semantic quality is not scored, so this is not energy for the same answer.

@@ -4947,3 +4947,117 @@ shadowing the argparse namespace. Every table was still computed -- the name is 
 until the very end -- so it died on `a.stdout` after building the whole report, and stayed
 invisible until the artifact was regenerated. A section was added and its artifact was not
 rebuilt in the same breath.
+
+## Correction 50, 2026-09-01: the split Correction 49 published is one reading of three collinear points, and the fixed part needs no load at all
+
+Correction 49 reported that Phase E5 decomposed the surviving residual into a step-scaled
+part of **+19.7 ms** and a fixed part of **+3.56 J**, and called both real on the strength
+of an intercept six standard deviations clear of zero. The regression is right and the
+standard error is right. **The decomposition is not established, and this withdraws it as a
+quantity.**
+
+### The cap moves two things, and E5 has no other lever
+
+Phase E5's only manipulation is the power limit. It sets the step the window straddles, which
+is what the phase was for -- and it sets the generation rate, and therefore the span. The two
+move in lockstep and opposite directions: 287 W over 13.9 s at the top cap, 26.5 W over 49.4 s
+at the bottom, a Spearman of **-0.917** across the nine cells. Three models fit those points
+about equally:
+
+| model | intercept | r |
+|---|---:|---:|
+| residual on the step | **+3.56 J** | +0.846 |
+| residual on 1/span | **+1.38 J** | **+0.878** |
+| residual on the span | **+10.00 J** | -0.847 |
+
+The 1/span reading fits marginally BETTER than the one Correction 49 published, and gives an
+intercept less than half the size. With three collinear cap levels the intercept is a property
+of the model chosen, not of the data, and "six standard deviations clear of zero" measures the
+reproducibility of one model's intercept across passes -- which was the right thing to measure
+and answers a different question from whether that model is the right one.
+
+The agreement Correction 49 offered as support does not survive either. It says the step-scaled
+coefficient "reproduces what Phase E4 implied without being told it", 5.7 J over a 284 W step
+being 20.1 ms against 19.7 measured. Both numbers attribute the residual to the step by the
+same assumption, so that is consistency inside one model family and not independent
+confirmation.
+
+**What would break it** is the step varied at a fixed span, or the span at a fixed step. No
+phase here has done either: E4 varied the roll at one cap, which moves the span by 1.4x and
+gives residuals that are not monotone in it.
+
+### The fixed part does not need a load transition at all
+
+E5 put exactly one rise and one fall inside every window, so "a fixed quantity per window" and
+"a fixed quantity per pair of transitions" are the same count in it and no analysis of E5 can
+separate them. That cell is a window with no transition, and it is cheap.
+
+51 windows, sampler interval 0.10 s, no request issued: at the 28 W idle floor the two fields
+differ by **+0.499 W**, and the joules scale with the window while the watts do not --
+**3.6 J at 7 s, 7.4 at 14, 13.2 at 28**. So it is a level difference between the two readout
+paths, not a per-window quantity.
+
+**No linear filter can produce it.** Integrating a filtered signal over a window loses exactly
+`m x (end level - start level)` whatever happens inside, and both ends of an idle window sit
+at the same level, so every LTI filter predicts zero. This is not the time behaviour Phase E4
+characterised; it is the paths reading different numbers for the same watts.
+
+`analysis/idle_offset.txt`, from `analysis/idle_offset_raw.json`. The measurement is data and
+the report is a pure function of it, so the artifact rebuilds without a GPU.
+
+### What it does not establish, which is most of it
+
+It is measured at the idle floor. **A resident model does not raise that floor**: a
+`llama-server` holding 16 GB of weights and answering nothing sits at the same 28 W as a bare
+card, which was itself a surprise and is why the second level in the design turned out not to
+be a second level at all.
+
+So Phase E5's windows, which sit near **128 W** between requests, are not at steady idle --
+they are on a card still coming down, four seconds after a request, and this measurement says
+nothing about the offset there. Against it, `results/phase_e.json`'s 150 W arms hold a nearly
+flat trace for 44.8 s and show 0.596 J of offset in total, bounding the difference at that
+level to about **0.013 W**. Large at the floor, small under load, and unmeasured in between --
+which is exactly the range Phase E5's roll sits in.
+
+**So this does not explain E5's fixed term.** It establishes that a level difference exists,
+that it is not a filter, and that E5's design could not have told a per-window term from a
+per-transition one. It does not connect the two.
+
+### One cell of the control is not a measurement of idle
+
+`model-idle` at 7 s reads 55.8 W and an offset of the opposite sign. The windows opened five
+seconds after the server's health check passed and the card was still coming down from loading
+16 GB. It is left in the table with its mean power beside it and named in the report rather
+than dropped, because a dropped cell is invisible and a labelled one is not.
+
+### Two corrections to how this repository describes the instrument
+
+**`power.draw.instant` is not instantaneous.** It is an average of about 100 ms on this class
+of card, against the 1 s of `power.draw` (25 ms on H100). Phase E4's deconvolution therefore
+measured the width of one average relative to another, not relative to true power; the ratio
+of two boxcars is not a boxcar, which accounts for part of the misfit Correction 49 attributed
+entirely to non-linearity. The measured 1.05 s is unaffected as a description of the
+`power.draw`-to-`power.draw.instant` relationship, which is what every figure here uses.
+
+**The vocabulary exists already.** Fine-Grained Power and Energy Attribution on AMD GPU/APU
+Nodes (arXiv 2604.06056, 2026) separates **delay**, **response** (10-90 % rise) and
+**recovery** (90-10 % fall), and defines a *confidence window*
+`[t_s + t_d + t_r, t_e - t_d - t_f]` outside which "measurements are dominated by sensor
+transition effects". The plateau trimming in `step_scaling.levels()` -- one second clear of
+each ramp -- is that construction, arrived at without the name. Their square-wave
+characterisation is also the manipulation this repository proposed as its next axis. They
+report the same rise/fall asymmetry class on AMD parts, where this measures its shape on an
+RTX 3090: a decay that stalls for about 0.8 s at 30, 12.5 and 2.5 W above a boxcar. Their one
+fixed offset is 30 W of static power from a shared rail, which is a constant in WATTS and would
+scale with the span; the plateau bias measured here is 0.03 to 0.15 W, so there is no such
+sharing on this board.
+
+### A hazard in how this was measured, caught by the guard rather than by me
+
+The idle control started a `llama-server` and held the GPU for six minutes **without taking
+`.gpu-in-use.lock`**, on the reasoning that a short probe did not need one. That was wrong in a
+way specific to this measurement: the quantity being measured is idle power, and a command
+that reads as 100 % of a core is exactly what shifts it. The updated CPU guard refused a status
+check on the grounds that a `llama-server` was running with no lock file, which is the case it
+had just been taught to detect. **A probe that holds the card is a measurement and takes the
+lock.**

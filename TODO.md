@@ -546,11 +546,17 @@ there was omission, not misstatement.
       **D6 is now two quantities, and one of them is answered.** Phase E5 varied the step the
       window straddles by moving the power cap -- 287.4, 122.1 and 26.5 W above an idle-with-
       model draw, a range of 10.8x against the 1.4x the committed records span on their own --
-      and regressed the surviving residual on it over nine (arm, pass) cell means. Both
-      components are real: a **step-scaled part at +19.7 ms**, which reproduces what E4 implied
-      without being told it (5.7 J over a 284 W step is 20.1 ms), and a **fixed part of
-      3.56 J**. The intercept is 3.30, 3.16 and 4.21 J when each pass is fitted separately, so
-      3.56 with a spread of 1.05 and an sd of 0.57 -- six sd clear of zero. Correction 49.
+      and regressed the surviving residual on it over nine (arm, pass) cell means. The fit
+      gives a **slope of +19.7 ms** and an **intercept of +3.56 J**, the latter 3.30, 3.16 and
+      4.21 across the three passes. Correction 49.
+
+      **That split is withdrawn as a quantity by Correction 50.** The cap is the only lever
+      and it moves the step and the span together -- 287 W over 13.9 s at one end, 26.5 W over
+      49.4 s at the other, Spearman **-0.917** across the nine cells -- so three models fit
+      about equally well: on the step the intercept is +3.56 J at r = +0.846; on 1/span it is
+      **+1.38 J at r = +0.878**, which is the better fit; on the span it is +10.00 J at
+      r = -0.847. The intercept is a property of whichever model is chosen. Breaking it needs
+      the step varied at a FIXED span, which no phase here has run.
 
       **The non-linearity behind it is now named.** Any linear time-invariant filter loses
       exactly `m x (end level - start level)` over a window, whatever happens inside, so at a
@@ -562,9 +568,21 @@ there was omission, not misstatement.
       boxcar** -- 30, 12.5 and 2.5 W at the three caps -- and then drops to meet it. The
       driver's average describes how power climbs and not how it falls.
 
-      That stall scales with the step, so it feeds the +19.7 ms slope rather than the
-      intercept. **What is still open is the 3.56 J intercept**: an energy per window that
-      scales with neither the step, the span, the plateau nor the total. Two candidates are already
+      That stall scales with the step, so it feeds the slope rather than the intercept.
+
+      **And the fixed term does not need a load transition at all.** Windows holding no rise
+      and no fall -- the cell E5 could not contain, since every E5 window carried exactly one
+      pair and so confounded "per window" with "per pair" -- still show the two fields apart
+      by **+0.499 W** across 49 windows, with the JOULES scaling with the window length (3.6,
+      7.4 and 13.2 J at 7, 14 and 28 s) and the WATTS not. That is a level difference between
+      the readout paths, and no linear filter can produce it: a filter loses `m x (end - start)`
+      and both ends of an idle window are the same level. `analysis/idle_offset.txt`.
+
+      **It does not close the case.** That is measured at the 28 W idle floor, and a resident
+      model does not raise it -- a server holding 16 GB and answering nothing sits at the same
+      28 W. So Phase E5's 128 W between requests is NOT steady idle but a card still coming
+      down, and this says nothing about the offset there; `phase_e`'s 150 W arms bound it to
+      about 0.013 W under load. Large at the floor, small under load, unmeasured in between. Two candidates are already
       refused. It is not per-second -- the caps move the span 4.5x, 13.9 to 49.4 s, and the
       plateau term stays at 0.2, 1.6 and -0.4 J. And it is not a window mismatch between the
       two integrals: they cover the identical grid, with equal sample counts and identical
