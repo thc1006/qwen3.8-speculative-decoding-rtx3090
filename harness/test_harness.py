@@ -6040,5 +6040,54 @@ class TheKeysReadAsBooleansMustBePresentInEveryResult(unittest.TestCase):
                                   + "\n  ".join(bad[:12]))
 
 
+class CIMustRunTheGateAndNotACopyOfIt(unittest.TestCase):
+    """Two implementations of the same check drift, and these had.
+
+    The workflow used to reimplement section 9 of `scripts/verify_everything.sh` inline. The
+    copy never learned that a manifest entry naming a deleted file is a failure, nor that a
+    differing artifact should be re-run so a transient can be told from a stale one -- both
+    added to the script and neither to the copy. Worse, the workflow ran no equivalent of
+    sections 3, 4 or 5 at all: broken links, the README's numbers against the result files, and
+    the guard that stops a withdrawn claim reappearing, which is the check a repository that
+    withdraws things needs enforced most.
+
+    The fix was to give the script a `--no-gpu` mode and have the workflow call it. This keeps
+    it that way.
+    """
+
+    def setUp(self):
+        root = Path(__file__).parent.parent
+        self.wf = (root / ".github" / "workflows" / "verify.yml").read_text()
+        self.sh = (root / "scripts" / "verify_everything.sh").read_text()
+
+    def test_the_workflow_invokes_the_script(self):
+        self.assertIn("verify_everything.sh --no-gpu", self.wf,
+                      "CI must run the gate, not a subset of it")
+
+    def test_the_script_supports_the_mode_ci_asks_for(self):
+        self.assertIn("--no-gpu", self.sh)
+        self.assertIn('NO_GPU=1', self.sh)
+
+    def test_the_workflow_does_not_reimplement_section_nine(self):
+        """The copy was recognisable by its own suffix map. If one comes back, so does the
+        drift."""
+        for marker in ('TOOLS = {"_report.txt"', 'SKIP = {"bootstrap_coverage.txt"'):
+            self.assertNotIn(marker, self.wf,
+                             f"the workflow carries its own {marker[:12]}..., which is how the "
+                             f"two implementations drifted the first time")
+
+    def test_the_script_is_executable_in_git(self):
+        """`run: scripts/verify_everything.sh` needs the mode bit committed, not just set on
+        one machine."""
+        import subprocess
+        out = subprocess.run(["git", "ls-files", "-s", "scripts/verify_everything.sh"],
+                             cwd=str(Path(__file__).parent.parent),
+                             capture_output=True, text=True).stdout.strip()
+        self.assertTrue(out, "the gate script is not tracked")
+        self.assertTrue(out.startswith("100755"),
+                        f"the gate script is committed as {out.split()[0]}, so CI would get "
+                        f"permission denied; git update-index --chmod=+x it")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

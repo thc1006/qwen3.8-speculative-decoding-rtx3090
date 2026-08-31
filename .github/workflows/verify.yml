@@ -60,42 +60,15 @@ jobs:
       - name: Result audit
         run: python harness/audit_results.py
 
-      - name: Every generated report is what its generator writes now
-        # The manifest-driven check. An artifact under analysis/ that is in neither the suffix rules
-        # nor analysis/MANIFEST.json fails here rather than being counted and skipped, which is how
-        # a stale mechanism report survived a result-file replacement for a day.
-        run: |
-          python - <<'PY'
-          import json, pathlib, subprocess, sys
-          TOOLS = {"_report.txt": "analyze", "_cost.txt": "cost_model",
-                   "_divergence.txt": "divergence_report", "_stability.txt": "pass_stability",
-                   "_width_groups.txt": "width_groups"}
-          SKIP = {"bootstrap_coverage.txt", "phase_m_anchor.txt"}
-          m = json.loads(pathlib.Path("analysis/MANIFEST.json").read_text())
-          regen, external = m["regenerate"], m["external"]
-          stale, unmapped, checked = [], [], 0
-          for art in sorted(pathlib.Path("analysis").glob("*.txt")):
-              key = f"analysis/{art.name}"
-              if art.name in SKIP or key in external:
-                  continue
-              if key in regen:
-                  argv = [sys.executable] + regen[key]
-              else:
-                  tool, stem = next(((t, art.name[:-len(s)]) for s, t in TOOLS.items()
-                                     if art.name.endswith(s)), ("analyze", art.name[:-4]))
-                  if stem == "analysis_hostB":
-                      stem = "phase_a_hostB"
-                  if not pathlib.Path(f"results/{stem}.json").exists():
-                      unmapped.append(art.name); continue
-                  argv = [sys.executable, f"harness/{tool}.py", f"results/{stem}.json"]
-              r = subprocess.run(argv, capture_output=True, text=True)
-              checked += 1
-              if r.stdout + r.stderr != art.read_text():
-                  stale.append(art.name)
-          print(f"{checked} regenerated, {len(external)} declared external, {len(stale)} differ")
-          if unmapped:
-              print("no generator, in neither the suffix rules nor MANIFEST.json:", unmapped)
-          if stale:
-              print("stale:", stale)
-          sys.exit(1 if (stale or unmapped) else 0)
-          PY
+      - name: The whole gate, sections 1 to 9
+        # `scripts/verify_everything.sh --no-gpu`, and NOT a copy of some of it. This step used
+        # to reimplement section 9 inline, and the two had drifted: the copy never learned that
+        # a manifest entry naming a deleted file is a failure, nor that a differing artifact
+        # should be re-run so a transient can be told from a stale one. It also meant sections
+        # 3, 4 and 5 ran nowhere -- broken links, the README's numbers against the result files,
+        # and the guard that stops a withdrawn claim coming back, which is the one this
+        # repository most needs enforced, since it withdraws things.
+        #
+        # The steps above are kept because they name what failed in the CI log; this is what
+        # decides the build.
+        run: scripts/verify_everything.sh --no-gpu

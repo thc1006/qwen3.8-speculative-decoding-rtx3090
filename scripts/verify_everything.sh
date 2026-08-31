@@ -11,6 +11,20 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 FAIL=0
+
+# --no-gpu runs sections 1 to 9, which need only Python and the committed files. It exists so
+# that CI can run THIS script rather than a copy of some of it. The workflow used to reimplement
+# section 9 inline, and the two had already drifted: the copy lacked the check that a manifest
+# entry naming a deleted file is a failure, and it lacked the retry that tells a transient
+# apart from a stale artifact. It also never ran sections 3, 4 or 5 at all -- broken links, the
+# README's numbers against the result files, and the guard against a withdrawn claim coming
+# back, which is the one that matters most in a repository that withdraws things.
+NO_GPU=0
+case "${1:-}" in
+  --no-gpu) NO_GPU=1 ;;
+  "") ;;
+  *) echo "usage: $0 [--no-gpu]" >&2; exit 2 ;;
+esac
 hdr() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 bad() { FAIL=1; printf '   FAIL: %s\n' "$*"; }
 
@@ -349,11 +363,21 @@ PY
 # The figures too. Regenerating them is byte-reproducible here -- matplotlib 3.11.1, same data,
 # same bytes -- which is what makes this checkable at all. It needs the venv, because matplotlib is
 # not in the system interpreter, and it says so rather than skipping quietly when that is missing.
-if [ -x .venv/bin/python ] && .venv/bin/python -c 'import matplotlib' 2>/dev/null; then
+# The venv if there is one, otherwise whatever python has matplotlib. Hard-coding
+# .venv/bin/python meant this section could only ever pass on the machine that has one, and CI
+# installs matplotlib into the system interpreter -- so pointing the workflow at this script
+# would have turned "the figures were NOT checked" into a red build on every push.
+PYFIG=""
+for cand in .venv/bin/python python3; do
+  if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'import matplotlib' 2>/dev/null; then
+    PYFIG="$cand"; break
+  fi
+done
+if [ -n "$PYFIG" ]; then
   before=$(git status --porcelain analysis/*.png)
-  .venv/bin/python analysis/plot.py >/dev/null 2>&1
-  .venv/bin/python analysis/plot_phase_m.py >/dev/null 2>&1
-  .venv/bin/python analysis/plot_qsmall_ladder.py >/dev/null 2>&1
+  "$PYFIG" analysis/plot.py >/dev/null 2>&1
+  "$PYFIG" analysis/plot_phase_m.py >/dev/null 2>&1
+  "$PYFIG" analysis/plot_qsmall_ladder.py >/dev/null 2>&1
   after=$(git status --porcelain analysis/*.png)
   if [ "$before" = "$after" ]; then
     printf '   16 figures regenerated, none changed\n'
@@ -362,7 +386,15 @@ if [ -x .venv/bin/python ] && .venv/bin/python -c 'import matplotlib' 2>/dev/nul
     printf '%s\n' "$after" | sed 's/^/     /'
   fi
 else
-  bad "no .venv with matplotlib: the figures were NOT checked"
+  bad "no interpreter with matplotlib on PATH or in .venv: the figures were NOT checked"
+fi
+
+if [ "$NO_GPU" = 1 ]; then
+  hdr "10. the GPU is where the runs left it"
+  echo "   SKIPPED: --no-gpu. This section reads the card and cannot run without one."
+  echo
+  if [ "$FAIL" = 0 ]; then echo "Sections 1 to 9 passed."; else echo "SOMETHING FAILED above."; fi
+  exit "$FAIL"
 fi
 
 hdr "10. the GPU is where the runs left it"
