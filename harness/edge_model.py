@@ -466,6 +466,62 @@ def main() -> int:
               f"{q / o if o else float('nan'):6.2f} {o - q:11.2f}")
         W("")
 
+    # ---- 3d. WHAT THE SURVIVING RESIDUAL IS NOT -----------------------------------------
+    if traced:
+        W("  3d. WHAT THE SURVIVING RESIDUAL IS NOT. Two things the rolled rows above could")
+        W("      mean, separated. The plateau is where the instantaneous field sits above 80 %")
+        W("      of its own maximum, trimmed by one second at each end so the filter's ramps")
+        W("      are outside it; on that stretch the two fields should agree, because a delayed")
+        W("      copy of a flat signal is the same flat signal. Whatever the two fields differ")
+        W("      by there is a PER-SECOND term. Everything else is at the edges.")
+        W("")
+        W(f"  {'arm':16s} {'roll s':>7s} {'n':>4s} {'plateau s':>10s} {'bias W':>8s} "
+          f"{'plateau J':>10s} {'edge J':>8s} {'offset J':>9s}")
+        W("  " + "-" * 78)
+        split = defaultdict(list)
+        for r in traced:
+            tr = r["trace"]
+            ts, wi = tr.get("t_instant_s") or [], tr.get("instant_w") or []
+            ta, wa = tr.get("t_avg_s") or [], tr.get("avg_w") or []
+            if len(ts) < 20 or len(ta) < 20:
+                continue
+            thr = 0.8 * max(wi)
+            idx = [i for i, w in enumerate(wi) if w >= thr]
+            if len(idx) < 10:
+                continue
+            # `pa`/`pb`, not `a`/`b`: `a` is the argparse namespace in this function, and
+            # the first version of this block shadowed it with a float. The report still
+            # built -- every table above is computed before the name is used again -- and
+            # then died on `a.stdout` at the very end, so the failure was invisible until
+            # the artifact was regenerated. Which is the point: a section was added and its
+            # artifact was not rebuilt in the same breath.
+            pa, pb = ts[idx[0]] + 1.0, ts[idx[-1]] - 1.0
+            if pb - pa < 2.0:
+                continue
+            ci, ca = cumulative(ts, wi), cumulative(ta, wa)
+            mi = (at(ts, ci, pb) - at(ts, ci, pa)) / (pb - pa)
+            ma = (at(ta, ca, pb) - at(ta, ca, pa)) / (pb - pa)
+            split[(r["arm"], r["roll"])].append(
+                (pb - pa, mi - ma, (mi - ma) * (pb - pa), r["off"]))
+        for k, v in sorted(split.items()):
+            pl = st.fmean(x[2] for x in v)
+            off = st.fmean(x[3] for x in v)
+            W(f"  {k[0][:16]:16s} {k[1]:7.2f} {len(v):4d} {st.fmean(x[0] for x in v):10.2f} "
+              f"{st.fmean(x[1] for x in v):8.3f} {pl:10.2f} {off - pl:8.2f} {off:9.2f}")
+        W("")
+        W("  So the residual is NOT a per-second loss: the plateau carries under a joule of it")
+        W("  on an arm whose plateau runs eight seconds and on one whose plateau runs four.")
+        W("  It is at the edges, which is where the boxcar model already is -- so what survives")
+        W("  is that model being slightly the wrong SHAPE, not a second mechanism beside it.")
+        W("")
+        W("  And the two arms carrying the same residual says nothing on its own. At the longest")
+        W("  roll both windows hold the same excursion, idle to the same 420 W cap and back:")
+        W("  section 3's head terms are within 3 % of each other and its middle terms within")
+        W("  0.5 %. Anything whose size is set by that excursion is PREDICTED to be equal on the")
+        W("  two arms, so the equality distinguishes nothing. What would distinguish it is")
+        W("  varying the excursion on purpose, which is Phase E5.")
+        W("")
+
     # ---- 4. THE NOISE FLOOR -------------------------------------------------------------
     W("  4. THE NOISE FLOOR. Same arm, same roll, across the three rounds. The offset is a")
     W("     small difference of two large numbers, so a change smaller than this is not one.")

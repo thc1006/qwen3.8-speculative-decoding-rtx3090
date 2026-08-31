@@ -258,6 +258,21 @@
     "a mechanism for whatever offset survives the roll: this phase measures that residual and does not explain it",
     "generalising the measured averaging width past this card and this driver version; it is a property of one firmware, read through one nvidia-smi"
    ]
+  },
+  {
+   "id": "E5",
+   "question": "does the residual that survives Phase E4's roll scale with the step the window straddles?",
+   "results": [
+    "results/phase_e5.json"
+   ],
+   "inference": "control",
+   "note": "one baseline arm at three power caps, with Phase E4's 4 s roll and traces. The cap sets how far the card climbs above its idle-with-model draw of about 128 W, so it sets the step: about 284 W at 420, 121 at 250, 22 at 150, a range of 13x against the 1.4x the committed records happen to span on their own. Three passes over three arms so the rotation closes and each cap visits each order position exactly once -- E3 and E4 could leave arm order fixed because their estimand was within-arm, and this one is between arms",
+   "forbidden": [
+    "any energy, efficiency or tok/J figure: a rolled window's `energy_j`, `decode_energy_j` and `sample_span_s` all include the roll, so they describe an object no other phase measured, and `energy_instruments.py` refuses to sweep a file that declares one",
+    "a speedup figure or any statement about speculative decoding: every arm is the baseline and they differ only in the power cap",
+    "a re-test of Phase E4's closed form on an unrolled window: every arm here carries the 4 s roll, so this phase measures what survives one and not what the model accounts for",
+    "reading the 250 W and 150 W caps as configurations anyone would run; they are here to move the step"
+   ]
   }
  ]
 }

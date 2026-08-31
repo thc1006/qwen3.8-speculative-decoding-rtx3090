@@ -66,6 +66,28 @@ class Arm:
 # divided by that count before one request's worth is subtracted from the measured request. A test
 # asserts this tuple covers every `energy_j*` key summary() emits: the defect it exists to stop was
 # two such fields being added to summary() while the call site kept normalising only the first.
+def effective_passes(passes: int, n_arms: int, latin_arms: bool) -> int:
+    """How many passes will actually run, which is what `design` has to record.
+
+    `--latin-arms` runs one pass per arm so the rotation closes. It used to do that by
+    reassigning `passes` further down, AFTER the result dict -- and its `"passes": passes`
+    -- had already been built, so a run under the flag recorded the pre-override count.
+    Phase E5's first attempt recorded `design.passes = 5` while three passes ran, and
+    `audit_results.py` correctly called the file 225 records of an expected 375 and failed
+    it: 55 minutes of card time, and the phase had to be relaunched with `--passes 3`, which
+    reaches the same rotation without going through the override at all.
+
+    Two truths for one quantity is the defect, so this resolves it once and both the design
+    block and the loop read the result. Nothing else between them touched `passes`, and
+    `arms` is a parameter this function never reassigns, so hoisting is safe.
+
+    E5 was the first use of the flag in this study; no committed file was produced with it,
+    and the audit being green on all of them is the evidence, since a file with an inflated
+    `design.passes` is exactly what that check reports as short.
+    """
+    return n_arms if (latin_arms and passes != n_arms) else passes
+
+
 PREFILL_ABSOLUTE_ENERGY_FIELDS = ("energy_j", "energy_j_instant", "energy_j_nvml")
 
 
@@ -313,6 +335,15 @@ def run_matrix(
     if required_vram_gb:
         DEV.assert_capacity(DEV.get_device(gpu_index), required_vram_gb,
                             f"matrix in {out_path.name}")
+    # Resolved BEFORE anything records it. `--latin-arms` used to reassign `passes` after
+    # the result dict was built, so the design block kept the caller's number while the loop
+    # ran a different one; see `effective_passes`.
+    if latin_arms and passes != len(arms):
+        print(f"--latin-arms: running {len(arms)} passes instead of {passes} so the arm "
+              f"rotation closes and every arm visits every order position exactly once",
+              flush=True)
+    passes = effective_passes(passes, len(arms), latin_arms)
+
     varies_resources = any(a.gpu_state is not None for a in arms)
     oc = T.overclock_state(gpu_index)
     if not oc.get("is_stock") and not allow_non_stock and not varies_resources:
@@ -386,6 +417,9 @@ def run_matrix(
         "gpu_state_declared": declared_state,
         "design": {
             "passes": passes,
+            # `--latin-arms` resolved above, so this is the count that will run and not the
+            # one the caller asked for. Recorded either way; see `effective_passes`.
+            "latin_arms": latin_arms,
             "interleaved": True,
             "fresh_server_per_arm_per_pass": True,
             "prompt_order": "fixed, identical across arms",
@@ -471,10 +505,6 @@ def run_matrix(
             _bmap[a.name] = same_tree[0].name
     result["divergence_baseline_map"] = _bmap
 
-    if latin_arms and passes != len(arms):
-        print(f"--latin-arms: running {len(arms)} passes instead of {passes} so the arm rotation "
-              f"closes and every arm visits every order position exactly once", flush=True)
-        passes = len(arms)
     for p_idx in range(1, passes + 1):
         # Rotate arm order every pass. Interleaving alone still leaves a fixed position effect:
         # whichever arm always runs first meets a cooler card and an emptier page cache than

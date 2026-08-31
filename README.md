@@ -71,6 +71,7 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 | E2 | 450 records, complete, 0 incidents | control -- Phase E re-run with the spread of the power trace recorded. The three earlier candidates were each tested against a proxy because the record carried no spread; `power_max_w - power_mean_w` is `cap - mean` while the card sits at its limit, and understated the true spread by a factor of two |
 | E3 | 450 records over 9 files, complete, 0 incidents | control -- Phase E's two 420 W arms re-run at three sampler periods over three rounds with the order rotated. `power.draw` is a one-second rolling average whatever rate it is queried at and `power.draw.instant` is not, so refining the grid separates a real energy difference from what trapezoidal integration does to two signals with different frequency content |
 | E4 | 450 records over 9 files, complete, 0 incidents | control -- Phase E3's two 420 W arms re-run with idle held around the sampling window, so both of its ends sit in the same steady state. Committed data already said the offset is per-window rather than per-second -- across 35 file-arm cells the longest third of each has a 1.81x window and a 1.01x offset -- but window length varies inside a cell because prompts generate at different speeds, which is a correlation with the window and not a manipulation of it. This manipulates it. The power traces are recorded, so `power.draw` can be deconvolved against `power.draw.instant` and the averaging width read off directly rather than quoted |
+| E5 | 225 records, complete, 0 incidents | control -- one baseline arm at three power caps, with Phase E4's 4 s roll and traces. The cap sets how far the card climbs above its idle-with-model draw of about 128 W, so it sets the step: about 284 W at 420, 121 at 250, 22 at 150, a range of 13x against the 1.4x the committed records happen to span on their own. Three passes over three arms so the rotation closes and each cap visits each order position exactly once -- E3 and E4 could leave arm order fixed because their estimand was within-arm, and this one is between arms |
 <!-- END GENERATED: EVIDENCE_STATUS -->
 
 ### What each phase may not be used to claim
@@ -102,6 +103,7 @@ these are the wider constraints those wordings came from.
 | E2 | a speedup or efficiency figure: the arms exist to put the instruments under three loads<br>a mechanism for the offset: this phase refuted a fourth candidate and identified none<br>reading the pooled correlations as within-arm ones; the two disagree, and for mean power they disagree in sign |
 | E3 | a speedup or efficiency figure: the arms exist to vary the sampler, and under --passes 1 the arm order does not rotate, so arm and position within an invocation are collinear<br>a difference in thermal behaviour between the two arms, for the same reason<br>a mechanism for the offset: this phase settles which reading is wrong, not why the averaging loses what it loses<br>generalising the counter's agreement past this card, this driver and windows read exactly twice |
 | E4 | any energy, efficiency or tok/J figure: a rolled window's `energy_j`, `decode_energy_j` and `sample_span_s` all include the roll, so they describe an object no other phase measured. `energy_instruments.py` refuses to sweep a file that declares one<br>a speedup figure, and any difference between the two arms: under --passes 1 the arm order does not rotate, so arm and position within an invocation are collinear<br>a mechanism for whatever offset survives the roll: this phase measures that residual and does not explain it<br>generalising the measured averaging width past this card and this driver version; it is a property of one firmware, read through one nvidia-smi |
+| E5 | any energy, efficiency or tok/J figure: a rolled window's `energy_j`, `decode_energy_j` and `sample_span_s` all include the roll, so they describe an object no other phase measured, and `energy_instruments.py` refuses to sweep a file that declares one<br>a speedup figure or any statement about speculative decoding: every arm is the baseline and they differ only in the power cap<br>a re-test of Phase E4's closed form on an unrolled window: every arm here carries the 4 s roll, so this phase measures what survives one and not what the model accounts for<br>reading the 250 W and 150 W caps as configurations anyone would run; they are here to move the step |
 <!-- END GENERATED: FORBIDDEN_CLAIMS -->
 
 Two things the table cannot carry. Phase V's arms did not merely underperform: `baseline-vllm`
@@ -471,8 +473,15 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
   itself gets LONGER -- which refuses a per-second loss and a loss unchanged by flat idle in the
   same measurement. The arm-dependence needs no separate explanation: T is one number, and the
   speculative arm's window ends differ by more. What is left unexplained at the longest roll is **5.7 J on
-  both arms**, the same on one drawing 4690 J and one drawing 3200 J; at the 1.5 s roll the
-  baseline still carries 12.4 J.
+  both arms**, and it is not a per-second loss: the steady-power plateau carries under a joule
+  of it whether that plateau runs 7.7 s or 4.1 s, so it sits at the edges, where the boxcar
+  model already is. That both arms carry the same amount distinguishes nothing -- at this roll
+  both windows hold the same idle-to-cap excursion, so anything sized by it is predicted to be
+  equal. **Phase E5 varied that excursion on purpose**, moving the step 10.8x with the power
+  cap, and the residual is two things: a step-scaled part at **+19.7 ms**, which reproduces
+  what E4 implied without being told it, and a fixed part of **3.56 J** whose spread across
+  three independently fitted passes is 1.05. The fixed part is what remains unexplained -- an
+  energy per window that scales with neither the step, the span, the plateau nor the total.
   Neither instrument is ground truth: they sit on the same board. Most speculative
   generations also follow a different token trajectory from the baseline they are compared against
   and semantic quality is not scored, so this is not energy for the same answer.

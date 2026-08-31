@@ -273,11 +273,28 @@ class TestAlgebraicInvariants(unittest.TestCase):
                       "for later")
 
     def test_latin_arms_closes_the_rotation(self):
+        """Seven arms over five passes leaves each arm visiting five of seven order positions,
+        and a different five; only len(arms) passes closes it.
+
+        This asserted that the SOURCE contained the literal `passes = len(arms)`. That is a
+        test of a line's presence, not of a behaviour: it passed for as long as the override
+        existed, including the whole time the override ran after the design block had already
+        recorded the caller's count -- the defect that cost Phase E5 a 55-minute run and that
+        `audit_results.py`, not this test, caught. It now checks the number, and the rotation
+        that number is for.
+        """
         import bench as B
-        src = inspect.getsource(B.run_matrix)
-        self.assertIn("passes = len(arms)", src,
-                      "seven arms over five passes leaves each arm visiting five of seven order "
-                      "positions, and a different five; only len(arms) passes closes it")
+        self.assertEqual(B.effective_passes(5, 7, True), 7)
+        self.assertEqual(B.effective_passes(5, 3, True), 3)
+        self.assertEqual(B.effective_passes(5, 3, False), 5)
+        # and what closing means: with passes == len(arms), `rot = (p_idx - 1) % len(arms)`
+        # sends every arm through every position exactly once.
+        for n in (3, 5, 7):
+            n_passes = B.effective_passes(1, n, True)
+            seen = [[(i - rot) % n for rot in range(n_passes)] for i in range(n)]
+            for positions in seen:
+                self.assertEqual(sorted(positions), list(range(n)),
+                                 f"with {n} arms the rotation does not close")
 
     def test_both_power_fields_are_sampled(self):
         """power.draw is time-averaged on Ampere; power.draw.instant is not.
@@ -4836,6 +4853,7 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
         "E2":    ["results/phase_e2.json"],
         "E3":    ["results/phase_e3_*.json"],
         "E4":    ["results/phase_e4_*.json"],
+        "E5":    ["results/phase_e5.json"],
         # Qs was first written into NOT_TABLED as "covered by the Phase Q row", and the guard that
         # rejects a stale exemption failed on it in the same run: it has had its own row in
         # docs/PHASES.md all along, four rungs and 1500 records, checked against nothing.
@@ -5620,6 +5638,246 @@ class ThePhaseE4EstimatorMustRecoverALagThatWasPutThere(unittest.TestCase):
         self.assertGreater(head, 0.80,
                            f"only {head:.1%} of the offset accrued in the first 0.5 s of a "
                            f"trace whose only defect is a 0.1 s lag")
+
+
+class ThePhaseE5AnalyserMustTellTheTwoWorldsApart(unittest.TestCase):
+    """Phase E5 asks one question with two answers, so its analyser is checked against both.
+
+    Correction 48 said the surviving residual was the same on both of Phase E4's arms and
+    offered that as a reason to think it a different kind of object from the edge term. It is
+    not: at that roll both arms hold the same idle-to-cap excursion, so anything sized by the
+    excursion is PREDICTED to be equal and the equality distinguished nothing. E5 varies the
+    excursion with the power cap instead, over a factor of 13 rather than the 1.4 the committed
+    records happen to span.
+
+    EDGE means residual = asymmetry x step, so `residual / step` is one number at every cap.
+    FIXED means the residual itself is. Data is synthesised for each world with the answer
+    planted, and the analyser has to name it -- before the real file exists, so that neither
+    prediction can be written after seeing it.
+
+    WHAT THESE TESTS DO NOT COVER. Reverting `levels()` to read the idle level off the
+    window's first samples, rather than off `power_first_w`, leaves them all green. That is
+    not a hole in the fixture: with one idle sample present the two estimates are the same
+    number, and the reason to prefer the carried-in level is that it needs no idle sample
+    inside the window at all, not that the other value is wrong. Reverting the guard that
+    demanded two of them does fail here, 71 records of 72, which is the defect that actually
+    bit on the real file.
+    """
+
+    CAPS = ((420, 412.0, 9.9), (250, 249.0, 13.5), (150, 150.0, 44.8))
+    T = 1.0
+    ASYM = 0.0201          # seconds, from E4: 5.7 J over a 284 W step
+
+    def _synth(self, mode, seed=1):
+        import math
+        import random
+        import importlib
+        E = importlib.import_module("edge_model")
+        rng = random.Random(seed)
+        recs = []
+        for cap, load, plat in self.CAPS:
+            for p_idx in (1, 2, 3):
+                for _ in range(8):
+                    # THE WINDOW'S REAL SHAPE, which the first version of this fixture got
+                    # wrong and so could not see the defect it was meant to guard. The
+                    # pre-roll sleeps BEFORE the sampler opens, so the window starts with the
+                    # request already beginning -- one idle sample and then full load, which
+                    # is what the committed traces show: [123, 291, 357, 422, ...]. The
+                    # post-roll is inside, so the idle is all at the END. A fixture with four
+                    # seconds of idle at the START instead puts the plateau's first sample at
+                    # index 34, where a guard demanding two idle samples never fires; on the
+                    # real file that guard dropped every record at every cap.
+                    dt, idle, lead, post = 0.117, 128.0, 0.15, 4.0
+                    span = lead + plat + post
+                    full = [round(i * dt - self.T, 4)
+                            for i in range(int((span + self.T) / dt) + 1)]
+                    wf = [idle if (t < lead or t > lead + plat) else load + rng.gauss(0, 4)
+                          for t in full]
+                    cum = E.cumulative(full, wf)
+                    wav = [(E.at(full, cum, t) - E.at(full, cum, t - self.T)) / self.T
+                           for t in full]
+                    cut = next(i for i, t in enumerate(full) if t >= 0.0)
+                    ts, wi, wa = full[cut:], wf[cut:], wav[cut:]
+                    ci, ca = E.cumulative(ts, wi), E.cumulative(ts, wa)
+                    extra = {"edge": self.ASYM * (load - idle),
+                             "fixed": 5.7,
+                             "both": 0.5 * self.ASYM * (load - idle) + 3.0}[mode]
+                    recs.append({
+                        "arm": f"baseline@pw{cap}", "pass": p_idx, "decode_tok_s": load / 10,
+                        "power": {"energy_j": ca[-1] - extra, "energy_j_instant": ci[-1],
+                                  "power_first_w": wa[0], "power_last_w": wa[-1],
+                                  "power_instant_first_w": wi[0], "power_instant_last_w": wi[-1],
+                                  "sample_span_s": ts[-1],
+                                  "power_mean_w": sum(wi) / len(wi)},
+                        "power_trace": {"t_avg_s": ts, "avg_w": wa,
+                                        "t_instant_s": ts, "instant_w": wi}})
+        return {"design": {"power_roll_s": 4.0}, "records": recs}
+
+    def _per_cap(self, mode):
+        import importlib
+        import json
+        import statistics as stx
+        import tempfile
+        S = importlib.import_module("step_scaling")
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            json.dump(self._synth(mode), fh)
+            path = fh.name
+        try:
+            rows, _ = S.load_records([path])
+        finally:
+            Path(path).unlink(missing_ok=True)
+        # EVERY record, not most of them. The first version of `levels()` set its plateau
+        # threshold at 80 % of a record's maximum, which falls BELOW idle once the cap is low
+        # enough: at the 150 W cap the load is 150 W and idle 128, and 0.8 x max is 120.6 on
+        # the maximum phase_e actually records. Every sample then counts as plateau, the guard
+        # drops the record, and the cap the phase turns on contributes nothing.
+        #
+        # This synthetic loses only 3 of 72, because the noise it adds inflates each maximum
+        # and lifts the threshold back over idle -- a weak signal of what is a total loss on
+        # the real file. It is a signal at all only because the count is pinned here; on
+        # averages over whatever survived, the run would have looked fine.
+        want = 8 * 3 * len(self.CAPS)
+        self.assertEqual(len(rows), want,
+                         f"{want - len(rows)} of {want} synthetic records were dropped; a cap "
+                         f"whose step is small compared with idle must not fall out of the "
+                         f"analysis, because it is the one the phase turns on")
+        out = {}
+        for arm in {r["arm"] for r in rows}:
+            v = [r for r in rows if r["arm"] == arm]
+            out[arm] = (stx.fmean(x["step"] for x in v), stx.fmean(x["resid"] for x in v))
+        return out
+
+    def test_an_edge_shaped_residual_reads_as_one_asymmetry_at_every_cap(self):
+        per = self._per_cap("edge")
+        self.assertEqual(len(per), 3)
+        ratios = [res / step for step, res in per.values()]
+        for r in ratios:
+            self.assertAlmostEqual(r, self.ASYM, delta=0.004,
+                                   msg=f"residual/step came out {r * 1000:.1f} ms for a planted "
+                                       f"{self.ASYM * 1000:.1f}")
+        self.assertLess(max(ratios) - min(ratios), 0.004,
+                        "the whole point is that this ratio does not move with the cap")
+
+    def test_a_fixed_residual_does_not_read_as_one_asymmetry(self):
+        """The other half. An analyser that always reported a constant ratio would pass the
+        test above and be measuring nothing."""
+        per = self._per_cap("fixed")
+        self.assertEqual(len(per), 3)
+        for step, res in per.values():
+            self.assertAlmostEqual(res, 5.7, delta=0.5,
+                                   msg=f"planted a fixed 5.7 J and read {res:.2f}")
+        ratios = [res / step for step, res in per.values()]
+        self.assertGreater(max(ratios) / min(ratios), 5.0,
+                           "with a fixed residual the ratio must scale with 1/step, and the "
+                           "caps span a factor of 13")
+
+    def test_a_mixture_is_read_as_a_mixture_and_not_as_either_alone(self):
+        """The outcome the phase's first pass hinted at, and the one a two-way test would
+        get wrong. With half the edge asymmetry and a 3 J fixed part planted, the analyser
+        has to return BOTH -- a slope near half, and an intercept near three. An analyser
+        that only ever answered "edge" or "fixed" would pass the other two tests."""
+        import importlib
+        import json
+        import statistics as stx
+        import tempfile
+        S = importlib.import_module("step_scaling")
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            json.dump(self._synth("both"), fh)
+            path = fh.name
+        try:
+            rows, _ = S.load_records([path])
+        finally:
+            Path(path).unlink(missing_ok=True)
+        cells = {}
+        for r in rows:
+            cells.setdefault((r["arm"], r["pass"]), []).append(r)
+        xs = [stx.fmean(x["step"] for x in v) for v in cells.values()]
+        ys = [stx.fmean(x["resid"] for x in v) for v in cells.values()]
+        slope, intercept, _ = S.fit(xs, ys)
+        self.assertAlmostEqual(slope, 0.5 * self.ASYM, delta=0.004,
+                               msg=f"slope {slope * 1000:.1f} ms for a planted "
+                                   f"{0.5 * self.ASYM * 1000:.1f}")
+        self.assertAlmostEqual(intercept, 3.0, delta=0.8,
+                               msg=f"intercept {intercept:.2f} J for a planted 3.0")
+
+    def test_the_step_is_measured_from_the_trace_and_not_from_the_arm_name(self):
+        """`levels()` reads the idle and load levels off each record. If it read the cap out of
+        the arm name instead, the analyser would be assuming the thing it reports."""
+        per = self._per_cap("edge")
+        got = sorted(round(step) for step, _ in per.values())
+        self.assertEqual(got, [22, 121, 284],
+                         f"measured steps {got} do not match the planted 22/121/284 W")
+
+
+class TheDesignMustRecordThePassCountThatActuallyRuns(unittest.TestCase):
+    """`--latin-arms` changes how many passes run, and the file used to record the other one.
+
+    The flag runs one pass per arm so the rotation closes. It did that by reassigning
+    `passes` AFTER the result dict -- and its `"passes": passes` -- had been built, so a run
+    under it recorded the caller's count. Phase E5's first attempt recorded `design.passes`
+    as 5 while three passes ran; `audit_results.py` computed arms x passes x n_prompts and
+    correctly called the file 225 records of an expected 375, and it cost 55 minutes of card
+    time before the relaunch. E5 was the first use of the flag in this study, so no committed
+    file carries the mismatch -- the audit being green on all of them is the evidence, since
+    that check is exactly what reports it.
+
+    Two tests, because either alone can be satisfied by a wrong implementation: the value,
+    and the ORDER, since a correct helper called after the design block would still record
+    the wrong number.
+    """
+
+    CASES = (((5, 3, True), 3), ((5, 3, False), 5), ((3, 3, True), 3),
+             ((3, 3, False), 3), ((5, 7, True), 7), ((1, 1, True), 1))
+
+    def test_the_effective_count_is_what_will_run(self):
+        import bench
+        for args, want in self.CASES:
+            self.assertEqual(bench.effective_passes(*args), want,
+                             f"effective_passes{args} should be {want}")
+
+    def test_the_flag_off_never_changes_anything(self):
+        """Every committed phase ran without it, so this is the case that must not move."""
+        import bench
+        for p in (1, 2, 3, 5, 7):
+            for n in (1, 2, 3, 7):
+                self.assertEqual(bench.effective_passes(p, n, False), p)
+
+    def test_the_resolve_happens_before_the_design_block_records_it(self):
+        """The defect was ordering, not arithmetic. Checked on the AST: the assignment that
+        calls `effective_passes` must sit above the dict entry that stores `passes`."""
+        import ast
+        src = (Path(__file__).parent / "bench.py").read_text()
+        tree = ast.parse(src)
+        resolves = [n.lineno for n in ast.walk(tree)
+                    if isinstance(n, ast.Assign)
+                    and isinstance(n.value, ast.Call)
+                    and isinstance(n.value.func, ast.Name)
+                    and n.value.func.id == "effective_passes"]
+        self.assertEqual(len(resolves), 1,
+                         "expected exactly one call site that resolves the pass count")
+        stores = [k.lineno for n in ast.walk(tree) if isinstance(n, ast.Dict)
+                  for k, v in zip(n.keys, n.values)
+                  if isinstance(k, ast.Constant) and k.value == "passes"
+                  and isinstance(v, ast.Name) and v.id == "passes"]
+        self.assertTrue(stores, "no `\"passes\": passes` entry found to check against")
+        self.assertLess(resolves[0], min(stores),
+                        f"the pass count is resolved at line {resolves[0]} but recorded at "
+                        f"line {min(stores)}; the design block would keep the caller's number")
+
+    def test_no_later_reassignment_undoes_it(self):
+        """The old override lived further down. If one comes back, the resolve above it is
+        decoration."""
+        import ast
+        src = (Path(__file__).parent / "bench.py").read_text()
+        tree = ast.parse(src)
+        bad = [n.lineno for n in ast.walk(tree)
+               if isinstance(n, ast.Assign)
+               and any(isinstance(t, ast.Name) and t.id == "passes" for t in n.targets)
+               and not (isinstance(n.value, ast.Call)
+                        and isinstance(n.value.func, ast.Name)
+                        and n.value.func.id == "effective_passes")]
+        self.assertEqual(bad, [],
+                         f"`passes` is reassigned outside effective_passes at lines {bad}")
 
 
 if __name__ == "__main__":

@@ -4807,3 +4807,143 @@ does.
 is `(T/2)` times an end-to-end difference and both terms are recorded. No committed
 figure applies it, because `power_first_w` and the traces postdate every other result
 file. The published numbers still read the instantaneous field or the counter instead.
+
+## Correction 49, 2026-09-01: the surviving residual is two things, and one claim about it is withdrawn
+
+Correction 48 measured `power.draw`'s averaging width, showed a closed form with no free
+parameter accounts for the whole unrolled offset, and reported **5.7 J surviving on both
+arms** at the longest roll. It then said of that residual that being the same on two arms
+made it "a different kind of object from the edge term". **That inference is withdrawn.**
+
+### The equality distinguished nothing
+
+At a 4 s roll both of Phase E4's arms hold the same excursion: idle, up to the same 420 W
+cap, back to idle. Its own running-difference table says so -- head terms +168.67 J against
++173.56, middle terms -158.68 against -159.32, within 3 % and 0.5 %. Anything whose size is
+set by that excursion is **predicted** to be equal on the two arms. The equality was offered
+as evidence and was not evidence of anything.
+
+The numbers had been right. The reading of them was not, and it was published for a day.
+
+### What the residual is not: a per-second loss
+
+Splitting each record at the plateau -- where the instantaneous field sits above the midpoint
+between the window's carried-in level and its 95th percentile, trimmed a second at each end so
+the filter's ramps fall outside -- the two fields differ there by **0.11 and 0.15 W**, worth
+**0.6 to 0.9 J of the 6.4**, on an arm whose plateau runs 7.7 s and one whose runs 4.1. A lag
+cannot produce a plateau term at all: on a flat stretch a delayed copy is the same stretch.
+
+Phase E5 repeats that at three caps with the span moved 4.5x, 13.9 to 49.4 s, and the plateau
+term stays at **0.2, 1.6 and -0.4 J** while the plateau itself runs 7.8, 11.3 and 43.3 s. It
+does not accrue per second.
+
+### What the committed data could not settle
+
+If the residual is the boxcar being slightly the wrong shape, it is `(a lag asymmetry) x (the
+step)` and scales with the step. Records vary in step on their own -- but only from 175 to
+248 W, a factor of 1.4 -- and regressing the residual on it gives **+78 ms on one arm and
+-214 ms on the other**, at r = +0.12 and -0.19. Not a weak answer. No answer.
+
+### Phase E5: the answer is BOTH
+
+The power cap sets how far the card climbs above its idle-with-model draw, so it sets the
+step. One baseline arm at 420, 250 and 150 W, with Phase E4's roll and traces, three passes
+so the rotation closes -- verified in the file, positions [0,2,1], [1,0,2], [2,1,0]. 225
+records, 0 incidents. The step, measured per record rather than taken from the cap:
+
+| cap | idle W | load W | step W | span s | offset J | predicted J | residual J |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 420 W | 130.5 | 417.8 | **287.4** | 13.9 | 9.90 | 1.00 | **8.90** |
+| 250 W | 127.5 | 249.7 | **122.1** | 17.4 | 7.18 | 0.31 | **6.87** |
+| 150 W | 125.1 | 151.7 | **26.5** | 49.4 | 3.60 | 0.09 | **3.51** |
+
+The step falls **10.8x** and the residual only **2.5x**. Neither pre-registered model
+survives alone. Regressing the residual on the step over the **nine (arm, pass) cell means**
+-- not the 225 records, which are three steps wearing a crowd:
+
+    slope  +19.7 ms      intercept  +3.56 J      r +0.846
+
+and the same fit inside each pass, which is where the uncertainty comes from, because the
+three caps are measured once per pass and those lines are independent:
+
+| pass | slope ms | intercept J |
+|---|---:|---:|
+| 1 | 19.1 | 3.30 |
+| 2 | 15.5 | 3.16 |
+| 3 | 24.7 | 4.21 |
+
+**Intercept 3.56 J with a spread of 1.05 and a standard deviation of 0.57** -- six standard
+deviations clear of zero. Both components are real.
+
+**The step-scaled coefficient reproduces Phase E4 without being told it.** 5.7 J over a
+284 W step is 20.1 ms; this measures **19.7**, from a different phase, a different matrix and
+a 10.8x range of steps.
+
+### The validity check that everything above rests on
+
+The averaging width must be a property of the driver, not of the workload. If it moved with
+the cap, the deconvolution would be reading the load and every number here would be circular.
+Median T is **1.050 s at all three caps**, quartiles 1.000 / 1.100, with **0 of 75** records
+at the search grid's edge in each.
+
+### What is still open
+
+**The 3.56 J intercept.** An energy per window that does not scale with the step, the span,
+the plateau, or the total. It is not the boxcar's shape, because that part is now the slope
+and is accounted for separately. Two candidates are already refused: it is not a window
+mismatch between the two integrals -- they cover the identical grid, sample counts equal and
+timestamps identical in every record of every cap -- and it is not per-second.
+
+D7 is untouched. All three readout paths sit on one sensor, and measuring the width of one
+path's filter says nothing about the sensor's own calibration.
+
+### A latent defect in the harness, found by being its first user
+
+`--latin-arms` runs one pass per arm so the rotation closes. It did that by reassigning
+`passes` **after** the result dict -- and its `"passes": passes` -- had already been built,
+so a run under the flag recorded the caller's count rather than the one that ran. Phase E5's
+first attempt recorded `design.passes = 5` while three passes ran, and `audit_results.py`
+computed arms x passes x n_prompts and correctly called the file **225 records of an expected
+375**.
+
+It was checked against the audit's own code before anything was killed, then confirmed in the
+partial file the terminated run left behind. 55 minutes of card time, and the relaunch used
+`--passes 3`, which reaches the identical rotation without going through the override --
+`rot = (p_idx - 1) % len(arms)` closes whenever the two are equal. The flag was not fixed in
+the hour before a two-hour run, because nothing done there would have been through the gate;
+it is fixed in this commit, with the resolve hoisted above the design block, `latin_arms`
+recorded, and two tests -- one for the value and one for the ORDER, since a correct helper
+called after the design block still records the wrong number.
+
+**E5 was the first use of the flag in this study.** No committed file carries the mismatch,
+and the audit being green on all of them is the evidence rather than a scan: an inflated
+`design.passes` is exactly what that check reports as short.
+
+### Three defects in the analysis, all caught before any number was believed
+
+- **The plateau threshold was a fraction of each record's maximum**, which works only while
+  idle sits far below load -- and shrinking that gap is what this phase does. At the 150 W cap
+  the load is about 150 W against a 128 W idle, and 80 % of the maximum `phase_e.json` records
+  there is 120.6 W, **below idle**: every sample would count as plateau and every record at the
+  decisive cap would be dropped. The synthetic check showed only 3 of 72 lost, because the
+  noise it adds inflates each maximum and lifts the threshold back over idle -- a weak signal
+  of a total loss, and a signal at all only because the test pins the record count instead of
+  averaging over whatever survived.
+- **A guard demanding two idle samples before the plateau dropped nearly every record**, at
+  every cap. The card goes from idle to full load inside one 0.117 s sample, so the plateau
+  starts at index 1. The idle level does not need to be read from inside the window at all:
+  `power_first_w` is by definition the mean over the T seconds BEFORE it, which is the term
+  Phase E4's closed form already uses. **The synthetic fixture could not have caught this**,
+  because it modelled the window with four seconds of idle at the start -- and the pre-roll
+  sleeps outside the sampler, so the real window opens with the request already beginning. A
+  fixture with the wrong shape stays green while the real thing loses everything.
+- **The decisive regression pooled 225 records as though they were independent.** They are
+  three steps wearing a crowd; this repository has already published one correlation that was
+  between-arm structure read as within-arm. Nine cell means, with the record-level fit still
+  printed and labelled as shape only.
+
+And one in the reporting: adding section 3d to `edge_model.py` bound `a, b` inside a loop,
+shadowing the argparse namespace. Every table was still computed -- the name is not used again
+until the very end -- so it died on `a.stdout` after building the whole report, and stayed
+invisible until the artifact was regenerated. A section was added and its artifact was not
+rebuilt in the same breath.

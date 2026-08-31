@@ -1,0 +1,84 @@
+================================================================================================
+DOES THE SURVIVING RESIDUAL SCALE WITH THE STEP THE WINDOW STRADDLES?
+================================================================================================
+225 records over 1 file(s), 3 arm(s), roll 4 s.
+
+  1. THE STEP, MEASURED. The cap is the lever but the step is what the model needs, and
+     it is read off each record: the idle mean before the plateau against the load mean
+     inside it, both trimmed a second clear of the filter's ramps.
+
+  arm                   n   idle W   load W   step W   span s  plateau s   tok/s
+  --------------------------------------------------------------------------------
+  baseline@pw420       75    130.5    417.8    287.4    13.91       7.79   41.06
+  baseline@pw250       75    127.5    249.7    122.1    17.35      11.26   30.35
+  baseline@pw150       75    125.1    151.7     26.5    49.36      43.25    8.89
+
+  2. THE RESIDUAL AGAINST THE STEP. `predicted` is Phase E4's closed form with the width
+     deconvolved from this record's own trace, so nothing here is fitted. EDGE says the
+     last column is one number at every cap; FIXED says the `resid J` column is.
+
+  arm                   n   step W  offset J   pred J   resid J  resid/step ms
+  ----------------------------------------------------------------------------------
+  baseline@pw420       75    287.4      9.90     1.00      8.90           31.0
+  baseline@pw250       75    122.1      7.18     0.31      6.87           56.2
+  baseline@pw150       75     26.5      3.60     0.09      3.51          132.3
+
+  the step falls 10.8x from the highest cap to the lowest; the residual falls 2.5x
+
+  residual on step over 9 (arm, pass) cell means, not 225 records: slope +19.7 ms, intercept +3.56 J, r +0.846
+  the record-level fit, for the shape only: slope +19.5 ms, intercept +3.60 J, r +0.159
+
+
+  the same fit inside each pass, which is where the uncertainty comes from --
+  three caps measured once per pass, so these are independent lines:
+    pass   slope ms   intercept J
+  --------------------------------
+       1       19.1          3.30
+       2       15.5          3.16
+       3       24.7          4.21
+  intercept +3.56 J, spread 1.05, sd 0.57
+  slope     +19.7 ms, spread 9.2
+  An intercept whose spread across passes covers zero is not a fixed component
+  this design can see, whatever the pooled fit says.
+
+  EDGE is a slope near the per-cap ratio with an intercept near zero. FIXED is a
+  slope near zero with an intercept near the residual. BOTH is what a slope and an
+  intercept that are each clearly non-zero would mean, and the intercept is then the
+  part of the residual that a step of zero would still produce -- which is the
+  quantity this phase exists to put a number on.
+
+  3. THE PER-SECOND TERM, separated in the same run. The caps move the span 4.5x as well,
+     so if any of the residual accrues per second rather than per edge it has to show up
+     as a plateau term that grows with the plateau.
+
+  arm                   n  plateau s   bias W  plateau J   edge J  offset J
+  ----------------------------------------------------------------------------
+  baseline@pw420       75       7.79    0.027       0.21     9.69      9.90
+  baseline@pw250       75      11.26    0.145       1.63     5.55      7.18
+  baseline@pw150       75      43.25   -0.008      -0.35     3.95      3.60
+
+  4. THE AVERAGING WIDTH, which is a property of the driver and must not move with the
+     cap. If it does, the deconvolution is reading the workload rather than the filter,
+     and every number above rests on it.
+
+  arm                   n  median T s         quartiles   at edge
+  --------------------------------------------------------------
+  baseline@pw420       75       1.050    1.000 / 1.100      0/75 
+  baseline@pw250       75       1.050    1.000 / 1.100      0/75 
+  baseline@pw150       75       1.050    1.000 / 1.100      0/75 
+
+  5. THE PASSES, which the rotation exists to make interchangeable. One pass per arm, so
+     `rot = (p_idx - 1) % len(arms)` closes and each cap visits each order position
+     exactly once; a pass effect the size of the cap effect would mean it did not work.
+   pass     n   resid J  offset J
+  --------------------------------
+      1    75      6.08      6.50
+      2    75      5.42      5.91
+      3    75      7.78      8.27
+
+  and the noise floor, per arm across the passes:
+  arm                 passes  energy_j CV  offset CV   resid CV
+  ------------------------------------------------------------
+  baseline@pw420           3       0.288 %     16.60 %     17.78 %
+  baseline@pw250           3       0.403 %     25.73 %     27.46 %
+  baseline@pw150           3       0.367 %      5.82 %      5.43 %

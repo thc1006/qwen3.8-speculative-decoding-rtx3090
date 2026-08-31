@@ -543,10 +543,25 @@ there was omission, not misstatement.
       The arm-dependence needed no per-arm time constant, which is the thing nine files refused:
       T is one number and `mtp-n2`'s window ends differ by more. Correction 48.
 
-      **What is still open under D6 is smaller and sharper: a residual of 5.7 J on both arms**,
-      the same on one drawing 4690 J over 13.9 s and one drawing 3200 J over 10.4 s, surviving the
-      longest roll and not accounted for by the boxcar. An arm-independent fixed quantity is a
-      different kind of object from the edge term and probably wants a different experiment.
+      **D6 is now two quantities, and one of them is answered.** Phase E5 varied the step the
+      window straddles by moving the power cap -- 287.4, 122.1 and 26.5 W above an idle-with-
+      model draw, a range of 10.8x against the 1.4x the committed records span on their own --
+      and regressed the surviving residual on it over nine (arm, pass) cell means. Both
+      components are real: a **step-scaled part at +19.7 ms**, which reproduces what E4 implied
+      without being told it (5.7 J over a 284 W step is 20.1 ms), and a **fixed part of
+      3.56 J**. The intercept is 3.30, 3.16 and 4.21 J when each pass is fitted separately, so
+      3.56 with a spread of 1.05 and an sd of 0.57 -- six sd clear of zero. Correction 49.
+
+      **What is still open is the 3.56 J intercept**: an energy per window that scales with
+      neither the step, the span, the plateau nor the total. Two candidates are already
+      refused. It is not per-second -- the caps move the span 4.5x, 13.9 to 49.4 s, and the
+      plateau term stays at 0.2, 1.6 and -0.4 J. And it is not a window mismatch between the
+      two integrals: they cover the identical grid, with equal sample counts and identical
+      timestamps in every record at every cap.
+
+      Withdrawn from Correction 48: that the residual being equal on both arms made it a
+      different kind of object. At that roll both windows hold the same excursion, so anything
+      sized by it is predicted to be equal, and the equality distinguished nothing.
 
       `energy_j` is now correctable in principle rather than only avoidable -- the correction is
       `(T/2)` times an end-to-end difference and both terms are recorded from Phase E4 onward --
