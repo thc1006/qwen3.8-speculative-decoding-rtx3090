@@ -1,0 +1,72 @@
+================================================================================================
+DOES THE RESIDUAL FOLLOW THE STEP OR THE SPAN? THE STEP IS HELD HERE
+================================================================================================
+predictions from Phase E5's nine cell means, pinned in the source so this phase cannot be scored
+against a moving target, and checked against `analysis/step_scaling.txt` by the test suite.
+
+225 records over 9 invocation(s), 1 arm, 3 generation lengths, 3 rounds.
+
+  1. THE STEP HELD AND THE SPAN MOVED, both measured per record rather than assumed.
+
+   tokens    n   idle W   load W   step W   span s  plateau s    T s
+  ----------------------------------------------------------------------------
+      200   75    128.1    417.4    289.3     9.04       2.93  1.000
+      400   75    131.4    417.7    286.3    13.89       7.79  1.050
+      800   75    133.2    417.7    284.5    23.23      17.11  1.050
+
+  the step moves 4.8 W across the three, 1.7 % of its own mean; the span moves 2.57x.
+  Held to under 8 % with the span moved over 1.6x, so the two are separated here.
+
+  2. THE RESIDUAL AGAINST WHAT E5'S TWO MODELS PREDICT FOR IT. Neither is fitted here:
+     both use coefficients from Phase E5 and this phase's own measured step and span.
+
+   tokens    n   span s  observed J  step model  span model  obs-step  obs-span
+  ----------------------------------------------------------------------------------
+      200   75     9.04        7.31        9.26       12.57     -1.95     -5.26
+      400   75    13.89       11.48        9.20        8.66     +2.28     +2.82
+      800   75    23.23       10.85        9.16        5.73     +1.69     +5.12
+
+  short to long: the span goes 9.0 -> 23.2 s and the residual 7.31 -> 10.85 J, a change of +3.54.
+  The step model predicts no change. The span model predicts -6.84.
+
+  3. FITTED HERE, with the step held, so a slope on 1/span is not confounded with it:
+
+  residual on 1/span over 9 (length, round) cell means: slope -55.03 J.s, intercept +14.02 J, r -0.327
+  E5's own 1/span fit, for comparison: slope +101.14, intercept +1.38 -- but there the span was moved BY the cap, which moved
+  the step with it. Here it is not.
+
+  3b. THE CONFOUND THIS PHASE INTRODUCES. Generating for longer makes the card hotter,
+      so temperature moves with the length just as the span does. Between cells the two
+      cannot be told apart. WITHIN a cell the span is fixed and the card still warms,
+      which is where to look.
+
+   tokens    n  temp max C   SM MHz   resid J  r(res,temp)  r(res,ordinal)  r(temp,ord)
+  ----------------------------------------------------------------------------------------
+      200   75        74.2     1859      7.31       +0.034          +0.041       +0.347
+      400   75        80.0     1832     11.48       +0.137          +0.138       +0.794
+      800   75        82.4     1802     10.85       -0.073          +0.176       +0.539
+
+  THE LAST COLUMN IS WHY THE OTHER TWO CANNOT BE READ AS A TEMPERATURE EFFECT. The card
+  warms monotonically through a pass, so inside one cell the temperature and the
+  position in the pass are very nearly the same variable, and a correlation with one is
+  a correlation with the other. This is the same shape of confound Phase E5 had between
+  the step and the span, and naming it is all that can be done with this design.
+
+  What the columns DO settle: a value near zero rules out a strong effect of either,
+  because a real one would have to show up in a correlation with both. A large value
+  settles nothing about which, and would mean section 2's between-cell change cannot be
+  read as a span effect until the two are separated -- which needs the length varied
+  with the thermal history held, and no phase here has done that.
+
+  4. THE ROUNDS, and the noise floor the difference above has to clear.
+   round     n   resid J   span s
+  --------------------------------
+       1    75     11.43    15.38
+       2    75     10.13    15.38
+       3    75      8.08    15.39
+
+   tokens  rounds  energy_j CV   resid CV
+  ----------------------------------------
+      200       3       0.338 %     85.43 %
+      400       3       0.148 %     54.07 %
+      800       3       0.023 %     21.07 %

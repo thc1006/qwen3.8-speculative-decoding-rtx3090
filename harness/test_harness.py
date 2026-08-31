@@ -4854,6 +4854,7 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
         "E3":    ["results/phase_e3_*.json"],
         "E4":    ["results/phase_e4_*.json"],
         "E5":    ["results/phase_e5.json"],
+        "E6":    ["results/phase_e6_*.json"],
         # Qs was first written into NOT_TABLED as "covered by the Phase Q row", and the guard that
         # rejects a stale exemption failed on it in the same run: it has had its own row in
         # docs/PHASES.md all along, four rungs and 1500 records, checked against nothing.
@@ -5878,6 +5879,64 @@ class TheDesignMustRecordThePassCountThatActuallyRuns(unittest.TestCase):
                         and n.value.func.id == "effective_passes")]
         self.assertEqual(bad, [],
                          f"`passes` is reassigned outside effective_passes at lines {bad}")
+
+
+class ThePinnedE5CoefficientsMustStillBeWhatPhaseE5Says(unittest.TestCase):
+    """Phase E6 is scored against numbers copied out of Phase E5. Copies go stale silently.
+
+    `span_at_fixed_step.py` predicts what the residual will do under each of the two models
+    Phase E5 could not separate, using E5's own fitted coefficients. Pinning them in the
+    source is what makes the prediction pre-registered rather than fitted after the fact. It
+    is also how a number stops matching the thing it came from: this repository has published
+    that failure twice, once for correlations quoted in three documents after their report was
+    regenerated, and once for an artifact rebuilt without its prose.
+
+    Recomputing the fit inside the analyser would cost seconds of CPU on every run, including
+    runs the gate makes while a measurement holds the card. So the check lives here, where no
+    card is busy, and reads the committed artifact rather than the 1.5 MB result file.
+    """
+
+    ART = "analysis/step_scaling.txt"
+
+    def setUp(self):
+        self.txt = (Path(__file__).parent.parent / self.ART).read_text()
+
+    def _row(self, label):
+        import re
+        m = re.search(rf"^\s*{re.escape(label)}\s+([+-][\d.]+)\s+\S+\s+([+-][\d.]+)\s+"
+                      rf"([+-][\d.]+)\s*$", self.txt, re.M)
+        self.assertIsNotNone(m, f"{self.ART} has no '{label}' row; the three-model table is "
+                                f"what these predictions are checked against")
+        return float(m.group(1)), float(m.group(2)), float(m.group(3))
+
+    def test_the_step_model_matches(self):
+        import importlib
+        S = importlib.import_module("span_at_fixed_step")
+        slope_ms, intercept, _ = self._row("residual on step")
+        self.assertAlmostEqual(slope_ms / 1000.0, S.E5_STEP_C1, delta=0.002,
+                               msg="the pinned step slope is not what step_scaling.txt says")
+        self.assertAlmostEqual(intercept, S.E5_STEP_C0, delta=0.30,
+                               msg="the pinned step intercept is not what step_scaling.txt says")
+
+    def test_the_span_model_matches(self):
+        import importlib
+        S = importlib.import_module("span_at_fixed_step")
+        slope, intercept, _ = self._row("residual on 1/span")
+        self.assertAlmostEqual(slope, S.E5_SPAN_C1, delta=8.0,
+                               msg="the pinned 1/span slope is not what step_scaling.txt says")
+        self.assertAlmostEqual(intercept, S.E5_SPAN_C0, delta=0.30,
+                               msg="the pinned 1/span intercept is not what step_scaling.txt "
+                                   "says")
+
+    def test_the_artifact_carries_all_three_models(self):
+        """Correction 50 withdrew Phase E5's split on the strength of three fits. Two of them
+        were in the prose and in no artifact, which is a figure with no generator -- the thing
+        `analysis/MANIFEST.json` exists to stop."""
+        for label in ("residual on step", "residual on 1/span", "residual on span"):
+            self.assertIn(label, self.txt,
+                          f"{self.ART} does not carry the '{label}' fit that Correction 50 "
+                          f"quotes")
+        self.assertIn("Spearman between the step and the span", self.txt)
 
 
 if __name__ == "__main__":

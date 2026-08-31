@@ -142,6 +142,12 @@ def load_records(paths):
                 "plateau_j": plat, "plateau_s": pb - pa,
                 "span": w.get("sample_span_s"), "e_avg": w["energy_j"],
                 "tok_s": r.get("decode_tok_s"),
+                # Temperature and clock move with anything that changes how long the card
+                # works, so they move with a generation-length manipulation whether or not
+                # anyone intended it. Carried so a phase that varies the length can check
+                # whether what it is calling a span effect is one.
+                "temp": w.get("temp_max_c"), "sm_clock": w.get("sm_clock_mean_mhz"),
+                "ordinal": r.get("ordinal"),
                 # Section 3c walks the trace itself. It was not carried here, so every
                 # record fell out of that section's filter and the table rendered with no
                 # rows at all -- under prose that went on describing what the rows showed.
@@ -236,6 +242,32 @@ def main() -> int:
         pb, pc, pr = fit([x["step"] for x in rows], [x["resid"] for x in rows])
         W(f"  the record-level fit, for the shape only: slope {1000 * pb:+.1f} ms, "
           f"intercept {pc:+.2f} J, r {pr:+.3f}")
+        W("")
+        # THE OTHER TWO MODELS, because the cap moves the step and the span together and the
+        # intercept is a property of whichever is fitted. Correction 50 withdrew the split on
+        # exactly these numbers, and they belong in the artifact that produces them rather
+        # than only in the prose that quotes them.
+        spans = [st.fmean(x["span"] for x in v) for v in cellp.values()]
+        W("  the same nine cell means under the two models the cap cannot be told apart from,")
+        W("  because it moves the step and the span together:")
+        W("")
+        W(f"  {'model':22s} {'slope':>14s} {'intercept J':>13s} {'r':>8s}")
+        W("  " + "-" * 60)
+        for label, xv, unit in (("residual on step", xs, "ms"),
+                                ("residual on 1/span", [1.0 / p for p in spans], "J.s"),
+                                ("residual on span", spans, "J/s")):
+            mb, mc, mr = fit(xv, ys)
+            shown = 1000 * mb if unit == "ms" else mb
+            W(f"  {label:22s} {shown:+10.2f} {unit:3s} {mc:+13.2f} {mr:+8.3f}")
+        rk1 = {j: i for i, j in enumerate(sorted(range(len(xs)), key=lambda k: xs[k]))}
+        rk2 = {j: i for i, j in enumerate(sorted(range(len(spans)), key=lambda k: spans[k]))}
+        n = len(xs)
+        dd = sum((rk1[i] - rk2[i]) ** 2 for i in range(n))
+        W("")
+        W(f"  Spearman between the step and the span across the nine cells: "
+          f"{1 - 6 * dd / (n * (n * n - 1)):+.3f}. At -1.000 they would be the same variable")
+        W("  wearing two names, and nothing here could tell them apart. Phase E6 holds the step")
+        W("  and moves the span on its own.")
         W("")
         # THE INTERCEPT NEEDS AN UNCERTAINTY OR "clearly non-zero" IS A JUDGEMENT CALL.
         # It comes from the design rather than from a resampling assumption: the three caps

@@ -5139,3 +5139,96 @@ model the design cannot choose between (Correction 50), and which is now known n
 lowest-P-state level difference. Three candidates are refused: a per-second loss, a window
 mismatch between the integrals, and this. Breaking the step/span confound still needs the step
 varied at a fixed span, which no phase here has run.
+
+## Correction 52, 2026-09-01: the span model is refused, and the step-scaled reading is restored
+
+Correction 50 withdrew Phase E5's decomposition as a quantity because the power cap moves the
+step and the span together -- Spearman -0.917 -- and a fit on 1/span described the same nine
+cells marginally better (r +0.878 against +0.846) with an intercept less than half the size,
++1.38 J against +3.56. That was the right thing to say with E5's design. It is no longer the
+state of the evidence.
+
+### The manipulation E5 could not do
+
+Phase E6 holds the cap at the stock 420 W, so the step is whatever the card does between its
+shelf and the limit, and moves the generation length instead: 200, 400 and 800 tokens. 225
+records over nine invocations, 25 each, three rounds with the order rotated, 0 incidents.
+
+| tokens | n | idle W | load W | step W | span s | plateau s | fitted T |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 200 | 75 | 128.1 | 417.4 | **289.3** | **9.04** | 2.93 | 1.000 |
+| 400 | 75 | 131.4 | 417.7 | **286.3** | **13.89** | 7.79 | 1.050 |
+| 800 | 75 | 133.2 | 417.7 | **284.5** | **23.23** | 17.11 | 1.050 |
+
+The step moves **1.7 %** and the span **2.57x**. The load end barely moves at all, 417.4 to
+417.7 W, because the cap pins it; what little the step does is the idle shelf rising with
+temperature. Both design gates were checked in the report and passed.
+
+**The 400-token cell reproduces Phase E5's top cap to two decimals**: span 13.89 against 13.91,
+step 286.3 against 287.4, idle 131.4 against 130.5. So the two phases measure the same object,
+E5's two models coincide at that cell, and they diverge either side of it -- which makes this a
+two-sided test rather than the one-sided one first designed. A systematic error in the
+measurement cannot push both ends the same way.
+
+### The span model made a risky prediction and lost
+
+Neither model is fitted here. Both use E5's own coefficients and E6's measured step and span:
+
+| tokens | span s | observed J | step model | span model |
+|---|---:|---:|---:|---:|
+| 200 | 9.04 | **7.31** | 9.26 | 12.57 |
+| 400 | 13.89 | **11.48** | 9.20 | 8.66 |
+| 800 | 23.23 | **10.85** | 9.16 | 5.73 |
+
+From the short cell to the long the span model predicted the residual would **fall by 6.84 J**.
+It **rose by 3.54**. Fitting 1/span here, with the step held so the slope is not confounded
+with it, gives **-55.03 J.s** against E5's +101.14 -- the opposite sign.
+
+The rounds set the bar. Their means are 11.43, 10.13 and 8.08 J, a spread of **3.35 J** and a
+standard error near **1.9 J** on three. So:
+
+- **span model**: predicted -6.84, observed +3.54, a discrepancy of 10.4 J, about **5.5
+  standard errors. Refused.**
+- **step model**: predicted no change, observed +3.54, about **1.9 standard errors. Not
+  refused** -- a risky prediction survived, which is not the same as confirmed.
+
+**So the step-scaled reading is restored as the better-supported one**, and Correction 50's
+withdrawal stands as what it was: a warning that E5's design could not choose, issued before a
+design that could. The +19.7 ms slope and +3.56 J intercept are again the figures to use, now
+on the strength of a test the alternative could have passed and did not.
+
+### The confound this phase introduces, measured rather than hoped away
+
+A longer generation is a hotter card: 74.2, 80.0 and 82.4 C across the three, with the SM clock
+falling 57 MHz. Temperature therefore moves with the manipulation exactly as the span does, and
+between cells nothing separates them.
+
+Within a cell the span is fixed and the card still warms, which is where to look. The residual
+correlates with temperature at **+0.034, +0.137 and -0.073**, and with position in the pass at
++0.041, +0.138 and +0.176. Those two are themselves collinear -- r 0.35 to 0.79, because the
+card warms monotonically through a pass -- so neither alone settles which; both being near zero
+rules out a strong effect of either, which is what the report says and all it says.
+
+### What neither model predicts
+
+The residual is **not monotone**: 7.31, 11.48, 10.85 J. The 200-token cell is the odd one and it
+is also the least trustworthy -- its plateau is 2.93 s, about three averaging windows, and its
+fitted width comes out a grid step below the others at 1.000 s against 1.050. Dropping it leaves
+the residual flat across a 1.67x change in span, which is exactly the step model. That is a
+post-hoc exclusion and is recorded as an observation, not as the result.
+
+### A limitation this phase found in itself
+
+The round-to-round coefficient of variation on the residual is **85.4 %, 54.1 % and 21.1 %** at
+the three lengths, against the 17.8 % Phase E5 measured at the same cap. The shorter the
+generation the noisier, which is what dividing a small difference by a shorter window does. The
+round means also fall monotonically, 11.43 to 8.08 J across the session, and that drift is the
+same size as the effect being measured. The rotation balances it across lengths rather than
+removing it, so the comparison is unbiased and expensive: three rounds buy a standard error of
+1.9 J on a 3.5 J effect.
+
+### What is still open under D6
+
+The fixed term surviving Phase E4's roll, now +3.56 J on the restored reading. Four candidates
+are refused: a per-second loss, a window mismatch between the integrals, the lowest-P-state
+level difference (Correction 51), and a 1/span dependence. What it is remains unidentified.

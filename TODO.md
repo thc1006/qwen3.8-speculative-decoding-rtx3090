@@ -550,13 +550,16 @@ there was omission, not misstatement.
       gives a **slope of +19.7 ms** and an **intercept of +3.56 J**, the latter 3.30, 3.16 and
       4.21 across the three passes. Correction 49.
 
-      **That split is withdrawn as a quantity by Correction 50.** The cap is the only lever
-      and it moves the step and the span together -- 287 W over 13.9 s at one end, 26.5 W over
-      49.4 s at the other, Spearman **-0.917** across the nine cells -- so three models fit
-      about equally well: on the step the intercept is +3.56 J at r = +0.846; on 1/span it is
-      **+1.38 J at r = +0.878**, which is the better fit; on the span it is +10.00 J at
-      r = -0.847. The intercept is a property of whichever model is chosen. Breaking it needs
-      the step varied at a FIXED span, which no phase here has run.
+      **Correction 50 withdrew that split**, because the cap moves the step and the span
+      together (Spearman -0.917) and a 1/span fit described the same nine cells marginally
+      better with an intercept of +1.38 J. **Correction 52 restores it.** Phase E6 held the cap
+      and moved the generation length instead -- 200, 400 and 800 tokens, step within 1.7 %,
+      span 2.57x -- and the span model made a risky prediction and lost: it required the
+      residual to FALL 6.84 J from the short cell to the long, and it ROSE 3.54, with the
+      1/span slope coming out at -55.03 against E5's +101.14. Against a round spread of 3.35 J
+      that is 5.5 standard errors. The step model predicted no change and the observed change
+      is 1.9 standard errors, so it survives a test it could have failed. **+19.7 ms and
+      +3.56 J are the figures again.**
 
       **The non-linearity behind it is now named.** Any linear time-invariant filter loses
       exactly `m x (end level - start level)` over a window, whatever happens inside, so at a
