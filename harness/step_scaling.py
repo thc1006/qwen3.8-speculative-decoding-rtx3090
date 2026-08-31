@@ -142,6 +142,12 @@ def load_records(paths):
                 "plateau_j": plat, "plateau_s": pb - pa,
                 "span": w.get("sample_span_s"), "e_avg": w["energy_j"],
                 "tok_s": r.get("decode_tok_s"),
+                # Section 3c walks the trace itself. It was not carried here, so every
+                # record fell out of that section's filter and the table rendered with no
+                # rows at all -- under prose that went on describing what the rows showed.
+                # A report asserting what its own table does not is the defect this
+                # repository exists to catch, so 3c now refuses to editorialise on nothing.
+                "trace": tr,
             })
     return rows, dropped
 
@@ -286,6 +292,65 @@ def main() -> int:
         off = st.fmean(x["off"] for x in v)
         W(f"  {arm[:18]:18s} {len(v):4d} {ps:10.2f} {pj / ps if ps else float('nan'):8.3f} "
           f"{pj:10.2f} {off - pj:8.2f} {off:9.2f}")
+    W("")
+
+    # ---- 3c. WHERE THE BOXCAR STOPS DESCRIBING THE FIELD --------------------------------
+    W("  3c. THE FALL. Fitting the width on each edge separately gives the same answer -- 1.00")
+    W("      to 1.10 s going up and coming down -- but the fit's own rms does not: under 2 W on")
+    W("      the rise at every cap, up to 18 on the fall. The boxcar describes how the reported")
+    W("      average CLIMBS and not how it comes down, so the two edges do not cancel, and no")
+    W("      linear time-invariant filter can do that. It is why there is anything to explain")
+    W("      at all: an LTI filter loses exactly m x (end level - start level) over a window")
+    W("      whatever happens inside it, and at this roll both ends are idle, so LTI predicts")
+    W("      nothing here and the offset is 3.6 to 9.9 J.")
+    W("")
+    W("      Aligned on the instantaneous field's own step down and stacked, in watts, as the")
+    W("      reported average MINUS a boxcar of the instantaneous field. Zero is the model")
+    W("      holding; a boxcar decays linearly for exactly T and then stops.")
+    W("")
+    W(f"  {'arm':16s} {'n':>4s} " + " ".join(f"{0.2 * k:5.1f}" for k in range(11)))
+    W("  " + "-" * 88)
+    any_fall = False
+    for arm, v in sorted(cells.items(), key=lambda kv: -st.fmean(x["step"] for x in kv[1])):
+        prof = []
+        for r in v:
+            tr = r.get("trace")
+            if not tr:
+                continue
+            ts, wi = tr.get("t_instant_s") or [], tr.get("instant_w") or []
+            ta, wa = tr.get("t_avg_s") or [], tr.get("avg_w") or []
+            if len(ts) < 30 or len(ta) < 30:
+                continue
+            thr = 0.5 * (r["idle"] + r["load"])
+            idx = [i for i, x in enumerate(wi) if x >= thr]
+            if not idx or ts[-1] - ts[idx[-1]] < 2.4:
+                continue
+            td, T = ts[idx[-1]], r["T"]
+            ci, ca = cumulative(ts, wi), cumulative(ta, wa)
+            row = []
+            for k in range(11):
+                t = td + 0.2 * k
+                av = (at(ta, ca, t + 0.02) - at(ta, ca, t - 0.02)) / 0.04
+                bx = ((at(ts, ci, t) - at(ts, ci, t - T)) / T) if t - T >= ts[0] else float("nan")
+                row.append(av - bx)
+            prof.append(row)
+        if not prof:
+            continue
+        med = []
+        for k in range(11):
+            col = [x[k] for x in prof if x[k] == x[k]]
+            med.append(st.median(col) if col else float("nan"))
+        any_fall = True
+        W(f"  {arm[:16]:16s} {len(prof):4d} " + " ".join(f"{x:5.1f}" for x in med))
+    W("")
+    if any_fall:
+        W("  What the field does instead is decay, STALL for about 0.8 s some tens of watts")
+        W("  high, and then drop to meet the model. The stall's height scales with the step,")
+        W("  so it feeds the slope in table 2 and not the intercept, and the intercept stays")
+        W("  unexplained.")
+    else:
+        W("  NO RECORD REACHED THIS TABLE. Nothing is being described below, because nothing")
+        W("  was measured above: every record was filtered out. Do not read a conclusion here.")
     W("")
 
     # ---- 4. THE WIDTH, WHICH MUST NOT MOVE ----------------------------------------------

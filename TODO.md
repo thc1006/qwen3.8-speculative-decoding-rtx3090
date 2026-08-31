@@ -552,8 +552,19 @@ there was omission, not misstatement.
       3.56 J**. The intercept is 3.30, 3.16 and 4.21 J when each pass is fitted separately, so
       3.56 with a spread of 1.05 and an sd of 0.57 -- six sd clear of zero. Correction 49.
 
-      **What is still open is the 3.56 J intercept**: an energy per window that scales with
-      neither the step, the span, the plateau nor the total. Two candidates are already
+      **The non-linearity behind it is now named.** Any linear time-invariant filter loses
+      exactly `m x (end level - start level)` over a window, whatever happens inside, so at a
+      4 s roll -- both ends idle -- LTI predicts nothing and the offset is 3.6 to 9.9 J. The
+      relationship is therefore not LTI, and the departure is on ONE edge: fitting the width
+      separately on each gives the same 1.00 to 1.10 s, but the fit's rms is under 2 W on the
+      rise and up to 18 on the fall. Stacked on the instantaneous field's own step down, the
+      reported average decays, then **STALLS for about 0.8 s some tens of watts above a
+      boxcar** -- 30, 12.5 and 2.5 W at the three caps -- and then drops to meet it. The
+      driver's average describes how power climbs and not how it falls.
+
+      That stall scales with the step, so it feeds the +19.7 ms slope rather than the
+      intercept. **What is still open is the 3.56 J intercept**: an energy per window that
+      scales with neither the step, the span, the plateau nor the total. Two candidates are already
       refused. It is not per-second -- the caps move the span 4.5x, 13.9 to 49.4 s, and the
       plateau term stays at 0.2, 1.6 and -0.4 J. And it is not a window mismatch between the
       two integrals: they cover the identical grid, with equal sample counts and identical
