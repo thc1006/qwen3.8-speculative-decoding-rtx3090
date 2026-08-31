@@ -84,7 +84,10 @@ def report(raw: dict) -> str:
               f"{st.stdev(o) if len(o) > 1 else float('nan'):7.3f}")
     W("")
     # The one cell that is not a measurement of idle, said so rather than dropped quietly.
-    bad = [r for r in rows if r["mean"] > 40.0]
+    # Flagged in the DATA, not inferred from a power threshold. It was `mean > 40 W`, which
+    # worked until the clock-locked cell was added: that one sits at 52 W deliberately, and a
+    # threshold would have called the phase's own decisive measurement contaminated.
+    bad = [r for r in rows if r.get("contaminated")]
     if bad:
         labs = sorted({(r["label"], r["want_s"]) for r in bad})
         W("  NOT AN IDLE MEASUREMENT, and left in the table rather than dropped: "
@@ -93,7 +96,8 @@ def report(raw: dict) -> str:
         W("  windows opened 5 s after the health check passed, which was not enough. Its mean")
         W("  power says so -- twice the idle floor -- and its offset has the other sign.")
         W("")
-    good = [r for r in rows if r["mean"] <= 40.0]
+    good = [r for r in rows if not r.get("contaminated")
+            and r.get("sm_clock_state", "floor-210MHz") == "floor-210MHz"]
     if good:
         wpr = [r["off"] / r["span"] for r in good]
         W(f"  Over the {len(good)} windows that are idle: the offset is "
@@ -103,15 +107,28 @@ def report(raw: dict) -> str:
         W("  a per-window quantity -- and not a filter, because no linear filter can put")
         W("  anything at all on a window whose two ends sit at the same level.")
         W("")
-        W("  WHAT THIS DOES NOT ESTABLISH. It is measured at the idle floor, about 28 W, and")
-        W("  a resident model does not raise that floor: a server holding 16 GB and answering")
-        W("  nothing sits at the same 28 W as a bare card. Phase E5's windows idle at about")
-        W("  128 W between requests, which is therefore NOT steady idle but a card still on")
-        W("  its way down, and this measurement says nothing about the offset there. Against")
-        W("  it, `results/phase_e.json`'s 150 W arms hold a nearly flat trace for 44.8 s and")
-        W("  show 0.596 J of offset in total, which bounds the difference at that level to")
-        W("  about 0.013 W. Whatever this is, it is large at the floor and small under load,")
-        W("  and the levels in between are not measured.")
+        W("  IT BELONGS TO THE LOWEST CLOCK STATE, AND ONLY THERE. A resident model does not")
+        W("  raise the idle floor -- a server holding 16 GB and answering nothing sits at the")
+        W("  same 28 W as a bare card, at 210 MHz. What a request leaves behind is a CLOCK")
+        W("  state: for 15 to 20 s afterwards the card holds 1860 MHz and about 115 W, which")
+        W("  is why Phase E5's windows read 128 W between requests on a 4 s roll and why that")
+        W("  is not steady idle. Pinning the graphics clock reproduces that state with no")
+        W("  request in the window:")
+        W("")
+        for state in sorted({r.get("sm_clock_state", "floor-210MHz") for r in rows}):
+            v = [r for r in rows if not r.get("contaminated")
+                 and r.get("sm_clock_state", "floor-210MHz") == state]
+            if not v:
+                continue
+            W(f"    {state:16s} n={len(v):2d}  {st.fmean(r['mean'] for r in v):6.1f} W  "
+              f"offset {st.fmean(r['off'] / r['span'] for r in v):+7.3f} W")
+        W("")
+        W("  The difference collapses by a factor of about 18 the moment the card leaves its")
+        W("  lowest P-state. At the state Phase E5's roll actually sits in it is worth about")
+        W("  0.03 W, or 0.2 J over that phase's 6.1 s of non-plateau window, against a fixed")
+        W("  term of 1.4 to 3.6 J depending on which model is fitted. SO THIS IS NOT WHAT")
+        W("  PHASE E5'S FIXED TERM IS MADE OF. `results/phase_e.json`'s 150 W arms bound it")
+        W("  further, at about 0.013 W over a 44.8 s flat trace.")
     return "\n".join(L) + "\n"
 
 

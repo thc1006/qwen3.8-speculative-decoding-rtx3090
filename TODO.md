@@ -578,11 +578,15 @@ there was omission, not misstatement.
       the readout paths, and no linear filter can produce it: a filter loses `m x (end - start)`
       and both ends of an idle window are the same level. `analysis/idle_offset.txt`.
 
-      **It does not close the case.** That is measured at the 28 W idle floor, and a resident
-      model does not raise it -- a server holding 16 GB and answering nothing sits at the same
-      28 W. So Phase E5's 128 W between requests is NOT steady idle but a card still coming
-      down, and this says nothing about the offset there; `phase_e`'s 150 W arms bound it to
-      about 0.013 W under load. Large at the floor, small under load, unmeasured in between. Two candidates are already
+      **And it is not what E5's fixed term is made of.** Correction 51 measured the levels in
+      between. A resident model does not raise the floor -- 16603 MiB sits at 30 W and 210 MHz
+      -- but a request leaves the SM clock at **1860 MHz for 15 to 20 s**, which is why E5's
+      4 s roll reads 128 W rather than 28. Pinning the clock holds that state with no request
+      in the window, and the difference collapses by a factor of **18**: +0.501 W at the
+      210 MHz floor against **+0.030 W** at 1860 MHz, worth 0.2 J over E5's 6.1 s of
+      non-plateau window against a fixed term of 1.4 to 3.6 J. `phase_e`'s 150 W arms bound it
+      further at 0.013 W. The level difference is real, belongs to the lowest P-state, and is
+      a different thing. Two candidates are already
       refused. It is not per-second -- the caps move the span 4.5x, 13.9 to 49.4 s, and the
       plateau term stays at 0.2, 1.6 and -0.4 J. And it is not a window mismatch between the
       two integrals: they cover the identical grid, with equal sample counts and identical

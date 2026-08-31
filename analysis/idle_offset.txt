@@ -3,8 +3,9 @@ THE TWO POWER FIELDS ON A WINDOW WITH NO LOAD TRANSITION IN IT
 ============================================================================================
 Sampling windows holding no load transition at all. The control Phase E5 could not contain, because every E5 window carried exactly one rise and one fall, making 'per window' and 'per pair of transitions' collinear in it.
 
-51 windows, sampler interval 0.1 s, NVIDIA GeForce RTX 3090 on thc1006-debian13, 2026-09-01T02:10+08:00.
+61 windows, sampler interval 0.1 s, NVIDIA GeForce RTX 3090 on thc1006-debian13, 2026-09-01T02:10+08:00.
   bare         no server, nothing resident
+  clock-locked server up with the model resident and the graphics clock pinned, so the elevated state a request leaves behind is held with no request in the window
   model-idle   llama-server up with the Phase E5 model resident, no requests
 
   level         asked s    n   span s   mean W  offset J  offset W    sd J
@@ -12,6 +13,7 @@ Sampling windows holding no load transition at all. The control Phase E5 could n
   bare              7.0    6     6.97     27.7     3.622    +0.520   0.258
   bare             14.0   21    13.98     27.8     6.882    +0.492   0.865
   bare             28.0    6    27.98     27.7    13.211    +0.472   1.006
+  clock-locked     14.0   10    14.01     40.6     3.923    +0.281   3.722
   model-idle        7.0    6     6.98     55.8    -2.279    -0.326  12.849
   model-idle       14.0    6    13.98     27.9     7.212    +0.516   0.515
   model-idle       28.0    6    27.97     28.1    13.923    +0.498   1.175
@@ -21,17 +23,25 @@ Sampling windows holding no load transition at all. The control Phase E5 could n
   windows opened 5 s after the health check passed, which was not enough. Its mean
   power says so -- twice the idle floor -- and its offset has the other sign.
 
-  Over the 49 windows that are idle: the offset is +0.499 W, spread 0.308, and the JOULES scale with the window while
+  Over the 50 windows that are idle: the offset is +0.501 W, spread 0.236, and the JOULES scale with the window while
   the WATTS do not. So it is a level difference between the two readout paths, not
   a per-window quantity -- and not a filter, because no linear filter can put
   anything at all on a window whose two ends sit at the same level.
 
-  WHAT THIS DOES NOT ESTABLISH. It is measured at the idle floor, about 28 W, and
-  a resident model does not raise that floor: a server holding 16 GB and answering
-  nothing sits at the same 28 W as a bare card. Phase E5's windows idle at about
-  128 W between requests, which is therefore NOT steady idle but a card still on
-  its way down, and this measurement says nothing about the offset there. Against
-  it, `results/phase_e.json`'s 150 W arms hold a nearly flat trace for 44.8 s and
-  show 0.596 J of offset in total, which bounds the difference at that level to
-  about 0.013 W. Whatever this is, it is large at the floor and small under load,
-  and the levels in between are not measured.
+  IT BELONGS TO THE LOWEST CLOCK STATE, AND ONLY THERE. A resident model does not
+  raise the idle floor -- a server holding 16 GB and answering nothing sits at the
+  same 28 W as a bare card, at 210 MHz. What a request leaves behind is a CLOCK
+  state: for 15 to 20 s afterwards the card holds 1860 MHz and about 115 W, which
+  is why Phase E5's windows read 128 W between requests on a 4 s roll and why that
+  is not steady idle. Pinning the graphics clock reproduces that state with no
+  request in the window:
+
+    floor-210MHz     n=50    27.9 W  offset  +0.501 W
+    shelf-1860MHz    n= 5    52.7 W  offset  +0.030 W
+
+  The difference collapses by a factor of about 18 the moment the card leaves its
+  lowest P-state. At the state Phase E5's roll actually sits in it is worth about
+  0.03 W, or 0.2 J over that phase's 6.1 s of non-plateau window, against a fixed
+  term of 1.4 to 3.6 J depending on which model is fitted. SO THIS IS NOT WHAT
+  PHASE E5'S FIXED TERM IS MADE OF. `results/phase_e.json`'s 150 W arms bound it
+  further, at about 0.013 W over a 44.8 s flat trace.

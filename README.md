@@ -484,8 +484,10 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
   better with an intercept of 1.38 J. What survives is that something fixed is there, not its
   size. Windows holding no load transition at all put the two fields **0.499 W** apart at the
   idle floor with the joules scaling with the window, which no linear filter can produce --
-  though that is measured at 28 W, and under load the same difference is bounded at 0.013 W,
-  so it does not yet account for the term seen at 128 W.
+  though it belongs to the lowest clock state and only there: pinning the graphics clock to
+  the 1860 MHz a request leaves behind for 15 to 20 s collapses it eighteenfold, to 0.030 W,
+  which is 0.2 J over the window in question against a fixed term of 1.4 to 3.6 J. It is a
+  real property of the instrument and not what survives the roll.
   Neither instrument is ground truth: they sit on the same board. Most speculative
   generations also follow a different token trajectory from the baseline they are compared against
   and semantic quality is not scored, so this is not energy for the same answer.

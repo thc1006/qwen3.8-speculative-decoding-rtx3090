@@ -5061,3 +5061,81 @@ that reads as 100 % of a core is exactly what shifts it. The updated CPU guard r
 check on the grounds that a `llama-server` was running with no lock file, which is the case it
 had just been taught to detect. **A probe that holds the card is a measurement and takes the
 lock.**
+
+## Correction 51, 2026-09-01: the level difference belongs to the lowest clock state, so it is not what Phase E5's fixed term is made of
+
+Correction 50 measured a level difference between `power.draw` and `power.draw.instant` of
+**+0.499 W** on windows containing no load transition, and said the levels between the idle
+floor and full load were not measured. They are now, and the answer removes the last thread
+connecting that finding to Phase E5.
+
+### Two checks the correction should have carried and did not
+
+**The two integrals covering the same samples.** Correction 50's whole claim is that the
+offset is a level difference rather than a difference in what each integral covered. That was
+verified for Phase E5's 225 records and NOT for the idle control, which recorded
+`n_power_samples` and not its instant sibling. Five fresh windows: the counts are equal in
+**5 of 5**, and the two fields' MEANS are apart by **+0.458 W** against an offset over span of
+**+0.467 W**. The claim holds, and it now rests on a measurement rather than on an assumption
+carried over from a different phase.
+
+**A resident model in VRAM at the idle floor.** Correction 50 says a server holding 16 GB and
+answering nothing sits at the same 28 W as a bare card, on the strength of a log line saying
+`model loaded`. Sampling the card directly: **16603 MiB resident at 30 W and 210 MHz**, sixty
+seconds after the server came up. True as stated.
+
+### What a request actually leaves behind is a clock state
+
+The same sampling shows why Phase E5's windows read about 128 W between requests when the
+floor is 28. It is not thermal and it is not the weights:
+
+| after the server starts | power | VRAM | SM clock |
+|---|---:|---:|---:|
+| +2 s | 115.2 W | 16603 MiB | 1860 MHz |
+| +10 s | 115.3 W | 16603 MiB | 1860 MHz |
+| +20 s | 48.5 W | 16603 MiB | 210 MHz |
+| +60 s | 32.1 W | 16603 MiB | 210 MHz |
+
+The card holds **1860 MHz for 15 to 20 s** after activity ends. Phase E5's roll is 4 s, which
+is nowhere near it, so its "idle" is the shelf and not the floor -- and Correction 50's control
+measured the floor.
+
+### Pinning the clock puts the offset where E5's roll sits, and it collapses
+
+With the model resident and the graphics clock pinned, so the shelf is held with no request in
+the window at all:
+
+| state | n | power | offset |
+|---|---:|---:|---:|
+| floor, 210 MHz | 50 | 27.9 W | **+0.501 W** |
+| shelf, 1860 MHz | 5 | 52.7 W | **+0.030 W** |
+
+A factor of **18**, and the sample counts are equal in 5 of 5 there too. At the clock state
+Phase E5's roll actually occupies, the level difference is worth **0.2 J** over that phase's
+6.1 s of non-plateau window, against a fixed term of **1.4 to 3.6 J** depending on which of
+the three collinear models is fitted.
+
+**So the level difference is not what Phase E5's fixed term is made of.** It is a real
+property of the instrument -- large at the lowest P-state, essentially gone above it, and
+bounded at about 0.013 W under load by `phase_e`'s 150 W arms -- and it is a different thing
+from whatever survives E5's roll.
+
+The pinned cell reaches 52.7 W rather than the 115 W the shelf shows after real activity, so
+it reproduces the clock state and not the whole of it. The offset had already collapsed by
+then, and the direction is not in doubt, but the 115 W shelf itself is still unmeasured.
+
+### The threshold that would have called the decisive cell contaminated
+
+`idle_offset.py` marked one cell as not-a-measurement-of-idle by testing `mean > 40 W`. That
+worked for exactly as long as every legitimate cell sat at the floor. The clock-locked cell
+sits at 52.7 W on purpose, and the threshold would have excluded the phase's own decisive
+measurement while reporting that it had done so. Contamination is now a flag in the data,
+which is where a fact about how a measurement was taken belongs.
+
+### What is still open under D6
+
+The fixed term surviving Phase E5's roll, whose size is between 1.4 and 3.6 J depending on a
+model the design cannot choose between (Correction 50), and which is now known not to be the
+lowest-P-state level difference. Three candidates are refused: a per-second loss, a window
+mismatch between the integrals, and this. Breaking the step/span confound still needs the step
+varied at a fixed span, which no phase here has run.
