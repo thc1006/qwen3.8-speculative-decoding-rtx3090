@@ -575,9 +575,18 @@ there was omission, not misstatement.
 - [ ] **D5** factorial prompts: class crossed with thinking, language crossed with matched task,
       short and medium output lengths alongside the 400-token regime.
 
-### E. Upstream
+### U. Upstream
 
-- [x] **E1** llama.cpp output-row / token-row index-space fix, prepared as
+These were `E1` to `E5` until 2026-09-01. The measurement phases are named after the letter of
+their question -- `E`, `E2`, `E3`, `E4`, `E5` are the energy-instrument phases, and four of them
+were added in the two days before this rename -- so `E3` meant both the sampling-rate phase and
+the llama.cpp acceptance histogram, and `E5` meant both the step-scaling phase and the
+batch-invariance harness. A reader chasing either landed on whichever they found first. The
+section letter moves rather than the phases, because the phase ids are in `evidence/registry.json`,
+`docs/PHASES.md`, the result filenames, the artifact names and four corrections, while these ids
+appear nowhere but this file.
+
+- [x] **U1** llama.cpp output-row / token-row index-space fix, prepared as
       `upstream/llamacpp/0002-output-reorder-index-space.patch` (155 lines, DCO, `libllama.so`
       compiles). `output_swaps` is built from output-row ordering and `output_reorder()` applied
       it to two buffers that are not indexed that way: `embd_nextn` when
@@ -587,7 +596,7 @@ there was omission, not misstatement.
       that file, 0 failures. **Source-level proof, not a runtime reproducer**: no scrambled
       embedding has been observed. Submitting is the author's step; `AGENTS.md` there forbids an
       agent pushing or opening a PR.
-- [x] **E2** SGLang consumer-side sibling hardening, prepared as
+- [x] **U2** SGLang consumer-side sibling hardening, prepared as
       `upstream/sglang/0002-bound-sibling-walks.patch` plus a seven-case test matrix in
       `test_speculative_sampling_malformed.py`: self-loop, two-node cycle, out-of-row first hop,
       out-of-row sibling, a negative that is not the -1 sentinel, and a candidate id above and
@@ -601,7 +610,7 @@ there was omission, not misstatement.
       `VerifyTreeGreedy` launches `dim3 block(1)`.
 
       **Not yet run**: it needs a free GPU and the card is mid-benchmark.
-- [ ] **E3** llama.cpp acceptance histogram. **Do not write the PR.** The counters exist -
+- [ ] **U3** llama.cpp acceptance histogram. **Do not write the PR.** The counters exist -
       `slot.n_accepted_per_pos[i]` is incremented for every `i < n_accepted`, so it is a survival
       count: steps that accepted at least i+1 - but they are kept out of the task result on
       purpose, and the source says so twice:
@@ -617,12 +626,12 @@ there was omission, not misstatement.
       `sum(H) == steps` and `sum(j*H[j]) == accepted` as reconciliation. An opt-in verbose field
       is the other way to answer it. The AIPerf adapter comes after, against the existing
       `SpecDecodeAcceptanceRecord` schema, not a new one.
-- [x] **E4** done before the claim was made: `repro/output_reorder_ordering/` holds the probe and
+- [x] **U4** done before the claim was made: `repro/output_reorder_ordering/` holds the probe and
       its README. 400 randomly generated batches, upstream fails 210 of them, removing the swap
       alone fails 231 (worse than upstream), permuting by token index fails 0; rerun at four more
       seeds for 2000 further cases, 0 failures. The four fixed cases that name the mechanism are
       tabulated there, including the one where upstream is correct and removal alone is not.
-- [ ] **E5** quantized batch-invariance conformance harness across backend, quant, width, context,
+- [ ] **U5** quantized batch-invariance conformance harness across backend, quant, width, context,
       flash attention and parallelism.
 
 ## Deleted from scope, with reasons
