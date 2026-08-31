@@ -5232,3 +5232,83 @@ removing it, so the comparison is unbiased and expensive: three rounds buy a sta
 The fixed term surviving Phase E4's roll, now +3.56 J on the restored reading. Four candidates
 are refused: a per-second loss, a window mismatch between the integrals, the lowest-P-state
 level difference (Correction 51), and a 1/span dependence. What it is remains unidentified.
+
+## Correction 53, 2026-09-01: Correction 52 used the wrong error term, and refuses nothing
+
+Correction 52 said Phase E6 refused the 1/span reading of the residual "by 5.5 standard
+errors" and restored the step-scaled split as the better-supported one. **The refusal is
+withdrawn. The arithmetic behind it was wrong.**
+
+### The error was the precision of the wrong quantity
+
+The models disagree about a CONTRAST: how much the residual changes from the shortest
+generation to the longest. Correction 52 took its error from the spread of the round means
+**pooled over the three lengths** -- 11.43, 10.13 and 8.08 J, a spread of 3.35 and a standard
+error of 0.97.
+
+That is the precision of a round mean, and it is small for the reason that makes it the wrong
+number: averaging three lengths cancels much of the round scatter. A contrast does the
+opposite. It is a difference of two noisy cells and it adds their variances.
+
+Paired inside each round, which is what the design is for:
+
+| round | 800 tokens minus 200 |
+|---|---:|
+| 1 | **+10.22 J** |
+| 2 | **-4.06 J** |
+| 3 | **+4.46 J** |
+
+mean **+3.54 J**, sd **7.19**, standard error **4.15** on three rounds, two degrees of freedom.
+Four times the error Correction 52 used.
+
+### What that does to both verdicts
+
+| model | predicts | observed | t |
+|---|---:|---:|---:|
+| step-scaled | no change | +3.54 ± 4.15 | **+0.85** |
+| 1/span | -6.84 J | +3.54 ± 4.15 | **+2.50** |
+
+t = 2.50 on two degrees of freedom is about p = 0.13. **That is a lean, not a refusal.** And
+the slope tells the same story: fitted inside each round the 1/span slopes are -163.7, +69.7
+and -72.0, a mean of **-55.3 with a standard error of 67.9**, which is not distinguishable
+from zero, let alone from Phase E5's +101.14.
+
+**So Correction 50's withdrawal stands.** The split into +19.7 ms and +3.56 J is still a
+property of the model chosen. Correction 52's restoration of it is withdrawn.
+
+### The design was underpowered and the phase can say by how much
+
+With a per-round contrast sd of 7.19 J, refusing a 6.84 J effect at t = 3 needs about **ten
+rounds**. Phase E6 ran three. That is now printed in `analysis/span_at_fixed_step.txt` rather
+than left to be worked out, along with the paired contrast and both t values -- because the
+number that decides the phase was computed in prose the first time, which is how it came to be
+the wrong one.
+
+Pairing on the prompt does not rescue it: the same 25 prompts run at every length, but the
+residual is not a property of the prompt. Scatter between prompt means is 7.17 J against 18.17
+within a prompt, and the paired difference has an sd of 26.45 J -- larger than independent
+differencing would give. The data is exhausted.
+
+### What Phase E6 does still establish
+
+The manipulation itself worked and that part is unaffected: the step held to 1.7 % while the
+span moved 2.57x, breaking Phase E5's Spearman of -0.917. The 400-token cell reproduces E5's
+top cap to two decimals. The temperature confound this phase introduces was measured rather
+than assumed, and the within-cell correlations are near zero. Those stand.
+
+What does not stand is a verdict. E6 was built to separate two models and it separated them by
+2.5 standard errors on two degrees of freedom, which is worth reporting and is not worth
+calling an answer.
+
+### The number that decides a phase belongs in its artifact
+
+`span_at_fixed_step.py` reported round means and coefficients of variation, and not the
+contrast. So the write-up reached for the nearest available number, and the nearest available
+number was wrong. The analyser now computes the paired contrast, its standard error, the t
+against each model, and the number of rounds the comparison would need -- and the write-up
+quotes it instead of deriving it.
+
+Three numbers in the Phase E6 row of `docs/PHASES.md` -- 3.35, 10.4 and 5.5 -- appeared in no
+artifact at all. That is what a hand-computed statistic looks like from outside, and checking
+each figure in the four phase rows written tonight against the artifact each cites is how these
+were found.

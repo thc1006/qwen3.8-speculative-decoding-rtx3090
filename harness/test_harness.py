@@ -5939,5 +5939,106 @@ class ThePinnedE5CoefficientsMustStillBeWhatPhaseE5Says(unittest.TestCase):
         self.assertIn("Spearman between the step and the span", self.txt)
 
 
+class NoAnalyserMayShadowItsArgparseNamespace(unittest.TestCase):
+    """The same defect twice in one session, so a rename is not the fix.
+
+    `edge_model.py` bound `a, b = ts[idx[0]] + 1.0, ...` inside a loop in a function whose
+    argparse namespace is also `a`. Every table was still computed -- the name is not read
+    again until the end -- so it built the whole report and died on `a.stdout`, invisible
+    until the artifact was regenerated. It was renamed with a comment explaining why. Hours
+    later `span_at_fixed_step.py` did it again, in a section written to fix a different
+    defect. Fixing one instance does not stop the next; this does.
+    """
+
+    def _files(self):
+        root = Path(__file__).parent
+        return sorted(root.glob("*.py")) + sorted((root / "matrices").glob("*.py"))
+
+    def test_nothing_rebinds_a_parse_args_result(self):
+        import ast
+        bad = []
+        for f in self._files():
+            if f.name == "test_harness.py":
+                continue
+            tree = ast.parse(f.read_text())
+            for fn in [n for n in ast.walk(tree)
+                       if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+                names = {}
+                for n in ast.walk(fn):
+                    if (isinstance(n, ast.Assign) and isinstance(n.value, ast.Call)
+                            and isinstance(n.value.func, ast.Attribute)
+                            and n.value.func.attr == "parse_args"):
+                        for t in n.targets:
+                            if isinstance(t, ast.Name):
+                                names[t.id] = n.lineno
+                if not names:
+                    continue
+                for n in ast.walk(fn):
+                    tgts = []
+                    if isinstance(n, ast.Assign):
+                        tgts = n.targets
+                    elif isinstance(n, (ast.For, ast.comprehension)):
+                        tgts = [n.target]
+                    flat = []
+                    for t in tgts:
+                        flat += (list(t.elts) if isinstance(t, (ast.Tuple, ast.List)) else [t])
+                    for x in flat:
+                        if (isinstance(x, ast.Name) and x.id in names
+                                and getattr(n, "lineno", 0) > names[x.id]):
+                            bad.append(f"{f.name}:{n.lineno} rebinds `{x.id}` "
+                                       f"(the argparse namespace, bound at {names[x.id]}) "
+                                       f"in {fn.name}()")
+        self.assertEqual(sorted(set(bad)), [],
+                         "an analyser builds its whole report and then dies reading an "
+                         "attribute off a list:\n  " + "\n  ".join(sorted(set(bad))))
+
+
+class TheKeysReadAsBooleansMustBePresentInEveryResult(unittest.TestCase):
+    """`.get("k")` cannot tell absent from False, and three keys decide published numbers.
+
+    `expects_drafter` chooses which arm is a baseline, in eight analysers. `contended` decides
+    whether a pass is reported as clean, in four. The degeneracy fields decide whether a record
+    is excluded. All three are read with a bare `.get()`, so a file that lacked one would have
+    its speculative arm silently reclassified, its contended pass reported clean, or its
+    degenerate record counted -- and nothing would say so. This repository has already
+    published that failure once, for `prefill_power.get('subtracted')`, where the key merely
+    postdated the run.
+
+    Every committed file carries all three today -- 319 arm entries, 225 host-load entries, and
+    every record sampled. The call sites are therefore safe, and stay safe only while that
+    holds. Rather than rewrite fourteen of them to distinguish a case that does not occur, this
+    pins the premise they rest on: the day a file arrives without one, this fails instead of
+    the analysis quietly changing its answer.
+    """
+
+    def test_every_arm_declares_whether_it_expects_a_drafter(self):
+        import json
+        bad = []
+        for f in sorted((Path(__file__).parent.parent / "results").glob("*.json")):
+            try:
+                d = json.loads(f.read_text())
+            except Exception:
+                continue
+            for arm, meta in (d.get("arms") or {}).items():
+                if isinstance(meta, dict) and "expects_drafter" not in meta:
+                    bad.append(f"{f.name}:{arm}")
+        self.assertEqual(bad, [], "these arms would be read as baselines:\n  "
+                                  + "\n  ".join(bad[:12]))
+
+    def test_every_host_load_entry_declares_contention(self):
+        import json
+        bad = []
+        for f in sorted((Path(__file__).parent.parent / "results").glob("*.json")):
+            try:
+                d = json.loads(f.read_text())
+            except Exception:
+                continue
+            for k, hl in (d.get("arm_pass_host_load") or {}).items():
+                if isinstance(hl, dict) and "contended" not in hl:
+                    bad.append(f"{f.name}:{k}")
+        self.assertEqual(bad, [], "these passes would be reported clean:\n  "
+                                  + "\n  ".join(bad[:12]))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

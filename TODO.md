@@ -552,14 +552,17 @@ there was omission, not misstatement.
 
       **Correction 50 withdrew that split**, because the cap moves the step and the span
       together (Spearman -0.917) and a 1/span fit described the same nine cells marginally
-      better with an intercept of +1.38 J. **Correction 52 restores it.** Phase E6 held the cap
-      and moved the generation length instead -- 200, 400 and 800 tokens, step within 1.7 %,
-      span 2.57x -- and the span model made a risky prediction and lost: it required the
-      residual to FALL 6.84 J from the short cell to the long, and it ROSE 3.54, with the
-      1/span slope coming out at -55.03 against E5's +101.14. Against a round spread of 3.35 J
-      that is 5.5 standard errors. The step model predicted no change and the observed change
-      is 1.9 standard errors, so it survives a test it could have failed. **+19.7 ms and
-      +3.56 J are the figures again.**
+      better with an intercept of +1.38 J. **It stays withdrawn.** Phase E6 held the cap and
+      moved the generation length instead -- 200, 400 and 800 tokens, step within 1.7 %, span
+      2.57x, which breaks the confound -- and the span model required the residual to FALL
+      6.84 J from the short cell to the long while it ROSE 3.54. But the error on that
+      contrast is the scatter of the contrast: paired within each round it is +10.22, -4.06
+      and +4.46 J, so **+3.54 with a standard error of 4.15 on two degrees of freedom**. That
+      is **t = 2.50** against the span model and **t = 0.85** against the step model -- a lean,
+      not a refusal. Correction 52 claimed 5.5 standard errors by using the spread of the round
+      means pooled over lengths, which is the precision of a round mean and not of a contrast;
+      Correction 53 withdraws that. Refusing a 6.84 J effect at this scatter would take about
+      **ten rounds** and E6 ran three.
 
       **The non-linearity behind it is now named.** Any linear time-invariant filter loses
       exactly `m x (end level - start level)` over a window, whatever happens inside, so at a

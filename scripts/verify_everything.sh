@@ -271,7 +271,7 @@ if missing:
         print(f"           {m}")
     sys.exit(1)
 
-stale, checked, unmapped = [], 0, []
+stale, checked, unmapped, flaky = [], 0, [], []
 for art in sorted(pathlib.Path("analysis").glob("*.txt")):
     key = f"analysis/{art.name}"
     if art.name in SKIP or key in external:
@@ -293,6 +293,26 @@ for art in sorted(pathlib.Path("analysis").glob("*.txt")):
     checked += 1
     got, want = r.stdout + r.stderr, art.read_text()
     if got != want:
+        # RUN IT AGAIN BEFORE CALLING IT A DIFFERENCE. On 2026-08-31 this failed on
+        # phase_nmax_cost.txt and passed on the identical tree a minute later, while a
+        # model was loading on the same machine. cost_model.py is deterministic -- every
+        # seed in it is a literal, five reruns are byte-identical, and its output does not
+        # move with PYTHONHASHSEED -- so the first run had failed rather than the artifact
+        # drifted, and nothing in the output told those apart. A retry does: "differed,
+        # then matched" is a transient, "differed twice" is a stale artifact, and the line
+        # below says which instead of leaving it to whoever re-runs the gate.
+        r2 = subprocess.run(argv, capture_output=True, text=True)
+        got2 = r2.stdout + r2.stderr
+        if got2 == want:
+            flaky.append(f"{art.name} (from {label}) differed on the first run "
+                         f"(exit {r.returncode}, {len(got)} bytes) and matched on the "
+                         f"second: a transient, not a stale artifact")
+            continue
+        if got2 != got:
+            stale.append(f"{art.name} (from {label}) is NOT REPRODUCIBLE: two runs of the "
+                         f"same command gave {len(got)} and {len(got2)} bytes, neither "
+                         f"matching the committed {len(want)}")
+            continue
         # Say WHY. This reported only a filename, and on 2026-08-30 it flagged
         # phase_nmax_cost.txt once and passed on the identical tree a minute later.
         # cost_model.py is deterministic -- every seed in it is a literal and five
@@ -307,6 +327,12 @@ for art in sorted(pathlib.Path("analysis").glob("*.txt")):
                      f"lines, then one ends: committed {len(want)} bytes, "
                      f"computed {len(got)}")
         stale.append(f"{art.name} (from {label}, exit {r.returncode}) {first}")
+if flaky:
+    print(f"   {len(flaky)} artifact(s) differed once and matched on retry, which is a")
+    print(f"   transient and not a stale artifact. Named because a silent retry hides a")
+    print(f"   machine that cannot be trusted to regenerate anything:")
+    for x in flaky:
+        print(f"           {x}")
 if unmapped:
     print(f"   FAIL: {len(unmapped)} generated artifact(s) have no generator, in neither the suffix")
     print(f"         rules nor analysis/MANIFEST.json. Add them, with the argv that reproduces them:")

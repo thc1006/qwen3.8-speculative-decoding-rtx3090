@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics as st
 import sys
 from collections import defaultdict
@@ -191,7 +192,7 @@ def main() -> int:
     # co-varies with the manipulation exactly as the span does, and nothing in section 2
     # separates them. The within-cell correlation does: inside one length the span is fixed
     # and the card still warms from the first record to the last.
-    W("  3b. THE CONFOUND THIS PHASE INTRODUCES. Generating for longer makes the card hotter,")
+    W("  3c. THE CONFOUND THIS PHASE INTRODUCES. Generating for longer makes the card hotter,")
     W("      so temperature moves with the length just as the span does. Between cells the two")
     W("      cannot be told apart. WITHIN a cell the span is fixed and the card still warms,")
     W("      which is where to look.")
@@ -226,7 +227,56 @@ def main() -> int:
     W("  with the thermal history held, and no phase here has done that.")
     W("")
 
-    W("  4. THE ROUNDS, and the noise floor the difference above has to clear.")
+    # THE DECISIVE NUMBER, COMPUTED HERE RATHER THAN IN PROSE. The first write-up of this
+    # phase took its error from the spread of the round means POOLED OVER THE THREE LENGTHS,
+    # which is the precision of a round mean and not of a length CONTRAST: averaging three
+    # lengths cancels the round scatter, and differencing two cells adds their variances. It
+    # made the error four times too small and turned t = 2.5 into "5.5 standard errors".
+    # The number that decides the phase belongs in the artifact.
+    ks = sorted(cells, key=lambda t: st.fmean(x["span"] for x in cells[t]))
+    if len(ks) >= 2:
+        short, long_ = ks[0], ks[-1]
+        rounds = sorted({r["round"] for r in rows})
+        per = []
+        for rd in rounds:
+            # `lo_v`/`hi_v`, not `a`/`b`: `a` is the argparse namespace in this function.
+            # edge_model.py had exactly this shadowing in its section 3d, it was fixed with
+            # a comment explaining it, and it came back here in the same session. Renaming
+            # one instance does not stop the next; the guard that does is
+            # `NoAnalyserMayShadowItsArgparseNamespace`.
+            lo_v = [x["resid"] for x in cells[short] if x["round"] == rd]
+            hi_v = [x["resid"] for x in cells[long_] if x["round"] == rd]
+            if lo_v and hi_v:
+                per.append(st.fmean(hi_v) - st.fmean(lo_v))
+        W("  4. THE CONTRAST, PAIRED WITHIN A ROUND, which is what the models disagree about.")
+        W("     Each round holds all three lengths, so differencing inside one removes the")
+        W("     session drift; the spread of those differences is the error, and it is larger")
+        W("     than the spread of the round means because a difference adds two variances.")
+        W("")
+        W(f"  {long_} tokens minus {short}, per round: "
+          + ", ".join(f"{x:+.2f}" for x in per))
+        if len(per) >= 2:
+            m, sd = st.fmean(per), st.stdev(per)
+            sem = sd / math.sqrt(len(per))
+            W(f"  mean {m:+.2f} J, sd {sd:.2f}, sem {sem:.2f} on {len(per)} rounds "
+              f"(df = {len(per) - 1})")
+            W("")
+            sp_lo = st.fmean(x["span"] for x in cells[short])
+            sp_hi = st.fmean(x["span"] for x in cells[long_])
+            for label, pred in (
+                    ("step model, no change", 0.0),
+                    ("span model", (E5_SPAN_C0 + E5_SPAN_C1 / sp_hi)
+                     - (E5_SPAN_C0 + E5_SPAN_C1 / sp_lo))):
+                W(f"    against the {label:22s} predicting {pred:+6.2f} J: "
+                  f"t = {(m - pred) / sem if sem else float('nan'):+.2f}")
+            W("")
+            need = (3.0 * sd / abs(pred)) ** 2 if pred else float("nan")
+            W(f"  At this scatter, refusing an effect of {abs(pred):.2f} J at t = 3 would take")
+            W(f"  about {need:.0f} rounds. This phase ran {len(per)}. A t of 2.5 on two degrees")
+            W("  of freedom is a lean, not a refusal, and saying so is the result.")
+            W("")
+
+    W("  5. THE ROUNDS, and the noise floor the difference above has to clear.")
     W(f"  {'round':>6s} {'n':>5s} {'resid J':>9s} {'span s':>8s}")
     W("  " + "-" * 32)
     byr = defaultdict(list)

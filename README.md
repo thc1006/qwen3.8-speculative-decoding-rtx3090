@@ -481,10 +481,11 @@ and Phase M's cost exclusions and the cross-session quantization ladders to
   both windows hold the same idle-to-cap excursion, so anything sized by it is predicted to be
   equal. **Phase E5 varied that excursion on purpose**, moving the step 10.8x with the power
   cap. The fit gives a step-scaled part at **+19.7 ms** and a fixed part of **+3.56 J**. Phase E5
-  could not choose between that and a 1/span reading, because its cap moved both at once; Phase
+  could not choose between that and a 1/span reading, because its cap moved both at once. Phase
   E6 held the cap and moved the generation length instead, and the 1/span reading required the
-  residual to fall where it rose, by about 5.5 standard errors. **The step-scaled split
-  stands.** Windows holding no load transition at all put the two fields **0.499 W** apart at the
+  residual to fall where it rose -- but only by **2.5 standard errors on two degrees of
+  freedom**, which is a lean and not a refusal. **The split remains model-dependent**, and
+  settling it would take about ten rounds against the three E6 ran. Windows holding no load transition at all put the two fields **0.499 W** apart at the
   idle floor with the joules scaling with the window, which no linear filter can produce --
   though it belongs to the lowest clock state and only there: pinning the graphics clock to
   the 1860 MHz a request leaves behind for 15 to 20 s collapses it eighteenfold, to 0.030 W,

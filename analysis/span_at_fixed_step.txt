@@ -35,7 +35,7 @@ against a moving target, and checked against `analysis/step_scaling.txt` by the 
   E5's own 1/span fit, for comparison: slope +101.14, intercept +1.38 -- but there the span was moved BY the cap, which moved
   the step with it. Here it is not.
 
-  3b. THE CONFOUND THIS PHASE INTRODUCES. Generating for longer makes the card hotter,
+  3c. THE CONFOUND THIS PHASE INTRODUCES. Generating for longer makes the card hotter,
       so temperature moves with the length just as the span does. Between cells the two
       cannot be told apart. WITHIN a cell the span is fixed and the card still warms,
       which is where to look.
@@ -58,7 +58,22 @@ against a moving target, and checked against `analysis/step_scaling.txt` by the 
   read as a span effect until the two are separated -- which needs the length varied
   with the thermal history held, and no phase here has done that.
 
-  4. THE ROUNDS, and the noise floor the difference above has to clear.
+  4. THE CONTRAST, PAIRED WITHIN A ROUND, which is what the models disagree about.
+     Each round holds all three lengths, so differencing inside one removes the
+     session drift; the spread of those differences is the error, and it is larger
+     than the spread of the round means because a difference adds two variances.
+
+  800 tokens minus 200, per round: +10.22, -4.06, +4.46
+  mean +3.54 J, sd 7.19, sem 4.15 on 3 rounds (df = 2)
+
+    against the step model, no change  predicting  +0.00 J: t = +0.85
+    against the span model             predicting  -6.84 J: t = +2.50
+
+  At this scatter, refusing an effect of 6.84 J at t = 3 would take
+  about 10 rounds. This phase ran 3. A t of 2.5 on two degrees
+  of freedom is a lean, not a refusal, and saying so is the result.
+
+  5. THE ROUNDS, and the noise floor the difference above has to clear.
    round     n   resid J   span s
   --------------------------------
        1    75     11.43    15.38
