@@ -54,8 +54,10 @@ token at that batch position.
 | permute by token index (the change) | **0** |
 
 Seed 4242. The last row was rerun at seeds 1, 7, 99 and 12345: four further seeds at 400 cases
-each, 1600, and 0 failures -- 2000 counting the 4242 run itself, which is the figure
-`upstream/llamacpp/pr27705_writeup_body.md` quotes as "2000 cases across 5 seeds".
+each, 1600, and 0 failures -- 2000 counting the 4242 run itself, which is the figure llama.cpp
+[#27705](https://github.com/ggml-org/llama.cpp/pull/27705) states as "2000 cases across 5
+seeds". The local draft of that text is not published, so the arithmetic is given above rather
+than cited to it.
 
 ## The four fixed cases that name the mechanism
 

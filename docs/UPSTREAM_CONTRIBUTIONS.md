@@ -57,9 +57,11 @@ confirmation. Reading the tracker properly shows otherwise. The parent thread is
 
 An earlier version of this section attributed to ggerganov, on 2026-08-21, a request for "a
 reproduction isolating the width at which it starts, on CUDA". **That attribution does not
-survive checking and is withdrawn.** `upstream/llamacpp/comment_25618_cuda_onset_facts.md`
-records the search: all 18 comments on #25618, plus #27407, #27342, #26750, #27623, #27676
-and #27705, every speculative issue ggerganov has commented on, and the 100 most recently
+survive checking and is withdrawn.** The search is recorded in a working note that this
+repository does not publish, for the reason the `.gitignore` gives for every draft of upstream
+correspondence, so what it covered is stated here instead: all 18 comments on #25618, and
+also #27407, #27342, #26750, #27623, #27676 and #27705, every speculative issue ggerganov
+has commented on, and the 100 most recently
 updated discussions. No such question is anywhere in them. The comment count on #25618
 matches what the API returns, so this cannot distinguish "never asked" from "asked and
 deleted" -- but it is not something to put in a maintainer's mouth on the strength of a note.

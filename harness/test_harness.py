@@ -7395,6 +7395,84 @@ class TheCostSectionsCountsMustComeFromTheReports(unittest.TestCase):
         self.assertEqual(2, len(self._disagreements(gone, 5, 13)))
 
 
+class ACitationMayNotPointAtAPathThisRepositoryExcludes(unittest.TestCase):
+    """A document may not send a reader to a file this repository deliberately does not publish.
+
+    Two did. `docs/UPSTREAM_CONTRIBUTIONS.md` cited
+    `upstream/llamacpp/comment_25618_cuda_onset_facts.md` as the record behind a withdrawn
+    attribution to a maintainer -- the most sensitive claim in that document -- and
+    `repro/output_reorder_ordering/README.md` cited `upstream/llamacpp/pr27705_writeup_body.md`
+    for a figure. Both exist on the machine this was written on and neither is in a clone: the
+    `.gitignore` excludes every draft of upstream correspondence, on purpose, and a citation to
+    one is a citation to nothing.
+
+    The existing link guard could not see them. It parses markdown links and `src=` attributes;
+    these were backticked paths in running prose.
+
+    The rule is the repository's own `.gitignore`, applied by git rather than re-implemented
+    here, so a path belonging to another project -- `src/llama-context.cpp` in a patch, say --
+    is not flagged: this repository does not ignore it, it simply does not have it.
+    PREREGISTRATION.md is exempt for the reason it always is. It is dated, and a file that
+    existed when a Correction was written is history rather than a broken pointer.
+    """
+
+    REF = re.compile(r"`([A-Za-z0-9_][A-Za-z0-9_./-]*\.[A-Za-z0-9]{1,6})`")
+    DATED_RECORD = "PREREGISTRATION.md"
+
+    def _cited(self):
+        _P = AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid
+        root = Path(__file__).resolve().parent.parent
+        names = sorted(set(tracked_markdown() + _P._python_prose() + tracked_shell()
+                           + tracked_metadata() + tracked_upstream_prose()))
+        out = {}
+        for name in names:
+            # The dated record must be able to name a file that existed when it was written, and
+            # this file must be able to write down the two paths the check exists for. Both are
+            # mention rather than use; the backtick blanking the other guards rely on cannot
+            # separate them here, because a backticked path is exactly what this reads.
+            if name in (self.DATED_RECORD, f"harness/{Path(__file__).name}"):
+                continue
+            f = root / name
+            if not f.exists():
+                continue
+            for m in self.REF.finditer(_P._prose_of(f)):
+                out.setdefault(m.group(1), set()).add(name)
+        return out
+
+    def _excluded(self, paths):
+        """git decides, so the .gitignore is not re-implemented here and cannot drift from it."""
+        import subprocess
+        if not paths:
+            return set()
+        root = Path(__file__).resolve().parent.parent
+        r = subprocess.run(["git", "-C", str(root), "check-ignore", "--stdin"],
+                           input="\n".join(sorted(paths)), capture_output=True,
+                           text=True, timeout=60)
+        ignored = set(r.stdout.split())
+        tracked = set(subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True,
+                                     text=True, timeout=60).stdout.split())
+        return {p for p in ignored if p not in tracked}
+
+    def test_no_document_cites_a_path_the_gitignore_removes(self):
+        cited = self._cited()
+        bad = sorted(self._excluded(set(cited)))
+        self.assertEqual(
+            [], bad,
+            "these paths are excluded by this repository's own .gitignore, so a clone has "
+            "nothing to open:\n  "
+            + "\n  ".join(f"{p} -- cited by {', '.join(sorted(cited[p]))}" for p in bad))
+
+    def test_the_check_fires_on_an_excluded_path(self):
+        self.assertEqual({".venv/pyvenv.cfg"}, self._excluded({".venv/pyvenv.cfg"}))
+
+    def test_a_path_from_another_project_is_not_flagged(self):
+        self.assertEqual(set(), self._excluded({"src/llama-context.cpp",
+                                                "tools/server/server-common.cpp"}))
+
+    def test_a_tracked_path_is_never_flagged(self):
+        self.assertEqual(set(), self._excluded({"models/SHA256SUMS", "README.md"}))
+
+
 class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
     """A guard's docstring may not state a size its own list contradicts.
 
