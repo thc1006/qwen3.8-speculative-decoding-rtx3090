@@ -5492,3 +5492,42 @@ withdrew that figure on 2026-08-26 after re-measuring with eval-only rather than
 timings, which Correction 23 records against the vLLM harness and `docs/PHASE_L_DESIGN.md` now
 records against the phase. Phase L ran before the withdrawal, so its non-reproduction -- a factor
 of 1.5 against a reported 25 -- is consistent with the withdrawal rather than independent of it.
+
+
+## Correction 57, 2026-09-01: the undercoverage rule was applied to positive intervals only
+
+Found by auditing the generated reports for overstatement rather than by re-reading the code.
+Nothing measured changes: no interval, coefficient or record moves, and the reading the section
+draws is unchanged. What changes is which arms are counted as evidence for it.
+
+`stats.Interval.near_zero` carries this repository's rule that an interval clearing zero by less
+than 1.3 half-widths is inside the undercoverage measured here at n = 25 -- 88.0 to 90.9 % actual
+against a nominal 95 % -- and "should not be leaned on". `cost_model.py` built its positive set as
+`not spans_zero and point > 0 and not near_zero` and its negative set as `not spans_zero and
+point < 0`. The second condition was missing from one of them.
+
+The consequence was printed in the reports themselves. In `analysis/phase_a_cost.txt` the table
+gave `dflash2-n4` as clearing zero by **0.23 half-widths - inside the known undercoverage** and
+`dflash2-n7` by **0.02**, and sixteen lines below, the summary named both as arms where "r is
+significantly NEGATIVE". Across the ten cost reports, **18 of the 36 arms** carrying that sentence
+were inside the margin their own table row had already flagged. None of the 36 was ever tested
+against it.
+
+Corrected in both directions. The negative set now takes `not near_zero` as well, the summary
+sentence no longer uses the word "significantly", and the "not established" line reports margins
+on both sides with their direction named. After regeneration:
+
+| matrix | negative and established | negative, inside the margin |
+|---|---:|---:|
+| A | 0 | 2 |
+| KV | 0 | 3 |
+| NMAX | 1 | 2 |
+| R2 | 4 | 6 |
+
+Phase A and Phase KV no longer contribute any established negative arm. `docs/COST_MODEL.md` said
+"Three arms return an `r` that is significantly *negative*" and now states five across those four
+matrices, with the thirteen inside the margin named as printed and not counted. The hypothesis
+this bears on, H2, was reported as unsupported before this correction and is unsupported after it;
+what moves is the strength of the evidence offered for the direction of the residual, not the
+direction itself.
+

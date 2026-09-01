@@ -684,17 +684,26 @@ def report(result: dict) -> None:
             print("  Reading: the verification overhead is paid per position VERIFIED, not per")
             print("  draft REJECTED. This does not say rollback is free; it bounds how much of")
             print("  the observed cost rollback can account for.")
-            falls = [b for b in bounds if not b[1].spans_zero and b[1].point < 0]
+            # near_zero gates BOTH directions. It used to gate only the positive one, so an
+            # arm clearing zero downward by 0.02 half-widths was called "significantly
+            # NEGATIVE" sixteen lines under its own table row reading "inside the known
+            # undercoverage". Across the cost reports that was 18 of 36 named arms. A rule
+            # applied in one direction is not a rule.
+            falls = [b for b in bounds
+                     if not b[1].spans_zero and b[1].point < 0 and not b[1].near_zero]
             if falls:
-                print("  " + ", ".join(b[0] for b in falls) + ": r is significantly NEGATIVE, "
-                      "the opposite of a rollback account. k rises with acceptance at constant")
-                print("  draft width, which is what a cost paid per position verified looks like "
-                      "near saturation: mean_len climbs toward w+1 while the cycle cost does not.")
-            marginal = [b for b in bounds
-                        if not b[1].spans_zero and b[1].point > 0 and b[1].near_zero]
+                print("  " + ", ".join(b[0] for b in falls) + ": r is NEGATIVE and clears zero "
+                      "by more than the undercoverage margin, the opposite of a rollback")
+                print("  account. k rises with acceptance at constant draft width, which is "
+                      "what a cost paid per position verified looks like")
+                print("  near saturation: mean_len climbs toward w+1 while the cycle cost "
+                      "does not.")
+            marginal = [b for b in bounds if not b[1].spans_zero and b[1].near_zero]
             if marginal:
-                print("  Not established, and not treated as overturning the reading: "
-                      + ", ".join(f"{b[0]} ({b[1].margin_half_widths:.2f} half-widths)"
+                print("  Not established, and not treated as overturning the reading either "
+                      "way: "
+                      + ", ".join(f"{b[0]} ({b[1].margin_half_widths:.2f} half-widths "
+                                  f"{'below' if b[1].point < 0 else 'above'} zero)"
                                   for b in marginal))
         else:
             print("  Reading: at least one arm shows an r that clears zero by more than the "

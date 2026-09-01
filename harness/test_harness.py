@@ -7160,6 +7160,64 @@ class AShellScriptMayNotCarryItsOwnListOfDocuments(unittest.TestCase):
         self.assertEqual([], self._hard_coded(commented))
 
 
+class TheUndercoverageRuleMustApplyInBothDirections(unittest.TestCase):
+    """A threshold that only one sign has to clear is not a threshold.
+
+    `stats.Interval.near_zero` says an interval clearing zero by less than 1.3 half-widths is
+    inside the undercoverage measured here at n = 25 and should not be leaned on.
+    `cost_model.py` selected its positive set with `point > 0 and not near_zero` and its negative
+    set with `point < 0` alone. In `analysis/phase_a_cost.txt` that printed `dflash2-n7` as
+    "clears zero by only 0.02 half-widths - inside the known undercoverage" and, sixteen lines
+    below, as an arm where "r is significantly NEGATIVE". Across the cost reports 18 of the 36
+    arms carrying that sentence were inside the margin their own row had flagged. Correction 57.
+
+    The rule here is narrow and mechanical: a comprehension that filters on the SIGN of a point
+    estimate must also consult `near_zero`. It does not try to judge prose.
+    """
+
+    SIGN = re.compile(r"\.point\s*[<>]\s*0")
+
+    def _one_directional(self, src):
+        import ast
+        out = []
+        for node in ast.walk(ast.parse(src)):
+            if not isinstance(node, (ast.ListComp, ast.GeneratorExp, ast.SetComp)):
+                continue
+            conds = " ".join(ast.unparse(c) for gen in node.generators for c in gen.ifs)
+            if self.SIGN.search(conds) and "near_zero" not in conds:
+                out.append(f"line {node.lineno}: {conds[:90]}")
+        return out
+
+    def test_no_module_filters_on_sign_without_the_margin(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        names = subprocess.run(["git", "-C", str(root), "ls-files", "harness/*.py"],
+                               capture_output=True, text=True, timeout=60).stdout.split()
+        bad = []
+        for name in names:
+            if name.endswith(Path(__file__).name):
+                continue
+            f = root / name
+            if not f.exists():
+                continue
+            for hit in self._one_directional(f.read_text(encoding="utf-8", errors="replace")):
+                bad.append(f"{name}:{hit}")
+        self.assertEqual(
+            bad, [],
+            "a point estimate is filtered by sign without the undercoverage margin, which is "
+            "how one direction came to be held to a weaker standard than the other:\n  "
+            + "\n  ".join(bad))
+
+    def test_the_check_fires_on_the_filter_it_was_written_for(self):
+        planted = "falls = [b for b in bounds if not b[1].spans_zero and b[1].point < 0]\n"
+        self.assertEqual(1, len(self._one_directional(planted)))
+
+    def test_a_filter_that_consults_the_margin_is_not_flagged(self):
+        ok = ("falls = [b for b in bounds if not b[1].spans_zero and b[1].point < 0 "
+              "and not b[1].near_zero]\n")
+        self.assertEqual([], self._one_directional(ok))
+
+
 class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
     """A guard's docstring may not state a size its own list contradicts.
 

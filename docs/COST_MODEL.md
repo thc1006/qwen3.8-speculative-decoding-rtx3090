@@ -316,10 +316,15 @@ silently wrong:
   `r` -- which is the direction of this section's own conclusion, so those arms are reported and
   excluded from the bound rather than counted toward it.
 
-Three arms return an `r` that is significantly *negative*: `k` rises with acceptance at constant
-draft width. That is the opposite of a rollback account and is what a cost paid per position
-verified looks like near saturation, where `mean_len` climbs toward `w + 1` while the cycle cost
-does not.
+Five arms across the four matrices above return an `r` that clears zero downward by more than the
+undercoverage margin: `k` rises with acceptance at constant draft width. That is the opposite of a
+rollback account and is what a cost paid per position verified looks like near saturation, where
+`mean_len` climbs toward `w + 1` while the cycle cost does not. Thirteen more point the same way
+from inside that margin; they are printed and not counted. Neither Phase A nor Phase KV
+contributes to the five -- every negative arm in both sits inside the margin.
+
+Until 2026-09-01 this paragraph said three arms were *significantly* negative, because
+`cost_model.py` applied the 1.3-half-width rule to positive intervals only. Correction 57.
 
 What the bound covers is the component of cost proportional to `w*(1 - acceptance)`, and that
 component is approximately none. It does not bound a fixed checkpoint paid every verification
