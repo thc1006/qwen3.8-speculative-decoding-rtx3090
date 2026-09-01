@@ -17,7 +17,8 @@ The sampling kernel needs a third check the greedy one does not: it uses the
 candidate token id to index a vocabulary-strided array, so an id outside the
 vocabulary reads and writes out of bounds on a sibling chain that is otherwise
 valid, and no hop bound prevents that. It also runs the walk on every thread of
-a 1024-thread block, so its warnings come from one thread.
+a 1024-thread block; compute-sanitizer counts two errors per malformed case and
+prints one, under its own print limit.
 
 Signed-off-by: thc1006 <84045975+thc1006@users.noreply.github.com>
 ---
@@ -61,7 +62,7 @@ index b30b18e..ad14753 100644
 +    // As in VerifyTreeGreedy, with one addition: this kernel uses the candidate id to index a
 +    // vocabulary-strided array, so an id outside the vocabulary reads and writes out of bounds
 +    // on a sibling chain that is otherwise perfectly valid. Every thread in the block runs this
-+    // walk, so only one of them reports.
++    // walk; compute-sanitizer counts two and prints one, under its own print limit.
 +    uint32_t hops = 0;
      while (cur_index != -1) {
 +      if (cur_index < 0 || (uint32_t) cur_index >= num_draft_tokens ||

@@ -7,8 +7,10 @@ as one. The sampling kernel additionally uses the candidate token id to index a
 vocabulary-strided array.
 
 Patch: `0002-bound-sibling-walks.patch`. Both get a hop bound and a range check; the sampler gets
-the vocabulary check as well, and its warnings come from one thread because it runs the walk on
-all 1024 of them.
+the vocabulary check as well. It runs the walk on all 1024 threads of the block, and
+`compute-sanitizer` counts two errors per malformed case and prints one, saying so itself in
+`hardware_sm86_oob.txt`: `1 errors were not printed. Use --print-limit option`. The number
+of messages is the tool's print limit, not a count of threads.
 
 ## Proven
 

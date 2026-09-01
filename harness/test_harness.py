@@ -59,6 +59,28 @@ def tracked_metadata():
             and not Path(f).name.startswith("results_")]
 
 
+def tracked_upstream_prose():
+    """The files under `upstream/` that this repository wrote, as opposed to copied.
+
+    Every prose guard excluded `upstream/` wholesale, and the rule is right for what it was
+    written for: that directory holds copied third-party source -- eagle_utils.cu, spec_cpu.cpp,
+    speculative_sampling.cuh -- and reading someone else's code for this repository's voice is
+    meaningless. It also held the four patches and two findings write-ups that this repository
+    wrote and sends to other projects, which is the most outward-facing prose in the tree: one
+    of the patches is open as sglang#36201. 7,467 words of it were read by nothing.
+
+    `.patch` and `.md` are the unambiguous split. The `.cu` and `.py` files there are a mix of
+    copied source and this repository's own reproducers, and no filename rule separates them.
+    """
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    out = subprocess.run(["git", "-C", str(root), "ls-files",
+                          "upstream/*.patch", "upstream/*.md",
+                          "upstream/*/*.patch", "upstream/*/*.md"],
+                         capture_output=True, text=True, timeout=60)
+    return out.stdout.split() if out.returncode == 0 else []
+
+
 def tracked_shell():
     """Every shell script this repository publishes.
 
@@ -4031,10 +4053,11 @@ class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
         # checks are reused here rather than restated, so the two cannot drift apart.
         _P = AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid
         names = [n for n in out.stdout.split("\n") if n]
-        names += _P._python_prose() + tracked_shell() + tracked_metadata()
+        names += (_P._python_prose() + tracked_shell() + tracked_metadata()
+                  + tracked_upstream_prose())
         found = []
         for name in names:
-            if "PREREGISTRATION" in name or name.startswith(("upstream/", "llamacpp")):
+            if "PREREGISTRATION" in name or name.startswith("llamacpp"):
                 continue
             f = self.ROOT / name
             if not f.exists():
@@ -6915,6 +6938,16 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
             except ValueError:
                 return ""
             return "\n\n".join(found)
+        if str(path).endswith(".patch"):
+            # A patch is two authors. The message above the diff and every `+` line are this
+            # repository's words and go upstream; the context and `-` lines are the project's
+            # own code, quoted, and reading them as claims would attribute their prose to us.
+            head, _, body = text.partition("\ndiff --git ")
+            kept = [head]
+            for line in ("diff --git " + body).splitlines():
+                if line.startswith("+") and not line.startswith("+++"):
+                    kept.append(line[1:])
+            return "\n".join(kept)
         if str(path).endswith((".yml", ".yaml", ".cff")):
             # A block scalar keeps its text on the lines BELOW the key. The first version of
             # this kept the `abstract: >-` marker and dropped the abstract, so CITATION.cff's
@@ -7032,7 +7065,8 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         root = Path(__file__).parent.parent
         bad = []
         names = [n for n in tracked_markdown() if n != "PREREGISTRATION.md"]
-        names += self._python_prose() + tracked_shell() + tracked_metadata()
+        names += (self._python_prose() + tracked_shell() + tracked_metadata()
+                  + tracked_upstream_prose())
         for name in names:
             for sent in self._sentences(self._prose_of(root / name)):
                 if self.OUTSIDE.search(sent) and self.UPGRADE.search(sent):
@@ -7058,7 +7092,8 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         pat = re.compile(self.ACTORS + r"\s+" + self.ACTIONS, re.I)
         bad = []
         names = [n for n in tracked_markdown() if n != "PREREGISTRATION.md"]
-        names += self._python_prose() + tracked_shell() + tracked_metadata()
+        names += (self._python_prose() + tracked_shell() + tracked_metadata()
+                  + tracked_upstream_prose())
         for name in names:
             for sent in self._sentences(self._prose_of(root / name)):
                 m = pat.search(sent)
