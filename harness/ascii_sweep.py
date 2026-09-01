@@ -76,7 +76,8 @@ def convert(text):
 def main():
     paths = sys.argv[1:]
     if not paths:
-        out = subprocess.run(["git", "ls-files"], capture_output=True, text=True).stdout
+        out = subprocess.run(["git", "ls-files"], capture_output=True, text=True,
+                             timeout=15).stdout
         paths = [p for p in out.splitlines()
                  if not p.startswith(SKIP_DIRS) and not p.endswith(SKIP_EXT)
                  and not (p.startswith("analysis/") and p.endswith(".txt"))]

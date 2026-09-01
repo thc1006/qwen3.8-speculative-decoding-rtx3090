@@ -1,7 +1,8 @@
 """Phase C -- method breadth on one host under one protocol.
 
-Nobody has run every speculative method available for this model on a single machine with a
-single protocol. `sudoingX/qwen38-mtp` is crowdsourced across different builds, quants and
+Nothing in the 2026-08-24 prior-art sweep reports running every speculative method available
+for this model on a single machine under a single protocol -- which is a statement about what
+was posted, not about what anyone has run. `sudoingX/qwen38-mtp` is crowdsourced across different builds, quants and
 operating systems and discloses its own confounds; `syv-ai/qwen38-27b-rtx3090` is vLLM only;
 the PR #27342 thread has DFlash2 but not the ngram family or a classic draft model.
 

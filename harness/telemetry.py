@@ -639,7 +639,13 @@ def settle_gpu(
 
 
 def overclock_state(index: int = 0) -> dict:
-    """Capture clock offsets and power limits so an overclock can never be silently in effect.
+    """Capture clock offsets and power limits, so those two cannot be silently in effect.
+
+    Not "an overclock can never be", which this said until 2026-09-01 and which claims a
+    completeness it does not have. Correction 40 exists because a fan curve raises the
+    sustained clock the way an offset does and nothing recorded it; `is_stock` now reads
+    `fan_control` as a third axis and treats unreadable as not-stock. Phase A predates that,
+    so its records carry no fan field at all.
 
     This exists because it happened. Ten minutes into the first full run of this study the card
     was found carrying `GPUMemoryTransferRateOffset=800` (+400 MHz memory) and

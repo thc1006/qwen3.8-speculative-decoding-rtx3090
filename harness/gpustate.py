@@ -161,7 +161,8 @@ def fan_state(sidx: int, *, max_fans: int = 4) -> dict:
     """Fan control mode and per-fan target/current speed, in one nvidia-settings call.
 
     Nothing in this harness recorded a fan anywhere until 2026-08-29. `overclock_state` captures
-    clock offsets and power limits precisely so an overclock can never be silently in effect, and
+    clock offsets and power limits precisely so those two cannot be silently in effect -- a fan
+    curve is the third axis and `is_stock` reads it separately, since Correction 40 -- and
     a fan curve is the same intervention by another route: a card held cooler holds a higher
     sustained clock, and Phase B's own telemetry has every arm losing 8-12 % of its clock inside a
     single arm-pass. Someone who changed the curve between two runs would have left no field

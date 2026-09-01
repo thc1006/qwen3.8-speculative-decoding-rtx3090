@@ -75,7 +75,7 @@ def _smi_watts(index: int) -> float | None:
     try:
         out = subprocess.check_output(
             ["nvidia-smi", "--query-gpu=power.draw", "--format=csv,noheader,nounits",
-             "-i", str(index)], text=True, stderr=subprocess.DEVNULL).strip()
+             "-i", str(index)], text=True, stderr=subprocess.DEVNULL, timeout=15).strip()
         return float(out.split(",")[0])
     except Exception:                                              # noqa: BLE001
         return None

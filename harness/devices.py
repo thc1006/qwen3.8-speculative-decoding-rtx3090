@@ -28,6 +28,13 @@ import subprocess
 import time
 from dataclasses import dataclass
 
+# Every nvidia-smi call below is a query that normally returns in 10 to 50 ms, and every
+# one of them can run while a measurement is in flight: `other_devices_state` at the start
+# of each arm, `_temp` on every poll of the thermal gate. A wedged driver with no bound
+# stops the run without failing it. 15 s matches `telemetry.NVSMI_TIMEOUT_S`; the callers
+# all treat a raised exception as "no reading", so a bound degrades rather than crashes.
+NVSMI_TIMEOUT_S = 15.0
+
 
 def _n(v, fmt: str = "{:.0f}") -> str:
     """Format a field the driver may not report, without turning it into a number."""
@@ -88,7 +95,7 @@ def enumerate_devices() -> list[Device]:
     try:
         out = subprocess.check_output(
             ["nvidia-smi", f"--query-gpu={_FIELDS}", "--format=csv,noheader,nounits"],
-            text=True, stderr=subprocess.DEVNULL).strip()
+            text=True, stderr=subprocess.DEVNULL, timeout=NVSMI_TIMEOUT_S).strip()
     except Exception:
         return []
     devs: list[Device] = []
@@ -122,7 +129,8 @@ def ecc_mode(index: int = 0) -> str:
     try:
         return subprocess.check_output(
             ["nvidia-smi", "--query-gpu=ecc.mode.current", "--format=csv,noheader",
-             "-i", str(index)], text=True, stderr=subprocess.DEVNULL).strip() or "unknown"
+             "-i", str(index)], text=True, stderr=subprocess.DEVNULL,
+            timeout=NVSMI_TIMEOUT_S).strip() or "unknown"
     except Exception:
         return "unknown"
 
@@ -143,7 +151,7 @@ def other_devices_state(index: int = 0) -> list[dict]:
             csv = subprocess.check_output(
                 ["nvidia-smi", "--query-gpu=memory.used,utilization.gpu,temperature.gpu,power.draw",
                  "--format=csv,noheader,nounits", "-i", str(d.index)],
-                text=True, stderr=subprocess.DEVNULL).strip()
+                text=True, stderr=subprocess.DEVNULL, timeout=NVSMI_TIMEOUT_S).strip()
             mem, util, temp, pw = [float(x) for x in csv.split(",")]
             out.append({"index": d.index, "name": d.name, "memory_used_mib": mem,
                         "utilization_pct": util, "temperature_c": temp, "power_w": pw,
@@ -188,7 +196,8 @@ def _temp(index: int) -> float | None:
     try:
         return float(subprocess.check_output(
             ["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits",
-             "-i", str(index)], text=True, stderr=subprocess.DEVNULL).strip())
+             "-i", str(index)], text=True, stderr=subprocess.DEVNULL,
+            timeout=NVSMI_TIMEOUT_S).strip())
     except Exception:
         return None
 

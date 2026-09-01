@@ -3870,7 +3870,10 @@ def _parents_of(path):
 
 
 class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
-    """The README drifts because the same conclusion is copied into six places by hand.
+    """The README drifts because the same conclusion is copied by hand into every surface
+    listed in SURFACES below. This sentence said "six places" while that list held five,
+    from the commit that introduced it: a hand-typed count drifting against the thing it
+    counts, inside the check written against hand-typed counts drifting.
 
     Correction 25 established that phase_c's ngram-mod emitting no drafts is the method working
     as designed; the README kept "its flag was accepted and did nothing" for a further day.
@@ -5350,18 +5353,28 @@ class EverySubprocessOnTheMeasurementPathMustBeBounded(unittest.TestCase):
 
     This asserts the property rather than the three numbers, so a new call is
     caught rather than a new constant.
+
+    It reads every module in `harness/` rather than a list of the four that
+    were known to shell out when this was written. That list was the defect:
+    `devices.py` queried nvidia-smi four times with no bound, and `bench.py`
+    calls into it at the start of every arm while `idle_floor_c` calls it on
+    every poll of the thermal gate, so the case the docstring above describes
+    was live in a file the check did not open. Two exemptions, both stated
+    rather than assumed: `Popen` is not in `BOUNDED`, because the servers in
+    `server.py` and `vllm_server.py` are meant to outlive the call that starts
+    them; and this file is skipped, because a test may legitimately wait on a
+    subprocess it fully controls.
     """
 
-    FILES = ("telemetry.py", "gpustate.py", "bench.py", "server.py")
     BOUNDED = ("subprocess.run", "subprocess.check_output", "subprocess.call")
 
     def test_no_unbounded_subprocess_call(self):
         import ast
         root = Path(__file__).parent
         bad = []
-        for name in self.FILES:
-            f = root / name
-            if not f.exists():
+        for f in sorted(root.glob("*.py")):
+            name = f.name
+            if name == Path(__file__).name:
                 continue
             for node in ast.walk(ast.parse(f.read_text())):
                 if not isinstance(node, ast.Call):
@@ -5382,9 +5395,24 @@ class EverySubprocessOnTheMeasurementPathMustBeBounded(unittest.TestCase):
         measured. 15 s against a 100 ms sampling interval is 150 intervals: by
         the time it fires the run is already ruined, so it cannot be the thing
         that ruins it."""
-        import telemetry
-        self.assertGreaterEqual(telemetry.NVSMI_TIMEOUT_S, 5.0)
-        self.assertLessEqual(telemetry.NVSMI_TIMEOUT_S, 60.0)
+        import ast
+        root = Path(__file__).parent
+        found = {}
+        for f in sorted(root.glob("*.py")):
+            if f.name == Path(__file__).name:
+                continue
+            for node in ast.walk(ast.parse(f.read_text())):
+                if not isinstance(node, ast.Assign):
+                    continue
+                for t in node.targets:
+                    nm = getattr(t, "id", "")
+                    if nm.endswith("TIMEOUT_S") and isinstance(node.value, ast.Constant):
+                        found[f"{f.stem}.{nm}"] = node.value.value
+        self.assertIn("telemetry.NVSMI_TIMEOUT_S", found,
+                      "the sampler's own bound is the one this reasoning is about")
+        for where, secs in found.items():
+            self.assertGreaterEqual(secs, 5.0, f"{where} could fire on a merely busy machine")
+            self.assertLessEqual(secs, 60.0, f"{where} is long enough to stop a run overnight")
 
 
 class TheNoiseFloorMustNotBeComputedWithThePopulationSd(unittest.TestCase):
@@ -6478,7 +6506,9 @@ class TheProseDoesNotCarryTheStructuralLLMSignature(unittest.TestCase):
     """The lexical band has collapsed; the structural one has not.
 
     `TheProseDoesNotCarryTheLLMLexicalSignature` checks the words Kobak et al. found spiking in
-    2024. Every 2026 source says that band is nearly spent: Wikipedia's *Signs of AI writing*
+    2024. The source that tracks that band over time says it is nearly spent, and several others
+    still lead with vocabulary, so this is one reading and not a consensus: Wikipedia's
+    *Signs of AI writing*
     lists nineteen excess words for 2023-24, six for mid-2024 to mid-2025 and **four** from
     mid-2025 on, and its own advice is that a single marker proves nothing and only a cluster
     does. What it lists under style instead is structural: negative parallelism ("not just X but
@@ -6654,17 +6684,43 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
                        r"as of|snapshot|prior-art|tracker|thread)\b", re.I)
 
     def _sentences(self, text):
+        """Use, not mention. A quoted sentence is being written down, not made.
+
+        This guard's own docstring quotes the six sentences it exists to catch, and the first
+        version of it fired on itself -- the same shape as the lexical guard, which blanks
+        backticked words for the same reason. A repository that records what its checks look
+        for has to be able to write the phrase down.
+        """
         body = re.sub(r"```.*?```", " ", text, flags=re.S)
         body = re.sub(r"`[^`\n]*`", " ", body)
+        # Across newlines too: a quoted example wrapped inside a docstring keeps its opening
+        # quote on one line and its closing quote on the next, and a newline-anchored pattern
+        # blanks four of five and leaves the wrapped one firing.
+        body = re.sub(r'"[^"]{0,200}"', " ", body, flags=re.S)
         return [re.sub(r"\s+", " ", x).strip() for x in re.split(r"(?<=[.!?])\s+", body)]
+
+    @staticmethod
+    def _python_prose():
+        """Docstrings and comment blocks carry 76,000 words here, more than the documents do.
+
+        The first version of this guard read markdown only, and two matrix docstrings were
+        carrying the same sentence it was written for: `phase_c.py` on running every speculative
+        method, `phase_l.py` on reproducing the long-context cliff. Prose is prose wherever it
+        sits.
+        """
+        import subprocess
+        root = Path(__file__).parent.parent
+        out = subprocess.run(["git", "ls-files", "*.py"], cwd=str(root),
+                             capture_output=True, text=True).stdout.split()
+        return [f for f in out if not f.startswith(("upstream/", "llamacpp", ".venv"))]
 
     def test_no_document_says_nobody_did_it_without_saying_how_that_is_known(self):
         root = Path(__file__).parent.parent
         pat = re.compile(self.ACTORS + r"\s+" + self.ACTIONS, re.I)
         bad = []
-        for name in tracked_markdown():
-            if name == "PREREGISTRATION.md":       # dated and append-only; see the guards above
-                continue
+        names = [n for n in tracked_markdown() if n != "PREREGISTRATION.md"]
+        names += self._python_prose()          # dated and append-only; see the guards above
+        for name in names:
             for sent in self._sentences((root / name).read_text()):
                 m = pat.search(sent)
                 if m and not self.SCOPE.search(sent):
@@ -6681,6 +6737,11 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
                      "nobody has manipulated the resources directly."):
             self.assertTrue(pat.search(sent), sent)
             self.assertIsNone(self.SCOPE.search(sent), sent)
+
+    def test_a_quoted_sentence_is_a_mention_and_not_a_use(self):
+        """The docstring above quotes all six; none of them may fire the check."""
+        quoted = 'The six were "Two things nobody has done" and "Nobody has checked whether it holds".'
+        self.assertEqual([], [x for x in self._sentences(quoted) if "nobody" in x.lower()])
 
     def test_a_scoped_sentence_is_not_flagged(self):
         pat = re.compile(self.ACTORS + r"\s+" + self.ACTIONS, re.I)
@@ -6755,6 +6816,76 @@ class AHeadingMustNotBeWrappedOntoASecondLine(unittest.TestCase):
     def test_a_fenced_comment_is_not_a_heading(self):
         fenced = "```bash\n# 0. confirm the card\npython3 -c \"print(1)\"\n```\n"
         self.assertEqual([], self._wrapped(fenced))
+
+
+class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
+    """A guard's docstring may not state a size its own list contradicts.
+
+    Two of these shipped. `EverySubprocessOnTheMeasurementPathMustBeBounded`
+    was named for every subprocess on the measurement path and opened four
+    files, missing `devices.py`, which queried nvidia-smi four times with no
+    bound on a path `bench.py` enters at the start of every arm. And
+    `TestReadmeSaysWhatTheArtifactsSay` said the conclusion was copied into
+    "six places" while its SURFACES list held five, from the commit that
+    introduced both -- a hand-typed count drifting against the thing it counts,
+    in the check written against hand-typed counts drifting.
+
+    The rule is narrow on purpose: only a count that directly qualifies places,
+    documents, files or modules, and only against a list in the same class that
+    holds nothing but filenames. Quoted spans are blanked first, so a docstring
+    may quote a wrong number it is correcting -- the sentence above does.
+    """
+
+    WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+             "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
+    NOUNS = r"places|documents|files|modules|surfaces"
+
+    def _mismatches(self, src):
+        import ast
+        out = []
+        for cls in [n for n in ast.parse(src).body if isinstance(n, ast.ClassDef)]:
+            sizes = {}
+            for st in cls.body:
+                if not isinstance(st, ast.Assign) or not isinstance(st.value, (ast.Tuple, ast.List)):
+                    continue
+                vals = [e.value for e in st.value.elts
+                        if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+                if vals and all(re.search(r"\.(py|md|json|sh)$", v) for v in vals):
+                    sizes[getattr(st.targets[0], "id", "?")] = len(vals)
+            doc = ast.get_docstring(cls) or ""
+            if not sizes or not doc:
+                continue
+            doc = re.sub(r'"[^"]{0,200}"', " ", doc, flags=re.S)
+            for m in re.finditer(rf"\b(\w+|\d+)\s+({self.NOUNS})\b", doc, re.I):
+                tok = m.group(1).lower()
+                n = self.WORDS.get(tok, int(tok) if tok.isdigit() else None)
+                if n is None:
+                    continue
+                for name, size in sizes.items():
+                    if n != size:
+                        out.append(f"{cls.name}: docstring says {n} {m.group(2)}, "
+                                   f"{name} holds {size}")
+        return out
+
+    def test_no_guard_states_a_size_its_own_list_contradicts(self):
+        bad = self._mismatches(Path(__file__).read_text(encoding="utf-8"))
+        self.assertEqual(
+            bad, [],
+            "a docstring counts something its own list does not:\n  " + "\n  ".join(bad))
+
+    def test_the_check_fires_on_the_defect_it_was_written_for(self):
+        planted = (
+            'class X(unittest.TestCase):\n'
+            '    """Copied into six places by hand."""\n\n'
+            '    SURFACES = ("a.md", "b.md", "c.md", "d.md", "e.md")\n')
+        self.assertEqual(1, len(self._mismatches(planted)))
+
+    def test_a_quoted_count_is_not_read_as_a_claim(self):
+        quoted = (
+            'class X(unittest.TestCase):\n'
+            '    """It said <<six places>> while the list held five."""\n\n'
+            '    SURFACES = ("a.md", "b.md", "c.md", "d.md", "e.md")\n').replace("<<", chr(34)).replace(">>", chr(34))
+        self.assertEqual([], self._mismatches(quoted))
 
 
 if __name__ == "__main__":

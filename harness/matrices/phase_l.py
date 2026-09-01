@@ -3,9 +3,13 @@
 llama.cpp issue #27623, open 2026-08-23 with zero comments, reports that decode throughput on
 this model collapses roughly 25x once the KV position passes about 80 K, from 33 tok/s at 68 K
 to 1.4 tok/s at 91 K, while prompt processing stays fast at ~1300 tok/s. Reproduced there on an
-RTX 4080 SUPER (sm_89) across three quants. Nobody has reproduced it on another architecture,
-and nobody has asked the follow-up that matters here: does speculation survive the cliff, ride
-it down, or make it worse? DFlash2's advertised advantage is precisely long-context retention,
+RTX 4080 SUPER (sm_89) across three quants. **Its author withdrew that 25x on 2026-08-26**,
+after re-measuring with eval-only rather than wall-clock timings; this phase ran before that,
+so read its non-reproduction as consistent with the withdrawal rather than independent of it.
+
+Nothing in the 2026-08-24 sweep reports a reproduction on another architecture, or the follow-up
+that matters here: does speculation survive the cliff, ride it down, or make it worse? The sweep
+sees what was posted, not what was run. DFlash2's advertised advantage is precisely long-context retention,
 so the answer is not guessable.
 
 Depth ladder and why it stops at 96 K. KV on this model costs ~34 KB/token at q8_0, since only
