@@ -4023,19 +4023,44 @@ class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
                   "costs a fixed c", "rules out warp count")
         marks = ("withdraw", "Withdraw", "used to read", "an earlier version", "earlier draft",
                  "no longer", "retract")
+        # Markdown was the whole of this check, and "rules out warp count" -- on this very list,
+        # withdrawn because every one of the six warp reports is either COMPARISON VOID or says
+        # the edited table row never reached the kernel -- survived in the caption of
+        # plot_width_partition.png, which is the figure the README leads a section with. The
+        # documents were clean; the picture was not. The prose surfaces built for the attribution
+        # checks are reused here rather than restated, so the two cannot drift apart.
+        _P = AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid
+        names = [n for n in out.stdout.split("\n") if n]
+        names += _P._python_prose() + tracked_shell() + tracked_metadata()
         found = []
-        for name in out.stdout.split("\n"):
-            if not name or "PREREGISTRATION" in name or name.startswith(("upstream/", "llamacpp")):
+        for name in names:
+            if "PREREGISTRATION" in name or name.startswith(("upstream/", "llamacpp")):
                 continue
             f = self.ROOT / name
             if not f.exists():
                 continue
-            for i, line in enumerate(f.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            markdown = name.endswith(".md")
+            text = f.read_text(encoding="utf-8", errors="replace") if markdown \
+                else _P._prose_of(f)
+            # Use, not mention -- the same rule `_sentences` applies, and for the same reason:
+            # prose that quotes a withdrawn claim in order to say it is withdrawn is not
+            # asserting it. Five of the first six hits after this check was widened were of that
+            # shape, including one in this file. Blanked over the whole text rather than per
+            # line, because a quotation wraps: `plot_phase_m.py` opens the quote and says "It
+            # used to read" on one line and closes it on the next, so a per-line pass saw
+            # neither the mark nor the opening quote.
+            text = re.sub(r'"[^"]{0,240}"', " ", text, flags=re.S)
+            text = re.sub(r"`[^`]{0,240}`", " ", text, flags=re.S)
+            for i, line in enumerate(text.splitlines(), 1):
                 if any(m in line for m in marks):
                     continue
                 for c in claims:
                     if c in line:
-                        found.append(f"{name}:{i} {c!r}")
+                        # For markdown the index IS the file line. For the other surfaces it is
+                        # an index into extracted prose, which would print as a line number and
+                        # point at unrelated code, so those report the sentence instead.
+                        where = f"{name}:{i}" if markdown else f"{name}"
+                        found.append(f"{where} {c!r} in {line.strip()[:90]!r}")
         self.assertFalse(found,
                          "these lines assert something this study has withdrawn, and do not mark "
                          "themselves as quoting it: " + "; ".join(found))
@@ -6954,6 +6979,26 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
                     out.append(t.string)
         except Exception:                                          # noqa: BLE001
             pass
+        # In a plotting module the string literals ARE the product: a title, a caption and an
+        # annotation reach the reader as pixels, and nothing else here does. Skipping them is
+        # what let "rules out warp count" -- a phrase this file already lists as withdrawn --
+        # sit in plot_width_partition.png's caption while every document was clean. Only the
+        # plot modules, because elsewhere a string literal is usually a fixture.
+        if "plot" in Path(path).name:
+            try:
+                for node in _ast.walk(_ast.parse(text)):
+                    if isinstance(node, _ast.Constant) and isinstance(node.value, str):
+                        if len(node.value.split()) >= 3:
+                            out.append(node.value)
+                    elif isinstance(node, _ast.JoinedStr):
+                        joined = "".join(
+                            v.value if isinstance(v, _ast.Constant)
+                            and isinstance(v.value, str) else " "
+                            for v in node.values)
+                        if len(joined.split()) >= 3:
+                            out.append(joined)
+            except SyntaxError:
+                pass
         try:
             for n in _ast.walk(_ast.parse(text)):
                 if isinstance(n, (_ast.Module, _ast.ClassDef, _ast.FunctionDef,
