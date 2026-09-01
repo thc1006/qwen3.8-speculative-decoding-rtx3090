@@ -128,8 +128,9 @@ def build(rungs, shared, bpw):
     ax.set_ylabel("no divergence observed\nthrough the token cap (%)")
     ax.set_xlabel("bits per weight  (file size / parameter count, measured)")
     # "the only ladder that can ask" is a claim about the world; the reason is the one to state.
-    ax.set_title("3.  llama.cpp #25618 says bf16 preserves parity. The 27B cannot hold bf16, "
-                 "so this 9B ladder is where the question can be asked",
+    # One line ran past the axes and the last two words were clipped out of the committed PNG.
+    ax.set_title("3.  llama.cpp #25618 says bf16 preserves parity. The 27B cannot hold bf16,\n"
+                 "     so this 9B ladder is where the question can be asked",
                  loc="left", fontsize=10.5, color=P.C("fg"))
     ax.set_ylim(-3, 103)
     P._despine(ax)

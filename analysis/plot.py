@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import sys
 import textwrap
+import matplotlib.text as mtext
 from collections import defaultdict
 from contextlib import contextmanager
 from pathlib import Path
@@ -203,6 +204,9 @@ def _halo(lw=2.2):
     return [pe.withStroke(linewidth=lw, foreground=C("bg"))]
 
 
+CLIP_TOL_PX = 2.0    # rounding on a long x-label measures 1 px; a clipped word is tens
+
+
 def _save(fig, stem, note="", bottom=0.13, provenance=None, top_in=None,
           captured=None, after_layout=None):
     # Footer spacing is computed in inches, not in figure fractions. A fixed fraction is a
@@ -235,8 +239,44 @@ def _save(fig, stem, note="", bottom=0.13, provenance=None, top_in=None,
     if after_layout is not None:
         fig.canvas.draw()
         after_layout(fig)
+    # Text that runs off the canvas is invisible in the committed PNG and silent in every check
+    # that reads the source: plot_qsmall_ladder's third panel title lost "question can be asked"
+    # off the right edge and the string in the file was complete. Measured here, where the
+    # renderer exists, rather than guessed from string length.
+    fig.canvas.draw()
+    rend = fig.canvas.get_renderer()
+    # A tick outside the view keeps its label artist, positioned off the canvas and never drawn.
+    # The headline figure has an 80 on an axis that stops at 75.3, and counting it would have
+    # made this check cry wolf on a correct figure.
+    offview = set()
+    for ax in fig.get_axes():
+        for get_ticks, get_labels, lim in ((ax.get_xticks, ax.get_xticklabels, ax.get_xlim),
+                                           (ax.get_yticks, ax.get_yticklabels, ax.get_ylim)):
+            lo, hi = sorted(lim())
+            for tick, lab in zip(get_ticks(), get_labels()):
+                if not (lo <= tick <= hi):
+                    offview.add(id(lab))
+    clipped = []
+    for t in fig.findobj(mtext.Text):
+        if id(t) in offview:
+            continue
+        if not t.get_visible() or not (t.get_text() or "").strip():
+            continue
+        try:
+            bb = t.get_window_extent(renderer=rend)
+        except Exception:                                          # noqa: BLE001
+            continue
+        if bb.width <= 0 or bb.height <= 0:
+            continue
+        over = max(bb.x0 * -1, bb.x1 - fig.bbox.x1, bb.y0 * -1, bb.y1 - fig.bbox.y1)
+        if over > CLIP_TOL_PX:
+            clipped.append((over, t.get_text().replace("\n", " ")[:60]))
     name = f"{stem}.png" if _MODE == "light" else f"{stem}_dark.png"
     p = OUT / name
+    if clipped:
+        detail = "; ".join(f"{txt!r} by {over:.0f} px" for over, txt in sorted(clipped, reverse=True))
+        raise SystemExit(f"REFUSED to write {name}: text runs off the canvas and would be "
+                         f"invisible in the committed figure -- {detail}")
     fig.savefig(p, dpi=DPI)
     plt.close(fig)
     px = int(w_in * DPI)
