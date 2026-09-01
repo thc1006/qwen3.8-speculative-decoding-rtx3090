@@ -48,32 +48,42 @@ fi
 
 hdr "2. every committed result, audited"
 python3 harness/audit_results.py || bad "audit_results reported a problem"
+# The audit excludes a partial write and a pre-repair copy, and one of those is committed, so a
+# section headed "every committed result" audits all but one of them. The exclusion is right --
+# a superseded copy kept for provenance is not a result this study stands on -- but naming it
+# is what stops the header from being the only account of the scope.
+git ls-files 'results/*.json' | grep -E '\.partial\.|\.pre_repair\.' \
+  | sed 's/^/   not audited, superseded and kept for provenance: /' || true
 
 hdr "3. documents link only at paths a clone would have"
+# This was a second implementation of the harness's own link guard, and the weaker one. It read
+# three documents -- README, TODO and PREREGISTRATION -- while twenty-four are tracked, and it
+# resolved every link against the repository root, which is correct only for a document that
+# sits there. The line it printed, "<N> tracked paths, 0 broken links", counted the universe
+# links are checked AGAINST rather than what was checked, so it read as full coverage of a
+# check that had opened three files; by this script's own opening rule that is a check
+# reporting OK without saying what it examined. The harness guard, unified on
+# tracked_markdown() and resolving each link relative to the document carrying it, found twelve
+# broken links in the twenty-one documents this copy never opened, two of them <picture>
+# sources. One
+# implementation now, invoked by name so the section still says what it covers.
+#
+# The line that followed, `[ $? -ne 0 ] && bad ...`, could never fire: `|| bad` above it had
+# already consumed the failure and returned 0.
 python3 - <<'PY' || bad "a document links at a path a clone would not have"
-import re, pathlib, subprocess, sys
-tracked = set(subprocess.check_output(["git", "ls-files"], text=True).split("\n")) - {""}
-dirs = {"/".join(t.split("/")[:i]) for t in tracked for i in range(1, len(t.split("/")))}
-bad = []
-for name in ("README.md", "TODO.md", "PREREGISTRATION.md"):
-    p = pathlib.Path(name)
-    if not p.exists():
-        continue
-    text = p.read_text(encoding="utf-8")
-    targets = [t for _, t in re.findall(r"\[([^\]]+)\]\(([^)#][^)]*)\)", text)]
-    targets += re.findall(r'src="([^"]+)"', text) + re.findall(r'srcset="([^"]+)"', text)
-    for t in targets:
-        if t.startswith(("http://", "https://", "mailto:")):
-            continue
-        path = t.split("#")[0].rstrip("/")
-        if path and path not in tracked and path not in dirs:
-            bad.append(f"{name} -> {path}")
-print(f"   {len(tracked)} tracked paths, {len(bad)} broken links")
-for b in bad:
-    print("   FAIL:", b)
-sys.exit(1 if bad else 0)
+import subprocess, sys
+sys.path.insert(0, "harness")
+from test_harness import tracked_markdown          # the one definition of "a document here"
+r = subprocess.run([sys.executable, "harness/test_harness.py",
+                    "TestEveryDocumentLinkPointsAtSomethingAClonWouldHave"],
+                   capture_output=True, text=True, timeout=300)
+print(f"   {len(tracked_markdown())} tracked documents, "
+      f"{'every link resolves' if r.returncode == 0 else 'FAILURES below'}")
+if r.returncode:
+    for line in (r.stdout + r.stderr).splitlines()[-30:]:
+        print("   " + line)
+sys.exit(r.returncode)
 PY
-[ $? -ne 0 ] && bad "a document links at an untracked path"
 
 hdr "4. the README's numbers against the result files"
 python3 - <<'PY' || bad "a README number does not match the result files"
@@ -168,9 +178,9 @@ for h in hits:
 raise SystemExit(1 if hits else 0)
 PY
 
-hdr "6. every result file is claimed by the evidence registry"
+hdr "6. every committed result is claimed by the registry, or named here as one it does not"
 python3 - <<'PY' || bad "a result file or a registry entry is unaccounted for"
-import glob, json, pathlib, re, sys
+import glob, json, pathlib, re, subprocess, sys
 
 # Every result file has to be claimed by an entry in evidence/registry.json, and every entry has
 # to point at files that exist. The first version of this check matched result filenames against
@@ -217,6 +227,13 @@ for m in re.finditer(r"\*\*Running:\*\*\s*Phase\s+([A-Za-z0-9-]+)", readme):
 
 print(f"   {len(on_disk)} result files, {len(reg['phases'])} registry entries, "
       f"{len(problems)} mismatches")
+# The glob is `results/phase_*.json` less the skip patterns, so a dry run and a superseded copy
+# fall outside it. Both are committed. A section headed "every" that quietly holds two files
+# back is the shape this script exists to catch, so they are named rather than left to a count.
+committed = subprocess.check_output(["git", "ls-files", "results/*.json"],
+                                    text=True, timeout=60).split()
+for x in sorted(set(committed) - set(on_disk)):
+    print(f"   not a claim the registry makes, so not checked here: {x}")
 for x in problems:
     print("   FAIL:", x)
 raise SystemExit(1 if problems else 0)
@@ -247,7 +264,7 @@ else
   printf '   phase_m_anchor.txt regenerates byte-identical\n'
 fi
 
-hdr "9. every generated report and figure is what its generator writes now"
+hdr "9. every generated report and figure that can be rebuilt here, against its generator"
 # Section 8 does this for one report. It had to be done for all of them: twenty-three committed
 # artifacts were older than the analysers that produce them, including `phase_a_report.txt`, which
 # still said "byte-identical" -- wording this study withdrew -- and `phase_c_cost.txt`, which

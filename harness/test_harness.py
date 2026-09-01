@@ -33,6 +33,23 @@ def tracked_markdown():
         return []
     return [f for f in out.stdout.split() if not f.startswith(("upstream/", "llamacpp"))]
 
+
+def tracked_shell():
+    """Every shell script this repository publishes.
+
+    The prose guards read markdown and, since the matrix docstrings were caught carrying the
+    sentence they were written for, Python. Nothing read the 8,000 words of comment in the
+    shell scripts, and those are the files a reproducer actually runs: the gate, the phase
+    drivers, the remote-host orchestration.
+    """
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    out = subprocess.run(["git", "-C", str(root), "ls-files", "*.sh"],
+                         capture_output=True, text=True, timeout=60)
+    if out.returncode != 0:
+        return []
+    return [f for f in out.stdout.split() if not f.startswith(("upstream/", "llamacpp"))]
+
 import analyze as A  # noqa: E402
 import bench  # noqa: E402
 import cost_model as CM  # noqa: E402
@@ -6727,6 +6744,18 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         """
         import ast as _ast, io as _io, tokenize as _tok
         text = Path(path).read_text(encoding="utf-8", errors="replace")
+        if str(path).endswith(".sh"):
+            # A shell script's prose is its comments. Taking the whole file would read a
+            # `grep -E "no prior art"` as a sentence, which is the mistake this method exists
+            # to stop making for Python.
+            lines = []
+            for i, line in enumerate(text.splitlines(), 1):
+                stripped = line.lstrip()
+                if i == 1 and stripped.startswith("#!"):
+                    continue
+                if stripped.startswith("#"):
+                    lines.append(stripped.lstrip("# ").rstrip())
+            return "\n".join(lines)
         if not str(path).endswith(".py"):
             return text
         out = []
@@ -6769,7 +6798,7 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         root = Path(__file__).parent.parent
         bad = []
         names = [n for n in tracked_markdown() if n != "PREREGISTRATION.md"]
-        names += self._python_prose()
+        names += self._python_prose() + tracked_shell()
         for name in names:
             for sent in self._sentences(self._prose_of(root / name)):
                 if self.OUTSIDE.search(sent) and self.UPGRADE.search(sent):
@@ -6795,7 +6824,7 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         pat = re.compile(self.ACTORS + r"\s+" + self.ACTIONS, re.I)
         bad = []
         names = [n for n in tracked_markdown() if n != "PREREGISTRATION.md"]
-        names += self._python_prose()          # dated and append-only; see the guards above
+        names += self._python_prose() + tracked_shell()   # PREREG is dated and append-only
         for name in names:
             for sent in self._sentences(self._prose_of(root / name)):
                 m = pat.search(sent)
@@ -6892,6 +6921,54 @@ class AHeadingMustNotBeWrappedOntoASecondLine(unittest.TestCase):
     def test_a_fenced_comment_is_not_a_heading(self):
         fenced = "```bash\n# 0. confirm the card\npython3 -c \"print(1)\"\n```\n"
         self.assertEqual([], self._wrapped(fenced))
+
+
+class AShellScriptMayNotCarryItsOwnListOfDocuments(unittest.TestCase):
+    """The gate's link check read three documents while twenty-four were tracked.
+
+    `verify_everything.sh` carried a second implementation of the harness's link guard, over
+    `("README.md", "TODO.md", "PREREGISTRATION.md")`, and printed the size of the tracked-path
+    set beside its verdict -- the universe links are checked AGAINST, not what was checked. It
+    read as full coverage of a check that had opened three files, and it resolved every link
+    against the repository root, so widening the list in place would have failed every relative
+    link in `docs/`. The harness guard, unified on `tracked_markdown()`, found twelve broken
+    links in the twenty-one documents that copy never opened.
+
+    The set of documents is derivable from git in one line, so in a shell script there is no
+    honest reason to write it down. Comments may name documents; code may not name two.
+    """
+
+    LITERAL = re.compile(r'["\']([A-Za-z0-9_./-]+\.md)["\']')
+
+    def _hard_coded(self, text):
+        out = []
+        for i, line in enumerate(text.splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            names = self.LITERAL.findall(line)
+            if len(names) >= 2:
+                out.append(f"{i}: {names}")
+        return out
+
+    def test_no_shell_script_lists_the_documents_it_checks(self):
+        root = Path(__file__).resolve().parent.parent
+        bad = []
+        for name in tracked_shell():
+            for hit in self._hard_coded((root / name).read_text(encoding="utf-8",
+                                                                errors="replace")):
+                bad.append(f"{name}:{hit}")
+        self.assertEqual(
+            bad, [],
+            "a shell script names the documents it checks instead of asking git:\n  "
+            + "\n  ".join(bad))
+
+    def test_the_check_fires_on_the_list_it_was_written_for(self):
+        planted = 'for name in ("README.md", "TODO.md", "PREREGISTRATION.md"):\n'
+        self.assertEqual(1, len(self._hard_coded(planted)))
+
+    def test_a_comment_may_name_two_documents(self):
+        commented = '# compare "README.md" against "docs/PHASES.md" by hand\n'
+        self.assertEqual([], self._hard_coded(commented))
 
 
 class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
