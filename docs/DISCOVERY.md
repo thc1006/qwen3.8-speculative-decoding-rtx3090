@@ -15,7 +15,10 @@ someone debug `--spec-draft-n-max` searches for that literal string. It appears 
 hundred documents on the public web, so anything containing it and also containing a measurement
 ranks immediately. The same holds for issue and PR numbers, architecture strings from GGUF
 metadata, and function names from the source. These tokens are nearly unique and cost nothing to
-include honestly, because this study genuinely used all of them.
+include honestly -- **for the ones this study actually used**. Two in the inventory below did
+not: `--spec-draft-ngl` appears nowhere in this repository's code, and `draft-dspark` only inside
+a docstring listing what `--spec-type` accepts. Including a token a study did not use is the
+opposite of the point being made here.
 
 **2. Being cited in the upstream thread.** An agent reading llama.cpp issue #27623 follows the
 links in it. That is not SEO at all, it is participation, and it outperforms every keyword
@@ -25,8 +28,9 @@ any topic list.
 
 **3. Natural-language search.** Agents issue questions, not keywords: "is speculative decoding
 worth it on a 3090", "why did my tokens per second drop at long context". Question-shaped
-headings match question-shaped queries, which is why the README's `## What this answers` section
-is written as questions with the answer in the first sentence. An agent that has to read three
+headings match question-shaped queries, which is why the README's `## Findings` table is written
+as questions with the answer beside each. This sentence named a `## What this answers` section
+that the README does not have. An agent that has to read three
 paragraphs to find out whether the answer is yes usually moves on.
 
 **4. Semantic retrieval over chunks.** Where an index exists, the unit is a passage, not a page.
@@ -59,8 +63,10 @@ speculative decoding acceptance rate measurement, llama.cpp benchmark methodolog
 divergence.
 
 The fourth and fifth groups are where this repo is strongest and where competition is thinnest.
-Nothing in the prior-art sweep published an energy figure for this model, and the long-context
-and MoE-versus-MTP cells are open at the time of writing.
+Nothing in the prior-art sweep published an energy figure for this model. The long-context and
+MoE-versus-MTP cells were open when this was written and have since been filled -- Phase L is a
+documented failure to reproduce the cliff on sm_86, Phase M is complete with its causal reading
+withheld -- and a negative or withheld result is still the only published answer in either.
 
 ## Exact-match inventory
 
@@ -78,14 +84,17 @@ Model and metadata strings, as they appear in the GGUF: `Qwen3.8-27B`, `Qwen3.6-
 `qwen35`, `qwen35moe`, `nextn_predict_layers`, `blk.N.nextn.eh_proj.weight`,
 `full_attention_interval`, `UD-Q4_K_XL`, `Q4_K_M`, Gated DeltaNet.
 
-Hardware: RTX 3090, GA102, sm_86, 936 GB/s, 24 GB, consumer Ampere, RTX A6000 for the planned
-second device.
+Hardware: RTX 3090, GA102, sm_86, 936 GB/s, 24 GB, consumer Ampere; a second RTX 3090 and an
+RTX A6000 48 GB, which carry the cross-host replication and the forced-warp intervention rather
+than being planned.
 
 Measurement vocabulary: tokens per joule, tok/J, acceptance rate, mean accepted length,
 verification step, draft acceptance, decode throughput, memory-bandwidth bound, compute bound.
 
-Absent from the README as of this writing and worth adding where they fit naturally:
-`draft-simple`, `--spec-draft-p-min`, issue #26750, `sm_86`.
+Absent from the README, re-derived by grep on 2026-09-01: `draft-simple`, `draft-dspark`,
+`--spec-draft-p-min`, `--spec-draft-ngl`, `sm_86`, `GA102`, `936 GB/s`, `qwen35moe`. Issue #26750
+was on this list and is in the README now. **This list goes stale silently, so re-derive it rather
+than trusting it**, and note that two of its entries name things this study did not use.
 
 ## Topics
 
@@ -123,7 +132,9 @@ agent does not rank the page and hand over a link. It reads the page and writes 
 document padded with terms it cannot substantiate produces a summary that says the repo discusses
 many topics, which is the least useful thing an agent can report. A document that says the built-in
 MTP head at `--spec-draft-n-max 2` gives 59.8 % more decode throughput on an RTX 3090, measured
-over 875 requests, produces a summary containing that sentence.
+over 25 prompts, produces a summary containing that sentence. The count that belongs here is the
+prompt count: `README.md` states that the inferential unit is the prompt and that 875 is not a
+sample size.
 
 The number is the retrievable object. The keyword is only how the number gets found.
 

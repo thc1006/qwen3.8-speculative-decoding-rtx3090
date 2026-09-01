@@ -70,6 +70,25 @@ MAX_PX = 1400
 # This has to be per theme rather than one palette for both: Wong's own sky blue #56B4E9 reaches
 # 8.20:1 on the dark background and 2.31:1 on white, so swapping the palette outright would just
 # move the failure to the light figures. The light values are unchanged.
+#
+# The light values are unchanged DESPITE failing the same test, and that is a measured decision
+# rather than an oversight. On white, orange is 2.25:1, below the 3.0 floor a data marker is
+# supposed to clear; vermillion 3.87, green 3.42 and purple 3.06 all sit under the 4.5 a small
+# label needs. Lifting them looks obvious and is not: darkening the four to 4.5 collapses the
+# minimum pairwise separation under simulated protanopia from 51.4 to 6.5, and vermillion and
+# orange become one colour. Lifting orange ALONE to 3.01:1 puts orange and purple 2.9 apart
+# under tritanopia, against 46.7 as published. The reason is structural. Under protan and
+# deutan simulation the red-green hue difference is most of what these pairs have, and what
+# survives it is the LIGHTNESS difference; equalising lightness to buy contrast spends the one
+# channel that was still separating them. Wong's orange is pale because it is doing that work.
+#
+# So the light figures keep a contrast the guidance would fail, and the compensating property
+# is the one this module already commits to: shape repeats every colour distinction, so colour
+# is never the only channel. Checked figure by figure -- both series that carry orange are a
+# triangle and a diamond against circles and squares, both heatmaps print the number in every
+# cell, and the one panel where colour IS the only channel, the elasticity bars, separates at
+# 57.6 or better in all three simulations. If a future figure encodes something in orange with
+# no second channel, this trade stops holding and the palette is not what to change.
 _WONG_LIGHT = {"blue": "#0072B2", "vermillion": "#D55E00", "green": "#009E73",
                "orange": "#E69F00", "purple": "#CC79A7"}
 _WONG_DARK = {"blue": "#4DA6E0", "vermillion": "#EE7733", "green": "#1FB894",
@@ -385,9 +404,12 @@ def fig_cost_model(result):
                           textcoords="offset points",
                           xytext=(-6 if lha == "left" else 0, 13), ha=lha, fontsize=10,
                           color=col, fontweight="bold")
+        # Stroked, not boxed. This was the one box `_halo` left behind: measured on the light
+        # figure, it took 52 px out of the orange draft-dflash line between x 799 and 850,
+        # which is the defect the stroke exists to prevent and not a smaller version of it.
         ax_s.annotate(spec, pts[-1], textcoords="offset points", xytext=(9, 0),
                       color=col, fontsize=10, va="center", fontweight="bold",
-                      bbox=dict(facecolor=C("bg"), edgecolor="none", pad=1.2))
+                      path_effects=_halo())
 
     for ax in axes:
         ax.grid(alpha=0.5)
@@ -427,8 +449,9 @@ def fig_dispatch_boundary(result_nmax):
     has seven and three, all inside the dispatch limit, plus a point past it. That point is the
     figure: MMVQ_MAX_BATCH_SIZE is 8, so a wider verification batch takes a different kernel
     family, and it sits well below the line the widths below it define. Fitting one line across
-    both regimes dragged the MTP coefficient from 0.2904 to 0.2215 and the fit from 0.9958 to
-    0.8304, which is what this exists to make visible rather than argued.
+    both regimes drags the MTP coefficient from 0.2904 to 0.2210 and the fit from 0.9958 to
+    0.8316, which is what this exists to make visible rather than argued. The pair read 0.2215
+    and 0.8304 until 2026-09-01, from the vintage where the on-path fit was 0.2915 and 0.9959.
     """
     rows = CM.collect(result_nmax)
     mmvq_max, _ = CM.recorded_mmvq_max(result_nmax)
@@ -571,6 +594,20 @@ R2_COMPUTE = (("sm600", "sm1200"), ("sm1200", "sm1700"))
 R2_METHODS = [("baseline", None, "o"), ("mtp-n3", "blue", "s"), ("mtp-n7", "green", "^")]
 
 
+def _r2_colour(key):
+    """Resolve one `R2_METHODS` palette key. Both panels of `fig_bound_by` call this.
+
+    They used to resolve it differently. The top panel looked the key up in `WONG`; the bottom
+    unpacked it straight into `color=`. "blue" and "green" are also matplotlib colour names, so
+    nothing raised: the bars came out #0000FF and #008000 under markers drawn at #0072B2 and
+    #009E73, the same two series in two colours in one figure. On the dark background pure blue
+    reads 2.20:1 against #0d1117 -- below the 3.0 floor for a graphical object, and worse than
+    the 3.65:1 that `_WONG_DARK` was added to fix. A palette lookup that silently succeeds with
+    the wrong value is why this is a function and not a second copy of the expression.
+    """
+    return WONG[key] if key else C("neutral")
+
+
 def _elast(res, m, lo, hi, key):
     cells = EL._cells(res)
     x_lo, x_hi = EL._clock(res, m, lo, key), EL._clock(res, m, hi, key)
@@ -586,9 +623,8 @@ def fig_bound_by(res):
     # the two speculative points sit almost on top of each other, so their labels are offset
     # rather than anchored, or they overlap
     OFFS = {"baseline": (14, 0, "left"), "mtp-n3": (-12, -20, "right"), "mtp-n7": (22, 24, "left")}
-    for m, _colour_name, mk in R2_METHODS:
-        col = None if _colour_name is None else WONG[_colour_name]
-        col = col or C("neutral")
+    for m, key, mk in R2_METHODS:
+        col = _r2_colour(key)
         bw = fmean([_elast(res, m, a, b, EL.MEM_KEY)[0]
                     for a, b in zip(R2_HI, R2_HI[1:])])
         cp = _elast(res, m, "sm1200", "sm1700", EL.SM_KEY)[0]
@@ -618,8 +654,8 @@ def fig_bound_by(res):
     #     does not
     labels, width = [], 0.26
     xs = np.arange(len(R2_COMPUTE))
-    for i, (m, col, mk) in enumerate(R2_METHODS):
-        col = col or C("neutral")
+    for i, (m, key, mk) in enumerate(R2_METHODS):
+        col = _r2_colour(key)
         vals, errs = [], [[], []]
         for lo, hi in R2_COMPUTE:
             e, elo, ehi = _elast(res, m, lo, hi, EL.SM_KEY)

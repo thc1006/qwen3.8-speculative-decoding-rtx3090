@@ -1,15 +1,18 @@
-# Clock response
+# Clock response (Phases R and R2)
 
 Extracted from the README so the front page stays readable. Part of
 [`thc1006/qwen3.8-speculative-decoding-rtx3090`](https://github.com/thc1006/qwen3.8-speculative-decoding-rtx3090).
 
-## Resource response
+## Phase A's arms boosted lower than their baselines
 
 <details>
 <summary>The speculative arms boosted lower than their own baselines, so the speedups are understated</summary>
 
 Every speculative arm ran at a **lower SM clock than the baseline it is compared against** - 1.98 %
-lower for `dflash2-n7`, 4.17 % lower for `mtp-n5` - and 3 to 5 degrees hotter. Nothing was pinned;
+lower for `dflash2-n7`, 4.17 % lower for `mtp-n5` - and **2 to 3 degrees hotter**. That range used
+to read "3 to 5"; measured three ways -- arm means, prompt-paired means and prompt-paired medians
+-- the per-arm difference is 2.1 to 3.3 C on both `temp_mean_c` and `temp_max_c`, and 5 appears
+only on single prompts, where the worst reaches 7.0. Nothing was pinned;
 this is the card boosting less because a speculative arm draws more power for the same wall time.
 
 The direction matters. A treatment arm running *faster* than its control would inflate the effect;
@@ -30,6 +33,8 @@ an estimate from an elasticity measured in a different phase, not a measurement,
 that the boost difference is not mistaken for something working in the study's favour.
 
 </details>
+
+## What each workload responds to
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../analysis/plot_bound_by_dark.png">

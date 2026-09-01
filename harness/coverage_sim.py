@@ -14,8 +14,11 @@ continuous draws, and H9, H10 and H11 are all scored on exactly that statistic.
 This rechecks the recorded figures and adds the binary case. At 2000 replications, where a
 coverage estimate's own Monte Carlo standard error is 0.6 to 0.7 points, normal and heavy-tailed
 land on the docstring values within one standard error and uniform is 2.3 away. A 300-replication
-pass had put the discrepancy on `normal` at 2.0 standard errors instead; the standard error is
-1.4 to 2.0 points at that size, so which of the three disagreed was itself noise. `reproduces` is
+pass had put the discrepancy on `normal` at about 1.8 standard errors instead -- 2.8 points over
+a Monte Carlo standard error near 1.6 at a coverage around 0.92, which is the figure
+PREREGISTRATION.md states with its assumption. This said 2.0, which is the same gap divided by
+1.4, the bottom of the 1.4-to-2.0 range quoted here and the divisor that makes the discrepancy
+look largest. Either way, which of the three disagreed was itself noise. `reproduces` is
 still too strong a word for a run with one process 2.3 standard errors out. The design simulated is this
 study's: five classes of five prompts, three passes each, resampling prompts within class, and
 the same estimator the reports use -- `stats.paired_cluster_bootstrap`.

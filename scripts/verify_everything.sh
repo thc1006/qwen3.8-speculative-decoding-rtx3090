@@ -381,14 +381,42 @@ for cand in .venv/bin/python python3; do
     PYFIG="$cand"; break
   fi
 done
+# Three things this section got wrong, all at once, and all invisible from its output.
+#
+# `plot_qsmall_ladder.py` takes its result files on the command line; the other two do not. It
+# was invoked with none, printed its usage, exited 2, and wrote nothing. The exit code went
+# nowhere -- `>/dev/null 2>&1` with no `||` -- and `git status` was then compared before and
+# after, which is clean precisely BECAUSE nothing was drawn. So the section announced "16
+# figures regenerated, none changed" while regenerating 14 and checking 14, and the two it
+# skipped were stale: `plot_qsmall_ladder_dark.png` still carried the pre-`_WONG_DARK` blue at
+# 3.65:1 on the dark background, six commits after that was fixed everywhere it was checked.
+# The count 16 was a literal in the message, so it could not disagree with what happened.
+#
+# Hence: arguments, a checked exit status, and a count of the files actually written this run
+# against the number on disk. A generator that draws nothing now fails instead of passing.
 if [ -n "$PYFIG" ]; then
   before=$(git status --porcelain analysis/*.png)
-  "$PYFIG" analysis/plot.py >/dev/null 2>&1
-  "$PYFIG" analysis/plot_phase_m.py >/dev/null 2>&1
-  "$PYFIG" analysis/plot_qsmall_ladder.py >/dev/null 2>&1
+  marker=$(mktemp)
+  run_fig() {
+    if ! "$PYFIG" "$@" >/dev/null 2>&1; then
+      bad "figure generator exited non-zero: $*"
+    fi
+  }
+  run_fig analysis/plot.py
+  run_fig analysis/plot_phase_m.py
+  run_fig analysis/plot_qsmall_ladder.py results/phase_qsmall_*.json
+  on_disk=$(find analysis -maxdepth 1 -name '*.png' | wc -l)
+  written=$(find analysis -maxdepth 1 -name '*.png' -newer "$marker" | wc -l)
+  # Collected while the marker still exists: `find ! -newer` on a deleted file errors and
+  # prints nothing, which would have made this branch report a failure with no list under it.
+  skipped=$(find analysis -maxdepth 1 -name '*.png' ! -newer "$marker")
+  rm -f "$marker"
   after=$(git status --porcelain analysis/*.png)
-  if [ "$before" = "$after" ]; then
-    printf '   16 figures regenerated, none changed\n'
+  if [ "$written" -ne "$on_disk" ]; then
+    bad "$written of $on_disk figures were written this run; the rest were not checked"
+    printf '%s\n' "$skipped" | sed 's/^/     not drawn: /'
+  elif [ "$before" = "$after" ]; then
+    printf '   %s figures regenerated, none changed\n' "$on_disk"
   else
     bad "a figure is not what its plot script draws now"
     printf '%s\n' "$after" | sed 's/^/     /'

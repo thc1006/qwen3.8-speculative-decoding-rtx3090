@@ -7,9 +7,19 @@ committed raw JSON. Its purpose is to make sure this repo does not inherit desig
 the data show to be load-bearing. It is written the same way the predecessor wrote its own v2.3
 scope correction: state the finding, state whether the conclusion survives, fix it going forward.
 
-**Summary: the predecessor's central conclusion survives every check below. Two reporting
-choices understated the magnitude of its own effect, and several design choices leave it unable
-to put an uncertainty on any number it published.**
+**Summary, as written on 2026-08-25.** Two reporting choices understated the magnitude of the
+predecessor's own effect, and several design choices leave it unable to put an uncertainty on any
+number it published.
+
+**The verdict on the central conclusion is withdrawn, and this document is not maintained as an
+assessment of it.** It said the conclusion survived every check below. Two things since say
+otherwise, neither of them available when this was written. The predecessor's own v4 audit
+retracts the anomaly the conclusion rested on -- its `ERRATA.md` A7, *"With acceptance measured
+properly, there is no anomaly left to explain"*. And this repository's Phase M failed the
+replication anchor derived from A1 below: `analysis/phase_m_anchor.txt` reads *"ANCHOR DOES NOT
+HOLD. the class-stratified effect is -65.6 %, outside the registered -32 % to -12 % band"*, a
+factor of three out. Read what follows as the design rationale for this repository's harness,
+which is what it was written for.
 
 ---
 
@@ -25,10 +35,19 @@ The v1 prompt set is 10 prompts, and its class balance is:
 | reason | 1 |
 | zh | 1 |
 
-Chat prompts do not trigger the speculative path on this model at all, measured from the
-repo's own data, baseline `135.8` vs `draft-q35-08b-max8` `135.7` tok/s on the chat class. So
-60 % of the prompt set contributes exactly zero effect to the average, and the published mean is
-a mixture statistic dominated by prompts where nothing happens.
+The drafter emitted nothing at all on most of the suite, measured from the repo's own committed
+rows: `draft_n` is **0 on 8 of the 10 prompts** in `draft-q35-08b-max8.json` -- all six chat
+prompts plus `reasoning` and `zh_cn` -- and their effect against the baseline rerun runs from
+-0.2 % to +0.5 %. So **80 % of the prompt set contributes essentially zero**, and the published
+mean is a mixture statistic carried entirely by `long_explain` at -56.3 % and `code_small` at
+-51.3 %.
+
+This paragraph used to say 60 %, and to give the reason as chat prompts not triggering the
+speculative path. Both were understatements of the same thing: the path was entered and the
+drafter produced no draft, on eight prompts rather than six.
+
+The same file is where Correction 9's counter defect is visible directly: every row has
+`draft_n == draft_n_accepted` exactly, 102/102 and 168/168 on the two that drafted at all.
 
 Re-analysing the repo's **own committed 300-token results** with a class-stratified mean
 (mean of per-class means, so each class carries equal weight):
@@ -48,7 +67,8 @@ stratified it is a larger net loss. The v1 README does publish a per-prompt heat
 describe the behaviour as bimodal, so the data were disclosed. The issue is that the TL;DR
 number, "Mean decode drops 3 to 12 %", is the diluted one, and that is the number that travels.
 
-**Carried into this repo:** prompt set balanced 3 x 5 by class, and the primary endpoint is
+**Carried into this repo:** prompt set balanced five per class over five classes, 25 in all, and
+the primary endpoint is
 defined as the class-stratified mean with per-class effects always reported beside it
 (`harness/prompts.py`, `harness/stats.py`).
 
@@ -71,9 +91,13 @@ Why it matters: the four `-1000tok` rows appear in the same sorted results table
 length-weighted mixture over a different KV-growth profile, and is not comparable to a row whose
 `predicted_n` is pinned at 300.
 
-**Carried into this repo:** `bench.py` asserts the cap is reached per request, records
-`predicted_n`, and flags any early-terminating request as a length confound instead of averaging
-it in. Configs with different caps are never placed in one ranking table.
+**Carried into this repo:** `bench.py` records `predicted_n` and a `hit_cap` boolean per request
+and prints a `SHORT(n)` flag when the cap is missed. It does not assert and does not drop the
+record -- an earlier version of this sentence said it asserted, and it does not. What decides the
+exclusion is the analyser, and it reports both series: a per-protocol one that drops
+early-terminating requests and an intention-to-treat one that keeps them, side by side, so the
+exclusion rule's effect is visible rather than assumed. Configs with different caps are never
+placed in one ranking table.
 
 ---
 
@@ -88,7 +112,10 @@ Given A1, that spread is mostly the bimodality, so it measures the prompt mixtur
 run-to-run noise. No published number in v1 or v3 carries an interval that would let a reader
 tell a real 4 % effect from drift.
 
-**Carried into this repo:** N >= 5 complete passes; intervals from a **cluster** bootstrap that
+**Carried into this repo:** five complete passes on the primary phase, three on the later ones
+and one on the controls -- across the 67 committed result files the split is 43 at one pass,
+22 at three and 2 at five, and those two are Phase A and its pre-repair copy, so five passes
+describes one run and not a standing rule. Intervals come from a **cluster** bootstrap that
 resamples prompts (passes within a prompt are repeated measures, not independent samples);
 any interval spanning zero is reported as "no detected effect", never as a direction.
 
@@ -134,9 +161,13 @@ declared factor if it is varied, never as an incidental difference between versi
 
 ## A6: No losslessness check and no degeneracy check
 
-Neither exists anywhere in v1-v3. The repo reasons about *acceptance rate* (correctly, and it
-verified the 100 % figure by reading `common/speculative.cpp`), but acceptance is an internal
-counter, not evidence about the bytes the user receives.
+Neither exists anywhere in v1-v3. The repo reasons about *acceptance rate*, and the 100 % figure
+it verified by reading `common/speculative.cpp` is itself a counter artefact: Correction 9 in
+`PREREGISTRATION.md` records that every predecessor config has `total_draft == total_accept`
+exactly, because the log line divided accepted by accepted, while the adjacent line gives 115
+accepted of 214 drafted. The predecessor's own `ERRATA.md` A1 reaches the same verdict
+independently. Acceptance is in any case an internal counter, not evidence about the bytes the
+user receives.
 
 This is not hypothetical for the successor model: vLLM issue #52475 reports MTP speculative
 decoding producing **repetition collapse** on a hybrid Gated DeltaNet Qwen3.8 target. Collapsed
@@ -174,8 +205,11 @@ assumed away.
 `draft-qwen3-0.6b` used a draft model with vocab 151936 against a target with vocab 248320. The
 draft never attached, so the row is a duplicate baseline.
 
-The repo handles this correctly and in public: the table row is annotated *"vocab 151936 !=
-248320, draft never attached, treat as baseline, shown for posterity"*. Recorded here only as
+The repo handles this correctly and in public: the table row is annotated *"(vocab 151936, draft
+never attached)"*. An earlier version of this sentence quoted it as *"vocab 151936 != 248320,
+draft never attached, treat as baseline, shown for posterity"* -- the last two clauses appear
+nowhere in that repository, so the quotation was longer than the source. The substance holds; the
+wording did not. Recorded here only as
 a positive control worth keeping: **this repo asserts drafter attachment from server logs before
 accepting an arm's numbers**, rather than relying on the operator to notice.
 
@@ -188,23 +222,41 @@ accepting an arm's numbers**, rather than relying on the operator to notice.
 This one is not a criticism of the predecessor specifically. It applies to every study this repo
 is scoped against, and it was found by instrumenting not by reading.
 
-Measured on this host during a single dry-run pass (7 arms, 5 prompts each, 450 W stock cap):
+Measured on this host during a single dry-run pass (7 arms, 5 prompts each) on the card **as
+found**: 450 W and overclocked, not stock, which `docs/GPU_AS_FOUND.md` records and which the
+primary matrix was reset away from. The phenomenon is why the thermal gate exists; the 9.3 %
+belongs to that state and has not been re-measured at the 420 W stock cap.
 
-| position in pass | arm | SM clock (mean) | GPU temp |
-|---|---|---:|---:|
-| 1st | `baseline@master` | ~1929 MHz | 62 -> 73 C |
-| 2nd | `baseline@pr27342` | ~1891 MHz | 74 -> 80 C |
-| 3rd | `mtp-n2` | ~1789 MHz | 79 -> 83 C |
-| 5th | `mtp-n5` | ~1808 MHz | 81 -> 84 C |
+| position in pass | arm | SM clock (mean) | mean power | GPU temp (max) |
+|---|---|---:|---:|---:|
+| 1st | `baseline@master` | 1928.7 MHz | 445.1 W | 68.2 C |
+| 2nd | `baseline@pr27342` | 1891.0 MHz | 445.2 W | 77.4 C |
+| 3rd | `mtp-n2` | 1789.1 MHz | 439.2 W | 81.2 C |
+| 4th | `mtp-n3` | 1815.6 MHz | 439.7 W | 82.8 C |
+| 5th | `mtp-n5` | 1807.5 MHz | 440.6 W | 83.2 C |
+| 6th | `dflash2-n4` | 1821.3 MHz | 438.3 W | 83.0 C |
+| 7th | `dflash2-n7` | 1840.7 MHz | 440.1 W | 83.8 C |
 
-Full spread across the pass: **1950 -> 1769 MHz, 9.3 %**. Power sat at ~445 W throughout, against
-a 450 W cap, so this is **power-limit throttling, not thermal shutdown**. Leakage rises with
-temperature, and the same wattage buys fewer megahertz. The card never reports an error and
-`/health` stays green.
+**All seven rows are here now, and three of them change the reading.** An earlier version of this
+table showed positions 1, 2, 3 and 5 -- the four that decline -- and omitted 4, 6 and 7, which
+recover. The clock bottoms out at position 3 and climbs 51.6 MHz over the last four arms, so the
+drift is **not monotone in position** and cannot all be a position effect.
 
-Why it matters: 9.3 % is larger than several of the effects this study is trying to resolve, and
-because arms occupy different positions within a pass, the position effect lands **inside every
-paired comparison**. A study that runs arms sequentially assigns the whole of it to whichever arm
+What is a position effect is the first pair: positions 1 and 2 are the same non-speculative work
+on two trees, which Phase A separately shows agree to 41.55 tok/s, and they differ by **1.95 %**.
+That is the number a rotation has to defeat. The **1950 -> 1769 MHz, 9.3 %** quoted below it is
+the per-record extreme over the whole pass and it mixes position with arm identity: the arm means
+span 1928.7 to 1789.1, 7.2 %, and the speculative arms sit at 438-441 W against the baselines'
+445, so they are not at the same operating point.
+
+Power did not sit at ~445 W throughout: the two baselines did, the five speculative arms drew
+438.3 to 440.6 W. It is still **power-limit throttling, not thermal shutdown** -- the card is
+within 5 W of a 450 W cap at every arm, leakage rises with temperature, and the same wattage buys
+fewer megahertz. The card never reports an error and `/health` stays green.
+
+Why it matters: a 1.95 % position effect on identical work is larger than several of the effects
+this study is trying to resolve, and because arms occupy different positions within a pass, it
+lands **inside every paired comparison**. A study that runs arms sequentially assigns the whole of it to whichever arm
 ran last.
 
 No study in the prior-art sweep controls for this. The closest is
@@ -225,10 +277,10 @@ sweep, which varies the cap deliberately rather than holding entry state constan
 
 | Predecessor | Here |
 |---|---|
-| 10 prompts, 60 % chat, unbalanced | 15 prompts, balanced 3 x 5 by class |
+| 10 prompts, 60 % chat, unbalanced | 25 prompts, balanced 5 per class |
 | headline = raw mean over prompts | headline = class-stratified mean, per-class always shown |
 | some prompts terminate early | every prompt written to exceed the cap; early termination flagged |
-| N = 1 (v1, v3), N = 3 on a v2 subset | N >= 5, all arms |
+| N = 1 (v1, v3), N = 3 on a v2 subset | N = 5 on the primary phase, 3 on the later phases, 1 on the controls |
 | std across prompts, reported as spread | cluster bootstrap CI over prompts |
 | arms run sequentially | arms interleaved within each pass |
 | harness and sampling change between versions | one harness, greedy primary endpoint |
@@ -239,9 +291,13 @@ sweep, which varies the cap deliberately rather than holding entry state constan
 | no power measurement | power integrated over generation -> tok/J |
 | intra-session clock throttling uncontrolled (all prior art) | thermal gate at arm entry + rotation + clock recorded as covariate |
 
-## Recommended follow-up in the predecessor repo
+## Recommended follow-up in the predecessor repo -- superseded
 
-An addendum re-reporting the v1 table with a class-stratified mean. The conclusion does not
-change; the published magnitude does, by roughly a factor of two, in the direction that
-*supports* the paper's argument. Filing that is consistent with how that repo handled its v2.3
-scope correction.
+This section recommended an addendum re-reporting the v1 table with a class-stratified mean,
+noting that the published magnitude moves by roughly a factor of two in the direction that
+supports that paper's argument.
+
+**That repository has since run its own v4 audit, which goes considerably further and reaches a
+different verdict on the central claim** -- its `ERRATA.md` A7 records that with acceptance
+measured properly there is no anomaly left to explain. The recommendation is left here as what
+was said, not as what is still wanted.

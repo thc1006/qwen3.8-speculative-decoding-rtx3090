@@ -38,15 +38,32 @@ llama.cpp master `c060ca974c773c7c3d17fd1b66dc9d312bc292c0` and the DFlash2 bran
 commits are also archived in `repro/dflash2-d1a522fc.bundle`, because `pull/27342/head` is a live
 ref that has already moved past what was measured.
 
-## What the script refuses to do
+## What the script stops for
 
-- the two llama.cpp trees are compared at their **full 40-character** commits,
+Four of these seven bullets used to break off mid-clause -- "because mixing a prebuilt master
+with", "checksums are checked against", "It never overwrites", "and any incident is" -- under a
+heading that said "refuses to do" over a list of checks. Each one below is now what
+`scripts/reproduce_phase_a.sh` actually does, read off the script rather than remembered.
+
+Every check here calls `die` and stops the run. The one exception is named at the end.
+
+- the two llama.cpp trees must be at their **full 40-character** pinned commits, and the script
+  stops if either is not; `pull/27342/head` has already moved past what was measured, which is
+  why the commits are also archived as a bundle;
 - both trees are configured and built with identical flags, because mixing a prebuilt master with
-- checksums are checked against
+  a freshly built branch would put the build itself inside the comparison it exists to control;
+- model checksums are checked against `models/SHA256SUMS.phase_a`, the manifest the lock file
+  names, so a different quantization cannot be measured under the name of the one that was;
 - the card is checked for compute capability 8.6 and about 20 GB free before anything is built;
 - the harness's own tests must pass first;
-- the result is written to `results/reproductions/phase_a_<host>_<utc>.json`. It never overwrites
-- the record count is checked against the 875 the lock file declares, and any incident is
+- the result is written to `results/reproductions/phase_a_<host>_<utc>.json`, and it never
+  overwrites: a path that already exists is a failure rather than a target, so the committed
+  artifact cannot be replaced by a rerun;
+- the record count must equal the 875 the lock file declares.
+
+The exception is incidents. A recorded incident prints a warning and lets the run finish, because
+the file is still worth keeping and reading. It is the *comparison* that then refuses: it exits
+non-zero until `--allow-incidents` says the incident has been read, and asks for that in writing.
 
 ## Comparing the result
 

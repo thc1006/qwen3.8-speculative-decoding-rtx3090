@@ -29,7 +29,7 @@ The GDN recurrent state is ~75 MB total and does not grow with context.
 | 32 K | 1.09 GB | 18.7 GB | yes |
 | 64 K | 2.18 GB | 19.7 GB | yes |
 | 96 K | 3.27 GB | 20.8 GB | yes |
-| 128 K | 4.36 GB | 21.9 GB | tight |
+| 128 K | 4.36 GB | 21.9 GB + ~1.9 compute = **23.8 GB, 99 %** | **not attempted** |
 | 262 K | 8.92 GB | 26.5 GB | **no** - needs q4_0 (~22.4 GB, matching the community figure of 22.2 GB) |
 
 So the cliff at ~80 K is reachable at `q8_0`, on the same KV setting as every other phase in this
@@ -37,8 +37,23 @@ repo. No quant change is needed to cross it, which keeps the comparison clean.
 
 ## Design
 
-Depths {8 K, 32 K, 64 K, 96 K, 128 K} x methods {baseline, mtp-n2, dflash2-n4}, 3 passes.
-8 K is the anchor shared with Phase A, so the long-context arms attach to an already-characterised
+Depths **{8 K, 32 K, 64 K, 80 K, 96 K}** x methods {baseline, mtp-n2, dflash2-n4} **plus
+`baseline@Nk-pr`, the PR-27342-tree build control** -- four arms, not three -- with 3 passes,
+**15 prompts (3 per class)** and a **160-token cap**.
+
+That line used to read 128 K rather than 80 K and to list three arms. 128 K was dropped before the
+run: with a q8_0 cache it needs 23.8 of 24 GB, which `harness/matrices/phase_l.py` records as "not
+attempted". 80 K was added so the reported ~80 K cliff is straddled rather than jumped.
+
+**`CACHE_PROMPT` is True here and False in every other phase** -- every request in an arm shares
+one filler and re-prefilling 96 K tokens per request would dominate the run; the reasoning is in
+the matrix. The result is 180 records per rung, 900 in all, 0 incidents.
+8 K is the ladder's own anchor, at the same **depth** as Phase A but not the same protocol: 15
+prompts against 25, a 160-token cap against 400, `-c 12288` against 8192, `cache_prompt` on rather
+than off, 3 passes against 5 and 4 arms against 7. Absolute rates therefore do not transfer, and
+`analysis/phase_l_ladder.txt` computes retention against each method's own 8 K rung rather than
+against Phase A. This used to read "the anchor shared with Phase A", which claimed more than the
+shared depth supports. The long-context arms attach to an already-characterised
 reference not a fresh one.
 
 ## The one thing that must not be got wrong
@@ -51,9 +66,14 @@ scores its own history on runs two and three.
 
 Filler will therefore be assembled from distinct public-domain prose, tokenised and truncated to
 an exact target length, with the actual question appended at the end. The realised prompt token
-count is recorded per request (`t_prompt_n`) and asserted against the target, so a depth that did
+length is recorded per request as `filler_tokens` and per arm-pass as `arm_pass_filler`
+(`requested`, `realised`, `chars`), with the server's own `timings.t_prompt_n` beside it. It is
+**reported, not asserted**: `harness/filler.py` returns the realised count rather than raising on
+a shortfall, and `analysis/phase_l_ladder.txt`'s realised-depth table is where a depth that did
 not actually materialise is visible instead of assumed.
 
 Acceptance is expected to fall with depth on its own, and vLLM #47602 reports exactly that from
 the other engine, so the analysis must separate "acceptance decayed" from "the per-step cost k rose".
-The cost model already in `harness/cost_model.py` does that decomposition directly.
+**`harness/cost_model.py` was not used here** and no `analysis/phase_l_*_cost.txt` exists;
+`harness/analyze_depth.py` makes the separation instead, in `analysis/phase_l_ladder.txt`, which
+tabulates retention against each method's own 8 K rung beside acceptance per rung.

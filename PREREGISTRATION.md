@@ -5320,3 +5320,98 @@ Three numbers in the Phase E6 row of `docs/PHASES.md` -- 3.35, 10.4 and 5.5 -- a
 artifact at all. That is what a hand-computed statistic looks like from outside, and checking
 each figure in the four phase rows written tonight against the artifact each cites is how these
 were found.
+
+## Correction 54, 2026-09-01: "about ten rounds" prices a design that is bounded
+
+The number is a point estimate on two degrees of freedom, and the axis it points at --
+more rounds at this span placement -- is the one the design cannot buy.
+
+Correction 53 closed with a number that three documents then repeated: refusing the 1/span
+reading at t = 3 "would take about **ten rounds**; this phase ran three." That number is
+arithmetically right and it is not a usable answer, for two reasons this correction records.
+Nothing measured changes. What changes is what the phase says about its own successor.
+
+### The number is a point estimate whose interval spans two orders of magnitude
+
+Ten rounds comes from scaling the observed scatter: `n = 3 x (3 / 2.50)^2`, with the scatter
+taken as the sd of the three paired contrasts, **7.19 J on two degrees of freedom**. A variance
+on two degrees of freedom is very poorly determined. The chi-square interval for sigma is
+
+| | |
+|---|---|
+| point estimate | **7.19 J** |
+| 95 % interval | **[3.74, 45.19] J** |
+| rounds needed, scaling as sigma squared | **[2.7, 395]** |
+
+So "about ten rounds" is the middle of a range that runs from three nights to four hundred.
+Quoting it without that range invites a reader to plan against it, which is the thing this
+repository exists not to do.
+
+### The design cannot reach t = 3 at three rounds by lengthening the long window
+
+The quantity that separates the two models is `1/span`, so what the design buys is the spread
+of `u = 1/span` across its cells, and the contrast E6 uses is long minus short. Since `1/span`
+is positive, `|u_short - u_long| < 1/span_short` whatever the long window is set to. With the
+short cell at **9.04 s** and the standard error at **4.151 J** on three rounds:
+
+| long window | u spread | contrast the span model predicts | expected t |
+|---:|---:|---:|---:|
+| 23.23 s, as run | 0.06757 | -6.83 J | **1.65** |
+| 46 s | 0.08888 | -8.99 J | 2.17 |
+| 100 s | 0.10062 | -10.18 J | 2.45 |
+| unbounded | 0.11062 | -11.19 J | **2.70** |
+
+The expected t is bounded at **2.70** and the target is 3. That is a property of where the cells
+sit, not of how many rounds are run, and it is not visible from a scatter-and-rounds calculation.
+It is an expectation rather than a limit on any single realised t.
+
+The leverage is at the short end instead. Holding the long cell at 23.23 s and shortening the
+short one, the same arithmetic gives an expected t of 2.00 at 8 s, 2.43 at 7 s, **3.01 at 6 s**
+and 3.82 at 5 s -- reached at three rounds, on less generated text than E6 ran.
+
+### And this phase's own data argues against taking that route naively
+
+The short cell is where the measurement is already weakest. From
+`analysis/span_at_fixed_step.txt`:
+
+| tokens | span | plateau | fitted T |
+|---:|---:|---:|---:|
+| 200 | 9.04 s | **2.93 s** | **1.000 s** |
+| 400 | 13.89 s | 7.79 s | 1.050 s |
+| 800 | 23.23 s | 17.11 s | 1.050 s |
+
+The 200-token cell holds about three averaging windows of steady power and its fitted width comes
+out one grid step below the other two. A 6 s window has essentially no plateau: the rise and fall
+occupy it. So the design geometry points at exactly the regime in which the deconvolution may be
+reading the load rather than the filter, and a refusal obtained there could be an artefact of the
+short window rather than a statement about the residual.
+
+### What replaces the sentence
+
+Not "ten rounds". Three things, none of which the phase can supply on its own: a variance
+estimated on more than two degrees of freedom, which one session of repeated cells would give;
+a short cell placed as low as the plateau will bear, with the fitted width checked at that length
+rather than assumed; and, because the E5 confound was between step and span rather than a shortage
+of replicates, a design that moves both -- four corners rather than one edge -- which is the only
+arrangement here that could refuse the step model as well as the span one.
+
+Phase E6's conclusion is unchanged: **a lean, not a refusal**, at t = 2.50 against the span model
+and t = 0.85 against the step model, with the split still model-dependent.
+
+## Correction 55, 2026-09-01: "a sixth of the effect" is 11.6 %, and it appeared four times
+
+Correction 13 recorded that matching the two fits to their shared widths moves the difference in
+`c` from `-0.0424` to `-0.0473`, and called that **"a sixth of the effect"**. It is **11.6 %**.
+A sixth is 16.7 %, so the phrase overstates the move by nearly half. The same wording had been
+copied into `harness/cost_model.py`, `harness/test_harness.py` and `docs/COST_MODEL.md`.
+
+Nothing measured changes. `-0.0424`, `-0.0473` and the interval `[-0.0489, -0.0456]` are all
+unaffected, and so is every conclusion drawn from them: the point of Correction 13 was that the
+two chords are not the same quantity, which the 11.6 % says as well as the fraction did.
+
+The three editable copies now state the percentage. This entry is the correction for the copy in
+Correction 13's own text, which is not edited because this file is append-only.
+
+Found while checking whether a figure written into `docs/COST_MODEL.md` earlier the same day was
+sourced. It was; the fraction attached to it was not. A round fraction that needs rounding to be
+said is worth replacing with the number it rounds.

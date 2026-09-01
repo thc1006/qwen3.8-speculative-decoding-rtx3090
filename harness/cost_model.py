@@ -737,8 +737,10 @@ def report(result: dict) -> None:
             continue
         # A batch wider than MMVQ_MAX_BATCH_SIZE never reaches MMVQ and takes a different kernel
         # family, so a single line through both sides is a line through two regimes. On phase_nmax
-        # that dragged the MTP coefficient from 0.2915 to 0.2215 and the fit quality from
-        # r2 = 0.9959 to 0.8304, and the width-9 point sits 26 % below what the MMVQ line predicts.
+        # that drags the MTP coefficient from 0.2904 to 0.2210 and the fit quality from
+        # r2 = 0.9958 to 0.8316, and the width-9 point sits 26 % below what the MMVQ line predicts.
+        # Those four numbers were 0.2915, 0.2215, 0.9959 and 0.8304 until 2026-09-01, from the
+        # fit vintage the completed ladder superseded.
         # The MMVQ side is decided by the width the KERNEL sees, which is bracketed rather than
         # known. `dflash2-n8` brackets [7.94, 9.00] across a limit of 8: the fit had been calling
         # it off-path on the nominal 9 while docs/COST_MODEL.md called it on-path on the realised
@@ -946,7 +948,8 @@ def report(result: dict) -> None:
         # RESTRICT BOTH FITS TO THE WIDTHS THEY SHARE. k(w) is curved, so a slope over widths
         # 3 to 7 and a slope over 2 to 8 are chords of different arcs and are not estimates of
         # the same quantity. On phase_nmax matching the ranges moves the difference from -0.0424
-        # to -0.0473, which is a sixth of the effect being compared.
+        # to -0.0473, 11.6 % larger. That was called "a sixth" here and in three other places; a
+        # sixth is 16.7 % and overstates the move by nearly half, so the percentage is used now.
         shared = sorted(set(oa) & set(ob))
         d = delta_c_ci(ga, shared, gb, shared) if len(shared) >= 2 else None
         if d is None:

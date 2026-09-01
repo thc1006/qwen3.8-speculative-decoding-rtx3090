@@ -16,6 +16,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+
+def tracked_markdown():
+    """Every markdown file this repository publishes, from git rather than a hand-written list.
+
+    Three separate guards each carried their own tuple: the link check covered 3 documents, the
+    lexical check 5 and the citation check 4, against 23 tracked. Twenty of them had never had
+    a link checked. The tuples were not wrong when written -- they were written before most of
+    the documents existed, and nothing made adding a document add it to them.
+    """
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    out = subprocess.run(["git", "-C", str(root), "ls-files", "*.md"],
+                         capture_output=True, text=True, timeout=60)
+    if out.returncode != 0:
+        return []
+    return [f for f in out.stdout.split() if not f.startswith(("upstream/", "llamacpp"))]
+
 import analyze as A  # noqa: E402
 import bench  # noqa: E402
 import cost_model as CM  # noqa: E402
@@ -1476,7 +1493,10 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
         parts = [self._readme()]
         for f in sorted((self.ROOT / "docs").glob("*.md")):
             parts.append(f.read_text(encoding="utf-8"))
-        return "\n".join(parts)
+        # Emphasis is removed before matching. A phrase this guard looks for is a claim, and
+        # bolding one word inside it does not change the claim -- but it does stop a literal
+        # `in` from finding it, which is a guard failing on a formatting change.
+        return re.sub(r"\*\*|__|(?<!`)`(?!`)", "", "\n".join(parts))
 
     def _load(self, name):
         f = self.ROOT / "results" / name
@@ -1541,7 +1561,14 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
         verdict = verdicts[0]
 
         text = self._prose()
+        # "moves with the drafter" was the third phrasing here, and it was the wrong one: the
+        # analyser's own verdict says "the two CONFIGURATIONS share all of it except..." and
+        # docs/COST_MODEL.md's scope note refuses a drafter-specific reading outright, because
+        # drafter and source tree move together and no arm separates them. Pinning the old
+        # sentence made this test require prose the documentation forbids. Both spellings are
+        # accepted so the check survives either, and the scoped one is what the docs now say.
         asserts_difference = ["the marginal cost is not shared",
+                              "part of the marginal cost moves with the configuration",
                               "part of the marginal cost moves with the drafter"]
         says_open = ["not resolved"]
         if verdict.startswith("the marginal costs differ"):
@@ -2344,8 +2371,8 @@ class TestSlopesAreComparedOnSharedWidths(unittest.TestCase):
     `k(w)` is curved -- every fit in this study extrapolates below the floor a zero-depth cycle
     must cost -- so a slope is a CHORD, and a chord over widths 3 to 7 is a different number from
     a chord over 2 to 8. phase_nmax fits draft-dflash on {3,5,7} and draft-mtp on {2..8} and the
-    reported difference moves from -0.0424 to -0.0473 when the ranges are matched, a sixth of the
-    effect. Phase A is worse: {5,8} against {3,4,6}, which share NO width at all, and its
+    reported difference moves from -0.0424 to -0.0473 when the ranges are matched, 11.6 % larger.
+    (This said "a sixth" until 2026-09-01, which is 16.7 % and overstates the move by nearly half.) Phase A is worse: {5,8} against {3,4,6}, which share NO width at all, and its
     "the two coefficients agree to 1.7 %" compared chords of disjoint arcs.
 
     The second half is the shape check. Comparing each fit's width residual separately and adding
@@ -3757,8 +3784,6 @@ class TestEveryDocumentLinkPointsAtSomethingAClonWouldHave(unittest.TestCase):
     """
 
     ROOT = Path(__file__).parent.parent
-    DOCS = ("README.md", "TODO.md", "PREREGISTRATION.md")
-
     def _tracked(self):
         import subprocess
         out = subprocess.run(["git", "-C", str(self.ROOT), "ls-files"],
@@ -3767,30 +3792,76 @@ class TestEveryDocumentLinkPointsAtSomethingAClonWouldHave(unittest.TestCase):
             self.skipTest("not a git checkout")
         return set(out.stdout.split("\n")) - {""}
 
-    def test_no_document_links_at_an_untracked_path(self):
+    @staticmethod
+    def _resolve(doc, target):
+        """A link is relative to the document holding it, not to the repository root.
+
+        This check compared the raw target string against `git ls-files` output, which is
+        root-relative. It passed for three years of edits because its three documents all sat
+        at the root, where the two happen to coincide. The first time it ran over `docs/` it
+        called twenty-one working links broken -- `../README.md` from `docs/PHASES.md` is
+        `README.md` -- and the narrow file list was what had been hiding that.
+        """
+        import posixpath
+        base = posixpath.dirname(doc)
+        return posixpath.normpath(posixpath.join(base, target)) if base else \
+            posixpath.normpath(target)
+
+    @staticmethod
+    def _targets(text):
         import re
+        out = [t for _, t in re.findall(r"\[([^\]]+)\]\(([^)#][^)]*)\)", text)]
+        out += re.findall(r'src="([^"]+)"', text)
+        out += re.findall(r'srcset="([^"]+)"', text)
+        return out
+
+    def test_no_document_links_at_an_untracked_path(self):
         tracked = self._tracked()
         dirs = {d for t in tracked for d in _parents_of(t)}
         broken = []
-        for name in self.DOCS:
+        docs = tracked_markdown()
+        self.assertGreater(len(docs), 15, "no markdown found; has the glob broken?")
+        for name in docs:
             f = self.ROOT / name
             if not f.exists():
                 continue
-            text = f.read_text(encoding="utf-8")
-            targets = [t for _, t in re.findall(r"\[([^\]]+)\]\(([^)#][^)]*)\)", text)]
-            targets += re.findall(r'src="([^"]+)"', text)
-            targets += re.findall(r'srcset="([^"]+)"', text)
-            for t in targets:
+            for t in self._targets(f.read_text(encoding="utf-8")):
                 if t.startswith(("http://", "https://", "mailto:")):
                     continue
-                path = t.split("#")[0].rstrip("/")
-                if not path or path in tracked or path in dirs:
+                raw = t.split("#")[0].rstrip("/")
+                if not raw:
                     continue
-                broken.append(f"{name} -> {path}")
+                path = self._resolve(name, raw)
+                if path in tracked or path in dirs:
+                    continue
+                broken.append(f"{name} -> {t} (resolves to {path})")
         self.assertFalse(broken,
                          "these paths are linked from a committed document and are not in the "
                          "repository, so they resolve for the author and 404 for a reader: "
                          + ", ".join(broken))
+
+    def test_a_link_is_resolved_against_its_own_document(self):
+        """The bug the narrow file list hid: both directions, on real paths."""
+        self.assertEqual("README.md", self._resolve("docs/PHASES.md", "../README.md"))
+        self.assertEqual("docs/GPU_AS_FOUND.md",
+                         self._resolve("docs/PHASES.md", "GPU_AS_FOUND.md"))
+        self.assertEqual("analysis/plot_bound_by.png",
+                         self._resolve("docs/RESOURCE_RESPONSE.md", "../analysis/plot_bound_by.png"))
+        self.assertEqual("README.md", self._resolve("README.md", "README.md"))
+        self.assertIn("docs/PHASES.md", self._tracked(),
+                      "the fixture paths must be real, or this test proves nothing")
+
+    def test_the_check_still_catches_a_link_at_nothing(self):
+        """A guard nobody has watched fail is a guard whose silence means nothing."""
+        tracked = self._tracked()
+        dirs = {d for t in tracked for d in _parents_of(t)}
+        fake = self._targets("See [the plan](../docs/NOT_A_REAL_FILE.md) and "
+                             '<img src="../analysis/no_such_figure.png">')
+        self.assertEqual(2, len(fake), "the extractor missed one of the two forms")
+        for t in fake:
+            path = self._resolve("docs/PHASES.md", t)
+            self.assertNotIn(path, tracked, f"{path} exists; pick a fixture that does not")
+            self.assertNotIn(path, dirs)
 
 
 def _parents_of(path):
@@ -4758,8 +4829,9 @@ class TheProseDoesNotCarryTheLLMLexicalSignature(unittest.TestCase):
         "diminishing": "diminishing increments in accepted length, measured",
     }
 
-    DOCS = ("README.md", "PREREGISTRATION.md", "docs/COST_MODEL.md",
-            "docs/GREEDY_DIVERGENCE.md", "docs/RESOURCE_RESPONSE.md")
+    # Was five hand-listed files out of the twenty-three this repository tracks, so eighteen
+    # public documents were never scanned. All eighteen turned out to be clean, which is the
+    # point: the gap was invisible because the guard passed either way.
 
     @staticmethod
     def _prose_only(text):
@@ -4782,7 +4854,9 @@ class TheProseDoesNotCarryTheLLMLexicalSignature(unittest.TestCase):
         self.assertFalse(set(self.TELLS) & set(self.ALLOWED),
                          "a word cannot be both a tell and allowed; decide")
         hits = []
-        for name in self.DOCS:
+        docs = tracked_markdown()
+        self.assertGreater(len(docs), 15, "no markdown found; has the glob broken?")
+        for name in docs:
             p = root / name
             if not p.exists():
                 continue
@@ -5388,7 +5462,23 @@ class TheDocsMustQuoteTheReportTheyCiteAndNotAPastOne(unittest.TestCase):
     """
 
     CITES = "analysis/energy_instruments.txt"
-    DOCS = ("docs/PHASES.md", "docs/ENERGY.md", "README.md", "TODO.md")
+
+    # A dated, append-only record is not a current-state document, and this guard asks a
+    # current-state question. PREREGISTRATION.md's Correction 45 exists BECAUSE the counts
+    # moved: its text is "89 file-arm cells and 6075 windows to 95 and 6525", written to
+    # record the move. Requiring it to match today's 119 and 7125 would mean editing a
+    # correction to say something it did not say, which is the one thing the file's policy
+    # forbids. Excluded here and nowhere else -- it is still scanned for links, for the
+    # lexical signature and for the structural one, where no currency assumption applies.
+    #
+    # Correction 45's own text overstates this: it says the guard binds "any line naming the
+    # report". It did not -- the guard listed four documents and PREREGISTRATION.md was not
+    # among them -- and it cannot, for the reason above.
+    DATED_RECORD = "PREREGISTRATION.md"
+
+    @classmethod
+    def _current_state_docs(cls):
+        return [d for d in tracked_markdown() if d != cls.DATED_RECORD]
 
     def setUp(self):
         self.root = Path(__file__).parent.parent
@@ -5409,7 +5499,7 @@ class TheDocsMustQuoteTheReportTheyCiteAndNotAPastOne(unittest.TestCase):
         satisfy another's citation. Anything else runs to the next blank line or
         the next top-level list item.
         """
-        for name in self.DOCS:
+        for name in self._current_state_docs():
             lines = (self.root / name).read_text().splitlines()
             for n, line in enumerate(lines, 1):
                 if self.CITES not in line:
@@ -5476,7 +5566,7 @@ class TheDocsMustQuoteTheReportTheyCiteAndNotAPastOne(unittest.TestCase):
         arts = "\n".join(p.read_text() for p in
                           sorted((self.root / "analysis").glob("*.txt")))
         bad = []
-        for name in self.DOCS:
+        for name in self._current_state_docs():
             text = (self.root / name).read_text()
             for v in re.findall(r"r = ([+-]?[01]\.\d+)", text):
                 spelled = f"r = {v}" in arts
@@ -5486,6 +5576,25 @@ class TheDocsMustQuoteTheReportTheyCiteAndNotAPastOne(unittest.TestCase):
         self.assertEqual(sorted(set(bad)), [],
                          "no artifact under analysis/ produces these, in either spelling, so "
                          "nobody can check them:\n  " + "\n  ".join(sorted(set(bad))))
+
+    def test_the_dated_record_is_excluded_for_a_reason_that_still_holds(self):
+        """An exemption nobody rechecks is a hole. This one has to keep earning it.
+
+        If PREREGISTRATION.md ever stops carrying a superseded count, the exemption is doing
+        nothing and should go. While it does carry one, the exemption is what lets the file
+        record that the number moved.
+        """
+        import re
+        text = (self.root / self.DATED_RECORD).read_text()
+        report = self.report
+        stale = [m for m in re.findall(r"(\d+) file-arm cells", text)
+                 if f"{m} file-arm cells" not in report]
+        self.assertTrue(stale,
+                        f"{self.DATED_RECORD} no longer quotes a superseded cell count; drop "
+                        f"DATED_RECORD from this guard and let it be checked like the rest")
+        self.assertNotIn(self.DATED_RECORD, self._current_state_docs())
+        self.assertIn("README.md", self._current_state_docs(),
+                      "the exclusion must remove exactly one document, not narrow the guard")
 
     def test_the_cell_and_window_counts_are_the_reports_own(self):
         import re
@@ -6150,10 +6259,8 @@ class TheProseMustBeWrappedSoADiffIsReadable(unittest.TestCase):
     def test_no_prose_line_is_longer_than_it_needs_to_be(self):
         import subprocess
         root = Path(__file__).parent.parent
-        files = [f for f in subprocess.run(["git", "ls-files", "*.md"], cwd=str(root),
-                                           capture_output=True, text=True).stdout.split()
-                 if not f.startswith(("upstream/", "llamacpp"))]
-        self.assertGreater(len(files), 10, "no markdown found; has the glob broken?")
+        files = tracked_markdown()
+        self.assertGreater(len(files), 15, "no markdown found; has the glob broken?")
         bad, checked = [], 0
         for name in files:
             fence = False
@@ -6174,6 +6281,354 @@ class TheProseMustBeWrappedSoADiffIsReadable(unittest.TestCase):
         self.assertEqual(bad, [],
                          f"wrap these to {self.LIMIT} or fewer; a line nobody can diff is a "
                          f"line nobody reviews:\n  " + "\n  ".join(bad[:15]))
+
+
+class APaletteKeyMustNeverReachMatplotlibAsAColour(unittest.TestCase):
+    """`WONG["blue"]` is #0072B2. Matplotlib's `"blue"` is #0000FF. Both are legal.
+
+    `fig_bound_by` resolved the same table twice. The top panel unpacked it as
+    `(m, _colour_name, mk)` and looked the name up in `WONG`; the bottom unpacked it as
+    `(m, col, mk)` and passed the name straight into `color=`. Nothing raised, because every
+    key in this palette is also a CSS colour name, so the bars came out pure blue and pure
+    green under markers drawn in Wong blue and Wong green -- one figure, one series, two
+    colours. On the dark background pure blue reads 2.20:1 against #0d1117: below the 3.0
+    floor for a graphical object, and worse than the 3.65:1 that `_WONG_DARK` was added to
+    fix.
+
+    Checked over the source and not over the pixels, because the figure looked right to
+    anyone who was not holding it against the palette. The only symptom is the wrong constant.
+    """
+
+    ARGS = {"color", "c", "ecolor", "facecolor", "edgecolor", "markerfacecolor",
+            "markeredgecolor", "mfc", "mec", "foreground"}
+
+    @staticmethod
+    def _palette_keys():
+        src = (Path(__file__).parent.parent / "analysis" / "plot.py").read_text()
+        m = re.search(r"_WONG_LIGHT\s*=\s*\{(.*?)\}", src, re.S)
+        assert m, "the light palette is not where this guard expects it"
+        return set(re.findall(r'"(\w+)":', m.group(1)))
+
+    def _offences(self, source, keys):
+        import ast
+        out = []
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.Call):
+                continue
+            for kw in node.keywords:
+                if kw.arg in self.ARGS and isinstance(kw.value, ast.Constant) \
+                        and kw.value.value in keys:
+                    out.append((kw.value.lineno, kw.arg, kw.value.value))
+        return out
+
+    def test_no_figure_module_passes_one(self):
+        root = Path(__file__).parent.parent / "analysis"
+        keys = self._palette_keys()
+        self.assertIn("blue", keys)
+        hits = []
+        for f in sorted(root.glob("*.py")):
+            for ln, arg, val in self._offences(f.read_text(), keys):
+                hits.append(f"{f.name}:{ln} {arg}={val!r} is a palette key, not a colour")
+        self.assertEqual(hits, [],
+                         "resolve it through WONG; matplotlib will accept the bare name and "
+                         "draw the wrong one:\n  " + "\n  ".join(hits))
+
+    def test_the_check_fires_on_the_defect_it_was_written_for(self):
+        keys = self._palette_keys()
+        bad = "ax.bar(xs, vals, color='blue')\nax.plot(x, y, color=WONG['blue'])\n"
+        self.assertEqual([(1, "color", "blue")], self._offences(bad, keys))
+
+    def test_a_resolved_lookup_is_not_flagged(self):
+        keys = self._palette_keys()
+        good = "ax.bar(xs, vals, color=WONG['blue'])\nax.plot(x, y, color=C('mut'))\n"
+        self.assertEqual([], self._offences(good, keys))
+
+
+class NoTextMayBeBoxedOverSomethingThatIsData(unittest.TestCase):
+    """A box behind a label is a rectangle, and a rectangle is wider than the letters in it.
+
+    The box was itself a fix: it stopped another series' line reading as a strikethrough
+    across a label. It over-corrected. On `plot_cost_model` the `draft-mtp` label erased 52 px
+    of the orange `draft-dflash` line, and on `plot_phase_m` four acceptance labels erased four
+    segments of the zero reference line -- three in the MoE panel, one in the dense one. A line
+    that stops and restarts is what missing data looks like, and in a plot of net effect against
+    the baseline the zero line is where the sign changes, which is the claim in the title.
+
+    `_halo` strokes the glyphs instead, so the mask is glyph-shaped: the line stays continuous
+    between the letters and the text stays legible. Measured after the change, the orange line
+    gained back 113 px in the light figure and 98 in the dark, and nothing else in either moved.
+
+    The two modules disagreed for six commits, each carrying a comment arguing its own side.
+    This is here so the next call site cannot quietly pick the older one.
+    """
+
+    def test_no_module_puts_a_background_box_behind_text(self):
+        root = Path(__file__).parent.parent / "analysis"
+        hits = []
+        for f in sorted(root.glob("*.py")):
+            for i, line in enumerate(f.read_text().splitlines(), 1):
+                if re.search(r"bbox\s*=\s*dict\([^)]*facecolor\s*=\s*P?\.?C\(", line):
+                    hits.append(f"{f.name}:{i} {line.strip()[:78]}")
+        self.assertEqual(hits, [],
+                         "use path_effects=_halo() -- a box masks more than its glyphs and "
+                         "the surplus lands on data:\n  " + "\n  ".join(hits))
+
+    def test_the_check_fires_on_the_construct_it_replaced(self):
+        bad = '   ax.annotate(t, xy, bbox=dict(facecolor=P.C("bg"), edgecolor="none", pad=0.8))'
+        self.assertTrue(re.search(r"bbox\s*=\s*dict\([^)]*facecolor\s*=\s*P?\.?C\(", bad))
+        good = '   ax.annotate(t, xy, path_effects=P._halo(2.4))'
+        self.assertIsNone(re.search(r"bbox\s*=\s*dict\([^)]*facecolor\s*=\s*P?\.?C\(", good))
+
+
+
+class TheProseMustBreakIntoParagraphsAReaderCanHold(unittest.TestCase):
+    """The line guard measures the diff. This one measures the reading, and they disagreed.
+
+    `TheProseMustBeWrappedSoADiffIsReadable` caps a LINE at 120 characters. Every block this
+    test now refuses passed that one, because a 2,392-character paragraph hard-wrapped at 98 is
+    twenty-five conforming lines. The unit a diff cares about is the line; the unit a reader
+    meets is the block between two breaks, and nothing was measuring it.
+
+    Measured against llama.cpp's own docs as the control -- `speculative.md` 95 blocks, longest
+    457, p90 300; `build.md` 164 blocks, longest 558, p90 298; neither with a single block over
+    900 -- this repository had `docs/ENERGY.md` at a p90 of 1,689 and `docs/PHASES.md` at 1,973,
+    six times the control, and the README carried one bullet of 4,448 characters. That bullet
+    turned out to be a third copy of `docs/ENERGY.md`: 31 of its 32 quantities were already
+    stated there or in `docs/PHASES.md`, and the one that was not was `1.9 %` where the source
+    says `-0.14 % to +1.87 %`, so the copy was also the less precise of the two.
+
+    `PREREGISTRATION.md` is exempt and stays exempt. It is append-only by project policy, so
+    reflowing it would rewrite committed history to fix a style; its 14 long blocks are recorded
+    here rather than repaired.
+    """
+
+    LIMIT = 950
+    EXEMPT = {"PREREGISTRATION.md": "append-only by project policy; reflowing rewrites the record"}
+
+    @staticmethod
+    def _blocks(text):
+        """Blocks as a reader meets them: a blank line, a bare `>`, or a list marker starts one.
+
+        The bare `>` matters. Without it `docs/GREEDY_DIVERGENCE.md`'s three-paragraph note read
+        as one 1,396-character block and would have been "fixed" where it was already correct.
+        """
+        out, cur = [], []
+        fence = False
+        def flush():
+            if cur:
+                t = re.sub(r"\s+", " ", " ".join(x.strip() for x in cur)).strip()
+                if t and not t.startswith(("|", "#", "<")):
+                    out.append(t)
+        for ln in text.splitlines():
+            if ln.strip().startswith("```"):
+                fence = not fence
+                flush(); cur.clear(); continue
+            if fence:
+                continue
+            marker = re.match(r"^\s*[-*+]\s", ln) or re.match(r"^\d+\.\s", ln)
+            if marker or not ln.strip() or ln.strip() == ">":
+                flush(); cur.clear()
+            if ln.strip():
+                cur.append(ln)
+        flush()
+        return out
+
+    def test_no_block_runs_longer_than_a_reader_will_hold(self):
+        import subprocess
+        root = Path(__file__).parent.parent
+        files = tracked_markdown()
+        self.assertGreater(len(files), 15, "no markdown found; has the glob broken?")
+        bad, checked = [], 0
+        for name in files:
+            if name in self.EXEMPT:
+                continue
+            for b in self._blocks((root / name).read_text()):
+                checked += 1
+                if len(b) > self.LIMIT:
+                    bad.append(f"{name}: a {len(b)}-character block -- {b[:60]}...")
+        self.assertGreater(checked, 300, "too few blocks measured to mean anything")
+        self.assertEqual(bad, [],
+                         f"break these into paragraphs; the line guard cannot see them because "
+                         f"they are already wrapped:\n  " + "\n  ".join(bad[:10]))
+
+    def test_the_exemption_is_named_and_still_needed(self):
+        """An exemption nobody rechecks becomes a hole. This one has to still be earning it."""
+        root = Path(__file__).parent.parent
+        for name, why in self.EXEMPT.items():
+            p = root / name
+            self.assertTrue(p.exists(), f"{name} is exempted and does not exist")
+            self.assertTrue(why.strip(), f"{name} is exempted with no reason")
+            over = [b for b in self._blocks(p.read_text()) if len(b) > self.LIMIT]
+            self.assertTrue(over, f"{name} no longer has a long block; drop the exemption")
+
+    def test_the_measure_counts_a_wrapped_paragraph_as_one_block(self):
+        """The defect this exists for: conforming lines, one unreadable paragraph."""
+        wrapped = "\n".join(["x" * 90] * 12)
+        self.assertEqual(1, len(self._blocks(wrapped)))
+        self.assertGreater(len(self._blocks(wrapped)[0]), self.LIMIT)
+        self.assertTrue(all(len(l) <= 120 for l in wrapped.splitlines()),
+                        "every line is inside the line guard, which is the point")
+
+    def test_a_bare_quote_marker_separates_paragraphs(self):
+        quoted = "> first paragraph of the note\n>\n> second paragraph of the note\n"
+        self.assertEqual(2, len(self._blocks(quoted)))
+
+
+class TheProseDoesNotCarryTheStructuralLLMSignature(unittest.TestCase):
+    """The lexical band has collapsed; the structural one has not.
+
+    `TheProseDoesNotCarryTheLLMLexicalSignature` checks the words Kobak et al. found spiking in
+    2024. Every 2026 source says that band is nearly spent: Wikipedia's *Signs of AI writing*
+    lists nineteen excess words for 2023-24, six for mid-2024 to mid-2025 and **four** from
+    mid-2025 on, and its own advice is that a single marker proves nothing and only a cluster
+    does. What it lists under style instead is structural: negative parallelism ("not just X but
+    Y", "It is not A, it's B"), copula avoidance ("serves as", "stands as", "boasts"), unearned
+    significance ("underscores", "highlights its importance", "evolving landscape"), vague
+    attribution ("experts argue", "industry reports"), and participial tails hung on sentences.
+
+    Calibrated against controls in both directions rather than by taste. A deliberately written
+    slop fixture scores 27 to 54 per 1000 words on each detector; four human-written llama.cpp
+    documents score 0.00 to 0.52; every document in this repository scores 0.00 to 1.10. The
+    threshold is set at 4.0 for the sum, which is roughly four times the highest real document
+    and a fortieth of the fixture -- a gap wide enough that a legitimate "not X, but Y" costs
+    nothing and a paragraph written in that voice cannot pass.
+
+    Like the lexical guard, this is a property of the prose and not a claim about who wrote it.
+    """
+
+    PATTERNS = {
+        "negative parallelism": [
+            r"\bnot just\b[^.]{0,80}?\bbut\b", r"\bnot only\b[^.]{0,80}?\bbut\b",
+            r"\bit is not\b[^.]{0,60}?,\s*(it|that)('s| is)\b",
+            r"\bisn't\b[^.]{0,60}?\bit's\b", r"\bno\s+\w+,\s+no\s+\w+,\s+(just|only)\b",
+        ],
+        "copula avoidance": [
+            r"\bserves as\b", r"\bstands as\b", r"\bfunctions as\b", r"\boperates as\b",
+            r"\bboasts\b", r"\bfeatures a\b",
+        ],
+        "unearned significance": [
+            r"\bis a testament\b", r"\bunderscor", r"\bhighlight(s|ing)\b", r"\bemphasiz",
+            r"\bplays? a (crucial|key|vital|pivotal|significant) role\b",
+            r"\bevolving landscape\b", r"\bsetting the stage\b", r"\bindelible\b",
+        ],
+        "vague attribution": [
+            r"\bindustry reports\b", r"\bobservers have\b", r"\bexperts (argue|say|agree)\b",
+            r"\bsome critics\b", r"\bseveral (sources|publications)\b",
+            r"\bit('s| is) important to (note|understand|remember)\b",
+        ],
+        "participial tail": [
+            r",\s+(highlighting|underscoring|emphasizing|reflecting|symbolizing|contributing|"
+            r"ensuring|showcasing|demonstrating|illustrating|cultivating|fostering|encompassing)\b",
+        ],
+    }
+
+    PER_1000 = 4.0
+
+    SLOP = (
+        "This project stands as a comprehensive solution that serves as a robust foundation. "
+        "It is not just a benchmark, but a complete framework, highlighting the importance of "
+        "rigorous measurement. It is important to note that industry reports generally suggest "
+        "such gains may be substantial. Experts argue that the evolving landscape of inference "
+        "represents a pivotal shift, underscoring the broader implications. This is not a small "
+        "improvement, it is a transformation, contributing to a deeper understanding."
+    )
+
+    @staticmethod
+    def _prose(text):
+        """Same use-versus-mention rule as the lexical guard, plus tables and link targets."""
+        blank = lambda m: re.sub(r"[^\n]", " ", m.group(0))
+        text = re.sub(r"```.*?```", blank, text, flags=re.S)
+        text = re.sub(r"<[a-z!/][^>]*>", blank, text)
+        text = re.sub(r"`[^`\n]*`", blank, text)
+        text = re.sub(r"\]\([^)\n]*\)", blank, text)
+        return re.sub(r"^\s*\|.*$", blank, text, flags=re.M)
+
+    @classmethod
+    def _score(cls, raw):
+        t = cls._prose(raw)
+        n = max(len(re.findall(r"[A-Za-z][A-Za-z'-]+", t)), 1)
+        found = []
+        for label, pats in cls.PATTERNS.items():
+            for pat in pats:
+                for m in re.finditer(pat, t, re.I):
+                    found.append((label, m.group(0)[:56]))
+        return 1000.0 * len(found) / n, found
+
+    def test_no_document_reads_like_the_fixture(self):
+        import subprocess
+        root = Path(__file__).parent.parent
+        files = tracked_markdown()
+        self.assertGreater(len(files), 15, "no markdown found; has the glob broken?")
+        bad = []
+        for name in files:
+            rate, found = self._score((root / name).read_text())
+            if rate > self.PER_1000:
+                bad.append(f"{name}: {rate:.2f} per 1000 -- " +
+                           "; ".join(f"{k}: {v!r}" for k, v in found[:4]))
+        self.assertEqual(bad, [],
+                         f"over {self.PER_1000} per 1000 words of the structural markers the "
+                         f"2026 guidance names:\n  " + "\n  ".join(bad))
+
+    def test_the_fixture_is_far_over_the_threshold(self):
+        rate, found = self._score(self.SLOP)
+        self.assertGreater(rate, 8 * self.PER_1000,
+                           f"the known-bad fixture only scores {rate:.1f}; the threshold is not "
+                           f"separating anything")
+        self.assertEqual(sorted({k for k, _ in found}), sorted(self.PATTERNS),
+                         "the fixture must exercise every detector, or an unexercised one is "
+                         "only asserted to work")
+
+    def test_ordinary_technical_prose_is_far_under_it(self):
+        """A guard that fires on correct writing costs more than no guard."""
+        fine = ("The counter is read exactly twice per window, so it cannot move with the "
+                "sampling rate. Varying the period over a threefold range leaves the integral "
+                "where it was, within 0.23 % of the counter at every rate. That is a measurement "
+                "of the instrument and not of the card, and no mechanism is identified by it.")
+        rate, found = self._score(fine)
+        self.assertLess(rate, self.PER_1000, f"fired on ordinary prose: {found}")
+
+
+class AnIssueNumberMustNotStartALine(unittest.TestCase):
+    """`#27705` at column zero is an H1 heading, and markdown gives no warning.
+
+    Wrapping a sentence that lists llama.cpp issues put `#27705,` at the start of a line inside
+    a paragraph. GitHub renders that as a top-level heading in the middle of the prose, and
+    nothing in the source looks wrong: the character is the same one the real headings use. It
+    was found by counting headings before and after an edit rather than by reading, and three
+    successive attempts to reword it around the break put a different issue number in the same
+    place, which is why the fix ended up being a wrap-and-retry rather than a hand-placed break.
+
+    `PREREGISTRATION.md` carries one instance and is exempt: it is append-only by project
+    policy, so the line cannot be rewrapped without editing a dated correction.
+    """
+
+    EXEMPT = {"PREREGISTRATION.md": "append-only; rewrapping would edit a dated correction"}
+
+    def test_no_line_begins_with_a_hash_and_a_digit(self):
+        root = Path(__file__).parent.parent
+        bad = []
+        for name in tracked_markdown():
+            if name in self.EXEMPT:
+                continue
+            for i, line in enumerate((root / name).read_text().splitlines(), 1):
+                if re.match(r"^#\d", line):
+                    bad.append(f"{name}:{i} {line[:60]}")
+        self.assertEqual(bad, [],
+                         "a line starting with '#' and a digit renders as an H1 heading; rewrap "
+                         "the paragraph so the issue number is not first on its line:\n  "
+                         + "\n  ".join(bad))
+
+    def test_the_exemption_still_has_something_to_exempt(self):
+        root = Path(__file__).parent.parent
+        for name in self.EXEMPT:
+            hits = [i for i, line in enumerate((root / name).read_text().splitlines(), 1)
+                    if re.match(r"^#\d", line)]
+            self.assertTrue(hits, f"{name} no longer has one; drop the exemption")
+
+    def test_the_check_fires_on_the_shape_it_was_written_for(self):
+        self.assertTrue(re.match(r"^#\d", "#27705, every speculative issue"))
+        self.assertIsNone(re.match(r"^#\d", "## Correction 54"))
+        self.assertIsNone(re.match(r"^#\d", "and #27705, every speculative issue"))
 
 
 if __name__ == "__main__":

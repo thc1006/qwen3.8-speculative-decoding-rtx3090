@@ -189,7 +189,7 @@ fi
 fi   # end of Part A
 
 # ------------------------------------------------- PART B: maintenance that waited for a free GPU
-hdr "B1. coverage, at a replication count that can tell the figures apart (TODO D6)"
+hdr "B1. coverage, at a replication count that can tell the figures apart (TODO D9)"
 # Measured, not guessed: one paired_cluster_bootstrap at n_boot=2000 over 25 prompts takes 9.2 ms
 # here, and the sweep is 8 rows, so 2000 replications is about 2.5 minutes plus whatever the n=50
 # rows add. The comment this replaces said "roughly 6.7x the work of the committed run", which was
@@ -205,7 +205,7 @@ else
   head -5 "$COV_ERR" | sed 's/^/     /'
 fi
 
-hdr "B2. the README's evidence block, generated (TODO D7)"
+hdr "B2. the README's evidence block, generated (TODO D8)"
 python3 harness/render_evidence.py || bad "render_evidence did not write the block"
 
 hdr "B3. the anchor report, regenerated from the current analyser"

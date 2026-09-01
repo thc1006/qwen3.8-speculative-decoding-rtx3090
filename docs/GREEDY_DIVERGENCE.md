@@ -21,11 +21,17 @@
 Extracted from the README so the front page stays readable. Part of
 [`thc1006/qwen3.8-speculative-decoding-rtx3090`](https://github.com/thc1006/qwen3.8-speculative-decoding-rtx3090).
 
-## Losslessness
+## How often the output diverges
 
-Speculative arms are byte-identical to their baseline on only 25-30 of 125 prompt-passes:
-**76-80 % of requests diverge**, forking at a median 23 % into the text. Every arm is nonetheless
-**100/100 reproducible across passes**, so the divergence is deterministic rather than noise.
+At the 400-token cap, speculative arms show **no divergence within the window** on 25-30 of 125
+prompt-passes -- **76-80 % diverge**, at a median 23 % into the text. None of those agreements is
+an exact identity: at that cap nothing reached EOS, so every one is right-censored. That wording
+matters enough that Corrections 33, 37 and 38 exist to remove "identical" from it, and this
+sentence carried it until 2026-09-01.
+
+The completed 1600-token re-run supersedes both figures: **92-100 % diverge**, at a median 10-12 %
+into the text. Every arm is **100/100 reproducible across passes** at both caps, so the divergence
+is deterministic rather than noise.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../analysis/plot_width_partition_dark.png">
@@ -37,6 +43,8 @@ Speculative arms are byte-identical to their baseline on only 25-30 of 125 promp
   blocks span both drafters." src="../analysis/plot_width_partition.png">
 </picture>
 
+## The partition is by verification width, not by drafter
+
 Fork positions partition the arms into exactly two groups by verification width, `{3,4}` against
 `{5,6,8}`, identically in all five passes. **The grouping crosses drafters**: width 5 and width 8
 are DFlash2 while width 6 is the built-in MTP head, and all three agree with each other on every
@@ -44,6 +52,8 @@ prompt. So drafter identity does not predict the grouping and verification width
 boundary co-occurs with the CUDA `calc_nwarps` table switching `ncols_dst` from four warps to two.
 
 Two things qualify that, and both were found by this repo looking for them.
+
+## The warp-count intervention, and why it is a null
 
 **The intervention does not support the warp count as the cause.** Three builds of the same
 revision, differing only in that table, were pre-registered with their outcomes written down
@@ -77,17 +87,22 @@ diverge. **The warp count is out as the cause**, on those grounds rather than on
 absence, and the co-occurrence above is reported as co-occurrence. What else changes at that width
 is open.
 
+## Censoring, and what the 1600-token cap settled
+
 **Every agreement is censored, not some of them.** An earlier version of this paragraph measured
-the window in characters and reported 15 of 25 prompts censored, with the partition checked against
-the 10 that were not. The design fixes the window in tokens, and characters per token span 1.36 to
-6.17 across these prompts, so that split was an artefact of the wrong unit. Measured in tokens,
-`harness/truncation_audit.py` gives 490 of 750 Phase A records diverged, 260 right-censored, and
-**0 that reached EOS**: at that cap no record anywhere stopped on its own, so no identity was
-exact and every one meant "did not diverge within 400 tokens". There was no clean subset, because
-the censoring was uniform, and the robustness check the earlier text claimed could not be run on
-that data at all. Forks resolved between **token 6 and token 359**, median 91, the latest at 90
-% of the window. Those are exact: `harness/exact_forks.py` tokenizes the two stored outputs and
-takes the first index where they differ, over 490 divergent records.
+the window in characters and reported 15 of 25 prompts censored, with the partition checked
+against the 10 that were not. The design fixes the window in tokens, and characters per token span
+1.36 to 6.17 across these prompts, so that split was an artefact of the wrong unit.
+
+Measured in tokens, `harness/truncation_audit.py` gives 490 of 750 Phase A records diverged, 260
+right-censored, and **0 that reached EOS**: at that cap no record anywhere stopped on its own, so
+no identity was exact and every one meant "did not diverge within 400 tokens". There was no clean
+subset, because the censoring was uniform, and the robustness check the earlier text claimed could
+not be run on that data at all.
+
+Forks resolved between **token 6 and token 359**, median 91, the latest at 90 % of the window.
+Those are exact: `harness/exact_forks.py` tokenizes the two stored outputs and takes the first
+index where they differ, over 490 divergent records.
 
 The larger budget that settles it has since been run (`results/phase_a_cap1600.json`, cap 1600,
 Correction 33). Right-censoring falls to **9 of 375 records** on 2 of 25 prompts, **267 of 525
@@ -106,4 +121,3 @@ proposes.
 [llama.cpp #26750](https://github.com/ggml-org/llama.cpp/issues/26750) asks the same question on
 Blackwell; this card is sm_86 and cannot answer it. See
 [`UPSTREAM_CONTRIBUTIONS.md`](UPSTREAM_CONTRIBUTIONS.md).
-

@@ -1,13 +1,25 @@
 # Phase V: does the dense-model result survive a change of engine?
 
-Written 2026-08-24, before any vLLM install. Nothing here is measured.
+Written 2026-08-24, before any vLLM install. The sections dated inline **were** measured
+afterwards -- the allocation failure at 2026-08-26 is the main one; everything undated is the
+original plan.
 
 ## Why the question is worth asking
 
 The predecessor study's headline turned out to be engine-specific, and it took a retraction to
-find that out. On llama.cpp, speculative decoding on Qwen3.6-35B-A3B was a net loss in every
-configuration tested. On vLLM, with matched flags and prefix caching off, MTP at k=1 came out
-27.5 % faster on the same RTX 3090. Same model, same card, opposite sign. The explanation was
+find that out. Two things this paragraph used to say are now wrong and are corrected here rather
+than deleted, because they are what motivated the phase.
+
+It said the llama.cpp result was **a net loss in every configuration tested**. That repo's own
+follow-up found positive ones: `--spec-draft-n-max 4` at **+18.7 %** and the target's built-in MTP
+head at **+17.5 %**, and its README records that the audit *"retracted this repository's headline
+mechanism"*. The loss belongs to the configurations first tested, not to the method.
+
+And it said the vLLM arm came out **27.5 % faster on the same RTX 3090** -- "same model, same
+card, opposite sign". The card is not the same: that repo's CHANGELOG puts the +27.5 % on **2x
+RTX 3090 with tensor parallelism**, against a single-card llama.cpp run. Engine, card count and
+parallelism move together there, which is the shape of comparison this study exists to avoid
+making. The explanation was
 that llama.cpp's draft-then-verify path uses K of 5 to 64 while vLLM's MTP uses k=1, and a MoE
 verify pass over K positions loads the union of K positions' expert sets.
 
@@ -97,8 +109,10 @@ KV cache memory" line anywhere in the log -- and that flag governs the KV budget
 `max_model_len` to 2048, and forcing `quantization: compressed-tensors` onto the speculative
 config. Logs for all five are in `logs/vllm_mtp_*.log` and `logs/vllm_probe_mtp*.log`.
 
-What this card can therefore produce is one working arm, `baseline-vllm`, and two recorded
-failures. The matrix marks both MTP arms `may_fail` and `harness/vllm_bench.py` records a failed
+What this card can therefore produce is one working arm, `baseline-vllm`, and two arms that fail
+to start -- **six recorded failures**, both arms on each of three passes, which is the count
+`docs/PHASES.md` and the README carry. The matrix marks both MTP arms `may_fail` and
+`harness/vllm_bench.py` records a failed
 start as a result rather than aborting the phase.
 
 ## Disk, and why this phase runs last

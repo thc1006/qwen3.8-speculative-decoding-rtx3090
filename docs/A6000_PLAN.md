@@ -29,7 +29,15 @@ What differs is the resource mix: more memory, less bandwidth, less power.
    effect (recorded as H2'). Measuring `c`, the marginal cost per verified position, at each
    rung tests H2' on the coefficient not on throughput.
 2. **Long context without a KV-quantization confound.** The 262 K figure first written here was
-   wrong. The 27B has 64 KV layers, 4 KV heads and 256 wide keys and values, so an f16 cache is
+   wrong, and so is the correction that replaced it. The 27B has `full_attention_interval: 4`,
+so **16 of its 64 layers hold KV** and the other 48 are Gated DeltaNet with a fixed state;
+the arithmetic below uses 64 and therefore overstates an f16 cache four-fold, which is what
+made a 48 GB card look necessary. `TODO.md` records this under deleted scope: an f16 cache at
+86 016 needs 23.93 GiB and the 24 GB card holds it.
+
+   Kept as written below, with this note, because the plan is a dated record rather than a
+   current statement. Taking 64 KV layers, 4 KV heads and 256 wide keys and values, an f16 cache
+   would be
    `64 x ctx x 4 x 512 x 2` bytes: 64 GiB at 262 144, against 48 on the card. What does fit is
    about 102 400, which is the arithmetic that matters, because Phase L's deepest rung is 98 304.
    At that depth the weights are 16.35 GiB, the f16 cache 25.00 and the compute buffer about 2,

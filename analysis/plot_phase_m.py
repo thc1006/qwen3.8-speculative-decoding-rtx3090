@@ -182,13 +182,20 @@ def fig_phase_m(result, series, prompt_class):
             if bits:
                 # The offset places these under the interval, and at this y-scale that lands
                 # some of them on the zero reference line -- "65 %" in the MoE panel and "37 %"
-                # in the dense one were struck through by it. The line is a decoration and the
-                # number is data, so the number gets the background rather than being moved to
-                # an inconsistent side of its own point.
+                # in the dense one were struck through by it.
+                #
+                # The first fix put an opaque box behind the number, on the reading that the
+                # line is a decoration and the number is data. Both halves of that were wrong.
+                # The box is a rectangle around glyphs, so it erased whole segments of the
+                # line: four of them, three in the MoE panel and one in the dense one. And in
+                # a plot of net effect against the baseline, zero is where the sign changes --
+                # it carries the claim in the title, so it is not a decoration. `P._halo`
+                # strokes the glyphs instead, which masks only the glyphs and leaves the line
+                # continuous between them.
                 ax.annotate("\n".join(bits), (pos[n], iv.lo), textcoords="offset points",
                             xytext=(0, -13), ha="center", va="top", fontsize=8.2,
                             color=P.C("mut"), linespacing=1.15, zorder=4,
-                            bbox=dict(facecolor=P.C("bg"), edgecolor="none", pad=0.8))
+                            path_effects=P._halo(2.4))
         rate = _baseline_rate(series, prompt_class, base)
         ax.set_title(f"{title}     baseline {rate:.0f} tok/s", loc="left", pad=8)
         ax.set_ylabel("net effect vs own baseline (%)")

@@ -45,11 +45,20 @@ confirmation. Reading the tracker properly shows otherwise. The parent thread is
 
 **The thread moved on 2026-08-21 and 2026-08-24, and it changes what is worth saying.**
 
-ggerganov, 2026-08-21: the numerical difference between computing logits for N tokens at once and
-N separate decodes is inherent to batched evaluation and is not a bug; what would be useful is a
-reproduction isolating *the width at which it starts, on CUDA*, since the Vulkan case was traced
-to the `soft_max` reduction order changing with batch size and nobody had posted the CUDA
-boundary.
+An earlier version of this section attributed to ggerganov, on 2026-08-21, a request for "a
+reproduction isolating the width at which it starts, on CUDA". **That attribution does not
+survive checking and is withdrawn.** `upstream/llamacpp/comment_25618_cuda_onset_facts.md`
+records the search: all 18 comments on #25618, plus #27407, #27342, #26750, #27623, #27676
+and #27705, every speculative issue ggerganov has commented on, and the 100 most recently
+updated discussions. No such question is anywhere in them. The comment count on #25618
+matches what the API returns, so this cannot distinguish "never asked" from "asked and
+deleted" -- but it is not something to put in a maintainer's mouth on the strength of a note.
+
+What is on the record, and is a better frame anyway, is ggerganov on
+[#23335](https://github.com/ggml-org/llama.cpp/issues/23335) (2026-05-19), the predecessor thread
+to #25618: *"This is expected - we use different kernels for different batch sizes."* That is a
+testable claim and this data tests it. The Vulkan case was separately traced to the `soft_max`
+reduction order changing with batch size.
 
 `frizikk`, 2026-08-24, answered part of it on Vulkan with an operator-level bisect: the first
 boundary is a `MUL_MAT` at `linear_attn_out-0`, Q8_0 weight against F32 activation, where `N=1`
@@ -60,9 +69,11 @@ and the cause is the path switch plus F32-to-Q8_1 staging.
 `F-Mangini`, 2026-08-22, showed the same at `n_max=1` on LFM2.5 DSpark, Vulkan, Q8_0 target, and
 that an F16 target preserves greedy parity, so a quantised target is necessary.
 
-**What this study has that is not in the thread, stated narrowly.** Not the onset width. Phase A
-never ran `n_max=1`, so it cannot say where divergence starts, and on the Vulkan evidence the
-answer is already `N=2`. What it has is a *second* boundary, further up, on CUDA: fork positions
+**What this study has that is not in the thread, stated narrowly.** On the onset it is a second
+architecture agreeing rather than a discovery. Phase A never ran `n_max=1`, but `phase_nmax` did,
+captured 2026-08-25 and running n-max 1 through 8: width 2 diverges on 19 of 25 prompts, so on
+CUDA there is no onset threshold above the smallest speculative width. `frizikk` has the onset on
+Vulkan and the priority is theirs. What it has is a *second* boundary, further up, on CUDA: fork positions
 on sm_86 partition into exactly two groups by verification width, `{3, 4}` against `{5, 6, 8}`,
 identically across five passes, with the partition shared by the target's own MTP head and by an
 unrelated 1.1 GB block-diffusion drafter. Every one of those widths diverges; what changes at the
@@ -82,19 +93,27 @@ does change. sm_86 is not RDNA, GCN, CDNA or DGX Spark, and the Turing table is 
 floating-point addition is not associative. That is the same shape of cause as the Vulkan
 `soft_max` finding, in a different kernel, and its boundary is where the measurement's is.
 
-**What would make it a claim rather than a coincidence.** `phase_nmax` runs MTP at widths 2
-through 9 and is registered as H8 in `PREREGISTRATION.md` before its data exists. The table
-forces three groups, `{2, 3, 4}`, `{5, 6, 7, 8}` and `{9}`; widths 2 and 7 were never measured
-and are the real test, and width 9 is confounded because it drops to one warp and leaves MMVQ at
-the same time. Causation needs the warp count forced constant across widths and the divergence
-disappearing, which is a build change and belongs upstream, not in a study that cannot rebuild
-its own trees mid-run.
+**What made it a claim rather than a coincidence, and what the answer was.** `phase_nmax` ran
+MTP at every width from 2 to 9, which is n-max 1 to 8, and H8 was registered in
+`PREREGISTRATION.md` before that data existed. The partition came out exactly as the warp table
+predicts on the widths that share the MMVQ path: `{2, 3, 4}` against `{5, 6, 7, 8}`, with width 9
+excluded because it leaves the kernel and the table makes no prediction for it.
+
+The causal test then ran, in a separate clone rather than in this study's own pinned trees: four
+builds from one cmake configure with the GENERIC warp table edited, on the A6000 and replicated
+on a second 3090. Two builds from that configure with no source difference are 150/150
+byte-identical, which is the guard that makes the rest readable. Forcing the count changes this
+kernel's runtime by up to 26.7 % and **moves no output byte**. A mechanism that cannot change the
+text cannot change where two texts diverge, so **the warp count is out as the cause**. The table
+coincides with the boundary; what else changes at that width is open. See
+`analysis/warp_intervention_v2.txt` and `analysis/phase_nmax_width_groups.txt`.
 
 **Filing discipline for this one:** comment on #25618, where the expertise is. Open by agreeing
-that batched evaluation is not bit-identical and that this is not filed as a bug. Do not claim
-the onset width; `frizikk` has it on Vulkan and this study did not run `n_max=1`. Lead with the
-second boundary, the code pointer, and the registered prediction, and say plainly that the
-coincidence is not proof. Credit `snick525` for drafter independence, `Ankk98` for the Vulkan
+that batched evaluation is not bit-identical and that this is not filed as a bug. Credit `frizikk` with the
+onset on Vulkan and offer this card's width-2 result as a CUDA confirmation of it, not as a
+discovery. Lead with the second boundary, the code pointer, and the intervention result -- which
+refuses the warp table as the cause rather than supporting it. Credit `snick525` for drafter
+independence, `Ankk98` for the Vulkan
 root cause, `frizikk` for the operator bisect and `F-Mangini` for the quantisation dependence.
 
 ## 1b. Missing per-request counter in the server API: small, concrete, and self-motivated
@@ -135,7 +154,7 @@ That is the case for the patch, and it is a better one than convenience. A deriv
 reproduces plausible numbers while being quietly wrong by a percent is exactly what an exposed
 counter prevents, and the server already keeps the counter.
 
-A patch is prepared at `upstream/0001-server-expose-draft-verification-steps-per-request.patch`
+A patch is prepared at `upstream/llamacpp/0001-server-expose-verif-steps.patch`
 against `c060ca9`. It is one line in `to_json()` and adds no state. It is deliberately **not**
 applied to `llamacpp-master/` in this repo: rebuilding that tree mid-study would leave later
 phases running a different binary from earlier ones, which is exactly the build confound the
@@ -167,7 +186,8 @@ This study measures, on sm_86 CUDA with Qwen3.8-27B Q4_K_XL:
 | 3 | 0.558 |
 | 5 | **0.412** |
 
-**0.412 at n-max 5 sits inside their 0.358-0.407 band at n-max 6.** Different model and different
+**0.412 at n-max 5 sits just outside their 0.358-0.407 band at n-max 6**, half a point above it
+and at one width shallower. Different model and different
 CUDA architecture, so this is not a refutation and must not be presented as one. It does supply
 the missing control: on a CUDA card where MTP is unambiguously a large *win* (+59.8 % at n-max 2),
 acceptance still falls to ~0.41 by n-max 5. That reframes the open question from "why is CUDA at
@@ -176,9 +196,11 @@ acceptance still falls to ~0.41 by n-max 5. That reframes the open question from
 root-caused a **Vulkan** flash-attention packing bug that made multi-token verify disagree with
 sequential decode.
 
-Phase N walks n-max 1-8 and produces the full curve, plus the per-step cost k at each depth. That
-is a measurement with no interpretive step in it, which is what makes it the most defensible
-thing this study has to offer upstream.
+The n-max phase walked n-max 1 to 8 and produced the full curve, plus the per-step cost `k` at
+each depth: 1050 records, complete. That is a measurement with no interpretive step in it, which
+is what makes it the most defensible thing this study has to offer upstream. It is registered as
+`n-max`, not "Phase N" -- that name appears in no other document and matches no row in
+`docs/PHASES.md`.
 
 ## 2b. The n-max disagreement in PR #27342, turned into a measurable coefficient
 
@@ -186,7 +208,7 @@ thing this study has to offer upstream.
 is the right DFlash2 setting because the drafter's `block_size` is 8 and lower values discard
 tokens the block already paid for. That reasoning is about the drafter and is sound on its own
 terms. This study measures the opposite ordering on an RTX 3090 at `UD-Q4_K_XL`: n-max 4 gives
-1.520x and n-max 7 gives 1.228x.
+1.519x and n-max 7 gives 1.226x.
 
 Both can hold, and the cost model says what has to differ rather than which report is wrong.
 With `speedup = mean_len(w) / (k0 + c(w-1))`, width 8 beats width 5 only when
@@ -209,9 +231,12 @@ no way to tell whether a new card should follow the 5090 or the 3090.
 
 **What it assumes, which must be said when posting.** The threshold uses this card's `mean_len`
 curve at `UD-Q4_K_XL`. A Q6_K target may accept more, which raises `mean_len` at depth and lowers
-the required `c`. That confound is not resolved here; Phase Q walks the target ladder to separate
-`c` from acceptance, and until it runs the honest statement is that the two reports differ by at
-least a factor in `c`, target quantisation uncontrolled.
+the required `c`. That confound is not resolved here. Phase Q has since walked two rungs of the target ladder,
+`UD-Q4_K_XL` and `UD-Q5_K_XL`, and did not separate them: the two rungs ran in different sessions,
+so `evidence/registry.json` scores the phase as an association rather than a causal estimate, and
+the MTP head is quantized with the target so verifier and drafter-head compute move together. The
+honest statement is unchanged -- the two reports differ by at least a factor in `c`, target
+quantisation uncontrolled.
 
 **Filing:** a comment on #27342 addressed to `lance0`'s numbers, crediting the `block_size`
 argument rather than disputing it, and leading with the coefficient rather than with this card's
@@ -227,10 +252,21 @@ with prefill energy subtracted:
 | arm | tok/J | J per 400-token request | vs baseline |
 |---|---:|---:|---:|
 | baseline | 0.1005 | 3980 | - |
-| mtp-n2 | 0.1625 | **2506** | **-37 %** |
-| dflash2-n4 | 0.1555 | 2833 | -29 % |
-| mtp-n5 | 0.1344 | 3224 | -19 % |
-| dflash2-n7 | 0.1253 | 3785 | -5 % |
+| mtp-n2 | 0.1627 | **2503** | **-37.1 %** |
+| dflash2-n4 | 0.1554 | 2835 | -28.8 % |
+| mtp-n5 | 0.1343 | 3228 | -18.9 % |
+| dflash2-n7 | 0.1251 | 3786 | -4.9 % |
+
+Read off `analysis/phase_a_report.txt` rather than retyped: four of these five rows previously
+carried digits from an older reading and disagreed with `README.md` on the same quantity.
+
+**State the instrument when posting this.** It is board telemetry from `nvidia-smi power.draw`,
+decode-only with prefill measured per arm and subtracted, and it is not calibrated against any
+meter off the board. Two measured biases move the saving from -37.1 % toward about -35 %, and
+re-reading the same comparison with the less-smoothed instantaneous field gives -36.3 %; the
+sensor's own steady-state error is roughly plus or minus 5 % and runs in both directions. Post the
+relative saving with that range attached, not the point estimate alone. `docs/ENERGY.md` carries
+the full bound.
 
 Not a bug report; a data contribution to PR #27342 and to the community tables, where "is it
 worth enabling" is currently answered on throughput alone.
@@ -252,9 +288,15 @@ comparison rather than printing it.
 The completed ladder shares widths 3, 5 and 7. Fitted there, `c` is **0.2954** for MTP against
 **0.2481** for DFlash2 and the difference is **-0.0473 [-0.0489, -0.0456]**. The two `k(w)` curves
 differ by a straight line to within 2.4e-4, so whatever curvature they carry is shared and cancels
-out of the comparison. Part of the marginal cost moves with the drafter.
+out of the comparison. Part of the marginal cost moves with the **configuration** -- drafter and
+source tree together, since `draft-dflash` does not exist on master and no arm separates them.
+It is not a drafter-specific marginal cost, and `docs/COST_MODEL.md` states the same scope.
 
-`k0` is 0.8888 against 0.9443. Both sit below 1.0, which is the floor a zero-depth cycle must
+`k0` on those same shared widths is **0.8526** against 0.9443. (MTP's fit over its own full
+ladder, widths 2 to 8, is `k0` 0.8888 with `c` 0.2904; the two must not be mixed, which is
+the chord problem this section is about -- and mixing them is what the line here used to do,
+quoting `c` from the shared-width fit and `k0` from the full one.) Both sit below 1.0, which is
+the floor a zero-depth cycle must
 cost, so neither intercept is a measured fixed cost and the pair should not be read as an
 attribution.
 
@@ -277,8 +319,8 @@ affected at all. They tested only `draft-dflash`.
 | target | what this study adds | status |
 |---|---|---|
 | [#25618](https://github.com/ggml-org/llama.cpp/issues/25618) divergence | the CUDA width boundary (see section 1) | Phase A + Phase N |
-| [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) ~25x decode cliff past ~80 K, 1 comment | reproduction on sm_86, and whether speculation survives it | Phase L |
-| [#27572](https://github.com/ggml-org/llama.cpp/issues/27572) acceptance -> 0 under `-np N`, 10 comments, 3 of them this study's | sm_86 confirmation; also closes the predecessor repo's own untested concurrency caveat | Phase X |
+| [#27623](https://github.com/ggml-org/llama.cpp/issues/27623) ~25x decode cliff past ~80 K, 1 comment | **does not reproduce on sm_86**: a factor of 1.5 against the reported 25, over five rungs to 96 K. `evidence/registry.json` forbids reading that as a refutation -- different architecture, quantization and stack | Phase L, complete |
+| [#27572](https://github.com/ggml-org/llama.cpp/issues/27572) acceptance -> 0 under `-np N`, 10 comments, 3 of them this study's | **non-reproduction on sm_86**, stated as that: a clean CUDA run bounds the timing, it does not show the ordering is absent | `repro/FINDINGS_27572.md`; there is no Phase X in `evidence/registry.json` |
 | [vLLM #52475 / #53180](https://github.com/vllm-project/vllm/issues/52475) degenerate output on hybrid GDN | the baseline-relative degeneracy screen used here is the methodology those reports need | Phase V |
 
 ---
@@ -315,11 +357,14 @@ before opening.
 
 ## What this study CANNOT contribute, stated so nobody spends time on it
 
-- **The quantization axis of the divergence.** #25618 establishes that a bf16 target preserves
-  greedy parity while quantized targets do not. Testing that here would need a less-quantized
-  Qwen3.8-27B: `UD-Q6_K` is 25.3 GB, `Q8_0` 29 GB, BF16 50 GB, so none fit in 24 GB alongside a KV
-  cache. The decisive control for that question is not available on this hardware and this study
-  does not attempt it.
+- **The quantization axis of the divergence, on this target.** Testing it on Qwen3.8-27B would
+  need a less-quantized copy: `UD-Q6_K` is 25.3 GB, `Q8_0` 29 GB, BF16 50 GB, so none fit in 24 GB
+  alongside a KV cache. **The axis itself was measured on a smaller model instead.** Phase Q-small
+  walks Qwen3.5-9B over Q4_K_M / Q6_K / Q8_0 / BF16, 375 records a rung, and finds the effect but
+  not parity: no divergence observed through the cap on 16 / 8 / 4 % of quantized requests against
+  52 % at BF16, so **36 of 75 bf16 requests still diverge** and #25618's "stays bit-identical on
+  bf16" is too strong as written. That is a contribution to the thread rather than a gap. This
+  entry used to say the study did not attempt the axis at all.
 - **`draft-eagle3`.** Accepted by `--spec-type` in this build, but no EAGLE3 drafter has been
   published for Qwen3.8-27B (HF hub, checked 2026-08-24). Worth stating publicly so others stop
   looking; there is nothing to benchmark.

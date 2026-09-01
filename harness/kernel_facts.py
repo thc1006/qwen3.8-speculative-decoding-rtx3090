@@ -7,7 +7,7 @@ a Python file, and later untrue.
   `width_groups.py` hard-coded `calc_nwarps`, so it gave width 9 a warp count the table never
   assigns and scored H8 against a prediction that build never made.
   `cost_model.py` fitted one line across `MMVQ_MAX_BATCH_SIZE`, which dragged the MTP coefficient
-  by 24 % and the fit from r2 = 0.9958 to 0.8304.
+  by 24 % and the fit from r2 = 0.9958 to 0.8316.
   `warp_intervention.py` had to be told each forced build's table by hand, because the result file
   did not carry it.
 

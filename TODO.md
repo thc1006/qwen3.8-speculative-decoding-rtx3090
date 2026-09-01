@@ -26,7 +26,11 @@ second-host addendum in `PREREGISTRATION.md`.
       The elasticities nearly swap between baseline and speculative arms, and the regime change
       sits between 1200 and 1710 MHz.
 - [x] **Phase KV** - the f16 control for the width partition.
-- [x] **Cost model** - `k = k0 + c(w-1)`, `c` agreeing to 1.6 % across two unrelated drafters.
+- [x] **Cost model** - `k = k0 + c(w-1)`. The earlier reading, that `c` agrees to 1.6 % across
+  two unrelated drafters, is **withdrawn**: it compared chords over disjoint width ranges.
+  On the widths both cover the two differ by -0.0473 [-0.0489, -0.0456], and that is a
+  difference between two pinned configurations rather than between two drafters
+  (`docs/COST_MODEL.md`).
       Rejection-cost hypothesis registered and reported unsupported.
 - [x] **Correction 3** - the derived `mean_len` was low by a forward pass; caught by comparing
       against the server's own printed value on 625 requests.
@@ -38,7 +42,7 @@ second-host addendum in `PREREGISTRATION.md`.
       passed it to `settle_gpu`, so the flag raised on every card it was meant for.
       `scripts/run_phase_q.sh` and the whole A6000 plan depend on it.
 
-## Running now
+## Complete, and what each settled
 
 - [x] **Phase n-max** (host A) - complete, 1050 records. - MTP 1..8 and DFlash2 2,4,6,8.
   Delivers the H8/H8a verdicts and
@@ -159,7 +163,7 @@ second-host addendum in `PREREGISTRATION.md`.
       the `calc_nwarps` GENERIC table. Registered before any of it ran, with the outcomes and the
       baseline identity control written down first.
 
-## Next, in order
+## Completed phases, in the order they ran
 
 - [x] **Phase C** - complete 2026-08-25 10:43, 750/750, 0 incidents. Drafter quantization barely
       matters and the highest precision is the slowest: q8 +53.4 %, q4k +52.0 %, bf16 +48.5 %
@@ -171,17 +175,19 @@ second-host addendum in `PREREGISTRATION.md`.
       measurements, and the drafting counters separate them. `ngram-mod` has `t_draft_n = 0` on
       all 75 records and matches the baseline on all 75. An earlier version of this entry read
       that as a flag accepted and ignored, the predecessor's `draft-qwen3-0.6b` failure repeating;
-      Correction 25 established it is the method working as designed. Its default `n_min` is 48
-      and `draft_one` discards the whole draft on hitting an empty table entry before that, so it
-      needs 48 consecutive matched tokens to emit anything, and a 400-token general writing, code
-      and reasoning suite does not produce one. Its -0.20 % is the cost of entering the
-      speculative path and drafting nothing, and its 75/75 baseline match is the absence of
-      speculation rather than lossless speculation. `ngram-map-k` drafts on 6 of 75, 288 tokens
-      for 24 accepted. `ngram-cache` is the only active n-gram method here: it drafts on 63 of 75,
-      9699 tokens, accepts none of them, so its -8.3 % is drafting cost with no return, and it is
-      the only one of the three that supports a workload-level negative result. For contrast
-      DFlash2 accepts 41.1 % and draft08b-n8 21.0 %, the latter below n4's 35.2 % and slower for
-      it.
+      Correction 25 established it is the method working as designed.
+
+      Its default `n_min` is 48 and `draft_one` discards the whole draft on hitting an empty table
+      entry before that, so it needs 48 consecutive matched tokens to emit anything, and a
+      400-token general writing, code and reasoning suite does not produce one. Its -0.20 % is the
+      cost of entering the speculative path and drafting nothing, and its 75/75 baseline match is
+      the absence of speculation rather than lossless speculation.
+
+      `ngram-map-k` drafts on 6 of 75, 288 tokens for 24 accepted. `ngram-cache` is the only
+      active n-gram method here: it drafts on 63 of 75, 9699 tokens, accepts none of them, so its
+      -8.3 % is drafting cost with no return, and it is the only one of the three that supports a
+      workload-level negative result. For contrast DFlash2 accepts 41.1 % and draft08b-n8 21.0 %,
+      the latter below n4's 35.2 % and slower for it.
 - [x] **Phase L** - complete, five rungs, 900 records. The collapse does not appear, and the
       ladder now reaches past the depth the report's own worked example measures at, so the
       verdict is no longer withheld.
@@ -203,17 +209,18 @@ second-host addendum in `PREREGISTRATION.md`.
       rungs. Those were computed while the fourth rung stood at 60 of 180 records and are
       superseded; the ratio of class-stratified means and the paired bootstrap agree to 0.02
       points on the completed data, so the gap was the partial run, not the estimator.
-- [x] **Phase M** - complete, 1575 records, 21 arms, dense against MoE in one session with
-      matched width ladders so `c` is comparable and not just the levels. The built-in MTP head
-      wins on both targets and a 0.8B `draft-simple` drafter loses on both, and acceptance tracks
-      the drafter rather than the target. That is an observation about two drafters on two
-      targets; attributing the sign to the drafting method rather than the architecture is the
-      inference this design cannot make, which is why `docs/PHASES.md` withholds the causal
-      reading and the README states what settling it would take rather than that it is settled.
-      This entry asserted it flatly until 2026-09-01, and the gate could not see it: the phrase
-      is on its withdrawn list but ran across a line break, and the scan matched line by line.
-      The registered replication anchor does NOT hold either, so none of it is a statement about
-      the predecessor's numbers. Corrections 9 and 10.
+- [x] **Phase M** - complete, 1575 records, 21 arms, dense against MoE in one session with matched
+  width ladders so `c` is comparable and not just the levels. The built-in MTP head wins on both
+  targets and a 0.8B `draft-simple` drafter loses on both, and acceptance tracks the drafter
+  rather than the target. That is an observation about two drafters on two targets; attributing
+  the sign to the drafting method rather than the architecture is the inference this design cannot
+  make, which is why `docs/PHASES.md` withholds the causal reading and the README states what
+  settling it would take rather than that it is settled.
+
+  This entry asserted it flatly until 2026-09-01, and the gate could not see it: the phrase is on
+  its withdrawn list but ran across a line break, and the scan matched line by line. The
+  registered replication anchor does NOT hold either, so none of it is a statement about the
+  predecessor's numbers. Corrections 9 and 10.
 - [x] **Phase Q-small** - complete, four rungs, 1500 records: Q4_K_M, Q6_K, Q8_0 and BF16 on
       Qwen3.5-9B-MTP. It supplies the bf16 anchor the 27B ladder structurally cannot reach, and
       its Q4_K_M is the exact file llama.cpp #26750 reports on.
@@ -278,29 +285,37 @@ second-host addendum in `PREREGISTRATION.md`.
       allocation that fails is the head at `:244`, not the embedding at `:82`, which succeeds --
       the module makes two 2.37 GiB allocations, not one.
 
-- [x] **A1** `c` no longer attributed to target verification. It is the whole cycle - verification,
+### A. Claims scoped down after the self-audit
+
+These were `A1` to `A9` until 2026-09-01 and are now `SA1` to `SA9`. `docs/METHODOLOGY_AUDIT.md`
+publishes its own `A1` to `A9` for entirely different findings -- its `A1` is the predecessor's
+diluted headline mean, this one is `c`'s attribution -- so a reader arriving from that document
+met the same keys meaning different things. The section letter moves rather than the audit's,
+because the audit's keys are the published ones. Same reasoning as the `E` to `U` rename below.
+
+- [x] **SA1** `c` no longer attributed to target verification. It is the whole cycle - verification,
       the drafter's own forwards, sampling, launch, synchronisation, output extraction, state
       management - and two drafters sharing all but one of those narrows it without identifying it.
-- [x] **A2** the rollback bound scoped to the component proportional to `n_max(1 - acceptance)`.
+- [x] **SA2** the rollback bound scoped to the component proportional to `n_max(1 - acceptance)`.
       A fixed per-step checkpoint or per-rejection restore lands in `k_verify` and is invisible to
       a slope against acceptance.
-- [x] **A3** "`c` is a compute cost" downgraded to SM-clock-sensitive. Clock elasticity also moves
+- [x] **SA3** "`c` is a compute cost" downgraded to SM-clock-sensitive. Clock elasticity also moves
       with the voltage-frequency curve, power headroom, occupancy and launch amortisation.
-- [x] **A4** the 5090 paragraph relabelled a sensitivity threshold. It was already conditional on
+- [x] **SA4** the 5090 paragraph relabelled a sensitivity threshold. It was already conditional on
       holding acceptance fixed; the sentence before it was not.
-- [x] **A5** the -37 % decode energy marked provisional. `power.draw` and `power.draw.average`
+- [x] **SA5** the -37 % decode energy marked provisional. `power.draw` and `power.draw.average`
       return the same number on this card, so the sampler integrates one-second averages at 10 Hz.
-- [x] **A6** class and language scoped to this suite. `think=True` is 5 of 5 reason prompts and 0
+- [x] **SA6** class and language scoped to this suite. `think=True` is 5 of 5 reason prompts and 0
       of the other 20, so thinking is collinear with the class, and the Chinese prompts are
       different tasks rather than translations.
-- [x] **A7** the warp section carries the intervention result: forced-up passes every gate and the
+- [x] **SA7** the warp section carries the intervention result: forced-up passes every gate and the
       registered prediction held on 3 of 18 discriminating prompts.
-- [x] **A8** done - the docstring describes the design that exists, names the think-class
+- [x] **SA8** done - the docstring describes the design that exists, names the think-class
   collinearity and the language-task confound, and points at D5. It said "3 x 5 = 15" for a
   25-prompt suite and claims
       `think` is crossed with class. Rewrite to describe the design that exists and name the
       collinearity as a limitation.
-- [x] **A9** done - downgraded to a described observation that also says what it does not
+- [x] **SA9** done - downgraded to a described observation that also says what it does not
   measure. It asserted "compute-bound verify" as a conclusion. Same downgrade.
 
 Two audit claims that did not hold: the README never says "compute-bound" (the phrase is in
@@ -311,36 +326,42 @@ there was omission, not misstatement.
 ### B. Analyser correctness, no re-run needed
 
 - [x] **A refactor verified on printed output moved one pixel in a plot** - `mean_len` moved into
-      `harness/speclen.py` and the derived form changed from `(predicted_n - 1) / F` to
-      `1 + accepted / F`. Those are one identity, since `predicted_n - 1 = accepted + F`, and they
-      are not one floating-point expression: 174 of phase_nmax's 1050 records differ, by at most
-      8.9e-16, about four ULP. The move was checked by diffing the reports of `analyze.py` and
-      `cost_model.py` before and after, on two files, and they were byte-identical. That check
-      cannot see four ULP, because the reports print four decimals. Regenerating the figures found
-      it: `plot_dispatch_boundary.png` differs in exactly one pixel, at (494, 437), in both the
-      light and dark versions, where a point sat on a rounding boundary. The commit message for
-      the move said byte-identical output "is what says the refactor changed nothing", which is
-      too strong. It says the refactor changed nothing at the precision the reports carry. The new
-      form is kept because it is the one that stays exact once `draft_n_verif_steps` arrives and F
-      is counted rather than solved for, and the difference is recorded in `speclen.py`.
+  `harness/speclen.py` and the derived form changed from `(predicted_n - 1) / F` to `1 + accepted
+  / F`. Those are one identity, since `predicted_n - 1 = accepted + F`, and they are not one
+  floating-point expression: 174 of phase_nmax's 1050 records differ, by at most 8.9e-16, about
+  four ULP. The move was checked by diffing the reports of `analyze.py` and `cost_model.py` before
+  and after, on two files, and they were byte-identical. That check cannot see four ULP, because
+  the reports print four decimals.
+
+  Regenerating the figures found it: `plot_dispatch_boundary.png` differs in exactly one pixel, at
+  (494, 437), in both the light and dark versions, where a point sat on a rounding boundary. The
+  commit message for the move said byte-identical output "is what says the refactor changed
+  nothing", which is too strong. It says the refactor changed nothing at the precision the reports
+  carry.
+
+  The new form is kept because it is the one that stays exact once `draft_n_verif_steps` arrives
+  and F is counted rather than solved for, and the difference is recorded in `speclen.py`.
 
 - [x] **The cache check tested one invariant and reported it as the other** - `bench.py` fired on
-      any `t_cache_n > 0` with "despite cache_prompt=False" as a constant string. `phase_l` sets
-      `CACHE_PROMPT = True` deliberately, so it raised one incident per request against a
-      condition it never claimed: 45 records, 45 incidents when this was caught, and 900 over the
-      full ladder, enough to bury a real one. Fixed in 8143dd3 to check whichever direction the
-      matrix declared, and a miss under `CACHE_PROMPT = True` is now its own incident, which is
-      the one the deep rungs need since it means the KV cache was evicted. Nothing measured moved:
-      exclusion is decided per record by `analyze._usable()` and never reads this list, and the
-      energy path had already taken its `cache_prompt` branch. Rung 1 was mid-flight and python
-      imports once, so `harness/repair_cache_incidents.py` clears its 180 and keeps them under
-      `incidents_repaired`.
+  any `t_cache_n > 0` with "despite cache_prompt=False" as a constant string. `phase_l` sets
+  `CACHE_PROMPT = True` deliberately, so it raised one incident per request against a condition it
+  never claimed: 45 records, 45 incidents when this was caught, and 900 over the full ladder,
+  enough to bury a real one.
+
+  Fixed in 8143dd3 to check whichever direction the matrix declared, and a miss under
+  `CACHE_PROMPT = True` is now its own incident, which is the one the deep rungs need since it
+  means the KV cache was evicted.
+
+  Nothing measured moved: exclusion is decided per record by `analyze._usable()` and never reads
+  this list, and the energy path had already taken its `cache_prompt` branch. Rung 1 was
+  mid-flight and python imports once, so `harness/repair_cache_incidents.py` clears its 180 and
+  keeps them under `incidents_repaired`.
 
 - [x] **B1** `width_groups.py` mapped width 9 to one warp. `MMVQ_MAX_BATCH_SIZE` is 8, so that
       width never reaches MMVQ and the table predicts nothing for it. H8 now reports NOT TESTABLE
       for off-path widths and scores the rest.
 - [x] **B2** `cost_model.py` fitted one line across the MMVQ boundary, dragging the MTP
-      coefficient from 0.2904 to 0.2215 and the fit from r2 = 0.9958 to 0.8304.
+      coefficient from 0.2904 to 0.2210 and the fit from r2 = 0.9958 to 0.8316.
 - [x] **B3** `analyze.py` still used `mean_len = n / (n - accepted)`, the form `cost_model.py` was
       corrected away from. Two mean lengths in one repo.
 - [x] **B4** `bench.py` decode tok/J used `predicted_n` against an energy figure with the first
@@ -366,7 +387,7 @@ there was omission, not misstatement.
       pass 5, and recomputing those 150 independently disagrees on none. The thermal gate is also
       not a no-op: 34 of 35 arm-passes waited, median 30 s, GPU at stock throughout.
 - [x] **B12** found while looking for a clock confound, and it runs the other way: every speculative
-      arm boosted 2.0 to 4.2 % **lower** than its own baseline and ran 3 to 5 degrees hotter,
+      arm boosted 2.0 to 4.2 % **lower** than its own baseline and ran 2 to 3 degrees hotter,
       because it draws more power for the same wall time. A treatment slower than its control
       deflates the effect. At matched clock `mtp-n2` would be about +64.7 % rather than +59.8 %.
       The measured figure stays the headline as the conservative one.
@@ -453,7 +474,7 @@ there was omission, not misstatement.
       for the instances. Twenty tests, including one that the GENERIC switch has no case 9.
 - [~] **C5** same-token replay. **The full version needs an upstream feature**: llama-server has
       no teacher-forcing or scoring mode, only free generation, so nothing in the harness can make
-      a speculative arm replay the baseline's tokens. Like E3, that is an issue to raise rather
+      a speculative arm replay the baseline's tokens. Like U3, that is an issue to raise rather
       than code to write.
 
       The part that can be done here is done. A record that came out byte-identical shares its
@@ -490,14 +511,14 @@ there was omission, not misstatement.
       apart, so **the cost tracks tokens drafted rather than tokens rejected**, and the verdict
       holds across F-2 to F+1. Two `host_contended` incidents from processes of my own leave the
       file marked FAIL in the audit; the fit above should be read with that.
-- [x] **D7** evidence block wired into README.md. `evidence/registry.json` holds only what a file
+- [x] **D8** evidence block wired into README.md. `evidence/registry.json` holds only what a file
       cannot state -- the question, a controlled-vocabulary strength, and the claims a phase must
       not be used for -- and `harness/render_evidence.py` computes every count from the result
       files. `verify_everything.sh` section 7 regenerates and diffs it. The registry's vocabulary
       is now enforced rather than merely declared, and the generated rows are plain rather than
       bold because `| **M** |` is the findings table's own syntax and the duplicate shadowed two
       tests that grep for a phase row.
-- [x] **D6** `analysis/bootstrap_coverage.txt` regenerated at 2000 replications, which is what
+- [x] **D9** `analysis/bootstrap_coverage.txt` regenerated at 2000 replications, which is what
       `coverage_sim.py` now defaults to so the artifact reproduces from a bare invocation. Every
       row carries its own Monte Carlo standard error, 0.6 to 0.7 points. The result reverses which
       process disagrees with the recorded 800-replication figures: normal lands on 90.9 % at
@@ -535,27 +556,32 @@ there was omission, not misstatement.
       the live alternative to all of the above: a linear moving average preserves the integral of
       a stationary signal, so an oscillating trace should contribute nothing, and an offset that
       scales with the spread anyway could have been what trapezoidal integration does to two
-      signals with different frequency content. `results/phase_e3_*.json` -- 450 records over nine
-      invocations, three sampler periods over three rotated rounds -- settles it against the
-      driver's cumulative counter, which is read exactly twice per window and therefore cannot
-      move with the rate. Across a threefold change of grid the instantaneous integral does not
-      move (0.999x, 1.000x) and stays within **0.23 %** of the counter; the averaged integral sits
-      **0.31 to 1.86 %** below it and moves *further* away as the grid refines. Correction 47.
+      signals with different frequency content.
+
+      `results/phase_e3_*.json` -- 450 records over nine invocations, three sampler periods over
+      three rotated rounds -- settles it against the driver's cumulative counter, which is read
+      exactly twice per window and therefore cannot move with the rate. Across a threefold change
+      of grid the instantaneous integral does not move (0.999x, 1.000x) and stays within **0.23
+      %** of the counter; the averaged integral sits **0.31 to 1.86 %** below it and moves
+      *further* away as the grid refines. Correction 47.
 
       **D6 is answered for the part that was asked, by Phase E4.** The spread was the wrong axis.
       `power.draw` is a boxcar average of `power.draw.instant`, and deconvolving one against the
       other measures its width directly, needing no assumption about the window's ends: **1.00 to
       1.10 s**, the same on both arms at every setting, rms 1.2 to 1.6 W. That figure had only
-      ever been quoted from a paper as "about a second". Averaging over T is linear and preserves
-      the integral of what it averages; integrating the RESULT across a window does not, and loses
-      `(T/2)` times the difference between the window's two ends whatever the trace does in
-      between. With T measured there is no free parameter and the closed form reproduces the whole
-      unrolled offset -- 1.06 and 1.08 predicted against observed -- with 98 % and 93 % of it
-      accruing inside the first T seconds and the middle carrying 0.06 and 3.56 J. Holding idle
-      around the window collapses it 24.11 -> 6.43 J and 46.03 -> 6.35 J while the window
-      LENGTHENS, which refuses a per-second loss and a spread-driven one in the same measurement.
-      The arm-dependence needed no per-arm time constant, which is the thing nine files refused:
-      T is one number and `mtp-n2`'s window ends differ by more. Correction 48.
+      ever been quoted from a paper as "about a second".
+
+      Averaging over T is linear and preserves the integral of what it averages; integrating the
+      RESULT across a window does not, and loses `(T/2)` times the difference between the window's
+      two ends whatever the trace does in between. With T measured there is no free parameter and
+      the closed form reproduces the whole unrolled offset -- 1.06 and 1.08 predicted against
+      observed -- with 98 % and 93 % of it accruing inside the first T seconds and the middle
+      carrying 0.06 and 3.56 J.
+
+      Holding idle around the window collapses it 24.11 -> 6.43 J and 46.03 -> 6.35 J while the
+      window LENGTHENS, which refuses a per-second loss and a spread-driven one in the same
+      measurement. The arm-dependence needed no per-arm time constant, which is the thing nine
+      files refused: T is one number and `mtp-n2`'s window ends differ by more. Correction 48.
 
       **D6 is now two quantities, and one of them is answered.** Phase E5 varied the step the
       window straddles by moving the power cap -- 287.4, 122.1 and 26.5 W above an idle-with-
@@ -564,19 +590,25 @@ there was omission, not misstatement.
       gives a **slope of +19.7 ms** and an **intercept of +3.56 J**, the latter 3.30, 3.16 and
       4.21 across the three passes. Correction 49.
 
-      **Correction 50 withdrew that split**, because the cap moves the step and the span
-      together (Spearman -0.917) and a 1/span fit described the same nine cells marginally
-      better with an intercept of +1.38 J. **It stays withdrawn.** Phase E6 held the cap and
-      moved the generation length instead -- 200, 400 and 800 tokens, step within 1.7 %, span
-      2.57x, which breaks the confound -- and the span model required the residual to FALL
-      6.84 J from the short cell to the long while it ROSE 3.54. But the error on that
-      contrast is the scatter of the contrast: paired within each round it is +10.22, -4.06
-      and +4.46 J, so **+3.54 with a standard error of 4.15 on two degrees of freedom**. That
-      is **t = 2.50** against the span model and **t = 0.85** against the step model -- a lean,
-      not a refusal. Correction 52 claimed 5.5 standard errors by using the spread of the round
-      means pooled over lengths, which is the precision of a round mean and not of a contrast;
-      Correction 53 withdraws that. Refusing a 6.84 J effect at this scatter would take about
-      **ten rounds** and E6 ran three.
+      **Correction 50 withdrew that split**, because the cap moves the step and the span together
+      (Spearman -0.917) and a 1/span fit described the same nine cells marginally better with an
+      intercept of +1.38 J. **It stays withdrawn.**
+
+      Phase E6 held the cap and moved the generation length instead -- 200, 400 and 800 tokens,
+      step within 1.7 %, span 2.57x, which breaks the confound -- and the span model required the
+      residual to FALL 6.84 J from the short cell to the long while it ROSE 3.54. But the error on
+      that contrast is the scatter of the contrast: paired within each round it is +10.22, -4.06
+      and +4.46 J, so **+3.54 with a standard error of 4.15 on two degrees of freedom**. That is
+      **t = 2.50** against the span model and **t = 0.85** against the step model -- a lean, not a
+      refusal.
+
+      Correction 52 claimed 5.5 standard errors by using the spread of the round means pooled over
+      lengths, which is the precision of a round mean and not of a contrast; Correction 53
+      withdraws that. Refusing a 6.84 J effect at this scatter would take about **ten rounds** and
+      E6 ran three -- but that is a point estimate on two degrees of freedom, 95 % interval 3 to
+      395 rounds, and the long window cannot get there at all: `1/span` bounds the achievable
+      spread, so the expected t tops out at 2.70. The short end is the lever and it is also where
+      the plateau runs out. Correction 54.
 
       **The non-linearity behind it is now named.** Any linear time-invariant filter loses
       exactly `m x (end level - start level)` over a window, whatever happens inside, so at a
@@ -593,24 +625,30 @@ there was omission, not misstatement.
       **And the fixed term does not need a load transition at all.** Windows holding no rise
       and no fall -- the cell E5 could not contain, since every E5 window carried exactly one
       pair and so confounded "per window" with "per pair" -- still show the two fields apart
-      by **+0.499 W** across 49 windows, with the JOULES scaling with the window length (3.6,
-      7.4 and 13.2 J at 7, 14 and 28 s) and the WATTS not. That is a level difference between
+      by **+0.501 W** across 50 idle windows, with the JOULES scaling with the window length
+      (3.6, 6.9 and 13.2 J at 7, 14 and 28 s on the bare card) and the WATTS not. That is a level difference between
       the readout paths, and no linear filter can produce it: a filter loses `m x (end - start)`
       and both ends of an idle window are the same level. `analysis/idle_offset.txt`.
 
       **And it is not what E5's fixed term is made of.** Correction 51 measured the levels in
-      between. A resident model does not raise the floor -- 16603 MiB sits at 30 W and 210 MHz
-      -- but a request leaves the SM clock at **1860 MHz for 15 to 20 s**, which is why E5's
-      4 s roll reads 128 W rather than 28. Pinning the clock holds that state with no request
-      in the window, and the difference collapses by a factor of **18**: +0.501 W at the
-      210 MHz floor against **+0.030 W** at 1860 MHz, worth 0.2 J over E5's 6.1 s of
-      non-plateau window against a fixed term of 1.4 to 3.6 J. `phase_e`'s 150 W arms bound it
-      further at 0.013 W. The level difference is real, belongs to the lowest P-state, and is
-      a different thing. Two candidates are already
-      refused. It is not per-second -- the caps move the span 4.5x, 13.9 to 49.4 s, and the
-      plateau term stays at 0.2, 1.6 and -0.4 J. And it is not a window mismatch between the
-      two integrals: they cover the identical grid, with equal sample counts and identical
-      timestamps in every record at every cap.
+      between. A resident model does not raise the floor -- 16603 MiB sits at 30 W and 210 MHz --
+      but a request leaves the SM clock at **1860 MHz for 15 to 20 s**, which is why E5's 4 s roll
+      reads 128 W rather than 28.
+
+      Pinning the clock holds that state with no request in the window, and the difference
+      collapses by a factor of **18**: +0.501 W at the 210 MHz floor against **+0.030 W** at 1860
+      MHz, worth 0.2 J over E5's 6.1 s of non-plateau window against a fixed term of 1.4 to 3.6 J.
+      `phase_e`'s 150 W arms bound it further at 0.013 W. The level difference is real, belongs to
+      the lowest P-state, and is a different thing.
+
+      Three candidates are already refused, and a fourth refusal was itself withdrawn. It is
+      not per-second -- the caps move the span 4.5x, 13.9 to 49.4 s, and the plateau term stays
+      at 0.2, 1.6 and -0.4 J. It is not a window mismatch between the two integrals: they cover
+      the identical grid, with equal sample counts and identical timestamps in every record at
+      every cap. And it is not the lowest-P-state level difference above, which Correction 51
+      measured at 0.2 J against a fixed term of 1.4 to 3.6 J. The fourth was a 1/span
+      dependence: Correction 52 refused it and Correction 53 withdrew that refusal, so it is
+      leaned against at t = 2.50 on two degrees of freedom and not refused.
 
       Withdrawn from Correction 48: that the residual being equal on both arms made it a
       different kind of object. At that roll both windows hold the same excursion, so anything
@@ -631,8 +669,8 @@ there was omission, not misstatement.
 ### U. Upstream
 
 These were `E1` to `E5` until 2026-09-01. The measurement phases are named after the letter of
-their question -- `E`, `E2`, `E3`, `E4`, `E5` are the energy-instrument phases, and four of them
-were added in the two days before this rename -- so `E3` meant both the sampling-rate phase and
+their question -- `E`, `E2`, `E3`, `E4`, `E5` and `E6` are the energy-instrument phases, five of
+them added in the three days around this rename -- so `E3` meant both the sampling-rate phase and
 the llama.cpp acceptance histogram, and `E5` meant both the step-scaling phase and the
 batch-invariance harness. A reader chasing either landed on whichever they found first. The
 section letter moves rather than the phases, because the phase ids are in `evidence/registry.json`,
@@ -708,7 +746,6 @@ appear nowhere but this file.
   got planned for something a short probe would answer.
 
   The card was released without a record written. Nothing rests on this and nothing was lost.
-
 
 Recorded so they are not quietly revived.
 

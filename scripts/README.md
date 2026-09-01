@@ -4,8 +4,14 @@ The root of the repository held seventeen of these. They are grouped here by wha
 by where they run, because that is the distinction that matters when picking one: a script in
 `warp/` will `cd` into a directory that exists on another machine.
 
-Every script assumes it is invoked from anywhere and resolves the repository itself, so
-`bash scripts/run_phase_q.sh` works from the root.
+Four of these resolve the repository from their own location and run in any clone:
+`post_measurement.sh`, `reproduce_phase_a.sh`, `run_phase_qsmall.sh` and `verify_everything.sh`.
+The other eight -- `run_chain.sh`, `run_phase_l.sh`, `run_phase_q.sh`, `run_remaining.sh` and the
+four `run_phase_e*.sh` -- **hard-code this checkout's absolute path**. They run from anywhere on
+this host and `cd` to a directory that does not exist in a clone elsewhere, which matters for a
+repository whose point is that someone else can re-run it: a reproducer either edits that line or
+calls `harness/bench.py` directly with the arguments the script passes. This paragraph used to
+say every script resolved its own root, and used one of the eight as the example.
 
 ## Phase drivers — this host
 

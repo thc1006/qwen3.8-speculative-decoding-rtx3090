@@ -53,7 +53,9 @@ token at that batch position.
 | remove the `embd_layer_inp` swap and nothing else | **231, worse than upstream** |
 | permute by token index (the change) | **0** |
 
-Seed 4242. The last row was rerun at seeds 1, 7, 99 and 12345: 2000 cases, 0 failures.
+Seed 4242. The last row was rerun at seeds 1, 7, 99 and 12345: four further seeds at 400 cases
+each, 1600, and 0 failures -- 2000 counting the 4242 run itself, which is the figure
+`upstream/llamacpp/pr27705_writeup_body.md` quotes as "2000 cases across 5 seeds".
 
 ## The four fixed cases that name the mechanism
 

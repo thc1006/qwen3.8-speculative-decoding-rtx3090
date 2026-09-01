@@ -52,21 +52,29 @@ holds at r^2 = 0.9958 with five residual degrees of freedom.
 The two fits stop at width 8 deliberately. `MMVQ_MAX_BATCH_SIZE` is 8, so a wider verification
 batch never reaches that kernel at all: at width 9 `k` sits **26 % below** what the MMVQ line
 predicts for MTP and 6.7 % below for DFlash2, and throughput jumps back from +9.1 % at width 8 to
-+39.1 % at width 9. Fitting one line across the boundary dragged the MTP coefficient from 0.2904
-to 0.2215 and the fit from 0.9958 to 0.8304. The same boundary shows up a third way: two unrelated
-drafters that share only the verification width agree on the fork position for 25 of 25 prompts at
-widths 3, 5 and 7. At width 9 they agree on only 8 of 25, and that is not the control failing: they
-never verified at the same width there. `n_max` is what was asked for, and the width verified is
-one plus what the drafter actually proposed. DFlash2 delivers 87 % of its budget at `n_max` 8 and
-MTP 99 %, so they run at 7.94 and 8.93 columns, one inside `MMVQ_MAX_BATCH_SIZE` and one past it --
-though 7.94 is a lower bound rather than a measurement, so `dflash2-n8` brackets [7.94, 9.00]
-across the limit and the counters do not decide which kernel it took. The fit treats it as
-off-path, on the requested 9, and says so. The size of the deviation is the circumstantial
-argument for the other reading: `mtp-n8`, whose bracket does not straddle, sits 26 % off its line
-and `dflash2-n8` sits 6.7 % off, which is the scale of a residual rather than of a kernel change.
-At
-widths 3, 5 and 7 the two match to 0.00 columns. `harness/width_groups.py` now computes effective
-width per arm and refuses to score a pair that differ by more than a quarter column.
++39.1 % at width 9. Fitting one line across the boundary drags the MTP coefficient from 0.2904
+to **0.2210** and the fit from 0.9958 to **0.8316**. Those two used to read 0.2215 and 0.8304,
+which belong to the vintage where the on-path fit was 0.2915 and 0.9959: the on-path pair was
+updated to the completed ladder and the across-boundary pair was not.
+
+The same boundary shows up a third way: two unrelated drafters that share only the verification
+width agree on the fork position for 25 of 25 prompts at widths 3, 5 and 7. At width 9 they agree
+on only 8 of 25, and that is not the control failing: they never verified at the same width there.
+
+`n_max` is what was asked for, and the width verified is one plus what the drafter actually
+proposed. DFlash2 delivers 87 % of its budget at `n_max` 8 and MTP 99 %, so they run at 7.94 and
+8.93 columns, one inside `MMVQ_MAX_BATCH_SIZE` and one past it -- though 7.94 is a lower bound
+rather than a measurement, so `dflash2-n8` brackets [7.94, 9.00] across the limit and the counters
+do not decide which kernel it took. The fit treats it as off-path, on the requested 9, and says
+so.
+
+The size of the deviation is the circumstantial argument for the other reading: `mtp-n8`, whose
+bracket does not straddle, sits 26 % off its line and `dflash2-n8` sits 6.7 % off, which is the
+scale of a residual rather than of a kernel change. At widths 3, 5 and 7 the two match to 0.00
+columns. `harness/width_groups.py` now computes effective width per arm and refuses to score a
+pair that differ by more than a quarter column.
+
+## Why the two coefficients differ, after two wrong answers
 
 **`c` does not agree between the two methods, and it took two wrong answers to get there.** The
 point estimates are 0.2481 for `draft-dflash` over widths 3, 5 and 7 and 0.2904 for `draft-mtp`
@@ -81,7 +89,7 @@ standard errors. Both are wrong, in opposite directions, and for related reasons
 **A slope here is a chord.** `k(w)` is curved, so a slope fitted over widths 3 to 7 and one fitted
 over 2 to 8 are chords of different arcs and are not estimates of the same quantity. Matched on the
 widths both cover, `c` is **0.2954 against 0.2481** and the difference is
-**-0.0473 [-0.0489, -0.0456]** -- a sixth larger than the number first reported. Phase A is the
+**-0.0473 [-0.0489, -0.0456]** -- **11.6 % larger** than the -0.0424 first reported. Phase A is the
 sharper case: it fits DFlash2 on {5, 8} and MTP on {3, 4, 6}, which share no width at all, so its
 "the two agree to 1.7 %" compared chords of disjoint arcs. That comparison is now refused rather
 than printed.
@@ -98,20 +106,25 @@ against a two-sided 95 % point of 12.71 at one degree of freedom.
 
 So the comparison now restricts both fits to the shared widths, uses the prompt bootstrap for
 sampling uncertainty, and checks shape on the difference rather than on each fit. Where the
-curvature does *not* cancel it says so and the shape bound binds: Phase M's two targets share all
-five widths, their difference is `+0.0029 [-0.0007, +0.0064]`, and their curves are *not* parallel
--- residuals up to 0.15 -- so the bound is +/-0.0775 and the comparison is **not resolved**.
+curvature does *not* cancel it says so and the shape bound binds, and the comparison is reported
+as not resolved. The worked example used to be Phase M's two targets. **It is withdrawn with the
+rest of that phase's cost quantities** -- `cost_model.py` prints "REFUSING TO REPORT k, c OR k0
+FOR THIS RESULT" on it, for the reason set out below, so no current artifact carries those
+figures and none is quoted here.
 
 > **Withdrawn, 2026-08-27.** That paragraph continued "which rules out a large architecture
 > effect, against an expert-saturation account predicting the MoE's marginal cost per verified
-> position should be clearly the larger". Phase M cannot support it. Every `c` above rests on
-> `mean_len`, and `cost_model.py`'s integrity check fails on this phase -- mean gap -0.3494,
-> worst 2.9054 over 1425 requests, against a documented bound under 1 % -- so the comparison's
-> inputs are systematically wrong, not merely uncertain. The tool now refuses to print `k`, `c`
-> or `k0` for a result that fails that check, and nothing in this repository currently bounds a
-> difference in marginal cost between the two targets. What would close it is llama.cpp
-> returning `n_draft_verif_steps`, which `server_slot_stats` holds and `to_json()` omits; the
-> patch is in `upstream/`. See PREREGISTRATION.md Correction 29.
+> position should be clearly the larger".
+>
+> Phase M cannot support it. Every `c` above rests on `mean_len`, and `cost_model.py`'s integrity
+> check fails on this phase -- mean gap -0.3494, worst 2.9054 over 1425 requests, against a
+> documented bound under 1 % -- so the comparison's inputs are systematically wrong, not merely
+> uncertain. The tool now refuses to print `k`, `c` or `k0` for a result that fails that check,
+> and nothing in this repository currently bounds a difference in marginal cost between the two
+> targets.
+>
+> What would close it is llama.cpp returning `n_draft_verif_steps`, which `server_slot_stats`
+> holds and `to_json()` omits; the patch is in `upstream/`. See PREREGISTRATION.md Correction 29.
 
 What does not depend on any of this is what `c` is a cost *of*. `k` is the whole speculative cycle
 -- target verification, the drafter's own forward passes, sampling, launch and synchronisation,
@@ -119,6 +132,8 @@ output extraction and any per-step state management -- so `c` is reported as a t
 per verified position and never as a target-verification cost. Separating the components needs
 per-context event timing, a replay that skips drafter compute, or a profiler decomposition; none of
 those is in this repo.
+
+## The width a fit regresses on is bracketed, not known
 
 **The width a fit regresses on is bracketed, not known.** `n_max + 1` is an upper bound: it is
 what the flags asked for. What the drafter delivered per token-emitting forward, plus one, is a
@@ -131,11 +146,14 @@ takes the reuse branch at `:2893`).
 For every MTP arm in this study the bracket is tighter than 1 %, which is why none of the
 coefficients above move. For the 0.8B `draft-simple` arms the drafter delivered **53-77 %** of the
 requested depth, and the shortfall grows with depth, so the bracket is wide and asymmetric.
-Refitting Phase M's MoE `draft-simple` arm on the lower bound moves `c` from **0.2909 to 0.5851**.
-That is a factor of two behind four printed decimals, so `c` for that method is reported as the
-range and not as either endpoint. llama.cpp counts verification steps exactly in
+Refitting on the lower bound roughly doubles `c` for such an arm. The worked figures were Phase
+M's MoE `draft-simple` fit and are withdrawn with the rest of that phase's cost quantities; the
+point stands without them, which is that `c` for a method that misses its requested depth is
+reported as a range and not as either endpoint. llama.cpp counts verification steps exactly in
 `n_draft_verif_steps` and does not return it; the patch that exposes it is in `upstream/`, and it
 closes this bracket outright.
+
+## The floor at k(1), and why k(w) is concave
 
 **`k(w=1)` has a floor the model never reaches.** A cycle at zero draft depth is a plain decode
 step plus whatever the drafter costs, and a drafter costs at least nothing, so `k(1) >= 1.0`. (It
@@ -145,22 +163,34 @@ starts at `w = 2` -- which makes the floor a free falsification test, and the on
 since `r^2` over the measured widths is computed far away from it.
 
 Every fit on the dense target lands below the floor: 0.7187, 0.7799, 0.7825, 0.8888, 0.8937,
-0.8986, 0.9443 across the five completed matrices. A cycle cheaper than a decode step does not
-exist, so `k(w)` is concave and the first extra position costs more than `c`. Pinning `k(1)` at the
-floor moves `c` by 3.0-3.4 % and holds `r^2` above 0.99, so the line describes the measured widths
-well. What it does not support is reading `k0` as a fixed overhead, on any method or architecture --
+0.8986, 0.9443, across the four matrices that produce a cost report on it -- Phase A, KV and the
+n-max ladder contributing two fits each and R2 one. A cycle cheaper than a decode step does not
+exist, so `k(w)` is concave and the first extra position costs more than `c`.
+
+How much that matters depends on the fit, and quoting the n-max ladder's number for all of them
+was wrong. Pinning `k(1)` at the floor moves `c` by **3.2 and 3.4 % on the n-max ladder** and by
+**6.9 to 12.9 % on the others**, and `r^2` after the pin is above 0.99 everywhere except Phase R2,
+at 0.9896. `cost_model.py` prints "the line describes the measured widths well" only where the
+shift stays under 5 % and `r^2` above 0.97, and takes the other branch -- "the pin moves the fit
+materially, so the linear form does not reach zero depth and neither coefficient is a mechanism"
+-- for five of the seven. What it does not support is reading `k0` as a fixed overhead, on any method or architecture --
 and the concavity is also why a slope has to be compared over a matched width range.
 
 One threat to `c` can be checked without any of them. Once an arm diverges from its baseline it is
 decoding a different token sequence, so what follows is not a comparison of two widths on one
-trajectory. Between a fifth and a quarter of these requests show no divergence from their
-baseline inside the window, and those two arms therefore ran the same tokens for as long as either was watched. They are
-right-censored rather than identical -- at a 400-token cap nothing reached EOS, so what happens
-after the cap is unobserved -- but the fit only ever uses the measured span, so for this argument
-the distinction does not bite. Fitting on those alone gives **0.2898 against 0.2904 for `draft-mtp`
-and 0.2476 against 0.2481 for `draft-dflash`**, a gap of 0.2 % in both. Divergence does not move
-the coefficient here. `cost_model.py` prints this comparison on every run rather than leaving it
-as a one-off.
+trajectory. Between a fifth and a quarter of these requests show no divergence from their baseline
+inside the window, and those two arms therefore ran the same tokens for as long as either was
+watched.
+
+They are right-censored rather than identical -- at a 400-token cap nothing reached EOS, so what
+happens after the cap is unobserved -- but the fit only ever uses the measured span, so for this
+argument the distinction does not bite.
+
+Fitting on those alone gives **0.2898 against 0.2904 for `draft-mtp` and 0.2476 against 0.2481 for
+`draft-dflash`**, a gap of 0.2 % in both. Divergence does not move the coefficient here.
+`cost_model.py` prints this comparison on every run rather than leaving it as a one-off.
+
+## The best tested setting, and why the intervals do not settle it
 
 Accepted length shows diminishing increments over the measured widths while `k` grows roughly
 linearly inside the MMVQ path, so the ratio has an interior maximum in principle. **The best
@@ -184,23 +214,26 @@ selection needs fresh prompts or fresh passes.
 
 The PR thread disagrees. `lance0` reports on an RTX 5090 with a `UD-Q6_K_XL` target that n-max 7
 is right for DFlash2, since the drafter's `block_size` is 8 and lower values discard tokens the
-block already paid for. Here n-max 4 beats n-max 7 by a wide margin, 1.520x against 1.228x, and
+block already paid for. Here n-max 4 beats n-max 7 by a wide margin, 1.519x against 1.226x, and
 the completed ladder goes shallower still: n-max 2 at 1.537x.
 
 The model says both can be true, and says what would have to differ. For width 8 to beat width 5
 on this measured acceptance curve, `c` would have to be below **0.0543**. Phase A's two DFlash2
 points give 0.2784, 5.1 times too large; the completed ladder gives 0.2481 over widths 3, 5 and 7,
-4.6 times too large. Either way the shallower setting wins by a wide margin. Phase R2 shows
-what `c` responds to: over the tested GA102 clock ranges the baseline responds to
+4.6 times too large. Either way the shallower setting wins by a wide margin.
+
+Phase R2 shows what `c` responds to: over the tested GA102 clock ranges the baseline responds to
 core clock with an elasticity of 0.27 while the speculative arms sit at 0.76-0.81. That is
 consistent with `c` being dominated by compute, but clock elasticity is not a bottleneck
 measurement - it also moves with the voltage-frequency curve, power headroom, occupancy and launch
 amortisation - so calling the verify path compute-bound would need per-kernel counters this study
-does not have. Read as a sensitivity threshold rather than a hardware prediction: **holding this
-card's acceptance curve fixed**, width 8 overtakes width 5 once `c` drops below 0.0543, and
-measuring `c` on another card needs one baseline and three widths there. Whether a 5090's `c` is
-below it is not established here, and a different card can also move the acceptance curve, the
-kernel family and the dispatch boundary.
+does not have.
+
+Read as a sensitivity threshold rather than a hardware prediction: **holding this card's
+acceptance curve fixed**, width 8 overtakes width 5 once `c` drops below 0.0543, and measuring `c`
+on another card needs one baseline and three widths there. Whether a 5090's `c` is below it is not
+established here, and a different card can also move the acceptance curve, the kernel family and
+the dispatch boundary.
 
 One assumption is doing work there and is not verified: the calculation uses this card's
 `mean_len` curve, taken at `UD-Q4_K_XL`. A higher-precision target may accept more, which would
@@ -276,7 +309,7 @@ silently wrong:
   n = 25 -- suppressed the finding entirely.
 * **`w` is not `n_max`.** The server reuses a surviving draft tail instead of re-drafting
   (`tools/server/server-context.cpp:2893`), so a cycle can cost a forward pass and generate
-  nothing. On the MTP and DFlash arms the realised `w` sits within 0.7 % of `n_max` and the
+  nothing. On the MTP and DFlash arms the realised `w` sits within 1.1 % of `n_max` and the
   distinction is immaterial; on `dflash2-n8` it is 6.94 against 8, and on the 0.8B `draft-simple`
   arms it is **4.20 against 8** and **varies with acceptance at r = +0.94**. There the regressor
   is inside the response. The induced bias is positive in the slope and therefore negative in
@@ -297,4 +330,3 @@ yet report. The hypothesis was this repo's own, pre-registered, and is reported 
 the form it was written.
 
 </details>
-

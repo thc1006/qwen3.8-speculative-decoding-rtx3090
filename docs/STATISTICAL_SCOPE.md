@@ -22,23 +22,25 @@ per-prompt baseline CV of 0.001 that `results/phase_a.json` actually shows, a pe
 90.2 % +- 0.7**, inside the band the absolute processes occupy. A ratio misbehaves when its
 denominator can approach zero; on 25 prompts whose baselines span 41.4 to 41.7 tok/s, it cannot.
 The 1.3 half-width rule below remains a sensitivity flag rather than a coverage correction.
-Those come from [`analysis/bootstrap_coverage.txt`](analysis/bootstrap_coverage.txt):
-four synthetic processes at 2000 replications x 2000 resamples each, every row carrying its own
-Monte Carlo standard error of 0.6 to 0.7 points, which is the precision the standard formula
-([Morris, White and Crowther 2019](https://onlinelibrary.wiley.com/doi/10.1002/sim.8086)) asks
-about 1900 replications for.
+
+Those come from [`analysis/bootstrap_coverage.txt`](../analysis/bootstrap_coverage.txt): four
+synthetic processes at 2000 replications x 2000 resamples each, every row carrying its own Monte
+Carlo standard error of 0.6 to 0.7 points, which is the precision the standard formula ([Morris,
+White and Crowther 2019](https://onlinelibrary.wiley.com/doi/10.1002/sim.8086)) asks about 1900
+replications for.
 
 An older set, 88.0-90.9 %, is quoted in `stats.py` from an 800-replication simulation whose code
 was never in the repository, and at this replication count the reproduction lands on it: normal
-**91.1 %** against 90.9 % recorded, 0.3 standard errors, and heavy-tailed **87.5 %** against
-88.0 %, 0.7. Uniform is the one that does not, **92.0 %** against 90.6 %, 2.3 away. An earlier
-300-replication run had put the discrepancy on `normal` instead, at 2.0 standard errors; that was
+**91.1 %** against 90.9 % recorded, 0.3 standard errors, and heavy-tailed **87.5 %** against 88.0
+%, 0.7. Uniform is the one that does not, **92.0 %** against 90.6 %, 2.3 away. An earlier
+300-replication run had put the discrepancy on `normal` instead, at 1.8 standard errors; that was
 Monte Carlo noise, and settling which of the three actually disagrees is what the larger run
-bought. The binary process every divergence verdict in this study is scored on comes back at
-**90.2 %**, inside the band the continuous ones occupy. All of them are synthetic
-data-generating processes rather than this data's own unknown distribution, so they diagnose the
-estimator rather than quantify this interval; the primary Phase A effects sit far from zero under
-any of the sets.
+bought.
+
+The binary process every divergence verdict in this study is scored on comes back at **90.2 %**,
+inside the band the continuous ones occupy. All of them are synthetic data-generating processes
+rather than this data's own unknown distribution, so they diagnose the estimator rather than
+quantify this interval; the primary Phase A effects sit far from zero under any of the sets.
 
 Undercoverage is why an interval that only just clears zero is not read as a result.
 `stats.Interval.near_zero` counts how far the nearer bound sits from zero in half-widths and calls
@@ -67,7 +69,7 @@ over records is what made a censoring drop look larger than it was: 260 of 750 a
 against 9 of 375 at 1600 put the cross-tree control into one denominator and left it out of the
 other.
 
-## Limitation moved here from the README
+## What the intervals cover, and what they carry no uncertainty for
 
 - **Statistical scope.** The inferential unit is 25 prompts, not 875 records. The percentile
   cluster bootstrap undercovers at that size on every process tested

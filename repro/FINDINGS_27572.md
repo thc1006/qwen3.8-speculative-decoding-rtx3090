@@ -10,20 +10,23 @@ concurrent requests carry long prompts. The open question here was whether CUDA 
 account named an async device-to-host copy of `t_h_nextn` racing a later graph over the same
 buffer. The reporter's own probe refuted that: reading the device tensor at the spec-hook entry
 found it already NaN on 647 of 652 probes, so the graph was producing NaN and the copy was
-delivering it faithfully. That rules out the extract side, which is what the title assumed.
+delivering it faithfully on those. That makes the extract side -- which is what the title assumed
+-- an implausible sole cause rather than a ruled-out one: **five probes were not already NaN**,
+and nothing here accounts for them.
 
 The account that replaced it is a write-after-read on the graph inputs: `set_inputs` for ubatch
 k+1 writes into tensors ubatch k's graph is still reading, because `graph_compute_async` does not
 wait and the guard that would is gated on `cparams.pipeline_parallel`, which needs more than one
-device. That fits the measurements and is not proven either. Two reasons to keep it open. The
-fix that removes the symptom is `ggml_backend_sched_synchronize`, a fence over every backend, so
-its working does not single out the input write. And the reason offered for CUDA being safe, that
-the legacy default stream synchronizes implicitly, does not describe this code: the copy uses
-`cudaStreamPerThread`, which the CUDA docs say "does not synchronize with other streams (just
-like explicitly created streams)", the compute streams are created `cudaStreamNonBlocking`, which
-the legacy stream excludes anyway, and `cudaStreamLegacy` appears nowhere in `ggml-cuda.cu`. HIP
-compiles the same `.cu` files. So a clean CUDA run bounds the timing; it does not show the
-ordering is there.
+device. That fits the measurements and is not proven either.
+
+Two reasons to keep it open. The fix that removes the symptom is `ggml_backend_sched_synchronize`,
+a fence over every backend, so its working does not single out the input write. And the reason
+offered for CUDA being safe, that the legacy default stream synchronizes implicitly, does not
+describe this code: the copy uses `cudaStreamPerThread`, which the CUDA docs say "does not
+synchronize with other streams (just like explicitly created streams)", the compute streams are
+created `cudaStreamNonBlocking`, which the legacy stream excludes anyway, and `cudaStreamLegacy`
+appears nowhere in `ggml-cuda.cu`. HIP compiles the same `.cu` files. So a clean CUDA run bounds
+the timing; it does not show the ordering is there.
 
 What follows is therefore a non-reproduction on this hardware and software, stated as that.
 
@@ -66,7 +69,7 @@ the symptom appears, produced by the reporter and by a third party rather than h
 | `-np 4`, **19 000 tokens** (the reported length), concurrent | 4 | 0.34-0.44 | 0 |
 | `-np 4`, 16 384 tokens, concurrent, **12 repetitions** | 48 | all non-zero | 0 |
 | **`-np 8`**, 4 500 tokens, concurrent, `-c 40960` | 8 | 0.25-0.39 | 0 |
-| `-np 1` sequential controls at every length | - | healthy | 0 |
+| `-np 1` sequential controls at 4 500, 16 384, 19 000 and 32 768 tokens | 25 | healthy | 0 |
 
 ## Not tested, and why
 
