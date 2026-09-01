@@ -698,17 +698,22 @@ def report(result: dict) -> None:
                       "what a cost paid per position verified looks like")
                 print("  near saturation: mean_len climbs toward w+1 while the cycle cost "
                       "does not.")
-            marginal = [b for b in bounds if not b[1].spans_zero and b[1].near_zero]
-            if marginal:
-                print("  Not established, and not treated as overturning the reading either "
-                      "way: "
-                      + ", ".join(f"{b[0]} ({b[1].margin_half_widths:.2f} half-widths "
-                                  f"{'below' if b[1].point < 0 else 'above'} zero)"
-                                  for b in marginal))
         else:
             print("  Reading: at least one arm shows an r that clears zero by more than the "
                   "known undercoverage: "
                   + ", ".join(f"{b[0]} {str(b[1])}" for b in established))
+        # Outside the branch on purpose. It used to sit inside the `not established` arm, so an
+        # arm sitting inside the margin would have stopped being reported the moment any
+        # positive arm cleared it -- silent in exactly the case where the reader most needs to
+        # know what was set aside. No committed report takes the other branch today, so this
+        # changes nothing that is printed now.
+        marginal = [b for b in bounds if not b[1].spans_zero and b[1].near_zero]
+        if marginal:
+            print("  Not established, and not treated as overturning the reading either "
+                  "way: "
+                  + ", ".join(f"{b[0]} ({b[1].margin_half_widths:.2f} half-widths "
+                              f"{'below' if b[1].point < 0 else 'above'} zero)"
+                              for b in marginal))
     else:
         print("\n  No arm in this file holds its draft length at n_max, so none of them can")
         print("  estimate r under this model and no bound is reported. That is a limit of the")

@@ -7173,6 +7173,15 @@ class TheUndercoverageRuleMustApplyInBothDirections(unittest.TestCase):
 
     The rule here is narrow and mechanical: a comprehension that filters on the SIGN of a point
     estimate must also consult `near_zero`. It does not try to judge prose.
+
+    `if` statements are deliberately out of scope, and were checked by hand before being left
+    out. The five in the package that compare an interval bound to zero are a direction label
+    ("lower" or "higher"), a sign-disagreement test between two quantities, and an `elif` that
+    sits after `elif iv.near_zero` in the same chain, so the margin is already spent. Including
+    them would have produced five failures and no defects, and a guard that has to be argued
+    with is a guard that gets switched off. `analyze.py` marks near-zero verdicts through
+    `iv.near_zero` itself, which is sign-agnostic -- `margin_half_widths` divides the nearer
+    bound's absolute distance by the half-width -- so it was never one-directional.
     """
 
     SIGN = re.compile(r"\.point\s*[<>]\s*0")
@@ -7216,6 +7225,94 @@ class TheUndercoverageRuleMustApplyInBothDirections(unittest.TestCase):
         ok = ("falls = [b for b in bounds if not b[1].spans_zero and b[1].point < 0 "
               "and not b[1].near_zero]\n")
         self.assertEqual([], self._one_directional(ok))
+
+
+class TheCostSectionsCountsMustComeFromTheReports(unittest.TestCase):
+    """Two numbers written into a document by hand, on the day a rule changed them.
+
+    Correction 57 moved eighteen arms out of the set the cost section counts as evidence, and
+    `docs/COST_MODEL.md` was updated to say five arms clear the margin downward with thirteen
+    more inside it. Both are hand-typed, in a document no surface guard covers, and both move the
+    next time an arm does. The previous round produced exactly this defect in
+    analysis/MANIFEST.json and it had to be taken back out.
+
+    The four matrices are read from the document's own table rather than listed here, so adding a
+    row to it extends this check instead of silently escaping it.
+    """
+
+    WORDS = {"zero": 0, "no": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+             "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+             "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17,
+             "eighteen": 18, "nineteen": 19, "twenty": 20}
+    DOC = "docs/COST_MODEL.md"
+
+    def _matrices(self, doc):
+        m = re.search(r"^\| matrix \| arms fitted \|.*\n\|[-| :]+\|\n((?:\|.*\n)+)", doc, re.M)
+        if not m:
+            return []
+        return [r.split("|")[1].strip() for r in m.group(1).splitlines()]
+
+    def _counts(self, root, matrices):
+        established = marginal = 0
+        for name in matrices:
+            f = root / "analysis" / f"phase_{name.lower()}_cost.txt"
+            if not f.exists():
+                self.skipTest(f"{f.name} is not present")
+            t = f.read_text(encoding="utf-8")
+            a = re.search(r"^\s{2}([^\n:]+): r is NEGATIVE and clears zero", t, re.M)
+            established += len(a.group(1).split(",")) if a else 0
+            b = re.search(r"^\s{2}Not established[^:]*: (.+)$", t, re.M)
+            marginal += len(re.findall(r"half-widths below zero", b.group(1))) if b else 0
+        return established, marginal
+
+    def _word(self, doc, pattern):
+        m = re.search(pattern, doc, re.M)
+        self.assertIsNotNone(m, f"docs/COST_MODEL.md no longer carries {pattern!r}; if the "
+                                f"sentence was rewritten, this check has to be rewritten with it")
+        tok = m.group(1).lower()
+        self.assertIn(tok, self.WORDS, f"{tok!r} is not a number word this check knows")
+        return self.WORDS[tok]
+
+    def _disagreements(self, doc, established, marginal):
+        """The comparison itself, taking the document as text so a fixture can exercise it.
+
+        The first version of the fixture test below asserted things about the WORDS map and a
+        regex it had built itself, and would have passed with the real check deleted. A test
+        that cannot fail on the defect is decoration.
+        """
+        out = []
+        for pattern, want, what in (
+                (r"^(\w+) arms across the four matrices above", established, "established"),
+                (r"(\w+) more point the same way", marginal, "inside the margin")):
+            m = re.search(pattern, doc, re.M)
+            if not m:
+                out.append(f"the sentence carrying the {what} count is gone")
+                continue
+            tok = m.group(1).lower()
+            if tok not in self.WORDS:
+                out.append(f"{tok!r} is not a number word this check knows")
+            elif self.WORDS[tok] != want:
+                out.append(f"the document says {tok} {what}; the reports say {want}")
+        return out
+
+    def test_both_counts_match_the_regenerated_reports(self):
+        root = Path(__file__).resolve().parent.parent
+        doc = (root / self.DOC).read_text(encoding="utf-8")
+        matrices = self._matrices(doc)
+        self.assertTrue(matrices, "the cost section's matrix table could not be read")
+        established, marginal = self._counts(root, matrices)
+        self.assertEqual([], self._disagreements(doc, established, marginal),
+                         f"counted across {matrices}")
+
+    def test_the_check_fires_when_the_document_drifts(self):
+        drifted = ("Seven arms across the four matrices above return an `r` that clears zero\n"
+                   "downward. Two more point the same way from inside that margin.\n")
+        self.assertEqual(2, len(self._disagreements(drifted, 5, 13)))
+        self.assertEqual([], self._disagreements(drifted, 7, 2))
+
+    def test_a_rewritten_sentence_is_a_failure_not_a_pass(self):
+        gone = "The arms are discussed elsewhere in prose that no longer carries a count.\n"
+        self.assertEqual(2, len(self._disagreements(gone, 5, 13)))
 
 
 class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
