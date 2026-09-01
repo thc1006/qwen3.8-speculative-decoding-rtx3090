@@ -34,6 +34,27 @@ def tracked_markdown():
     return [f for f in out.stdout.split() if not f.startswith(("upstream/", "llamacpp"))]
 
 
+def tracked_metadata():
+    """The JSON and YAML this repository writes prose into, as opposed to measures into.
+
+    `results/` and `repro/hostB/` hold instrument output; their strings are the model's own text
+    and a benchmark's fields, and reading them as claims is reading 3.5 million words of
+    generated prose looking for the author's voice. What is left is small and entirely
+    hand-written: the deposit metadata, the citation file, the evidence registry, the artifact
+    manifest, the reproduction lock and the deposit log. None of it was read by any prose guard.
+    """
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    out = subprocess.run(["git", "-C", str(root), "ls-files", "*.json", "*.yml", "*.yaml", "*.cff"],
+                         capture_output=True, text=True, timeout=60)
+    if out.returncode != 0:
+        return []
+    return [f for f in out.stdout.split()
+            if not f.startswith(("upstream/", "llamacpp", "results/", "repro/hostB/",
+                                 "repro/results/"))
+            and not Path(f).name.startswith("results_")]
+
+
 def tracked_shell():
     """Every shell script this repository publishes.
 
@@ -4666,6 +4687,85 @@ class TheCitationFileMayNotNameAThingThatDoesNotExist(unittest.TestCase):
 
 
 
+class TheDepositMetadataMayNotNameAVersionNobodyDeposited(unittest.TestCase):
+    """The other half of the argument above, which had no test at all.
+
+    That guard says CITATION.cff is metadata a reader is invited to trust without opening the
+    repository, that Zenodo reads it mechanically, and that this makes it the easiest place in
+    the tree to publish an unbacked claim. `.zenodo.json` IS the Zenodo record -- it supplies the
+    title, description and version of the deposit itself -- so the reasoning applies to it word
+    for word, and nothing read it. CITATION.cff's `version` is checked against
+    `repro/DEPOSITS.json`, the check that exists because on 2026-08-29 a version was bumped for a
+    deposit that was then correctly not made; `.zenodo.json` carried the same field beside it
+    with nothing checking anything.
+
+    The three scalars are read with a regular expression rather than a YAML parser so this runs
+    where PyYAML is absent. The structural check above already needs the parser and skips
+    without it; this one should not be able to skip.
+    """
+
+    @staticmethod
+    def _zenodo():
+        import json
+        return json.loads((Path(__file__).resolve().parent.parent / ".zenodo.json").read_text())
+
+    @staticmethod
+    def _cff_scalar(key):
+        """`orcid` sits indented under `authors`, so anchoring at column zero found nothing and
+        the check compared an identifier against an empty string, which passes for `in` only by
+        accident of direction. Leading space is allowed and the key must appear exactly once."""
+        text = (Path(__file__).resolve().parent.parent / "CITATION.cff").read_text()
+        hits = re.findall(rf'^[ \t-]*{key}:\s*"?([^"\n]+?)"?\s*$', text, re.M)
+        if len(hits) != 1:
+            raise AssertionError(f"CITATION.cff has {len(hits)} {key!r} keys; expected exactly 1")
+        return hits[0].strip()
+
+    def test_the_version_is_one_that_was_actually_deposited(self):
+        import json
+        root = Path(__file__).resolve().parent.parent
+        v = self._zenodo().get("version", "")
+        self.assertTrue(v, ".zenodo.json declares no version")
+        deposits = json.loads((root / "repro" / "DEPOSITS.json").read_text())
+        have = {d["version"] for d in deposits["versions"]}
+        self.assertIn(
+            v, have,
+            f".zenodo.json names version {v!r}, which repro/DEPOSITS.json does not record as "
+            f"deposited (it has {sorted(have)}). A tag is not a deposit.")
+
+    def test_it_agrees_with_the_citation_file(self):
+        z = self._zenodo()
+        self.assertEqual(z.get("version", ""), self._cff_scalar("version"),
+                         ".zenodo.json and CITATION.cff name different versions")
+        self.assertEqual(z.get("title", ""), self._cff_scalar("title"),
+                         ".zenodo.json and CITATION.cff give the deposit different titles")
+        orcid = (z.get("creators") or [{}])[0].get("orcid", "")
+        self.assertIn(orcid, self._cff_scalar("orcid"),
+                      "two copies of an identifier is two chances to publish a wrong one")
+
+    def test_the_description_names_no_path_that_does_not_exist(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        tracked = set(subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True,
+                                     text=True, timeout=60).stdout.split())
+        dirs = {"/".join(t.split("/")[:i + 1])
+                for t in tracked for i in range(len(t.split("/")) - 1)}
+        bad = []
+        for name in set(re.findall(r"<code>([^<]+)</code>", self._zenodo().get("description", ""))):
+            ref = name.rstrip("/")
+            if "/" not in ref and not ref.isupper():
+                continue                      # a flag or a file extension, not a path
+            if "*" in ref:
+                head = ref.split("*")[0]
+                tail = ref.split("*")[-1]
+                if not any(t.startswith(head) and t.endswith(tail) for t in tracked):
+                    bad.append(name)
+                continue
+            if ref not in tracked and ref not in dirs:
+                bad.append(name)
+        self.assertEqual(
+            bad, [], f"the deposit description names paths a clone would not have: {bad}")
+
+
 class ACoolerCardIsAnInterventionAndMustBeRecorded(unittest.TestCase):
     """The stock gate covered clocks and power and said nothing at all about cooling.
 
@@ -6744,6 +6844,45 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         """
         import ast as _ast, io as _io, tokenize as _tok
         text = Path(path).read_text(encoding="utf-8", errors="replace")
+        if str(path).endswith((".json",)):
+            # A JSON file's prose is the strings it was written with, not the strings it
+            # recorded. Anything under a `records` array is instrument output, and so is a
+            # `text` or `prompt` field anywhere.
+            import json as _json
+            DATA = {"text", "prompt", "prompts", "output", "content",
+                    "stdout", "stderr", "cmd", "argv"}
+            found = []
+
+            def _walk(node, key="", in_records=False):
+                if isinstance(node, dict):
+                    for k, v in node.items():
+                        _walk(v, k, in_records or k == "records")
+                elif isinstance(node, list):
+                    for v in node:
+                        _walk(v, key, in_records)
+                elif isinstance(node, str) and len(node.split()) >= 5:
+                    if not in_records and key not in DATA:
+                        # Each JSON string is its own field, not a line of one paragraph. Joined
+                        # raw, a value with no terminal stop runs into the next one and the
+                        # sentence splitter reads across the seam: a real hit was reported
+                        # against text from two unrelated keys, and the same seam could match a
+                        # pattern neither field contains.
+                        text_ = node.rstrip()
+                        found.append(text_ if text_.endswith((".", "!", "?")) else text_ + ".")
+            try:
+                _walk(_json.loads(text))
+            except ValueError:
+                return ""
+            return "\n\n".join(found)
+        if str(path).endswith((".yml", ".yaml", ".cff")):
+            keep = []
+            for line in text.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    keep.append(stripped.lstrip("# ").rstrip())
+                elif re.match(r"(name|description|message|abstract|title):", stripped):
+                    keep.append(stripped)
+            return "\n".join(keep)
         if str(path).endswith(".sh"):
             # A shell script's prose is its comments. Taking the whole file would read a
             # `grep -E "no prior art"` as a sentence, which is the mistake this method exists
@@ -6798,7 +6937,7 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         root = Path(__file__).parent.parent
         bad = []
         names = [n for n in tracked_markdown() if n != "PREREGISTRATION.md"]
-        names += self._python_prose() + tracked_shell()
+        names += self._python_prose() + tracked_shell() + tracked_metadata()
         for name in names:
             for sent in self._sentences(self._prose_of(root / name)):
                 if self.OUTSIDE.search(sent) and self.UPGRADE.search(sent):
@@ -6824,7 +6963,7 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         pat = re.compile(self.ACTORS + r"\s+" + self.ACTIONS, re.I)
         bad = []
         names = [n for n in tracked_markdown() if n != "PREREGISTRATION.md"]
-        names += self._python_prose() + tracked_shell()   # PREREG is dated and append-only
+        names += self._python_prose() + tracked_shell() + tracked_metadata()
         for name in names:
             for sent in self._sentences(self._prose_of(root / name)):
                 m = pat.search(sent)

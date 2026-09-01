@@ -418,8 +418,9 @@ class PowerSampler:
             # integral of the signal under it; a lag of d seconds does not -- integrating a
             # delayed signal over [t0, t1] loses exactly d * (p(t1) - p(t0)), whatever the
             # trace does in between. So a per-window offset is predicted by the two ENDS
-            # alone, and 6255 committed windows already say the offset is per-window: across
-            # 35 cells the long third of each cell has a 1.81x window and a 1.01x offset.
+            # alone, and 6255 committed windows already say the offset is per-window: in the
+            # 35 cells with enough internal spread to split -- the long third of the windows at
+            # least 1.5x the short -- the window grows 1.81x and the offset 1.01x.
             # None of them could be checked against this model, because the ends were never
             # recorded. Four numbers per window is the entire cost of asking.
             "power_first_w": watts[0] if watts else None,
@@ -596,11 +597,18 @@ def settle_gpu(
 ) -> dict:
     """Wait until the GPU has cooled to `target_temp_c` before an arm starts.
 
-    Measured on this host: across one pass the card climbs 62 C -> 84 C while sitting on its
-    450 W power cap, and the SM clock falls from ~1950 MHz to ~1769 MHz -- a 9.3 % spread. That
-    is larger than several of the effects this study is trying to resolve, and because arms run
-    at different positions within a pass, it lands directly inside every paired comparison.
-    Rotation spreads the position effect but does not remove it.
+    Measured on this host during one pilot pass: the card climbs 62 C -> 84 C while sitting on
+    its 450 W power cap, and the SM clock falls from 1949.8 MHz to 1769.0 MHz between the
+    fastest and the slowest request -- a 9.3 % spread. That spread is not all position. The arm
+    means span 7.2 %, 1928.7 to 1789.1, and the speculative arms draw 438-441 W against the
+    baselines' 445, so they are not at the same operating point; `docs/METHODOLOGY_AUDIT.md` A9
+    separates the part that is position, which is the 1.95 % between the first two positions
+    running identical non-speculative work. It is that 1.95 % that is larger than several of the
+    effects this study is trying to resolve, and because arms run at different positions within
+    a pass it lands directly inside every paired comparison. Rotation spreads the position
+    effect but does not remove it. Both figures belong to the card as found, at 450 W and
+    overclocked; the primary matrix ran at the 420 W stock cap and neither was re-measured
+    there. All of them recompute from `results/dryrun_phase_a.json`.
 
     Gating on entry temperature makes every arm start from the same thermal state. If the target
     cannot be reached within `max_wait_s` the actual state is returned anyway and recorded, so a

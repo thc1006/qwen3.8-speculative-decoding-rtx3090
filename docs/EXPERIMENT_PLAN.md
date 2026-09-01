@@ -8,7 +8,7 @@ phase sketch in `TODO.md`; hypotheses remain as committed in `PREREGISTRATION.md
 | finding | evidence |
 |---|---|
 | the card is **power**-capped, not thermally capped | `SW Power Cap: Active`, `HW Thermal Slowdown: Not Active`, 15.5 h of accumulated power capping |
-| it loses **9.3 % of SM clock** over one pass (1950 -> 1769 MHz) | per-request clock sampling across a 7-arm pass |
+| it loses **9.3 % of SM clock** over one pass (1950 -> 1769 MHz) | per-request clock sampling across a 7-arm pass. This is the per-record extreme and it mixes position with arm identity; the arm means span 7.2 % and the position-only effect, on identical work in the first two positions, is **1.95 %** -- see `docs/METHODOLOGY_AUDIT.md` A9 |
 | ~~baseline throughput tracks the memory clock one for one~~ **withdrawn** | the pilot read an elasticity of about 1.0 from removing the overclock, and that step moved three things at once: memory -3.9 %, graphics -4.1 % and the power cap -6.7 %. Correction 1 says attributing the whole 4.1 % to bandwidth was wrong. Phase R's pre-flight moves the memory clock alone at a fixed 420 W and gives **~0.75** |
 | the two llama.cpp trees introduce no confound | baseline 43.69 vs 43.72 tok/s, and **no divergence between the trees on 5/5 prompts** (within the measured window) |
 | MTP and DFlash2 both run on sm86 | MTP n3 88.90 tok/s @ 84 % accept, mean draft len 3.51; DFlash2 n7 91.92 tok/s @ 67 %, mean len 5.64 |
