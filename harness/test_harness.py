@@ -39,9 +39,13 @@ def tracked_metadata():
 
     `results/` and `repro/hostB/` hold instrument output; their strings are the model's own text
     and a benchmark's fields, and reading them as claims is reading 3.5 million words of
-    generated prose looking for the author's voice. What is left is small and entirely
-    hand-written: the deposit metadata, the citation file, the evidence registry, the artifact
-    manifest, the reproduction lock and the deposit log. None of it was read by any prose guard.
+    generated prose looking for the author's voice. What is left is the deposit metadata, the
+    citation file, the evidence registry, the artifact manifest, the reproduction lock and the
+    deposit log. None of it was read by any prose guard.
+
+    A path filter cannot finish the job: `repro/config_27572.json` sits outside the excluded
+    directories and holds sixty lines of llama-server output. `_prose_of` drops those by key, so
+    what this returns is the set of files that MAY carry prose, not a claim that all of it does.
     """
     import subprocess
     root = Path(__file__).resolve().parent.parent
@@ -4752,8 +4756,15 @@ class TheDepositMetadataMayNotNameAVersionNobodyDeposited(unittest.TestCase):
         bad = []
         for name in set(re.findall(r"<code>([^<]+)</code>", self._zenodo().get("description", ""))):
             ref = name.rstrip("/")
-            if "/" not in ref and not ref.isupper():
-                continue                      # a flag or a file extension, not a path
+            if ref.startswith("."):
+                continue                      # a bare extension used as a noun, like `.json`
+            looks_like_a_path = ("/" in ref or ref.isupper()
+                                 or re.fullmatch(r"[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,6}", ref))
+            if not looks_like_a_path:
+                continue                      # a flag such as `draft-mtp`, not a path
+            # An earlier version of this required a slash or all caps, which skipped every bare
+            # filename with a lowercase extension: the description could have named README.md or
+            # a file that never existed and this would have passed.
             if "*" in ref:
                 head = ref.split("*")[0]
                 tail = ref.split("*")[-1]
@@ -6849,8 +6860,13 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
             # recorded. Anything under a `records` array is instrument output, and so is a
             # `text` or `prompt` field anywhere.
             import json as _json
+            # `log` and `probe_lines` are here because repro/config_27572.json holds sixty
+            # lines of llama-server output under them, and the path filter in
+            # tracked_metadata() let that file through while its own docstring said instrument
+            # output was excluded. Which strings are output is a property of the key, not of
+            # the directory, so it is decided here.
             DATA = {"text", "prompt", "prompts", "output", "content",
-                    "stdout", "stderr", "cmd", "argv"}
+                    "stdout", "stderr", "cmd", "argv", "log", "probe_lines", "lines"}
             found = []
 
             def _walk(node, key="", in_records=False):
@@ -6875,14 +6891,48 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
                 return ""
             return "\n\n".join(found)
         if str(path).endswith((".yml", ".yaml", ".cff")):
-            keep = []
-            for line in text.splitlines():
+            # A block scalar keeps its text on the lines BELOW the key. The first version of
+            # this kept the `abstract: >-` marker and dropped the abstract, so CITATION.cff's
+            # comments were guarded and the sentence citation tools actually display was not.
+            def _stop(v):
+                """A field value is its own unit. Consecutive comment lines are one paragraph
+                and stay joined, but two step names with no full stop between them merged into
+                one sentence and the failure named neither -- the same seam that had to be
+                closed for JSON one method above."""
+                v = v.rstrip()
+                return v if not v or v.endswith((".", "!", "?", ":")) else v + "."
+
+            keep, lines, i = [], text.splitlines(), 0
+            # A workflow step keys its name off a list item, so the CI-visible claims sit
+            # behind a "- ". Anchored without it, every step name in verify.yml was dropped.
+            FIELD = re.compile(r"-?\s*(name|description|message|abstract|title):\s*(.*)$")
+            while i < len(lines):
+                line = lines[i]
                 stripped = line.strip()
                 if stripped.startswith("#"):
                     keep.append(stripped.lstrip("# ").rstrip())
-                elif re.match(r"(name|description|message|abstract|title):", stripped):
-                    keep.append(stripped)
-            return "\n".join(keep)
+                    i += 1
+                    continue
+                m = FIELD.match(stripped)
+                if not m:
+                    i += 1
+                    continue
+                rest = m.group(2).strip()
+                if rest in (">", ">-", ">+", "|", "|-", "|+"):
+                    indent = len(line) - len(line.lstrip())
+                    i += 1
+                    block = []
+                    while i < len(lines):
+                        nxt = lines[i]
+                        if nxt.strip() and (len(nxt) - len(nxt.lstrip())) <= indent:
+                            break
+                        block.append(nxt.strip())
+                        i += 1
+                    keep.append(_stop(" ".join(block).strip()))
+                    continue
+                keep.append(_stop(rest.strip('"\'') or stripped))
+                i += 1
+            return "\n".join(k for k in keep if k)
         if str(path).endswith(".sh"):
             # A shell script's prose is its comments. Taking the whole file would read a
             # `grep -E "no prior art"` as a sentence, which is the mistake this method exists
