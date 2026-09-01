@@ -3,7 +3,7 @@
 Why this phase exists. Two separate claims turn on target quantization and neither can be
 settled on 24 GB with this model:
 
-1. llama.cpp #25618 establishes that greedy speculative output diverges from vanilla on
+1. llama.cpp #25618 reports that greedy speculative output diverges from vanilla on
    **quantized** targets while a **bf16** target preserves parity. That is a binary claim; a
    ladder turns it into a dose-response, which is more informative and harder to explain away.
 

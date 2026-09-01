@@ -5644,7 +5644,7 @@ class TheDocsMustQuoteTheReportTheyCiteAndNotAPastOne(unittest.TestCase):
 
 
 class ThePhaseE4EstimatorMustRecoverALagThatWasPutThere(unittest.TestCase):
-    """A ruler nobody has measured a known length with is not a ruler.
+    """A ruler is not a ruler until it has measured a known length.
 
     `edge_model.py` estimates how long `power.draw` lags, from `offset = d * dp` where dp is
     the window's end-to-end change in the instantaneous field. Its first version fitted that
@@ -6714,6 +6714,82 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
                              capture_output=True, text=True).stdout.split()
         return [f for f in out if not f.startswith(("upstream/", "llamacpp", ".venv"))]
 
+    @staticmethod
+    def _prose_of(path):
+        """The prose in a file, which for Python is not the file.
+
+        `_python_prose` returns names; the callers read the whole source, so every string
+        literal in this file was being read as prose. The fixture one line below the check
+        that needs it -- the sentence the guard was written for, quoted so it can be tested --
+        failed the guard. Worse, quote-pairing across two adjacent literals joined an assertion
+        message to the next fixture and scanned the seam as a sentence. Comments and docstrings
+        are the prose; code is not.
+        """
+        import ast as _ast, io as _io, tokenize as _tok
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        if not str(path).endswith(".py"):
+            return text
+        out = []
+        try:
+            for t in _tok.generate_tokens(_io.StringIO(text).readline):
+                if t.type == _tok.COMMENT:
+                    out.append(t.string)
+        except Exception:                                          # noqa: BLE001
+            pass
+        try:
+            for n in _ast.walk(_ast.parse(text)):
+                if isinstance(n, (_ast.Module, _ast.ClassDef, _ast.FunctionDef,
+                                  _ast.AsyncFunctionDef)):
+                    d = _ast.get_docstring(n)
+                    if d:
+                        out.append(d)
+        except SyntaxError:
+            pass
+        return "\n\n".join(out)
+
+    OUTSIDE = re.compile(r"(#\d{4,6}|\bissue\b|\bPR\b|llama\.cpp|vLLM|upstream)", re.I)
+    UPGRADE = re.compile(r"\b(establishes?|proves?|demonstrates?|confirms?|shows?)\s+(that|it)\b", re.I)
+
+    def test_no_outside_thread_is_said_to_have_established_something(self):
+        """The mirror image of the check below, and the one that shipped.
+
+        ACTORS above are all negative -- nobody, no study, none of them -- so the guard caught
+        "nobody has tested this" and let through "llama.cpp #25618 establishes that greedy
+        speculative output diverges on quantized targets". An issue is a report. This repository
+        says so in the four other places it cites that thread: two say the issue "says", two say
+        it "scopes its finding as". `phase_q.py` was the one that upgraded a report to a finding,
+        and the sentence after it already called the same thing a claim.
+
+        Two fabrications of this shape reached upstream-bound text before this existed: a
+        sentence attributed to a maintainer who never wrote it, and a quotation of the
+        predecessor repository that does not appear in it. Quoted spans are blanked by
+        `_sentences`, so citing what someone actually wrote is not what this catches -- claiming
+        what their thread established is.
+        """
+        root = Path(__file__).parent.parent
+        bad = []
+        names = [n for n in tracked_markdown() if n != "PREREGISTRATION.md"]
+        names += self._python_prose()
+        for name in names:
+            for sent in self._sentences(self._prose_of(root / name)):
+                if self.OUTSIDE.search(sent) and self.UPGRADE.search(sent):
+                    bad.append(f"{name}: {sent[:120]}")
+        self.assertEqual(
+            bad, [],
+            "an outside thread is credited with establishing something. Say what it reports:\n  "
+            + "\n  ".join(bad))
+
+    def test_the_upgrade_check_fires_on_the_sentence_it_was_written_for(self):
+        fixed = "llama.cpp #25618 establishes that greedy speculative output diverges from vanilla."
+        kept = "llama.cpp #25618 reports that greedy speculative output diverges from vanilla."
+        self.assertTrue(self.OUTSIDE.search(fixed) and self.UPGRADE.search(fixed))
+        self.assertFalse(bool(self.UPGRADE.search(kept)))
+
+    def test_quoting_what_they_wrote_is_not_claiming_what_it_established(self):
+        quoted = 'A maintainer replied to #25618: "this shows that the kernels differ."'
+        self.assertEqual([], [x for x in self._sentences(quoted)
+                              if self.OUTSIDE.search(x) and self.UPGRADE.search(x)])
+
     def test_no_document_says_nobody_did_it_without_saying_how_that_is_known(self):
         root = Path(__file__).parent.parent
         pat = re.compile(self.ACTORS + r"\s+" + self.ACTIONS, re.I)
@@ -6721,7 +6797,7 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         names = [n for n in tracked_markdown() if n != "PREREGISTRATION.md"]
         names += self._python_prose()          # dated and append-only; see the guards above
         for name in names:
-            for sent in self._sentences((root / name).read_text()):
+            for sent in self._sentences(self._prose_of(root / name)):
                 m = pat.search(sent)
                 if m and not self.SCOPE.search(sent):
                     bad.append(f"{name}: {sent[:110]}")
