@@ -5415,3 +5415,80 @@ Correction 13's own text, which is not edited because this file is append-only.
 Found while checking whether a figure written into `docs/COST_MODEL.md` earlier the same day was
 sourced. It was; the fraction attached to it was not. A round fraction that needs rounding to be
 said is worth replacing with the number it rounds.
+
+## Correction 56, 2026-09-01: a withdrawal this file never recorded, and four claims about conduct
+
+Two classes of wording, found by running over this file the same checks that were run over the
+other twenty-three documents earlier today. Nothing measured changes and no entry above is
+edited; this is the record of what is dead in them.
+
+### Correction 14's architecture sentence is withdrawn, and this file never said so
+
+Correction 14 reads, of Phase M's two targets:
+
+> Their difference is `+0.0029 [-0.0007, +0.0064]`, but their curves are *not* parallel --
+> residuals reach 0.15 -- so the shape bound of `+/-0.0775` binds and the comparison is **not
+> resolved**. That rules out a large architecture effect.
+
+Three things are wrong with it and only the first was ever recorded.
+
+**It is withdrawn, elsewhere.** `docs/COST_MODEL.md` has carried a "Withdrawn, 2026-08-27" block
+against that continuation since Correction 29's session, and Correction 29 set the rule that the
+README may not assert an architecture effect. Neither is attached to Correction 14. A reader
+working through this file in order meets the sentence with nothing to say it is dead, which is
+the failure mode the whole append-only arrangement exists to prevent.
+
+**It contradicts its own previous clause.** A comparison the same sentence calls *not resolved*
+cannot rule anything out. The shape bound binding is the reason nothing follows, and the sentence
+draws a conclusion from it anyway.
+
+**Its numbers are no longer producible.** `cost_model.py` fail-closes on Phase M's `mean_len`
+derivation and prints "REFUSING TO REPORT k, c OR k0 FOR THIS RESULT", so `+0.0029`,
+`[-0.0007, +0.0064]` and `+/-0.0775` come from no current artifact. `docs/COST_MODEL.md` stopped
+quoting them on 2026-09-01; this entry is where the record of that reaches the registration.
+
+The verdict on H6b stands as **not resolved**. Nothing in this study bounds a difference in
+marginal cost between the two targets.
+
+### Four sentences say what nobody has done, on evidence of what nobody posted
+
+The prior-art section of this file names its evidence in its own heading: "established by a
+search sweep on 2026-08-24, before measurement". A sweep of issue trackers sees what people
+posted. It cannot see what they measured and did not post, what is in a paper it did not search,
+or what someone controlled for without mentioning it. Four sentences turn it into a claim about
+conduct:
+
+| where | what it says |
+|---|---|
+| Known prior art | "no one has tested how speculative decoding interacts with the cliff" |
+| Phase L addendum | "Two things follow that nobody has done" |
+| Phase L addendum | "nobody has asked what speculation does to it" |
+| Phase M addendum | "Nobody has asked whether llama.cpp's MTP path escapes the penalty" |
+
+Each should read *nothing in the sweep reports*. Six sentences of the same shape were corrected
+in the other documents on 2026-09-01 and a guard was added for them; that guard exempts this
+file, because it is append-only, so these four are the surviving instances and this table is
+their correction.
+
+The motivation each supports is unchanged: nothing in the sweep reported those things, which is
+a sufficient reason to measure them, and both phases ran.
+
+### Seven headings in this file are wrapped, and render with their tails as body text
+
+Found while writing this entry, because the tool that wraps prose wrapped its heading too. The
+headings of Corrections 19b, 21, 35, 37, 46, 50 and 51 each run onto a second line, so everything
+after the break renders as a paragraph rather than as part of the heading -- "trend, and how 19a
+is to be scored", "not what Phase E5's fixed term is made of", and five more. A count of `#` lines
+cannot see it, because the continuation does not start with one.
+
+They are not repaired here. This file is append-only and a heading is text above. A guard now
+refuses a new one anywhere else and holds this file's count at seven, so the number can fall when
+one is legitimately rewritten and cannot rise.
+
+### And the target of Phase L was itself withdrawn
+
+The same prior-art entry describes llama.cpp #27623's ~25x collapse as a live report. Its author
+withdrew that figure on 2026-08-26 after re-measuring with eval-only rather than wall-clock
+timings, which Correction 23 records against the vLLM harness and `docs/PHASE_L_DESIGN.md` now
+records against the phase. Phase L ran before the withdrawal, so its non-reproduction -- a factor
+of 1.5 against a reported 25 -- is consistent with the withdrawal rather than independent of it.

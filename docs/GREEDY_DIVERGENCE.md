@@ -40,7 +40,9 @@ is deterministic rather than noise.
   match on 100 percent, of which 24 points are prompts where neither arm diverged inside the
   400-token window; widths 5, 6 and 8 match on 100 percent, of which 20 points are censored;
   across the two groups agreement falls to 44 percent, of which 16 points are censored. The
-  blocks span both drafters." src="../analysis/plot_width_partition.png">
+  blocks span both drafters. The five diagonal cells are an arm against itself, 100 percent by
+  construction, and are left unpainted and labelled rather than
+  counted." src="../analysis/plot_width_partition.png">
 </picture>
 
 ## The partition is by verification width, not by drafter

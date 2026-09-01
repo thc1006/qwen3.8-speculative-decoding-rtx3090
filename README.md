@@ -265,6 +265,8 @@ grouping.
   <img alt="Matrix of the 25 prompts on which each pair of arms shows the same first-divergence
   or censoring signature, at the 400-token cap. Two blocks appear, widths 3 and 4 against
   widths 5, 6 and 8, agreeing within a block on 100 % of prompts and across the blocks on 44 %.
+  The five diagonal cells are an arm against itself, 100 % by construction, and are left
+  unpainted and labelled rather than counted.
   The blocks span both drafters, so verification width predicts the grouping and drafter
   identity does not." src="analysis/plot_width_partition.png">
 </picture>

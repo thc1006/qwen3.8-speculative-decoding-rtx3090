@@ -204,7 +204,7 @@ def _halo(lw=2.2):
 
 
 def _save(fig, stem, note="", bottom=0.13, provenance=None, top_in=None,
-          captured=None):
+          captured=None, after_layout=None):
     # Footer spacing is computed in inches, not in figure fractions. A fixed fraction is a
     # different number of pixels on every figure height, and on the 4.5-inch panels it put the
     # footer lines on top of each other and on the x-label.
@@ -229,6 +229,12 @@ def _save(fig, stem, note="", bottom=0.13, provenance=None, top_in=None,
     for i, ln in enumerate(reversed(lines)):
         fig.text(0.5, pad + i * line_h, ln, ha="center", va="bottom",
                  fontsize=7.6, style="italic", color=C("mut"))
+    # Anything that has to MEASURE the layout runs here, not at draw time. A label rotated to
+    # lie along a line is the case: the line's angle on screen depends on the axes box, and the
+    # axes box is not settled until the two subplots_adjust calls above have run.
+    if after_layout is not None:
+        fig.canvas.draw()
+        after_layout(fig)
     name = f"{stem}.png" if _MODE == "light" else f"{stem}_dark.png"
     p = OUT / name
     fig.savefig(p, dpi=DPI)
@@ -559,11 +565,21 @@ def fig_width_partition(result):
     differ = sum(1 for p in prompts if fork[p][lo[0]] != fork[p][hi[0]])
 
     fig, ax = plt.subplots(figsize=(FIG_W, 5.6))
-    im = ax.imshow(agree, cmap="Blues", vmin=0, vmax=100, aspect="auto")
+    # The diagonal is an arm against itself, so it is 100 % by construction and carries no
+    # measurement. Painted with the data colormap it took the top of the scale, which made each
+    # block look denser than its evidence: the top-left block showed four dark cells where two
+    # are measured. Masking it puts those cells on the neutral fill, and the mark on them becomes
+    # legible for the first time -- it was #8a8a8a at 14 pt on the darkest blue, three points of
+    # contrast, on a cell a reader could not tell from missing data.
+    diag = np.eye(n, dtype=bool)
+    cmap = plt.get_cmap("Blues").copy()
+    cmap.set_bad(C("flat"))
+    im = ax.imshow(np.ma.masked_where(diag, agree), cmap=cmap, vmin=0, vmax=100, aspect="auto")
     for i in range(n):
         for j in range(n):
             if i == j:
-                ax.text(j, i, "-", ha="center", va="center", color="#8a8a8a", fontsize=14)
+                ax.text(j, i, "same arm", ha="center", va="center", color=C("mut"),
+                        fontsize=9.5, style="italic")
             else:
                 col = "white" if agree[i, j] > 55 else "#111111"
                 ax.text(j, i - 0.08, f"{agree[i, j]:.0f}%", ha="center", va="center",
@@ -588,7 +604,9 @@ def fig_width_partition(result):
         f"the same first-divergence or censoring signature (%)", fontsize=9)
     fig.subplots_adjust(left=0.175, right=0.885, top=0.845)
     _save(fig, "plot_width_partition", captured=captured_on(result),
-          note=PHASE_A_N + f" A cell counts a prompt when both arms show the same signature, "
+          note=PHASE_A_N + f" The diagonal is an arm against itself: 100 % by construction, "
+               f"not a measurement, and left unpainted. A cell counts a prompt when both arms "
+               f"show the same signature, "
                f"which includes both reaching the 400-token cap without diverging; the second "
                f"number is how much of the cell that is. Those pairs carry no fork position, so a "
                f"block is weaker than 100 % agreement on where output forks. The groups differ on "
@@ -650,11 +668,29 @@ def fig_bound_by(res):
         ax1.annotate(f"{m}\n({bw:.2f}, {cp:.2f})", (bw, cp), textcoords="offset points",
                      xytext=(dx, dy), fontsize=9.6, color=col, va="center", ha=ha)
     ax1.plot([0, 1], [1, 0], color=C("mut"), ls=":", lw=1.0, zorder=1)
-    # The dotted 1:1 line runs through the glyphs of its own label, in the same colour.
-    ax1.annotate("x + y = 1 (visual reference; no conservation law is implied)", (0.62, 0.38),
-                 fontsize=7.8, color=C("mut"),
-                 path_effects=_halo(2.6),
-                 rotation=-31, rotation_mode="anchor", ha="center", va="bottom")
+
+    def _label_the_diagonal(_fig):
+        """Rotate the label to the angle the line has on screen, measured rather than guessed.
+
+        This was `rotation=-31`, a number typed once. The angle a data-space slope of -1 renders
+        at depends on the axes box, and this figure's box is 7.11 x 2.48 inches, so the line
+        actually lies at -19.2 degrees. Nearly twelve degrees out put the far end of a
+        468-pixel label about 48 pixels off the line it names. The box is not settled until
+        `_save` has adjusted the footer, which is why this runs from there.
+        """
+        import math
+        p0 = ax1.transData.transform((0.0, 1.0))
+        p1 = ax1.transData.transform((1.0, 0.0))
+        deg = math.degrees(math.atan2(p1[1] - p0[1], p1[0] - p0[0]))
+        # The dotted line runs through the glyphs of its own label, in the same colour, so the
+        # halo is what keeps both readable.
+        # Anchored at 0.45 rather than 0.62. The label is about 468 px long, so at this angle it
+        # spans roughly 0.21 in x either side of its anchor: centred at 0.62 its tail reached
+        # x = 0.83 and ran through the baseline marker at (0.80, 0.27) and that marker's own
+        # label. At 0.45 it spans 0.24 to 0.66, which is the stretch of the line no point sits on.
+        ax1.annotate("x + y = 1 (visual reference; no conservation law is implied)",
+                     (0.45, 0.55), fontsize=7.8, color=C("mut"), path_effects=_halo(2.6),
+                     rotation=deg, rotation_mode="anchor", ha="center", va="bottom")
     ax1.set_xlim(-0.03, 1.0); ax1.set_ylim(-0.03, 1.0)
     ax1.set_xlabel("memory-clock elasticity   d(ln tok/s) / d(ln memory clock)\n"
                    "further right = responds more to the memory clock")
@@ -696,6 +732,7 @@ def fig_bound_by(res):
 
     fig.subplots_adjust(left=0.185, right=0.975, top=0.935, hspace=0.62)
     _save(fig, "plot_bound_by", bottom=0.10, captured=captured_on(res),
+          after_layout=_label_the_diagonal,
           note="Phase R2, 1575 requests, 0 incidents. Elasticity is how throughput responds to a "
                "clock that was set, so it places neither workload against a hardware limit: nothing "
                "here counts bytes moved or arithmetic issued, and no claim is made about which "

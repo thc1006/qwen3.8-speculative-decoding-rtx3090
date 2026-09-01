@@ -6691,5 +6691,71 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
             self.assertFalse(flagged, sent)
 
 
+class AHeadingMustNotBeWrappedOntoASecondLine(unittest.TestCase):
+    """A wrapped heading renders its tail as body text, and counting `#` lines cannot see it.
+
+    The tool that wraps over-long prose lines wrapped a heading, and every check in this file
+    passed: the word sequence was unchanged, and the heading count was unchanged because the
+    continuation line does not start with `#`. What changed was the rendering -- "## Correction
+    56, ... and four" as the heading and "claims about other people's conduct" as a paragraph
+    under it.
+
+    Seven headings in `PREREGISTRATION.md` are already in that state: Corrections 19b, 21, 35,
+    37, 46, 50 and 51. That file is append-only, so they are counted rather than repaired, and
+    the count may fall but not rise.
+    """
+
+    APPEND_ONLY = "PREREGISTRATION.md"
+    KNOWN_WRAPPED = 7
+
+    @staticmethod
+    def _wrapped(text):
+        lines = text.splitlines()
+        out, fence = [], False
+        for i, l in enumerate(lines[:-1]):
+            if l.strip().startswith("```"):
+                fence = not fence
+                continue
+            if fence or not re.match(r"^#{1,6} ", l):
+                continue
+            nxt = lines[i + 1]
+            if nxt.strip() and not re.match(r"^(\s*[-*+|>]|<|#|\s*\d+\.)", nxt):
+                out.append(f"{i + 1}: {l[:58]} || {nxt[:44]}")
+        return out
+
+    def test_no_current_state_document_has_one(self):
+        root = Path(__file__).parent.parent
+        bad = []
+        for name in tracked_markdown():
+            if name == self.APPEND_ONLY:
+                continue
+            for w in self._wrapped((root / name).read_text()):
+                bad.append(f"{name}:{w}")
+        self.assertEqual(bad, [],
+                         "the tail of these headings renders as a paragraph; shorten the heading "
+                         "rather than wrapping it:\n  " + "\n  ".join(bad))
+
+    def test_the_append_only_file_does_not_gain_more(self):
+        root = Path(__file__).parent.parent
+        found = self._wrapped((root / self.APPEND_ONLY).read_text())
+        self.assertLessEqual(len(found), self.KNOWN_WRAPPED,
+                             f"{self.APPEND_ONLY} gained a wrapped heading; it is append-only, so "
+                             f"write the heading short enough not to wrap:\n  "
+                             + "\n  ".join(found[self.KNOWN_WRAPPED:]))
+        if len(found) < self.KNOWN_WRAPPED:
+            self.fail(f"only {len(found)} wrapped headings remain; lower KNOWN_WRAPPED to "
+                      f"{len(found)} so the ratchet keeps holding")
+
+    def test_the_check_fires_on_a_wrapped_heading(self):
+        good = "## A short heading\n\nBody text follows a blank line.\n"
+        bad = "## A heading that ran on and\nwrapped onto a second line\n\nBody.\n"
+        self.assertEqual([], self._wrapped(good))
+        self.assertEqual(1, len(self._wrapped(bad)))
+
+    def test_a_fenced_comment_is_not_a_heading(self):
+        fenced = "```bash\n# 0. confirm the card\npython3 -c \"print(1)\"\n```\n"
+        self.assertEqual([], self._wrapped(fenced))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
