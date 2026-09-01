@@ -125,6 +125,37 @@ gh repo edit thc1006/qwen3.8-speculative-decoding-rtx3090 \
   --add-topic mixture-of-experts --add-topic kv-cache --add-topic quantization
 ```
 
+## The About box, which this page used to leave out
+
+The 350-character description is the one line GitHub prints beside the repository in every
+search result, and it is the `og:description` a link preview and a retrieval agent both read
+first. It ranked nowhere on the list above until 2026-09-01, which was an omission: it is
+stronger than topics and costs a tenth as much thought.
+
+Two properties decide what goes in it. Truncation is from the end, so the first 150 characters
+carry the load. And it is one of the few places where the exact-match tokens of channel 1 and
+the number of the last section can sit in the same sentence.
+
+What replaced the earlier line, and why:
+
+| change | reason |
+|---|---|
+| `n-max 2` became `--spec-draft-n-max 2` | channel 1 wants the literal string someone types into a search box, and `n-max 2` matches nothing |
+| `MTP` and `DFlash2` became `draft-mtp` and `draft-dflash` | the same, for the `--spec-type` values |
+| added `sm_86` | listed as absent from the README by the inventory above, and it is what someone with a 3090 searches when a report names another architecture |
+| added `Preregistered, DOI-archived` | the strongest audience segment here is people doing their own study, and that is what tells them whether this is worth reading |
+| `~35-37% lower energy` became `Decode energy -37.1%` | a number is retrievable; a range with a tilde is not, and the sensitivity band belongs in `docs/ENERGY.md` where it can be qualified |
+| added `not separated from it` | the README scores the two methods as not established against each other, and two numbers side by side read as a ranking without it |
+
+The website field takes the concept DOI rather than the repository URL: it is the identifier
+that resolves to whichever version is newest, and a reader who wants the code is already here.
+
+Topics are at the cap and each is justified above; nothing was traded.
+
+**The largest lever is still not on this page.** Channel 2 -- a comment in the upstream thread
+that a maintainer needs -- outperforms every field in the About box, and
+`docs/UPSTREAM_CONTRIBUTIONS.md` tracks where this study has something a thread actually wants.
+
 ## The failure mode worth avoiding
 
 Keyword stuffing backfires specifically for agent retrieval, and the reason is structural. The
