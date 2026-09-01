@@ -23,8 +23,10 @@ making. The explanation was
 that llama.cpp's draft-then-verify path uses K of 5 to 64 while vLLM's MTP uses k=1, and a MoE
 verify pass over K positions loads the union of K positions' expert sets.
 
-This study's dense-hybrid result is +59.8 % on llama.cpp. Nobody has checked whether it holds on
-the other engine, and the predecessor's experience is a direct reason not to assume it does.
+This study's dense-hybrid result is +59.8 % on llama.cpp. Nothing in the 2026-08-24 prior-art
+sweep reports checking whether it holds on the other engine -- which is a statement about what is
+posted, not about what anyone has run -- and the predecessor's experience is a direct reason not
+to assume it does.
 
 ## What this phase can and cannot separate
 

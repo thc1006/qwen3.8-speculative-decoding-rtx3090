@@ -89,7 +89,14 @@ RTX A6000 48 GB, which carry the cross-host replication and the forced-warp inte
 than being planned.
 
 Measurement vocabulary: tokens per joule, tok/J, acceptance rate, mean accepted length,
-verification step, draft acceptance, decode throughput, memory-bandwidth bound, compute bound.
+verification step, draft acceptance, decode throughput, memory-clock elasticity, SM-clock
+elasticity.
+
+That last pair used to read "memory-bandwidth bound, compute bound", which is the third entry on
+this page to name something the study may not claim. `evidence/registry.json` forbids a roofline
+or per-kernel bottleneck attribution for both Phase R and Phase R2, and `TODO.md` records
+"compute-bound verify" being downgraded from a conclusion to a described observation. The
+elasticities are what was measured; the bound is what was refused.
 
 Absent from the README, re-derived by grep on 2026-09-01: `draft-simple`, `draft-dspark`,
 `--spec-draft-p-min`, `--spec-draft-ngl`, `sm_86`, `GA102`, `936 GB/s`, `qwen35moe`. Issue #26750

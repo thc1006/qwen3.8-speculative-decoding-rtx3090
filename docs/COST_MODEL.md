@@ -267,7 +267,7 @@ not the one this claim is about.
 </details>
 
 <details>
-<summary>What the cost model rules out: the overhead is not paid on rejection</summary>
+<summary>What the cost model bounds: any overhead paid on rejection is under 1.4 % of the cycle</summary>
 
 A state-rollback account charges the overhead to *rejection*: 48 of this model's 64 layers are
 Gated DeltaNet and cannot roll back by truncating a KV suffix. Writing that as

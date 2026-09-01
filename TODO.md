@@ -230,8 +230,12 @@ second-host addendum in `PREREGISTRATION.md`.
       `blk.40.nextn.*` set matches the dense target's `blk.64`, so the `moe-mtp-*` arms were not
       silent baseline duplicates the way `ngram-mod` was.
 
-      H9 is supported as an effect and #26750's specific claim is refuted: bf16 diverges on 52 %
-      of requests, not the parity the report describes. See Corrections 22, 26 and 27, the last
+      H9 is supported as an effect, and **#25618's** bf16 claim -- not #26750's -- comes out too
+      strong as written: 36 of 75 bf16 requests still diverge, so 52 % is an effect and not the
+      parity that report describes. "Refuted" is the wrong verb twice over. It named the wrong
+      issue, and `evidence/registry.json` forbids reading Phase Q-small for agreement or
+      disagreement with #26750 at all, because the estimator and prompt population are not known
+      to match. See Corrections 22, 26 and 27, the last
       of which marks the one arm whose interval does not clear the study's own margin.
 - [x] **Phase Q** - complete for the two rungs this card can hold, 600 records: `UD-Q4_K_XL` and
       `UD-Q5_K_XL`. `UD-Q6_K_XL` and `Q8_0` do not fit in 24 GB and 29 GB of free disk is not

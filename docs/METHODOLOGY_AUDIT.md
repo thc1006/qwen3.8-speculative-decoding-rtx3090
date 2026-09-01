@@ -217,7 +217,7 @@ accepting an arm's numbers**, rather than relying on the operator to notice.
 
 ---
 
-## A9: Intra-session clock throttling: measured here, controlled by nobody in the prior art
+## A9: Intra-session clock throttling: measured here, reported by nobody in the prior-art sweep
 
 This one is not a criticism of the predecessor specifically. It applies to every study this repo
 is scoped against, and it was found by instrumenting not by reading.
@@ -259,7 +259,9 @@ this study is trying to resolve, and because arms occupy different positions wit
 lands **inside every paired comparison**. A study that runs arms sequentially assigns the whole of it to whichever arm
 ran last.
 
-No study in the prior-art sweep controls for this. The closest is
+No study in the prior-art sweep **reports** controlling for this, which is a weaker statement
+than it may read as: the sweep sees what was published, not what was done, so a study that
+controlled for drift and did not say so is invisible to it. The closest published thing is
 `sudoingX/qwen38-mtp` rule 7 ("a shared desktop halves everything, silently"), which is about a
 competing tenant rather than about the card's own thermal trajectory, and one contributor's power
 sweep, which varies the cap deliberately rather than holding entry state constant.

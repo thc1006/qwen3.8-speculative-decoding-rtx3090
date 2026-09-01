@@ -5,6 +5,12 @@ revised twice the same day as reading the actual threads narrowed what this stud
 Comment counts and issue states quoted below were read on **2026-08-25**; a tracker moves, so
 treat them as a snapshot rather than a current reading.
 
+**What a sweep of trackers can support, and what it cannot.** It reads what people have
+*posted*. It cannot see what they measured and did not post, what is in a paper or a blog it
+did not search, or what someone controlled for without saying so. So "no study reports X" is
+available here and "nobody does X" is not, and several sentences in this repository used to
+make the second claim on the first kind of evidence.
+
 Ranked by *how directly this study's data answers a question that is still open after the
 existing discussion*.
 
@@ -29,9 +35,13 @@ confirmation. Reading the tracker properly shows otherwise. The parent thread is
 2026-08-25**), and it already establishes:
 
 - **The phenomenon**, scoped: greedy speculative output diverges from vanilla on **quantized**
-  targets while a **bf16 target preserves parity**; ngram speculation stays lossless on the same
-  quantized target. Our target is `UD-Q4_K_XL`, i.e. squarely inside the known-affected regime.
-  Our divergence numbers are corroboration, not discovery.
+  targets while a bf16 target is reported to preserve parity; ngram speculation stays lossless on
+  the same quantized target. Our target is `UD-Q4_K_XL`, i.e. squarely inside the known-affected
+  regime. Our divergence numbers are corroboration, not discovery. **The bf16 half is the part
+  this study can add to rather than only confirm**: Phase Q-small walked a 9B ladder to bf16 and
+  found the effect but not parity -- 36 of 75 bf16 requests still diverge -- so "stays
+  bit-identical on bf16" is too strong as written. Section 6 below and `docs/PHASES.md` row Qs
+  carry it.
 - **The mechanism**, already argued in-thread: a batched decode over M positions must be bitwise
   identical to M serial decodes, and is not, so batched verification changes the reduction order.
 - **Drafter independence**, already demonstrated: `snick525` built PR #27342 specifically to get
@@ -243,7 +253,7 @@ argument rather than disputing it, and leading with the coefficient rather than 
 ordering. The 5090 result is more interesting than this one; it is the second point that makes
 the model testable.
 
-## 3. Energy: no prior art at all
+## 3. Energy: nothing in the sweep reports a figure
 
 `joule`, `tok/J` and `watt` appear **zero** times across PR #27342's 60-comment thread, and no
 study in the prior-art sweep publishes an energy figure for this model. Measured here, decode-only

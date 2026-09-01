@@ -5,8 +5,15 @@ Target: [llama.cpp #27623](https://github.com/ggml-org/llama.cpp/issues/27623), 
 collapses roughly 25x once the KV position passes ~80 K (33 t/s at 68 K -> 1.4 t/s at 91 K) while
 prompt processing stays fast (~1300 t/s). Reproduced there across three quants.
 
-Two things nobody has done: reproduce it on another architecture, and ask the obvious follow-up,
-**does speculative decoding survive the cliff, amplify it, or mask it?** DFlash2's advertised
+**Its author withdrew that 25x on 2026-08-26**, after re-measuring with eval-only rather than
+wall-clock timings (PREREGISTRATION.md Correction 23). This phase ran before that. Its own
+non-reproduction -- a factor of 1.5 against a reported 25 -- is therefore consistent with the
+withdrawal rather than independent of it, and `evidence/registry.json` already forbids reading
+Phase L as a refutation of #27623 for a separate reason.
+
+Two things the 2026-08-24 prior-art sweep found nobody had posted: a reproduction on another
+architecture, and the obvious follow-up, **does speculative decoding survive the cliff, amplify
+it, or mask it?** The sweep sees what was published, not what was run. DFlash2's advertised
 advantage is precisely long-context retention, so the answer is not guessable.
 
 ## Feasibility, computed from the target GGUF's own metadata

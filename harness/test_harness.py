@@ -6631,5 +6631,65 @@ class AnIssueNumberMustNotStartALine(unittest.TestCase):
         self.assertIsNone(re.match(r"^#\d", "and #27705, every speculative issue"))
 
 
+class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
+    """A sweep of issue trackers sees what was posted. It cannot see what was done.
+
+    `docs/UPSTREAM_CONTRIBUTIONS.md` records a survey run on 2026-08-24 with `gh` against the
+    live trackers. Six sentences turned that into a claim about other people's conduct --
+    "controlled by nobody in the prior art", "no prior art at all", "Two things nobody has done",
+    "Nobody has checked whether it holds on the other engine", "nobody has manipulated the
+    resources directly" -- and two of the six were section headings, which is what a summary
+    quotes. A study that controlled for thermal drift and did not mention it is invisible to a
+    tracker sweep, so "no study reports X" is available and "nobody does X" is not.
+
+    The check is for an action verb attributed to nobody, in a sentence that does not scope
+    itself. The scoping words are the ones that name the evidence: a sweep, something posted or
+    published, something a source reports, or this repository itself.
+    """
+
+    ACTORS = r"(nobody|no ?one|no study|no paper|no report|no published (study|work)|none of them)"
+    ACTIONS = (r"(has |have |had )?(done|checked|tested|controlled|controls|manipulated|measured|"
+               r"asked|tried|run|attempted|separated|isolated)")
+    SCOPE = re.compile(r"\b(sweep|posted|publish|reports?|reported|in this repository|"
+                       r"as of|snapshot|prior-art|tracker|thread)\b", re.I)
+
+    def _sentences(self, text):
+        body = re.sub(r"```.*?```", " ", text, flags=re.S)
+        body = re.sub(r"`[^`\n]*`", " ", body)
+        return [re.sub(r"\s+", " ", x).strip() for x in re.split(r"(?<=[.!?])\s+", body)]
+
+    def test_no_document_says_nobody_did_it_without_saying_how_that_is_known(self):
+        root = Path(__file__).parent.parent
+        pat = re.compile(self.ACTORS + r"\s+" + self.ACTIONS, re.I)
+        bad = []
+        for name in tracked_markdown():
+            if name == "PREREGISTRATION.md":       # dated and append-only; see the guards above
+                continue
+            for sent in self._sentences((root / name).read_text()):
+                m = pat.search(sent)
+                if m and not self.SCOPE.search(sent):
+                    bad.append(f"{name}: {sent[:110]}")
+        self.assertEqual(bad, [],
+                         "a tracker sweep shows what was posted, not what was done; say which "
+                         "one the sentence rests on:\n  " + "\n  ".join(bad[:8]))
+
+    def test_the_check_fires_on_the_six_sentences_it_was_written_for(self):
+        pat = re.compile(self.ACTORS + r"\s+" + self.ACTIONS, re.I)
+        for sent in ("Two things nobody has done: reproduce it on another architecture.",
+                     "Nobody has checked whether it holds on the other engine.",
+                     "No study controls for this.",
+                     "nobody has manipulated the resources directly."):
+            self.assertTrue(pat.search(sent), sent)
+            self.assertIsNone(self.SCOPE.search(sent), sent)
+
+    def test_a_scoped_sentence_is_not_flagged(self):
+        pat = re.compile(self.ACTORS + r"\s+" + self.ACTIONS, re.I)
+        for sent in ("Nothing in the 2026-08-24 prior-art sweep reports checking it.",
+                     "No study in the prior-art sweep reports controlling for this.",
+                     "A document nobody reads is a document nobody rechecks."):
+            flagged = pat.search(sent) and not self.SCOPE.search(sent)
+            self.assertFalse(flagged, sent)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

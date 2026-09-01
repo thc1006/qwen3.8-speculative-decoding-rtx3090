@@ -8,7 +8,7 @@ concurrent requests carry long prompts. The open question here was whether CUDA 
 
 **The cause is not settled, and this file no longer states one.** The issue title and its first
 account named an async device-to-host copy of `t_h_nextn` racing a later graph over the same
-buffer. The reporter's own probe refuted that: reading the device tensor at the spec-hook entry
+buffer. The reporter's own probe weighs against it: reading the device tensor at the spec-hook entry
 found it already NaN on 647 of 652 probes, so the graph was producing NaN and the copy was
 delivering it faithfully on those. That makes the extract side -- which is what the title assumed
 -- an implausible sole cause rather than a ruled-out one: **five probes were not already NaN**,

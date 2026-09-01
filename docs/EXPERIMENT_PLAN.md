@@ -3,7 +3,7 @@
 Revised 2026-08-24, after the pilot measurements and the overclock discovery. Supersedes the
 phase sketch in `TODO.md`; hypotheses remain as committed in `PREREGISTRATION.md`.
 
-## What the pilot established (verified, not assumed)
+## What the pilot measured, and the one row since withdrawn
 
 | finding | evidence |
 |---|---|
@@ -34,7 +34,8 @@ Define, for method `m`, the elasticities
 
 The two hypotheses predict **opposite signs** for the same contrast. That is what makes this
 decisive where the p-min sweep alone is only suggestive. The PR #27342 author advances H2' from
-`llama-batched-bench` per-step costs; nobody has manipulated the resources directly.
+`llama-batched-bench` per-step costs. Nothing in the 2026-08-24 sweep reports manipulating the
+resources directly; the sweep reads what was posted, not what was run.
 
 ## Phases, in priority order
 
