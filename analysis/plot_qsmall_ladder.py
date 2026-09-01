@@ -127,8 +127,10 @@ def build(rungs, shared, bpw):
         _panel_points(ax, x, ys, fam, colors[i % len(colors)], marks[i % len(marks)])
     ax.set_ylabel("no divergence observed\nthrough the token cap (%)")
     ax.set_xlabel("bits per weight  (file size / parameter count, measured)")
-    ax.set_title("3.  llama.cpp #25618 says bf16 preserves parity. This is the only ladder that "
-                 "can ask", loc="left", fontsize=10.5, color=P.C("fg"))
+    # "the only ladder that can ask" is a claim about the world; the reason is the one to state.
+    ax.set_title("3.  llama.cpp #25618 says bf16 preserves parity. The 27B cannot hold bf16, "
+                 "so this 9B ladder is where the question can be asked",
+                 loc="left", fontsize=10.5, color=P.C("fg"))
     ax.set_ylim(-3, 103)
     P._despine(ax)
     ax.grid(axis="y", color=P.C("grid"), lw=0.6, zorder=0)

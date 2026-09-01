@@ -146,7 +146,19 @@ STYLE = _ThemedStyle()
 
 PROVENANCE = ("Qwen3.8-27B UD-Q4_K_XL | RTX 3090 24 GB | llama.cpp c060ca9 | greedy, "
               "--parallel 1, fresh server per arm-pass, thermal gate at arm entry | "
-              "PREREGISTRATION.md | 2026-08-25")
+              "PREREGISTRATION.md")
+
+
+def captured_on(result):
+    """The date the drawn result was taken, read from the file rather than typed once.
+
+    The footer carried a single hard-coded `2026-08-25` on every figure in this module. The six
+    figures draw three phases taken on two different days: `phase_a` and `phase_r2` on
+    2026-08-24, `phase_nmax` on 2026-08-25. So five of the six asserted a date one day after
+    their own data. A provenance line is the last place a date should come from memory.
+    """
+    ts = ((result or {}).get("env") or {}).get("captured_at") or ""
+    return ts.split("T")[0] or "capture date not recorded"
 PHASE_A_N = "Phase A: 875 requests, 0 incidents, 0 excluded."
 CI_NOTE = ("Nominal 95 % paired cluster bootstrap over prompts within class, 10 000 "
            "resamples. The inferential unit is the prompt, n = 25; the passes are repeated "
@@ -191,7 +203,8 @@ def _halo(lw=2.2):
     return [pe.withStroke(linewidth=lw, foreground=C("bg"))]
 
 
-def _save(fig, stem, note="", bottom=0.13, provenance=None, top_in=None):
+def _save(fig, stem, note="", bottom=0.13, provenance=None, top_in=None,
+          captured=None):
     # Footer spacing is computed in inches, not in figure fractions. A fixed fraction is a
     # different number of pixels on every figure height, and on the 4.5-inch panels it put the
     # footer lines on top of each other and on the x-label.
@@ -199,8 +212,10 @@ def _save(fig, stem, note="", bottom=0.13, provenance=None, top_in=None):
     # `provenance` is overridable because the Phase M figures cover two targets and the
     # module-level line names one. A figure that carries the wrong target in its footer is worse
     # than one with no footer.
-    lines = textwrap.wrap(" ".join(x for x in (note, provenance or PROVENANCE) if x),
-                          width=int(w_in * 15.5))
+    prov = provenance or PROVENANCE
+    if captured:
+        prov = f"{prov} | {captured}"
+    lines = textwrap.wrap(" ".join(x for x in (note, prov) if x), width=int(w_in * 15.5))
     line_h, pad = 0.155 / h_in, 0.05 / h_in
     # 0.62 in below the axes for the tick labels and the x-label, then the footer block under it.
     fig.subplots_adjust(bottom=max(bottom, pad + line_h * len(lines) + 0.62 / h_in))
@@ -243,7 +258,7 @@ def _despine(ax, keep=("bottom", "left")):
 
 
 # ------------------------------------------------------------------ 1. the primary endpoint
-def fig_headline(series, prompt_class):
+def fig_headline(series, prompt_class, captured=None):
     rows = sorted(((a, _effect(series, prompt_class, a), _strat_mean(series, prompt_class, a))
                    for a in SPEC_ARMS), key=lambda r: r[1].point)
     base_abs = _strat_mean(series, prompt_class, "baseline@master")
@@ -274,11 +289,11 @@ def fig_headline(series, prompt_class):
                        for k, (c, m) in STYLE.items()],
               loc="lower right", frameon=False)
     fig.subplots_adjust(left=0.315, right=0.975, top=0.80)
-    _save(fig, "plot_headline", note=PHASE_A_N + " " + CI_NOTE)
+    _save(fig, "plot_headline", note=PHASE_A_N + " " + CI_NOTE, captured=captured)
 
 
 # ------------------------------------------------------------------ 2. where the win lives
-def fig_per_class(series, prompt_class):
+def fig_per_class(series, prompt_class, captured=None):
     classes = sorted(set(prompt_class.values()))
     M = np.full((len(SPEC_ARMS), len(classes)), np.nan)
     for i, arm in enumerate(SPEC_ARMS):
@@ -306,7 +321,7 @@ def fig_per_class(series, prompt_class):
                  "conversational and Chinese prompts as the verification width grows", pad=12)
     fig.colorbar(im, ax=ax, fraction=0.030, pad=0.02).set_label("vs baseline (%)", fontsize=9.6)
     fig.subplots_adjust(left=0.20, right=0.93, top=0.80)
-    _save(fig, "plot_per_class",
+    _save(fig, "plot_per_class", captured=captured,
           note=PHASE_A_N + " " + CI_NOTE + " Per-class is exploratory; the preregistered endpoint is the pooled "
                          "effect.")
 
@@ -390,7 +405,8 @@ def fig_cost_model(result):
     ax_s.axhline(1.0, color=C("mut"), ls=":", lw=1.1)
     ax_s.text(2.65, 1.005, "break-even", fontsize=9, color=C("mut"), va="bottom")
     ax_s.set_ylabel("speedup\n= tokens / cost")
-    ax_s.set_title("Saturating benefit over rising cost: the best width is a small one", pad=8)
+    ax_s.set_title("Saturating benefit over rising cost: the best TESTED width is a small one",
+                   pad=8)
     ax_s.set_xlabel("verification width  w = n-max + 1 as configured\n"
                     "(a drafter that does not fill its budget verifies fewer columns than this)")
     # below and to the right of the best point, with a leader, so the text never crosses a curve
@@ -418,7 +434,7 @@ def fig_cost_model(result):
     for _ax in axes:
         _ax.set_xlim(2.6, 9.4)   # room for the end labels
     fig.subplots_adjust(left=0.165, right=0.895, top=0.945, hspace=0.30)
-    _save(fig, "plot_cost_model", bottom=0.105,
+    _save(fig, "plot_cost_model", bottom=0.105, captured=captured_on(result),
           note=PHASE_A_N + " k is recovered per request as mean_len / speedup, then averaged over 125 requests "
                "per arm. draft-dflash has two widths here, so its line is determined "
                "rather than fitted. Phase A tests draft-dflash at w = 5 and 8 only, so its best "
@@ -512,7 +528,7 @@ def fig_dispatch_boundary(result_nmax):
         ax.text(0.03, 0.94 - i * 0.075, txt, transform=ax.transAxes, fontsize=9.2, color=col)
     ax.legend(loc="lower right", bbox_to_anchor=(0.99, 0.02), frameon=False, fontsize=9.5)
     _despine(ax)
-    _save(fig, "plot_dispatch_boundary", bottom=0.13,
+    _save(fig, "plot_dispatch_boundary", bottom=0.13, captured=captured_on(result_nmax),
           note="The two series run on different llama.cpp trees: every draft-mtp arm on master, "
                "every draft-dflash arm on PR #27342. Drafter and source tree vary together and no "
                "arm separates them, because draft-dflash cannot be run on master at all, so the "
@@ -571,7 +587,7 @@ def fig_width_partition(result):
         f"share of the {len(prompts)} prompts on which both arms show\n"
         f"the same first-divergence or censoring signature (%)", fontsize=9)
     fig.subplots_adjust(left=0.175, right=0.885, top=0.845)
-    _save(fig, "plot_width_partition",
+    _save(fig, "plot_width_partition", captured=captured_on(result),
           note=PHASE_A_N + f" A cell counts a prompt when both arms show the same signature, "
                f"which includes both reaching the 400-token cap without diverging; the second "
                f"number is how much of the cell that is. Those pairs carry no fork position, so a "
@@ -665,17 +681,21 @@ def fig_bound_by(res):
                      capsize=3, lw=1.2, zorder=3)
         for x, v in zip(xs + (i - 1) * width, vals):
             ax2.text(x, v + 0.025, f"{v:.2f}", ha="center", fontsize=9.2, color=C("fg"))
+    # "the baseline stops tracking it" was wrong on the figure's own evidence: the bar beside it
+    # reads 0.27, and README.md states that both workloads respond to both clocks and only the
+    # ORDERING reverses. The tick now says what the bar shows.
     ax2.set_xticks(xs, ["600 -> 1200 MHz\nall three track the SM clock",
-                        "1200 -> 1710 MHz\nthe baseline stops tracking it"], fontsize=9.6)
+                        "1200 -> 1710 MHz\nthe baseline falls to 0.27, the others hold"],
+                   fontsize=9.6)
     ax2.set_ylabel("SM-clock elasticity")
     ax2.set_ylim(0, 1.14)
-    ax2.set_title("Below 1200 MHz everything scales with clock. Above it, only\n"
-                  "the speculative arms still do", pad=10)
+    ax2.set_title("Below 1200 MHz all three track the SM clock. Above it the\n"
+                  "baseline's response falls by two thirds and the speculative arms hold", pad=10)
     ax2.legend(frameon=False, ncol=3, loc="upper right", fontsize=9.4)
     ax2.grid(axis="y", alpha=0.5); _despine(ax2)
 
     fig.subplots_adjust(left=0.185, right=0.975, top=0.935, hspace=0.62)
-    _save(fig, "plot_bound_by", bottom=0.10,
+    _save(fig, "plot_bound_by", bottom=0.10, captured=captured_on(res),
           note="Phase R2, 1575 requests, 0 incidents. Elasticity is how throughput responds to a "
                "clock that was set, so it places neither workload against a hardware limit: nothing "
                "here counts bytes moved or arithmetic issued, and no claim is made about which "
@@ -694,8 +714,9 @@ def main():
     for mode in ("light", "dark"):
         print(f"  --- {mode}")
         with theme(mode):
-            fig_headline(series, prompt_class)
-            fig_per_class(series, prompt_class)
+            phase_a_date = captured_on(result)
+            fig_headline(series, prompt_class, captured=phase_a_date)
+            fig_per_class(series, prompt_class, captured=phase_a_date)
             fig_cost_model(result)
             if result_nmax is not None:
                 fig_dispatch_boundary(result_nmax)
