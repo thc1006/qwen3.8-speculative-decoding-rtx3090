@@ -7625,6 +7625,140 @@ class TheDocumentIndexMustCountTheCorrectionsThatExist(unittest.TestCase):
         self.assertEqual({1, 2, 3, 28}, {int(n) for n in self.HEADING.findall(text)})
 
 
+class EveryAnchorLinkMustPointAtAHeadingThatExists(unittest.TestCase):
+    r"""The link guard checks the path. Nothing checked the part after the `#`.
+
+    `README.md`'s Contents line is eleven of them and every one addresses a heading in the same
+    file by its slug, so renaming a heading breaks a link silently: the page still loads, the
+    jump does nothing, and no check in this repository looked. The path half has been guarded
+    since the twelve broken relative links; this is the other half.
+
+    The slug rule is GitHub's: strip inline markup, drop anything that is not a word character,
+    whitespace or a hyphen, lower-case, and replace runs of whitespace or underscores with a
+    single hyphen.
+    """
+
+    LINK = re.compile(r"\]\(([^)#]*)#([A-Za-z0-9_-]+)\)")
+
+    @staticmethod
+    def _slug(heading):
+        h = re.sub(r"`|\*|\[|\]|\(|\)", "", heading.strip())
+        h = re.sub(r"[^\w\s-]", "", h).strip().lower()
+        return re.sub(r"[\s_]+", "-", h)
+
+    def _headings(self, root, name):
+        text = (root / name).read_text(encoding="utf-8", errors="replace")
+        return {self._slug(m.group(1))
+                for m in re.finditer(r"^#{1,6}\s+(.+?)\s*$", text, re.M)}
+
+    def test_every_fragment_addresses_a_heading(self):
+        import posixpath
+        root = Path(__file__).resolve().parent.parent
+        docs = [d for d in tracked_markdown()]
+        heads = {d: self._headings(root, d) for d in docs if (root / d).exists()}
+        bad, total = [], 0
+        for d in docs:
+            f = root / d
+            if not f.exists():
+                continue
+            for m in self.LINK.finditer(f.read_text(encoding="utf-8", errors="replace")):
+                total += 1
+                target, frag = m.group(1), m.group(2)
+                tgt = d if not target else posixpath.normpath(
+                    posixpath.join(posixpath.dirname(d), target))
+                if tgt not in heads:
+                    bad.append(f"{d}: -> {target}#{frag} (target is not a tracked document)")
+                elif frag not in heads[tgt]:
+                    bad.append(f"{d}: #{frag} is not a heading in {tgt}")
+        self.assertGreater(total, 0, "this check examined no anchor links, which is not a pass")
+        self.assertEqual(bad, [], "an anchor link addresses a heading that does not exist:\n  "
+                                  + "\n  ".join(bad))
+
+    def test_the_check_fires_on_a_renamed_heading(self):
+        page = "# A Heading, With Punctuation\n\nSee [it](#a-heading-with-punctuation).\n"
+        heads = {self._slug(m.group(1))
+                 for m in re.finditer(r"^#{1,6}\s+(.+?)\s*$", page, re.M)}
+        frag = self.LINK.search(page).group(2)
+        self.assertIn(frag, heads)
+        self.assertNotIn("a-heading-with-punctuation-renamed", heads)
+
+    def test_the_slug_rule_matches_the_ones_in_use(self):
+        self.assertEqual("how-this-study-is-scoped-and-what-it-inherits",
+                         self._slug("How this study is scoped, and what it inherits"))
+        self.assertEqual("the-verification-step-cost-model",
+                         self._slug("The verification-step cost model"))
+
+
+class TheFillerCorpusMustBeTheBytesItsChecksumsName(unittest.TestCase):
+    """`assets/README.md` publishes three SHA-256 values and nothing read them.
+
+    The document says why they matter: the drafter's acceptance rate depends on the exact tokens
+    it sees, a re-download differing by a line ending would change the filler and therefore the
+    measurement, and the difference would not show up in a result file. That is a strong argument
+    for committing the bytes and an equally strong one for checking them, which nothing did.
+
+    It also claimed `harness/filler.py` "asserts that no marker survives". It did not -- the two
+    searches there are best-effort and a file whose header format differed would have had its
+    licence block used as filler in silence. The assertion exists now, and this checks the other
+    half: that the files those patterns run over are the ones the document names.
+    """
+
+    def _published(self, root):
+        text = (root / "assets" / "README.md").read_text(encoding="utf-8")
+        return {name: digest for digest, name in
+                re.findall(r"^([0-9a-f]{64})\s+(\S+)\s*$", text, re.M)}
+
+    def test_every_published_checksum_matches_the_committed_file(self):
+        import hashlib
+        root = Path(__file__).resolve().parent.parent
+        published = self._published(root)
+        self.assertTrue(published, "assets/README.md publishes no checksums to check")
+        bad = []
+        for name, want in sorted(published.items()):
+            f = root / "assets" / name
+            if not f.exists():
+                bad.append(f"{name}: named in the document and not in the tree")
+                continue
+            got = hashlib.sha256(f.read_bytes()).hexdigest()
+            if got != want:
+                bad.append(f"{name}: published {want[:16]}, file is {got[:16]}")
+        self.assertEqual(bad, [], "the filler corpus is not the bytes its checksums name:\n  "
+                                  + "\n  ".join(bad))
+
+    def test_every_committed_asset_is_published(self):
+        root = Path(__file__).resolve().parent.parent
+        on_disk = {p.name for p in (root / "assets").glob("*.txt")}
+        self.assertEqual(sorted(on_disk), sorted(self._published(root)),
+                         "an asset is committed without a published checksum, or the reverse")
+
+    def test_the_stripper_refuses_boilerplate_it_did_not_remove(self):
+        """The assertion assets/README.md describes, exercised on a header it cannot match."""
+        import tempfile, shutil, importlib
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        filler = importlib.import_module("filler")
+        tmp = Path(tempfile.mkdtemp())
+        keep = filler.ASSETS
+        try:
+            (tmp / "book.txt").write_text(
+                "*** BEGIN OF THE PROJECT GUTENBERG EBOOK 9999 ***\n"
+                "This eBook is for the use of anyone anywhere in the United States\n"
+                "Call me Ishmael.\n")
+            filler.ASSETS = tmp
+            filler.corpus.cache_clear()
+            with self.assertRaises(RuntimeError):
+                filler.corpus()
+            (tmp / "book.txt").write_text(
+                "*** START OF THE PROJECT GUTENBERG EBOOK 9999 ***\n"
+                "Call me Ishmael.\n"
+                "*** END OF THE PROJECT GUTENBERG EBOOK 9999 ***\n")
+            filler.corpus.cache_clear()
+            self.assertEqual("Call me Ishmael.", filler.corpus())
+        finally:
+            filler.ASSETS = keep
+            filler.corpus.cache_clear()
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
     """A guard's docstring may not state a size its own list contradicts.
 

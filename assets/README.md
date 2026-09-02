@@ -19,7 +19,16 @@ The bytes are committed rather than fetched at run time, because the drafter's a
 depends on the exact tokens it sees. A re-download that differs by so much as a line ending
 would change the filler and therefore the measurement, and the difference would not be visible
 in the result file. `harness/filler.py` strips the Gutenberg header and licence block at load
-time and asserts that no marker survives; what reaches the model is the prose alone.
+time and, since 2026-09-02, asserts it: the two boundary markers, the licence sentence,
+the trademark clause, the domain and the full-licence header must all be absent from the
+assembled corpus or it refuses to return one. Until then the sentence claimed an assertion
+the function did not make, and a file whose header format differed would have had its
+licence block used as filler with nothing said.
+
+One mention of the archive does reach the model, and it is not boilerplate: Moby-Dick's
+Original Transcriber's Notes sit inside the marked region, after the START line, and name
+the archive the etext was combined from. It is front matter of the book as packaged, one
+occurrence in 5.15 million characters, and it is left in rather than special-cased.
 
 Real prose is used rather than a repeated paragraph on purpose. Repetition is exactly what a
 speculative drafter predicts best, so filling context with it would raise acceptance for a

@@ -48,7 +48,24 @@ def corpus() -> str:
         raise RuntimeError(
             f"no .txt found in {ASSETS}. Fetch the public-domain sources first; see "
             f"docs/PHASE_L_DESIGN.md.")
-    return "\n\n".join(parts)
+    out = "\n\n".join(parts)
+    # assets/README.md said this function "asserts that no marker survives" and it did not: the
+    # two searches above are best-effort, and a file whose header format differed would have had
+    # its whole licence block fed to the model with nothing said. The boilerplate is what must
+    # not survive, and each of these is absent from the committed corpus today, so this is a
+    # guard on a future re-download rather than a change to what Phase L measured.
+    for pattern in (r"\*\*\*\s*START OF (THE|THIS) PROJECT GUTENBERG",
+                    r"\*\*\*\s*END OF (THE|THIS) PROJECT GUTENBERG",
+                    r"This eBook is for the use of anyone anywhere",
+                    r"PROJECT GUTENBERG.{0,40}trademark",
+                    r"gutenberg\.org",
+                    r"START: FULL LICENSE"):
+        if re.search(pattern, out, re.I | re.S):
+            raise RuntimeError(
+                f"Gutenberg boilerplate survived stripping: {pattern!r} is still in the filler "
+                f"corpus. The header format has changed; fix the patterns above before running, "
+                f"because the licence block would otherwise be fed to the model as filler.")
+    return out
 
 
 def count_tokens(port: int, text: str, timeout_s: float = 300.0) -> int:
