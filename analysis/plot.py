@@ -651,12 +651,14 @@ def fig_width_partition(result):
                f"number is how much of the cell that is. Those pairs carry no fork position, so a "
                f"block is weaker than 100 % agreement on where output forks. The groups differ on "
                f"{differ} of {len(prompts)} prompts. The blocks span both drafters, so drafter "
-               f"identity does not predict the grouping while width does. A pre-registered "
-               f"warp-count intervention does NOT support warp count as the cause -- its "
-               f"registered prediction held on 3 of the 18 prompts that can discriminate -- and "
-               f"the four-build set that replaced it is void on its own validity gates, so "
-               f"nothing here rules the warp count out. Pass 1; identical in all five. w is the "
-               f"kernel's ncols_dst.")
+               f"identity does not predict the grouping while width does. A four-build "
+               f"warp-count intervention is a null, and the grounds matter: disassembly puts the "
+               f"edit in 92 of 6202 kernels and test-backend-ops at +13.6 to +26.7 % on them, no "
+               f"output byte moves -- 0 of 75 and 0 of 50 -- and the two stock builds agree on "
+               f"150 of 150 outputs, so the build is deterministic. A mechanism that cannot "
+               f"change the text cannot change where two texts diverge, which is why the warp "
+               f"count is out as the cause here rather than on a measured absence. Pass 1; "
+               f"identical in all five. w is the kernel's ncols_dst.")
 
 
 # ------------------------------------------------------------------ 5. what speculation is bound by
