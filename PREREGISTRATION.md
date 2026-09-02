@@ -5574,3 +5574,66 @@ Both recorders are fixed for runs after this date, and neither gap can be filled
 retrospectively, because that host is not this one. The document now says, where it quotes them,
 that the two blocks are transcribed rather than read back from the archive, and names the
 deposited evidence beside each.
+
+## Correction 59, 2026-09-02: a check that never matched, and three lists that could only shrink
+
+Found by asking what the eight findings of the previous pass had in common rather than by hunting
+for a ninth. Every one of them was caught by a guard written that same day, and CI was green
+through all of them. So the binding constraint here is not whether the guards run but what they
+cover, and this entry is about that shape rather than about a measurement. Nothing measured
+changes: no interval, coefficient, record or figure moves.
+
+### A check that asserted nothing, from the commit that introduced it
+
+`test_record_counts_quoted_in_the_readme_match_the_result_files` searched the prose for
+`Phase A \((\d+) request records` and `Phase M, (\d+) records`. The documents have never used
+either form -- they write `**875 request records**` and `**complete**, 1125 request records` --
+so both patterns missed, and the loop's `if not m: continue` turned each miss into a pass. It ran,
+was counted among the tests, and asserted nothing, in v1.0.0 and v1.0.4 alike. Both are deposited.
+
+It is replaced by a check on the form the prose does use: a number written as `N request records`
+has to be a record count some committed result file actually holds. Six occurrences across two
+documents, five distinct counts, every one of them matching a file. Watched failing on `1125`
+changed to `9999`.
+
+### A guard that found several rows and checked one of them
+
+`test_no_phase_m_cost_numbers_while_its_mean_len_check_fails` collected every `| **M** |` row out
+of the concatenated documents and then asserted on `row[0]`. Which row that was depended on the
+order the documents happened to be joined in, so the guard could report on Phase M while checking
+a row the rule was never about. It now checks every such row in the two files that carry the
+later-phases results table, named by file. `docs/EXPERIMENT_PLAN.md` is outside that set with its
+reason written down: it tabulates arms, passes and estimated hours for a run that had not
+happened, so it states no cost interpretation to withhold.
+
+### Three lists that could only shrink
+
+Two guards checked the README's headline numbers and each carried the same five-document tuple:
+the README and the four pages it was split into on 2026-08-29. There are seventeen such pages.
+The twelve neither guard read include `docs/COST_MODEL.md`, `docs/RESOURCE_RESPONSE.md` and
+`docs/GREEDY_DIVERGENCE.md`, which is why every correction made to those three on 2026-09-02 was
+found by reading them rather than by a check. A third list paired two ladder drivers with their
+matrices; that one was complete, but complete by the timing of when it was typed rather than by
+construction.
+
+All three now derive from the tree. Widening the document set from five to seventeen found no new
+disagreement -- the suite passed unchanged -- so this is prevention rather than a repair, and it
+is recorded as such.
+
+### The class, rather than the six instances of it
+
+The scope of a guard has been narrower than its name repeatedly, and only the sourced instances
+are listed here: the link check over 3 of 23 documents, the lexical check 5 and the citation check
+4, all recorded in `tracked_markdown`'s docstring; the subprocess-timeout guard over the four
+modules Correction 45 names, while `harness/devices.py` -- which `bench.py` enters at the start of
+every arm -- was not one of them; and these two over 5 of 17. No list was wrong when it was
+written. Each was typed before most of the files it should cover existed, and a tuple does not
+grow.
+
+`NoGuardMayFreezeTheListOfFilesItChecks` walks this file's own syntax tree and fails on any class
+attribute holding three or more tracked repository paths that nothing re-derives. Run against the
+tree as it stood before this entry it names all three lists above; run against it now it names
+none. Two files listed by identity is a subject rather than a scope and does not trip it.
+`scripts/verify_everything.sh` is deliberately outside its reach: that script names its three
+figure generators literally and is pinned by outcome instead, since it fails when the number of
+figures rewritten differs from the number on disk.

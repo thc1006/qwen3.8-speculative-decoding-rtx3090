@@ -34,6 +34,33 @@ def tracked_markdown():
     return [f for f in out.stdout.split() if not f.startswith(("upstream/", "llamacpp"))]
 
 
+def tracked_claim_surfaces():
+    """The documents whose numbers are this study's claims as they stand today.
+
+    Two guards check the README's headline numbers against the files they came from, and each
+    carried the same five-document tuple: README.md and the four pages the README was split into
+    on 2026-08-29. There are seventeen such pages. The twelve neither guard read include
+    docs/COST_MODEL.md, docs/RESOURCE_RESPONSE.md and docs/GREEDY_DIVERGENCE.md, and every
+    correction made to those three on 2026-09-02 was found by reading them rather than by a check.
+    The tuple was not wrong when it was written; it was written when the split had just happened
+    and it never grew with docs/.
+
+    `PREREGISTRATION.md` and `TODO.md` are deliberately outside this set even though both are full
+    of numbers. The preregistration is append-only and carries every superseded figure on purpose,
+    so a check that its numbers match today's artifacts would be a check that it had been
+    rewritten -- the one thing it must never be. TODO.md quotes withdrawn readings under its
+    completed entries for the same reason. The write-ups under `upstream/` and `repro/` are
+    reports to other projects and are read by their own guards.
+    """
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    out = subprocess.run(["git", "-C", str(root), "ls-files", "README.md", "docs/*.md"],
+                         capture_output=True, text=True, timeout=60)
+    if out.returncode != 0:
+        return ("README.md",)
+    return tuple(sorted(out.stdout.split()))
+
+
 def tracked_metadata():
     """The JSON and YAML this repository writes prose into, as opposed to measures into.
 
@@ -1534,8 +1561,7 @@ class TestReadmeMatchesArtifacts(unittest.TestCase):
     # front page AND the documents its content moved into, because a claim does not stop needing
     # checking when it changes file. Reading only README.md turned four of them from passing to
     # vacuous the moment the move happened -- "no Phase M row to check" is not a pass.
-    SURFACES = ("README.md", "docs/PHASES.md", "docs/ENERGY.md",
-                "docs/STATISTICAL_SCOPE.md", "docs/REPRODUCIBILITY.md")
+    SURFACES = tracked_claim_surfaces()
 
     def _surfaces(self):
         return "\n".join((self.ROOT / f).read_text(encoding="utf-8")
@@ -3076,8 +3102,33 @@ class TestDriverTablesMatchTheirMatrix(unittest.TestCase):
     """
 
     ROOT = Path(__file__).parent.parent
-    PAIRS = [("scripts/run_phase_q.sh", "harness/matrices/phase_q.py"),
-             ("scripts/run_phase_qsmall.sh", "harness/matrices/phase_qsmall.py")]
+
+    @classmethod
+    def _pairs(cls):
+        """Every (driver, matrix) this check applies to, derived rather than listed.
+
+        This was a two-entry literal, and it was complete: exactly two drivers carry a
+        `declare -A FILE=(` block and exactly two matrices carry `RUNGS`. It was complete by
+        timing rather than by construction, so a third ladder added later would have had its two
+        tables drift with nothing comparing them -- which is the defect this class exists for.
+        Pairing is by name, `run_phase_X.sh` against `matrices/phase_X.py`, the convention every
+        runner in the tree follows.
+        """
+        import re as _re
+        import subprocess
+        out = subprocess.run(["git", "-C", str(cls.ROOT), "ls-files", "scripts/*.sh"],
+                             capture_output=True, text=True, timeout=60)
+        if out.returncode != 0:
+            return []
+        pairs = []
+        for f in sorted(out.stdout.split()):
+            path = cls.ROOT / f
+            if not path.exists() or "declare -A FILE=(" not in path.read_text(encoding="utf-8"):
+                continue
+            m = _re.fullmatch(r"scripts/run_(phase_\w+)\.sh", f)
+            if m:
+                pairs.append((f, f"harness/matrices/{m.group(1)}.py"))
+        return pairs
 
     @staticmethod
     def _matrix_files(path):
@@ -3109,7 +3160,7 @@ class TestDriverTablesMatchTheirMatrix(unittest.TestCase):
 
     def test_every_driver_names_the_files_its_matrix_names(self):
         checked = 0
-        for driver, matrix in self.PAIRS:
+        for driver, matrix in self._pairs():
             dp, mp = self.ROOT / driver, self.ROOT / matrix
             if not (dp.exists() and mp.exists()):
                 continue
@@ -3126,6 +3177,16 @@ class TestDriverTablesMatchTheirMatrix(unittest.TestCase):
         self.assertGreater(checked, 0, "no driver/matrix pair was checked; the guard has no "
                                         "subject")
 
+    def test_every_driver_with_a_file_table_has_a_matrix_to_check_it_against(self):
+        """A driver that downloads files and has no matrix beside it is checked by nothing."""
+        pairs = self._pairs()
+        self.assertTrue(pairs, "no driver carries a `declare -A FILE=(` block, so the pairing "
+                               "derivation found no subject; it used to be a literal list and "
+                               "would have gone on naming two files that no longer qualify")
+        orphans = [d for d, m in pairs if not (self.ROOT / m).exists()]
+        self.assertEqual(orphans, [], f"these drivers download per-rung files and have no matrix "
+                                      f"to check the names against: {orphans}")
+
     def test_no_driver_hardcodes_how_many_arms_its_matrix_defines(self):
         """N_ARMS=4 against a matrix defining five is a gate that passes on a truncated run.
 
@@ -3133,7 +3194,7 @@ class TestDriverTablesMatchTheirMatrix(unittest.TestCase):
         driver, a run that lost every n-max 6 arm-pass lands on exactly the expected count and
         has its weights deleted -- and n-max 6 is the arm that matches llama.cpp #26750.
         """
-        for driver, matrix in self.PAIRS:
+        for driver, matrix in self._pairs():
             dp = self.ROOT / driver
             if not dp.exists():
                 continue
@@ -3957,8 +4018,7 @@ class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
     # front page AND the documents its content moved into, because a claim does not stop needing
     # checking when it changes file. Reading only README.md turned four of them from passing to
     # vacuous the moment the move happened -- "no Phase M row to check" is not a pass.
-    SURFACES = ("README.md", "docs/PHASES.md", "docs/ENERGY.md",
-                "docs/STATISTICAL_SCOPE.md", "docs/REPRODUCIBILITY.md")
+    SURFACES = tracked_claim_surfaces()
 
     def _surfaces(self):
         return "\n".join((self.ROOT / f).read_text(encoding="utf-8")
@@ -3982,15 +4042,60 @@ class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
             self.skipTest(f"no results/{name}")
         return json.loads(f.read_text(encoding="utf-8"))
 
-    def test_record_counts_quoted_in_the_readme_match_the_result_files(self):
-        import re
-        for phase, pattern in (("phase_a.json", r"Phase A \((\d+) request records"),
-                               ("phase_m.json", r"Phase M, (\d+) records")):
-            m = re.search(pattern, self.readme)
-            if not m:
+    @staticmethod
+    def _committed_record_counts():
+        """{n_records: [file stems]} over every committed result file that holds records."""
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        out = subprocess.run(["git", "-C", str(root), "ls-files", "results/*.json"],
+                             capture_output=True, text=True, timeout=60)
+        counts = {}
+        for f in out.stdout.split():
+            try:
+                d = json.loads((root / f).read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
                 continue
-            self.assertEqual(int(m.group(1)), len(self._result(phase)["records"]),
-                             f"the README's count for {phase} is not the file's")
+            if isinstance(d, dict) and isinstance(d.get("records"), list):
+                counts.setdefault(len(d["records"]), []).append(Path(f).stem)
+        return counts
+
+    def _quoted_record_counts(self):
+        import re
+        out = []
+        for f in self.SURFACES:
+            path = self.ROOT / f
+            if not path.exists():
+                continue
+            for m in re.finditer(r"(\d[\d,]*)\s+request records",
+                                 path.read_text(encoding="utf-8")):
+                out.append((f, int(m.group(1).replace(",", ""))))
+        return out
+
+    def test_every_record_count_quoted_in_prose_is_one_a_file_has(self):
+        """A number written as "N request records" has to be a count some committed file has.
+
+        This replaces a check that never ran once. It looked for `Phase A (875 request records`
+        and `Phase M, 1575 records`, forms the prose has never used -- the documents write
+        `**875 request records**` and `**complete**, 1125 request records` -- so both patterns
+        missed, the loop's `if not m: continue` swallowed both misses, and the test passed having
+        asserted nothing from the commit that introduced it.
+
+        The table rows are checked phase by phase by TheHandWrittenPhaseTableAgreesWithTheFiles.
+        What nothing read is the same count written into narrative prose, which is where
+        docs/RESOURCE_RESPONSE.md states 1125 and the README states 875.
+        """
+        quoted = self._quoted_record_counts()
+        self.assertTrue(quoted, "no document states a count as 'N request records'; this check "
+                                "asserted nothing for its whole life once already")
+        counts = self._committed_record_counts()
+        self.assertTrue(counts, "no committed result file holds records")
+        bad = [(f, n) for f, n in quoted if n not in counts]
+        self.assertEqual(bad, [], "these prose counts match no committed result file:\n  "
+                                  + "\n  ".join(f"{f}: {n} request records" for f, n in bad))
+
+    def test_that_check_would_fire_on_a_count_no_file_has(self):
+        counts = self._committed_record_counts()
+        self.assertNotIn(9999, counts, "9999 records would make this probe meaningless")
 
     def test_no_architecture_claim_while_the_phase_m_anchor_fails(self):
         anchor = self._artifact("phase_m_anchor.txt")
@@ -4004,15 +4109,29 @@ class TestReadmeSaysWhatTheArtifactsSay(unittest.TestCase):
                              f"anchor does not hold and that nothing in Phase M may then be read "
                              f"as a statement about the predecessor or the architecture")
 
+    # The documents carrying the later-phases RESULTS table. docs/EXPERIMENT_PLAN.md also has a
+    # `| **M** |` row and is deliberately not here: it tabulates arms, passes and estimated hours
+    # for a run that had not happened yet, so it states no cost interpretation to withhold.
+    RESULT_TABLE_FILES = ("README.md", "docs/PHASES.md")
+
     def test_no_phase_m_cost_numbers_while_its_mean_len_check_fails(self):
         cost = self._artifact("phase_m_cost.txt")
         if "The derivation is wrong" not in cost:
             self.skipTest("Phase M's mean_len check passes; this guard is for when it does not")
-        row = [l for l in self.readme.splitlines() if l.startswith("| **M** |")]
-        self.assertTrue(row, "no Phase M row in the later-phases table to check")
-        self.assertTrue(any(w in row[0] for w in ("withheld", "withdrawn")),
-                        "Phase M's mean_len derivation fails its own integrity check, so the "
-                        "README's Phase M row has to say its cost interpretation is withheld")
+        # Every such row, named by its file -- not `row[0]` of the concatenated surfaces, which is
+        # what this read. Which row it checked then depended on the order the surfaces happened to
+        # be joined in: widening that list to every document put a planning table's row first, and
+        # the guard went on reporting about Phase M while checking a row the rule is not about.
+        rows = [(f, l) for f in self.RESULT_TABLE_FILES
+                if (self.ROOT / f).exists()
+                for l in (self.ROOT / f).read_text(encoding="utf-8").splitlines()
+                if l.startswith("| **M** |")]
+        self.assertTrue(rows, "no Phase M row in the later-phases table to check")
+        bad = [f for f, l in rows if not any(w in l for w in ("withheld", "withdrawn"))]
+        self.assertEqual(bad, [],
+                         "Phase M's mean_len derivation fails its own integrity check, so every "
+                         "later-phases row for it has to say its cost interpretation is withheld; "
+                         f"these do not: {bad}")
 
     def test_a_zero_draft_arm_is_not_described_as_an_ignored_flag(self):
         res = self._result("phase_c.json")
@@ -8055,6 +8174,117 @@ class TheContributionMapMustNameEveryPatchThisRepositorySends(unittest.TestCase)
         self.assertNotEqual(text, without, "the section this guard was written for is gone")
         self.assertEqual(["upstream/llamacpp/0002-output-reorder-index-space.patch"],
                          self._unnamed(without))
+
+
+class NoGuardMayFreezeTheListOfFilesItChecks(unittest.TestCase):
+    """A guard's scope is narrower than its name, and it has been six times.
+
+    The link check covered 3 of 23 documents, the lexical check 5 and the citation check 4; the
+    subprocess-timeout guard covered the four modules Correction 45 names and not
+    `harness/devices.py`, which `bench.py` enters at the start of every arm; and the two
+    README-number guards five of seventeen, which is why the corrections made to
+    docs/COST_MODEL.md, docs/RESOURCE_RESPONSE.md and docs/GREEDY_DIVERGENCE.md were found by
+    reading rather than by a check. None of those lists was wrong when it was written. Each was
+    typed before most of the files it should cover existed, and a tuple does not grow.
+
+    So the rule is about the shape rather than the instances: a class attribute holding three or
+    more tracked repository paths must be pinned to a set this repository can derive -- computed
+    from `git ls-files`, from one of the `tracked_*` helpers, or from a `_pairs()`-style
+    derivation, or compared against one on a line that names the attribute. A list that is
+    neither is a scope nobody rechecks, and the next one will be complete on the day it is typed
+    too.
+
+    Deliberately not covered: `scripts/verify_everything.sh`, which names its three figure
+    generators literally and is pinned by outcome instead -- it fails when the number of PNGs
+    rewritten differs from the number on disk, so a fourth generator that it did not run would
+    leave a committed figure untouched and fail the section.
+    """
+
+    SOURCE = Path(__file__).resolve()
+    ROOT = SOURCE.parent.parent
+    MIN_PATHS = 3
+    PATHY = re.compile(r"^[\w./-]+\.(md|py|sh|json|yml|yaml|cff|txt|csv|patch)$")
+    DERIVED = re.compile(r"ls-files|_registry_ids|_table_ids|_pairs\(|_patches\(|\.glob\(|tracked_\w+\(")
+
+    # attribute name -> why a literal is right for it. Empty on purpose: nothing in this file
+    # needs one today. An entry here is checked below against the attributes that exist, so an
+    # exemption cannot outlive the thing it exempts.
+    EXEMPT: dict[str, str] = {}
+
+    def _tracked(self):
+        import subprocess
+        out = subprocess.run(["git", "-C", str(self.ROOT), "ls-files"],
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, out.returncode, out.stderr)
+        files = set(out.stdout.split())
+        self.assertTrue(files, "git listed no files; the check would pass vacuously")
+        return files
+
+    def _frozen(self, source, tracked):
+        """[(class, attribute, n_paths)] for every literal list of repo paths nothing derives."""
+        import ast
+        out = []
+        for cls in [n for n in ast.parse(source).body if isinstance(n, ast.ClassDef)]:
+            body = ast.get_source_segment(source, cls) or ""
+            for stmt in cls.body:
+                if not isinstance(stmt, (ast.Assign, ast.AnnAssign)):
+                    continue
+                targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+                name = getattr(targets[0], "id", None)
+                if not name or not name.isupper() or name in self.EXEMPT:
+                    continue
+                paths = {c.value for c in ast.walk(stmt)
+                         if isinstance(c, ast.Constant) and isinstance(c.value, str)
+                         and self.PATHY.match(c.value) and c.value in tracked}
+                if len(paths) < self.MIN_PATHS:
+                    continue
+                if any(re.search(rf"\b{name}\b", ln) and self.DERIVED.search(ln)
+                       for ln in body.splitlines()):
+                    continue
+                out.append((cls.name, name, len(paths)))
+        return out
+
+    def test_no_class_attribute_freezes_the_files_it_checks(self):
+        frozen = self._frozen(self.SOURCE.read_text(encoding="utf-8"), self._tracked())
+        self.assertEqual(
+            frozen, [],
+            "these carry a literal list of tracked repository paths that nothing re-derives, so "
+            "the day a file is added they check a subset and still pass:\n  "
+            + "\n  ".join(f"{c}.{a} ({n} paths)" for c, a, n in frozen))
+
+    def test_the_check_fires_on_a_frozen_list(self):
+        planted = (
+            "class X(unittest.TestCase):\n"
+            '    SURFACES = ("README.md", "TODO.md", "PREREGISTRATION.md")\n\n'
+            "    def test_a(self):\n"
+            "        return self.SURFACES\n")
+        self.assertEqual([("X", "SURFACES", 3)],
+                         self._frozen(planted, self._tracked()))
+
+    def test_the_check_passes_a_derived_one(self):
+        derived = (
+            "class X(unittest.TestCase):\n"
+            '    SURFACES = ("README.md", "TODO.md", "PREREGISTRATION.md")\n\n'
+            "    def test_a(self):\n"
+            "        self.assertEqual(self.SURFACES, tracked_markdown())\n")
+        self.assertEqual([], self._frozen(derived, self._tracked()))
+
+    def test_a_short_list_of_named_files_is_not_the_defect(self):
+        """Two files named by identity is a subject, not a scope. TABLE_FILES is the case."""
+        two = ('class X(unittest.TestCase):\n'
+               '    TABLE_FILES = ("README.md", "TODO.md")\n')
+        self.assertEqual([], self._frozen(two, self._tracked()))
+
+    def test_every_exemption_still_names_an_attribute_that_exists(self):
+        import ast
+        src = self.SOURCE.read_text(encoding="utf-8")
+        names = {getattr(t, "id", None)
+                 for cls in ast.parse(src).body if isinstance(cls, ast.ClassDef)
+                 for stmt in cls.body if isinstance(stmt, ast.Assign)
+                 for t in stmt.targets}
+        stale = sorted(set(self.EXEMPT) - names)
+        self.assertEqual(stale, [], f"these exemptions name attributes that no longer exist: "
+                                    f"{stale}")
 
 
 if __name__ == "__main__":
