@@ -4772,22 +4772,45 @@ class TheDepositMetadataMayNotNameAVersionNobodyDeposited(unittest.TestCase):
             raise AssertionError(f"CITATION.cff has {len(hits)} {key!r} keys; expected exactly 1")
         return hits[0].strip()
 
-    def test_the_version_is_one_that_was_actually_deposited(self):
-        import json
+    def test_the_version_names_a_real_release_point(self):
+        """The two files do not have the same job, and an earlier version of this check missed it.
+
+        CITATION.cff carries a `doi:` beside its `version:`, so the pair asserts that the
+        identifier resolves to that version, and it must name something Zenodo already holds.
+        That is what the guard above enforces and why v1.0.2's tree rolled back to 1.0.0 after
+        v1.0.1 asserted a version that was never deposited.
+
+        `.zenodo.json` carries no DOI. It is the metadata Zenodo READS when a release creates a
+        record, so its `version` names the deposit about to be made. Requiring that to be
+        already-deposited, which this check first did, makes a new deposit impossible: the file
+        would have to name the version it is in the act of creating. It only has to name a real
+        release point and never go backwards from what is already archived, because a record
+        labelled with an older number than one that exists is the confusion the whole convention
+        is here to avoid.
+        """
+        import json, subprocess
         root = Path(__file__).resolve().parent.parent
         v = self._zenodo().get("version", "")
         self.assertTrue(v, ".zenodo.json declares no version")
         deposits = json.loads((root / "repro" / "DEPOSITS.json").read_text())
         have = {d["version"] for d in deposits["versions"]}
-        self.assertIn(
-            v, have,
-            f".zenodo.json names version {v!r}, which repro/DEPOSITS.json does not record as "
-            f"deposited (it has {sorted(have)}). A tag is not a deposit.")
+        tags = set(subprocess.run(["git", "-C", str(root), "tag", "--list"], capture_output=True,
+                                  text=True, timeout=60).stdout.split())
+        self.assertTrue(
+            v in have or f"v{v}" in tags,
+            f".zenodo.json names version {v!r}, which is neither deposited ({sorted(have)}) nor "
+            f"a tag in this repository. A version number has to name something real.")
 
-    def test_it_agrees_with_the_citation_file(self):
+        def key(x):
+            return tuple(int(n) for n in re.findall(r"\d+", x))
+        newest = max((key(x) for x in have), default=())
+        self.assertGreaterEqual(
+            key(v), newest,
+            f".zenodo.json names {v!r} while {sorted(have)[-1]!r} is already archived. A deposit "
+            f"cut from this tree would carry a version number older than a record that exists.")
+
+    def test_it_agrees_with_the_citation_file_on_what_does_not_depend_on_the_deposit(self):
         z = self._zenodo()
-        self.assertEqual(z.get("version", ""), self._cff_scalar("version"),
-                         ".zenodo.json and CITATION.cff name different versions")
         self.assertEqual(z.get("title", ""), self._cff_scalar("title"),
                          ".zenodo.json and CITATION.cff give the deposit different titles")
         orcid = (z.get("creators") or [{}])[0].get("orcid", "")
