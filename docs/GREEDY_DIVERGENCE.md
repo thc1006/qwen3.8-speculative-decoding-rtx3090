@@ -115,8 +115,10 @@ identities**: of the records that ran to EOS, not one matched its baseline. The 
 {3,4} / {5,6,8} is unchanged and rests on more determined cells than before.
 
 This corroborates [llama.cpp #25618](https://github.com/ggml-org/llama.cpp/issues/25618) rather
-than discovering anything: that thread already establishes the phenomenon, its
-quantization-dependence, its drafter-independence, and a root cause on the Vulkan side. What is
+than discovering anything: that thread already reports the phenomenon, its
+quantization-dependence, its drafter-independence, and a root cause on the Vulkan side. Its
+bf16 half is the one this study measured and found too strong as written: 36 of 75 requests
+still diverge with bf16 weights, which `PHASES.md`'s Q-small row gives in full. What is
 still open is the **CUDA** boundary, and a width-localised boundary is what this repo can add -
 now with the intervention result attached, which points away from the mechanism the thread
 proposes.

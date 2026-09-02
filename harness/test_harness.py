@@ -7071,7 +7071,19 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
         return "\n\n".join(out)
 
     OUTSIDE = re.compile(r"(#\d{4,6}|\bissue\b|\bPR\b|llama\.cpp|vLLM|upstream)", re.I)
-    UPGRADE = re.compile(r"\b(establishes?|proves?|demonstrates?|confirms?|shows?)\s+(that|it)\b", re.I)
+    # Two forms. "establishes that X" takes a clause; "establishes the phenomenon" takes a noun,
+    # and only the first was caught, so `docs/GREEDY_DIVERGENCE.md` credited llama.cpp #25618 with
+    # establishing a phenomenon while four other places in this tree say that thread "says" or
+    # "scopes its finding as". Correcting one grammatical form of a claim is not correcting the
+    # claim.
+    UPGRADE = re.compile(
+        r"\b(?:(?:establishes?|proves?|demonstrates?|confirms?)\s+"
+        r"(?:that\b|it\b|the\b|its\b|a\b|an\b|this\b)"
+        r"|(?:establishes?|proves?|demonstrates?|confirms?|shows?)\s+(?:that\b|it\b))", re.I)
+    # `shows` keeps the clause form only. "shows the ordering is absent" is ordinary description
+    # and the two sentences it caught when widened were both denials -- "nothing here shows",
+    # "it does not show" -- which are the most careful sentences in the tree, not the least.
+    DENIED = re.compile(r"\b(nothing|not|never|cannot|can't|does not|do not|no \w+)\b[^.;]{0,40}$", 0)
 
     def test_no_outside_thread_is_said_to_have_established_something(self):
         """The mirror image of the check below, and the one that shipped.
@@ -7096,7 +7108,10 @@ class AClaimAboutWhatOthersDidNeedsEvidenceOfWhatTheyDid(unittest.TestCase):
                   + tracked_upstream_prose())
         for name in names:
             for sent in self._sentences(self._prose_of(root / name)):
-                if self.OUTSIDE.search(sent) and self.UPGRADE.search(sent):
+                m = self.UPGRADE.search(sent)
+                if m and self.DENIED.search(sent[:m.start()]):
+                    continue          # "nothing here shows", "it does not show"
+                if self.OUTSIDE.search(sent) and m:
                     bad.append(f"{name}: {sent[:120]}")
         self.assertEqual(
             bad, [],
