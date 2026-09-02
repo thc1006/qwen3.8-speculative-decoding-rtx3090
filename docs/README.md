@@ -14,7 +14,7 @@ that cannot happen silently again.
 | [`../README.md`](../README.md) | the primary result, its limits, and how to reproduce it |
 | [`PHASES.md`](PHASES.md) | every follow-up phase: its question, its status, and what it may not be used to claim |
 | [`STATISTICAL_SCOPE.md`](STATISTICAL_SCOPE.md) | what the intervals are, what they cover, and what none of them carry |
-| [`../PREREGISTRATION.md`](../PREREGISTRATION.md) | the append-only record: hypotheses before their data, and 55 dated corrections |
+| [`../PREREGISTRATION.md`](../PREREGISTRATION.md) | the append-only record: hypotheses before their data, and 57 dated corrections |
 
 ## The four mechanism reports
 

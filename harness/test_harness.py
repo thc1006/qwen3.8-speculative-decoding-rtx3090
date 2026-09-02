@@ -7563,6 +7563,53 @@ class TheReadmeMustNameEveryPhaseThatDocumentTabulates(unittest.TestCase):
             "checked here while a numeral would not be")
 
 
+class TheDocumentIndexMustCountTheCorrectionsThatExist(unittest.TestCase):
+    r"""`docs/README.md` says how many dated corrections PREREGISTRATION.md carries, by hand.
+
+    It said 55, which was exactly right the day that index was written and went stale when 56
+    and 57 were appended. Unlike a count of commits between two tags, this one is derivable, so
+    it gets a check rather than being taken out.
+
+    The regex matters and this repository has been caught by it twice. Corrections 1 and 2 are
+    written `### CORRECTION 1:` -- heading level three, upper case -- and 28a is a `###`
+    sub-heading, so a scan for `^## Correction (\d+)` misses six headings and two whole
+    corrections. PREREGISTRATION.md records that at the point where a verification scan reported
+    references to corrections it had failed to find.
+    """
+
+    HEADING = re.compile(r"^#{2,3} *(?:Correction|CORRECTION) *(\d+)[a-z]?", re.M)
+    STATED = re.compile(r"(\d+) dated corrections")
+
+    def _numbers(self, root):
+        text = (root / "PREREGISTRATION.md").read_text(encoding="utf-8")
+        return {int(n) for n in self.HEADING.findall(text)}
+
+    def test_the_index_states_the_number_that_exists(self):
+        root = Path(__file__).resolve().parent.parent
+        idx = (root / "docs" / "README.md").read_text(encoding="utf-8")
+        m = self.STATED.search(idx)
+        self.assertIsNotNone(m, "docs/README.md no longer states a correction count; if the "
+                                "sentence was rewritten, rewrite this check with it")
+        self.assertEqual(int(m.group(1)), len(self._numbers(root)),
+                         "docs/README.md and PREREGISTRATION.md disagree on how many dated "
+                         "corrections there are")
+
+    def test_the_numbering_has_no_gaps(self):
+        nums = self._numbers(Path(__file__).resolve().parent.parent)
+        self.assertEqual(sorted(nums), list(range(1, max(nums) + 1)),
+                         "a correction number is missing, so a count is not a range")
+
+    def test_the_loose_regex_is_the_one_that_undercounts(self):
+        """The trap, written down so the next reader does not re-derive it."""
+        # The numbers here are real ones. A fixture citing a Correction that does not exist
+        # fails the guard next door, which is the correct behaviour of that guard.
+        text = ("## Correction 3, x\n### CORRECTION 1: y\n### CORRECTION 2: z\n"
+                "## Correction 28, w\n### Correction 28a, v\n")
+        loose = len(set(re.findall(r"^## Correction (\d+)", text, re.M)))
+        self.assertEqual(2, loose)
+        self.assertEqual({1, 2, 3, 28}, {int(n) for n in self.HEADING.findall(text)})
+
+
 class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
     """A guard's docstring may not state a size its own list contradicts.
 
