@@ -60,7 +60,11 @@ At the top of the clock range the two workloads sit in opposite corners:
 |---|---:|---:|
 | baseline | **0.79-0.81** | **0.27** |
 | mtp-n3 | 0.13-0.15 | 0.76 |
-| mtp-n7 | 0.17-0.18 | 0.81 |
+| mtp-n7 | 0.17-0.18 | 0.80 |
+
+The compute column is `mtp-n7`'s 0.8050 rounded once. It read 0.81 until 2026-09-02, from
+rounding the report's already-rounded 0.805 a second time, which put this table 0.01 above
+the figure beside it.
 
 The two elasticities very nearly swap: over these clock intervals the baseline responds mostly to
 the memory clock and the speculative arms mostly to the SM clock. That is consistent with one
