@@ -42,7 +42,9 @@ inside the band the continuous ones occupy. All of them are synthetic data-gener
 rather than this data's own unknown distribution, so they diagnose the estimator rather than
 quantify this interval; the primary Phase A effects sit far from zero under any of the sets.
 
-Undercoverage is why an interval that only just clears zero is not read as a result.
+The printed intervals should therefore be read as under-covering rather than as exact 95 %
+statements. Undercoverage is why an interval that only just clears zero is not read as a
+result.
 `stats.Interval.near_zero` counts how far the nearer bound sits from zero in half-widths and calls
 anything under 1.3 too close to lean on; `analyze.py` names any verdict that sits inside that
 margin.
@@ -68,16 +70,3 @@ Divergence and right-censoring are reported over arm-prompt cells for that reaso
 over records is what made a censoring drop look larger than it was: 260 of 750 at the 400-token cap
 against 9 of 375 at 1600 put the cross-tree control into one denominator and left it out of the
 other.
-
-## What the intervals cover, and what they carry no uncertainty for
-
-- **Statistical scope.** The inferential unit is 25 prompts, not 875 records. The percentile
-  cluster bootstrap undercovers at that size on every process tested
-  (87.5-92.0 % against a nominal 95 %, four synthetic processes, 2000 replications each, Monte
-  Carlo standard error 0.6 to 0.7 points), so the printed intervals should be read as
-  under-covering rather than as exact 95 % statements, and none of them carry uncertainty from changing host,
-  card, build, model or prompt population. The prompts were purposively constructed rather than
-  sampled from deployment traffic, so the bootstrap measures sensitivity to resampling this suite
-  under its class structure and is not a population-representative traffic interval. Intervals
-  across secondary arms, classes and follow-up phases are nominal and unadjusted for multiplicity;
-  they are not simultaneous 95 % family-wise statements.
