@@ -367,6 +367,47 @@ its ancestor resolved to itself: `test_valid_chain` was testing a third looping 
 body would have claimed a before-equals-after result that does not hold. Caught in the last check
 before opening.
 
+## 8. `output_reorder` index space: committed, filed, and not in this map either
+
+Section 7 recorded exactly this omission for SGLang. This one is llama.cpp and has the same
+shape: `upstream/llamacpp/0002-output-reorder-index-space.patch` and the evidence directory
+`repro/output_reorder_ordering/` are both committed, and neither appeared anywhere above.
+
+`extract_layer_inputs()` writes rows in **ubatch** order, `dst_offset = token_offset *
+row_floats`. `common/speculative.cpp:1115` reads them by **batch** index. The two orders agree
+only while the splitter does not regroup, and `split_equal` regroups whenever a batch spans more
+than one ubatch or interleaves sequences.
+
+It is decidable without model arithmetic. For `LLM_ARCH_LLAMA`, `res->t_layer_inp[0]` is `inpL`
+straight out of `build_inp_embd` with nothing between them touching it, so a layer-0 row depends
+on the token id and on nothing else -- not the position, not the sequence, not the batch shape.
+Two rows holding the same token are bit-identical, so the check needs no tolerance and the
+reference table is built by decoding each id once in an unpermuted single sequence.
+
+| variant | failures / 400 |
+|---|---|
+| upstream `fc62ba7` | 210 |
+| remove the `embd_layer_inp` swap and nothing else | **231, worse than upstream** |
+| permute by token index (the change) | **0** |
+
+Seed 4242, then four further seeds at 400 cases each: 2000 cases across 5 seeds, 0 failures. The
+middle row is why the obvious fix is wrong. With `n_outputs == n_tokens` the output permutation
+happens to equal the token permutation, so the existing swap is load-bearing and removing it
+breaks cases upstream gets right; the break is at `n_outputs < n_tokens`, where the swap indices
+address output rows while the buffer holds token rows.
+
+The committed patch is +15/-11 in `src/llama-context.cpp` and +36 in
+`tests/test-batch-alloc.cpp`, filed as
+[#27705](https://github.com/ggml-org/llama.cpp/pull/27705). **The tracker was not re-read for
+this entry**: unlike the states quoted above it carries no snapshot date, and the committed patch
+is a snapshot rather than a claim about the pull request's current head.
+
+`repro/output_reorder_ordering/README.md` also records a claim this study got wrong and
+withdrew -- that a synthetic model cannot carry nextn tensors, which had been used to justify
+leaving `embd_nextn` untested. `src/models/qwen35.cpp:213` sets `res->t_h_nextn`
+unconditionally and reads no nextn weight tensors, so both the masked and the unmasked layout
+were directly testable all along, and both are now tested.
+
 ## What this study CANNOT contribute, stated so nobody spends time on it
 
 - **The quantization axis of the divergence, on this target.** Testing it on Qwen3.8-27B would

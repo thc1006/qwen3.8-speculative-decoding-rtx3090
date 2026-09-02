@@ -27,6 +27,7 @@ import statistics
 import sys
 import threading
 import time
+import urllib.error
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -63,6 +64,21 @@ SPEC = ["--spec-type", "draft-mtp", "--spec-draft-n-max", "4"]
 TEMPERATURE = 1.0
 
 
+def failure_text(e: BaseException, limit: int = 4000) -> str:
+    """The useful half of a ServerError is its log tail, and a tail is at the end.
+
+    `repr(e)[:300]` spent the whole budget on the CMD line: every `case_failed` record under
+    `repro/hostB/` stops mid-flag at `-fa on -c`, so all eight failed starts recorded that
+    llama-server exited 1 and not the line that says why it would not start. Keep both ends --
+    the head names the exception class, the tail carries the log.
+    """
+    s = repr(e)
+    if len(s) <= limit:
+        return s
+    head = limit // 4
+    return s[:head] + f"\n...[{len(s) - limit} chars omitted]...\n" + s[-(limit - head):]
+
+
 def fire(port: int, prompts: list[str], max_tokens: int, concurrent: bool) -> list[dict]:
     """Send one request per prompt, together or one at a time."""
     out: list[dict] = [None] * len(prompts)  # type: ignore[list-item]
@@ -72,6 +88,17 @@ def fire(port: int, prompts: list[str], max_tokens: int, concurrent: bool) -> li
             out[i] = S.chat(port, "You are concise.", prompts[i],
                             max_tokens=max_tokens, temperature=TEMPERATURE,
                             seed=1000 + i, think=False, cache_prompt=False)
+        except urllib.error.HTTPError as e:
+            # `repr(e)` is `<HTTPError 400: 'Bad Request'>` and names no reason. The reason is
+            # in the response body -- an over-length prompt comes back as "request (24645
+            # tokens) exceeds the available context size (20480 tokens)" -- and every `errors`
+            # entry written before this recorded that four requests were refused without
+            # recording what refused them.
+            try:
+                body = e.read().decode("utf-8", "replace")[:800]
+            except Exception:  # noqa: BLE001
+                body = ""
+            out[i] = {"error": repr(e)[:200], "error_body": body}
         except Exception as e:  # noqa: BLE001
             out[i] = {"error": repr(e)[:200]}
 
@@ -224,7 +251,7 @@ def main() -> int:
             except Exception as e:  # noqa: BLE001
                 r = {"tag": f"np{slots}_{toks}tok_{'conc' if conc else 'seq'}",
                      "n_slots": slots, "n_req": n_req, "prompt_tokens": toks,
-                     "concurrent": conc, "case_failed": repr(e)[:300],
+                     "concurrent": conc, "case_failed": failure_text(e),
                      "acceptance": [], "exactly_zero": 0, "empty_completions": 0}
                 print(f"    case failed: {r['case_failed']}", flush=True)
             else:

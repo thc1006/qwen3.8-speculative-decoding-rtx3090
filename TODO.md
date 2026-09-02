@@ -47,8 +47,8 @@ second-host addendum in `PREREGISTRATION.md`.
 - [x] **Phase n-max** (host A) - complete, 1050 records. - MTP 1..8 and DFlash2 2,4,6,8.
   Delivers the H8/H8a verdicts and
       the `mtp-n1` arm Phase V needs.
-- [x] **#27572 reproduction** - complete on both hosts; host B's 21 result files are under
-  `repro/hostB/`. - the extended sweep reaches the reported
+- [x] **#27572 reproduction** - complete on both hosts; host B's 21 files are under
+  `repro/hostB/`, 20 of them result files beside one config. - the extended sweep reaches the reported
       19 000-token prompts and an `-np` sweep beyond 4, which the first pass never covered.
 - [x] **RH2 cross-host replication** (host B) - done. `phase_a_hostB.json`, 175 records: partition
       clean 25/25, groups differ on 14, fork positions identical to host A on all 25 prompts.
@@ -688,9 +688,15 @@ appear nowhere but this file.
       `embeddings_nextn_masked` is off, and `embd_layer_inp` in every mode. A test showing that
       interleaved sequences give unsorted `out_ids` - the state that makes `output_reorder()` do
       any work at all - is added to `tests/test-batch-alloc.cpp` and passes, 206 assertions in
-      that file, 0 failures. **Source-level proof, not a runtime reproducer**: no scrambled
-      embedding has been observed. Submitting is the author's step; `AGENTS.md` there forbids an
-      agent pushing or opening a PR.
+      that file, 0 failures.
+
+      ~~**Source-level proof, not a runtime reproducer**: no scrambled embedding has been
+      observed.~~ **Superseded by U4**, which observes it directly: the probe in
+      `repro/output_reorder_ordering/` fails 210 of 400 randomly generated batches on upstream
+      `fc62ba7`. See Correction 58.
+
+      Filed as [#27705](https://github.com/ggml-org/llama.cpp/pull/27705). Submitting was the
+      author's step, since `AGENTS.md` there forbids an agent pushing or opening a PR.
 - [x] **U2** SGLang consumer-side sibling hardening, prepared as
       `upstream/sglang/0002-bound-sibling-walks.patch` plus a seven-case test matrix in
       `test_speculative_sampling_malformed.py`: self-loop, two-node cycle, out-of-row first hop,

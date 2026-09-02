@@ -69,19 +69,33 @@ the symptom appears, produced by the reporter and by a third party rather than h
 | `-np 4`, **19 000 tokens** (the reported length), concurrent | 4 | 0.34-0.44 | 0 |
 | `-np 4`, 16 384 tokens, concurrent, **12 repetitions** | 48 | all non-zero | 0 |
 | **`-np 8`**, 4 500 tokens, concurrent, `-c 40960` | 8 | 0.25-0.39 | 0 |
-| `-np 1` sequential controls at 4 500, 16 384, 19 000 and 32 768 tokens | 25 | healthy | 0 |
+| `-np 1` sequential controls at 4 500, 16 384, 19 000 and 32 768 tokens | 116 | 0.23-0.54 | 0 |
 
 ## Not tested, and why
 
 Two configurations the sweep appeared to cover turned out to measure nothing. Both are recorded
 here because an earlier version of the reproducer counted them as clean runs.
 
+The two console blocks below are transcribed from the session rather than read back from the
+archive, and the deposit cannot confirm their wording. The reproducer kept a server log for each
+of the seven cases of the first sweep and for the configuration probe, and none for any case
+added later; it stored a refused request as `repr(HTTPError)`, which names the status and drops
+the server's reason, and a failed start as `repr(e)[:300]`, which the command line alone
+exhausts. What the archive does hold is named beside each block. Both gaps are closed for runs
+after 2026-09-02 -- `fire` now records the body of an HTTP error and `failure_text` keeps the end
+of a server failure rather than its first 300 characters -- but no re-run can put these lines
+into `repro/hostB/`, because that is a different host.
+
 **Prompts above about 20 000 tokens at `-np 4`.** `n_ctx` is divided across slots, so `-c 81920`
-with `-np 4` gives each slot 20 480. The server refuses anything longer:
+with `-np 4` gives each slot 20 480, which `results_np4_4500.json` records as `n_ctx_per_slot`.
+The server refuses anything longer:
 
 ```
 request (24645 tokens) exceeds the available context size (20480 tokens)
 ```
+
+In the archive: `results_27572_long.json` gives `np4_24576tok_conc` and `np4_32768tok_conc` four
+`<HTTPError 400: 'Bad Request'>` entries each and no completion.
 
 The 24 576 and 32 768 cases were rejected, not answered. The reproducer recorded them as empty
 completions, which is half the reported symptom, so its own verdict line said "does not
@@ -94,6 +108,10 @@ start at all:
 graph_reserve: failed to allocate compute buffers
 llama_init_from_model: failed to initialize the context: failed to allocate compute pp buffers
 ```
+
+In the archive: eight `case_failed` records reading `llama-server exited with code 1 during
+startup`, across `results_27572_np8.json`, `results_27572_np16.json`, `results_np8_4500.json`
+and `results_np16_4500.json`.
 
 Measured envelope on this card:
 

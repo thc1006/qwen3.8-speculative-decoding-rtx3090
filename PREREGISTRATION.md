@@ -5531,3 +5531,46 @@ this bears on, H2, was reported as unsupported before this correction and is uns
 what moves is the strength of the evidence offered for the direction of the residual, not the
 direction itself.
 
+## Correction 58, 2026-09-02: a claim that nothing had been observed, deposited beside the observation
+
+Found by reading the two working notes this repository had never read, rather than by rechecking
+a number. Nothing measured changes: no interval, coefficient or record moves, and no figure is
+regenerated. What changes is a statement about what evidence exists.
+
+`TODO.md` item U1 described the llama.cpp output-row / token-row fix as "**Source-level proof,
+not a runtime reproducer**: no scrambled embedding has been observed." That sentence is false in
+the archive that carries it. `repro/output_reorder_ordering/` is present at **v1.0.0**, the one
+version this repository has deposited, and its probe observes exactly that: on upstream
+`fc62ba7`, 210 of 400 randomly generated batches place a layer-0 row against the wrong batch
+token. `TODO.md` at that tag carries no U4 entry, so the claim and the evidence refuting it were
+deposited together on 2026-08-28. The sentence is struck rather than deleted and U1 now points
+at U4.
+
+**A second gap in the same area.** `docs/UPSTREAM_CONTRIBUTIONS.md` is this study's map of what
+it sends upstream, and it never named this work. The patch is tracked at v1.0.0, and the map's
+only mention of #27705 sat inside a list of issues someone else had commented on, which reads as
+a survey entry rather than as this study's own. Its section 7 opens by recording that the SGLang
+work "was not in this table until now, which was an omission": this is that omission again, in
+the same document, undetected. Section 8 now carries the work, and
+`TheContributionMapMustNameEveryPatchThisRepositorySends` requires every `.patch` tracked under
+`upstream/` to be findable in the map. That guard fails on the map as it stood before this entry.
+
+**Two repairs to `repro/FINDINGS_27572.md` from the same pass, neither of them deposited.** Its
+sweep table gave the `-np 1` sequential controls as 25 requests. That cell carried an honest dash
+until `147deed` replaced it with a number, and the number was wrong when it was written: the
+artifacts held 116 requests across the four prompt lengths the row names, at that commit and
+now. The other four rows are exact to the artifacts.
+`TheReproTableMustCountTheRunsItsArtifactsHold` recomputes all five.
+
+The same file quotes two console blocks -- a server refusing an over-length prompt, and
+`graph_reserve` failing to allocate -- that appear in no committed artifact. The claims behind
+them are deposited: four `<HTTPError 400: 'Bad Request'>` entries for each over-length case, and
+eight `case_failed` records reading "exited with code 1 during startup". The wording is not.
+`repro/llamacpp_27572.py` stored a refusal as `repr(HTTPError)`, which names the status and drops
+the server's reason, and a failed start as `repr(e)[:300]`, which the command line alone
+exhausts -- every such record under `repro/hostB/` stops mid-flag at `-fa on -c`.
+
+Both recorders are fixed for runs after this date, and neither gap can be filled in
+retrospectively, because that host is not this one. The document now says, where it quotes them,
+that the two blocks are transcribed rather than read back from the archive, and names the
+deposited evidence beside each.

@@ -7879,5 +7879,183 @@ class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
         self.assertEqual([], self._mismatches(quoted))
 
 
+class TheReproTableMustCountTheRunsItsArtifactsHold(unittest.TestCase):
+    """`repro/FINDINGS_27572.md` tabulates a sweep and nothing recomputed a cell of it.
+
+    The sequential-control row carried an honest dash until 147deed gave it a number, and the
+    number it was given -- 25 requests -- was wrong on arrival: the artifacts held 116 at that
+    commit, across the same four prompt lengths the row names. Four of the five rows were
+    exact, which is why nobody looked.
+
+    Each row names its own selection, so each row can be recomputed. The selectors below are
+    written here; every value compared is read from the artifacts on one side and parsed out of
+    the document on the other, so a drift on either side fails this.
+    """
+
+    DOC = Path(__file__).resolve().parent.parent / "repro" / "FINDINGS_27572.md"
+    ART = Path(__file__).resolve().parent.parent / "repro" / "hostB"
+
+    # (identifying substring of the row, predicate over one record)
+    ROWS = (
+        ("256 / 1024 / 4096 / 8192 / 16384 tokens, concurrent",
+         lambda r: r["_file"] == "results_27572.json" and r["concurrent"]
+         and r["n_slots"] == 4 and r["prompt_tokens"] in (256, 1024, 4096, 8192, 16384)),
+        ("**19 000 tokens** (the reported length), concurrent",
+         lambda r: r["concurrent"] and r["n_slots"] == 4 and r["prompt_tokens"] == 19000),
+        ("16 384 tokens, concurrent, **12 repetitions**",
+         lambda r: "_rep" in r["_file"] and r["concurrent"]
+         and r["n_slots"] == 4 and r["prompt_tokens"] == 16384),
+        ("**`-np 8`**, 4 500 tokens, concurrent, `-c 40960`",
+         lambda r: r["_file"] == "results_np8_ctx40960.json" and r["concurrent"]
+         and r["n_slots"] == 8),
+        ("`-np 1` sequential controls at",
+         lambda r: r["n_slots"] == 1 and not r["concurrent"]),
+    )
+
+    def _records(self):
+        out = []
+        for f in sorted(self.ART.glob("results*.json")):
+            d = json.loads(f.read_text())
+            for r in (d if isinstance(d, list) else [d]):
+                r["_file"] = f.name
+                r.setdefault("concurrent", False)
+                out.append(r)
+        self.assertTrue(out, "no artifacts found; the guard would pass vacuously")
+        return out
+
+    def _row(self, needle):
+        rows = [ln for ln in self.DOC.read_text().splitlines()
+                if ln.startswith("|") and needle in ln]
+        self.assertEqual(1, len(rows), f"expected one row containing {needle!r}, got {len(rows)}")
+        return [c.strip() for c in rows[0].strip("|").split("|")]
+
+    def _disagreements(self):
+        recs = self._records()
+        bad = []
+        for needle, pred in self.ROWS:
+            cells = self._row(needle)
+            sel = [r for r in recs if pred(r)]
+            if not sel:
+                bad.append(f"{needle}: selector matched no record")
+                continue
+            acc = [v for r in sel for v in (r.get("acceptance") or [])]
+            zeros = sum(r.get("exactly_zero", 0) for r in sel)
+
+            said_req, said_acc, said_zero = cells[1], cells[2], cells[3]
+            m = re.fullmatch(r"(\d+) each", said_req)
+            want = int(m.group(1)) * len(sel) if m else int(said_req.replace(" ", ""))
+            if len(acc) != want:
+                bad.append(f"{needle}: document says {said_req!r} "
+                           f"({want} requests), artifacts hold {len(acc)}")
+
+            rng = re.fullmatch(r"(\d\.\d\d)-(\d\.\d\d)", said_acc)
+            if rng:
+                got = (round(min(acc), 2), round(max(acc), 2))
+                if got != (float(rng.group(1)), float(rng.group(2))):
+                    bad.append(f"{needle}: document says acceptance {said_acc}, "
+                               f"artifacts give {got[0]:.2f}-{got[1]:.2f}")
+            elif said_acc == "all non-zero":
+                if min(acc) <= 0:
+                    bad.append(f"{needle}: document says all non-zero, min is {min(acc)}")
+
+            if int(said_zero) != zeros:
+                bad.append(f"{needle}: document says {said_zero} exactly-zero, "
+                           f"artifacts hold {zeros}")
+        return bad
+
+    def test_every_row_is_the_number_the_artifacts_give(self):
+        bad = self._disagreements()
+        self.assertEqual(bad, [], "the sweep table disagrees with what it tabulates:\n  "
+                                  + "\n  ".join(bad))
+
+    def test_the_slot_context_the_prose_cites_is_in_the_file_it_cites(self):
+        """The prose names `results_np4_4500.json` for the 20 480-token slot. Read it there."""
+        d = json.loads((self.ART / "results_np4_4500.json").read_text())
+        slots = {r.get("n_ctx_per_slot") for r in d if r.get("n_slots") == 4}
+        self.assertIn(20480, slots,
+                      "the document cites this file for a 20 480-token slot; it records "
+                      f"{sorted(x for x in slots if x is not None)}")
+
+    def test_the_check_fires_when_a_cell_drifts(self):
+        real = self._row("`-np 1` sequential controls at")
+        self.assertNotEqual("25", real[1],
+                            "the defect this guard was written for is back in the document")
+        recs = self._records()
+        sel = [r for r in recs if r["n_slots"] == 1 and not r["concurrent"]]
+        n = sum(len(r.get("acceptance") or []) for r in sel)
+        self.assertEqual(int(real[1]), n, "the row and the artifacts must agree")
+        self.assertNotEqual(n, 25, "the count the document used to claim")
+
+
+class TheContributionMapMustNameEveryPatchThisRepositorySends(unittest.TestCase):
+    """`docs/UPSTREAM_CONTRIBUTIONS.md` is the map of what this study sends upstream.
+
+    Section 7 opens by recording that the SGLang work "was not in this table until now, which
+    was an omission". The llama.cpp `output_reorder` change then repeated it exactly: the patch
+    and the whole evidence directory `repro/output_reorder_ordering/` were committed, and the
+    map named neither -- #27705 appeared in it only inside a list of issues someone else had
+    commented on, which reads as a survey entry rather than as this study's own open pull
+    request.
+
+    A patch is the unambiguous unit: it is the artifact that gets sent. Every one this
+    repository tracks under `upstream/` must be findable in the map.
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent
+    MAP = ROOT / "docs" / "UPSTREAM_CONTRIBUTIONS.md"
+
+    # A patch may be named by its filename, or -- where the map discusses it under the pull
+    # request it became -- by that anchor. The anchor is asserted below rather than assumed, so
+    # an entry that loses its link fails this guard instead of silently exempting a patch.
+    BY_ANCHOR = {
+        "upstream/sglang/0001-bound-eagle-tree-ancestor-walk.patch":
+            "https://github.com/sgl-project/sglang/pull/36201",
+    }
+
+    def _patches(self):
+        import subprocess
+        out = subprocess.run(["git", "-C", str(self.ROOT), "ls-files",
+                              "upstream/*.patch", "upstream/**/*.patch"],
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(0, out.returncode, out.stderr)
+        found = sorted(set(out.stdout.split()))
+        self.assertTrue(found, "no tracked patches found; the guard would pass vacuously")
+        return found
+
+    def _unnamed(self, text):
+        bad = []
+        for path in self._patches():
+            name = Path(path).name
+            if name in text:
+                continue
+            anchor = self.BY_ANCHOR.get(path)
+            if anchor and anchor in text:
+                continue
+            bad.append(path)
+        return bad
+
+    def test_every_tracked_patch_is_named_by_the_map(self):
+        bad = self._unnamed(self.MAP.read_text())
+        self.assertEqual(bad, [], "patches this repository sends upstream that its own "
+                                  "contribution map does not name:\n  " + "\n  ".join(bad))
+
+    def test_every_anchor_exemption_still_has_a_patch_and_a_link(self):
+        tracked = set(self._patches())
+        text = self.MAP.read_text()
+        for path, anchor in self.BY_ANCHOR.items():
+            self.assertIn(path, tracked,
+                          f"{path} is exempted by anchor but is no longer tracked")
+            self.assertIn(anchor, text,
+                          f"{path} is exempted by the anchor {anchor!r}, which the map "
+                          "no longer carries")
+
+    def test_the_check_fires_when_the_map_drops_a_patch(self):
+        text = self.MAP.read_text()
+        without = text.replace("0002-output-reorder-index-space.patch", "(removed)")
+        self.assertNotEqual(text, without, "the section this guard was written for is gone")
+        self.assertEqual(["upstream/llamacpp/0002-output-reorder-index-space.patch"],
+                         self._unnamed(without))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
