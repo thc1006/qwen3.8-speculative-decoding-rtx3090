@@ -7,7 +7,8 @@ by where they run, because that is the distinction that matters when picking one
 Four of these resolve the repository from their own location and run in any clone:
 `post_measurement.sh`, `reproduce_phase_a.sh`, `run_phase_qsmall.sh` and `verify_everything.sh`.
 The other eight -- `run_chain.sh`, `run_phase_l.sh`, `run_phase_q.sh`, `run_remaining.sh` and the
-four `run_phase_e*.sh` -- **hard-code this checkout's absolute path**. They run from anywhere on
+four `run_phase_e*.sh`, all four of them in the table below since 2026-09-02 and named only
+in this sentence before that -- **hard-code this checkout's absolute path**. They run from anywhere on
 this host and `cd` to a directory that does not exist in a clone elsewhere, which matters for a
 repository whose point is that someone else can re-run it: a reproducer either edits that line or
 calls `harness/bench.py` directly with the arguments the script passes. This paragraph used to
@@ -22,6 +23,10 @@ say every script resolved its own root, and used one of the eight as the example
 | `run_phase_qsmall.sh` | Phase Q-small, the 9B ladder | four rungs to bf16; the instrument that reaches the bit span the 27B ladder cannot |
 | `run_phase_l.sh` | Phase L, the context-depth ladder | budgeted in seconds so it stops at a rung boundary rather than mid-rung |
 | `run_chain.sh` | an earlier chain | superseded by `run_remaining.sh`; kept because results reference it |
+| `run_phase_e3.sh` | Phase E3, the sampler-period control | three intervals x three rounds, the interval order rotated each round so no interval sits in one part of the session |
+| `run_phase_e4.sh` | Phase E4, the pre/post-roll control | three roll settings x three rounds, rotated so each roll's slots average the same position, 5.0 of 9 |
+| `run_phase_e5.sh` | Phase E5, the power-cap step | one invocation, because the rotation is inside it: three passes over three arms so each cap visits each order position once |
+| `run_phase_e6.sh` | Phase E6, the generation-length control | three lengths x three rounds, rotated; one arm, so the manipulation is across invocations rather than within one |
 
 ## Not runners — they read rather than measure
 

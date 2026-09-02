@@ -7759,6 +7759,56 @@ class TheFillerCorpusMustBeTheBytesItsChecksumsName(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+class EveryRunnerMustAppearInItsOwnIndex(unittest.TestCase):
+    r"""`scripts/README.md` tabulates the drivers, and the four energy ones were not in it.
+
+    Its opening paragraph named them -- "the four `run_phase_e*.sh`" -- and the table below
+    listed five drivers that did not include them. Phases E3 to E6 were added over 2026-08-30 and
+    2026-09-01 and the prose reached the sentence and not the table, which is the third list in
+    this repository to go stale the same way in two days: the README said ten follow-up phases
+    beside eleven, and `docs/README.md` said 55 corrections beside 57.
+
+    `scripts/warp/` is excluded on purpose. That section covers its twelve scripts by pattern --
+    `run_warp_*.sh`, `collect_*.sh`, and two named outright -- which is the right shape for a set
+    that is finished and will not grow, and a name-by-name rule would force a table nobody reads.
+    """
+
+    def test_every_driver_is_named_in_the_index(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        index = (root / "scripts" / "README.md").read_text(encoding="utf-8")
+        # git's pathspec glob crosses a directory separator, so scripts/*.sh matches
+        # scripts/warp/*.sh as well. The warp set is covered by pattern in that section's prose
+        # and is excluded by path here rather than by trusting the glob.
+        names = [n for n in subprocess.run(
+            ["git", "-C", str(root), "ls-files", "scripts/*.sh"],
+            capture_output=True, text=True, timeout=60).stdout.split()
+            if Path(n).parent.name == "scripts"]
+        self.assertTrue(names, "no scripts found to check")
+        missing = [Path(n).name for n in names if f"`{Path(n).name}`" not in index]
+        self.assertEqual(
+            missing, [],
+            "scripts/README.md does not name these, and a runner nobody indexed is a runner "
+            "nobody finds: " + ", ".join(missing))
+
+    def test_the_index_names_nothing_that_is_not_there(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        index = (root / "scripts" / "README.md").read_text(encoding="utf-8")
+        tracked = {Path(n).name for n in subprocess.run(
+            ["git", "-C", str(root), "ls-files", "scripts/*.sh", "scripts/*/*.sh"],
+            capture_output=True, text=True, timeout=60).stdout.split()}
+        named = set(re.findall(r"`([a-z0-9_]+\.sh)`", index))
+        self.assertEqual(sorted(named - tracked), [],
+                         "the index names a script that is not in the tree")
+
+    def test_the_check_fires_on_a_driver_left_out(self):
+        index = "| `run_phase_l.sh` | drives L |\n"
+        names = ["scripts/run_phase_l.sh", "scripts/run_phase_e3.sh"]
+        missing = [Path(n).name for n in names if f"`{Path(n).name}`" not in index]
+        self.assertEqual(["run_phase_e3.sh"], missing)
+
+
 class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
     """A guard's docstring may not state a size its own list contradicts.
 
