@@ -7500,6 +7500,69 @@ class ACitationMayNotPointAtAPathThisRepositoryExcludes(unittest.TestCase):
         self.assertEqual(set(), self._excluded({"models/SHA256SUMS", "README.md"}))
 
 
+class TheReadmeMustNameEveryPhaseThatDocumentTabulates(unittest.TestCase):
+    """A hand-typed list of phases beside a hand-typed count of them, and neither was checked.
+
+    The sentence pointing at `docs/PHASES.md` opened "Ten follow-up phases" and then listed
+    eleven, and that document tabulates seventeen: the six energy controls were added to it over
+    2026-08-30 and 2026-09-01 and never reached the sentence. Found by reading the README end to
+    end before a release. The numeral is gone -- a count beside its own list is two things to
+    keep in step and this repository has not managed it once -- and the list itself is checked
+    here against the table it points at.
+
+    `Qs` in that table is `Q-small` in the prose, which is the only name that differs.
+    """
+
+    ALIAS = {"Qs": "Q-small"}
+
+    def _tabulated(self, root):
+        text = (root / "docs" / "PHASES.md").read_text(encoding="utf-8")
+        return [m.group(1) for m in re.finditer(r"^\| \*\*([A-Za-z0-9-]+)\*\* \|", text, re.M)]
+
+    def _sentence(self, root):
+        text = (root / "README.md").read_text(encoding="utf-8")
+        m = re.search(r"Every follow-up phase -- (.+?) -- with its question", text, re.S)
+        self.assertIsNotNone(m, "the README sentence naming the follow-up phases is gone; if it "
+                                "was rewritten, this check has to be rewritten with it")
+        return m.group(1).replace("\n", " ")
+
+    def test_every_tabulated_phase_is_named_in_the_readme(self):
+        root = Path(__file__).resolve().parent.parent
+        sentence = self._sentence(root)
+        missing = [p for p in self._tabulated(root)
+                   if not re.search(rf"(?<![A-Za-z0-9-]){re.escape(self.ALIAS.get(p, p))}"
+                                    rf"(?![A-Za-z0-9-])", sentence)]
+        self.assertEqual(
+            missing, [],
+            f"docs/PHASES.md tabulates these and the README's list does not name them: {missing}")
+
+    def test_the_readme_names_nothing_that_document_does_not(self):
+        root = Path(__file__).resolve().parent.parent
+        sentence = self._sentence(root)
+        tabulated = {self.ALIAS.get(p, p) for p in self._tabulated(root)}
+        named = set(re.findall(r"(?<![A-Za-z0-9-])(?:E[0-9]?|B|C|KV|L|M|n-max|Q|Q-small|R2?|V)"
+                               r"(?![A-Za-z0-9-])", sentence))
+        self.assertEqual(
+            sorted(named - tabulated), [],
+            f"the README names a phase docs/PHASES.md does not tabulate: "
+            f"{sorted(named - tabulated)}")
+
+    def test_the_check_fires_when_a_phase_is_added_to_the_document_only(self):
+        sentence = "B, C and E"
+        tab = ["B", "C", "E", "E2"]
+        missing = [p for p in tab
+                   if not re.search(rf"(?<![A-Za-z0-9-]){re.escape(p)}(?![A-Za-z0-9-])", sentence)]
+        self.assertEqual(["E2"], missing)
+
+    def test_no_numeral_opens_that_sentence(self):
+        root = Path(__file__).resolve().parent.parent
+        text = (root / "README.md").read_text(encoding="utf-8")
+        self.assertIsNone(
+            re.search(r"\b(Ten|Eleven|Twelve|Thirteen|\d+) follow-up phases", text),
+            "a count beside the list it counts is two things to keep in step, and the list is "
+            "checked here while a numeral would not be")
+
+
 class ACountInADocstringMustMatchTheListItCounts(unittest.TestCase):
     """A guard's docstring may not state a size its own list contradicts.
 

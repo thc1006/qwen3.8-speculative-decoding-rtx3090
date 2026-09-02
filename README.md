@@ -436,8 +436,11 @@ mixture.
 
 ## Later phases
 
-Ten follow-up phases -- B, C, KV, L, M, n-max, Q, Q-small, R, R2 and V -- with their questions,
-status and what each may not be used to claim, are in [`docs/PHASES.md`](docs/PHASES.md). Their
+Every follow-up phase -- B, C, KV, L, M, n-max, Q, Q-small, R, R2, V and the energy controls
+E, E2, E3, E4, E5 and E6 -- with its question, status and what it may not be used to claim,
+is in [`docs/PHASES.md`](docs/PHASES.md). The count that used to open this sentence said ten
+beside a list of eleven, and the six energy phases had been added to that document without
+reaching it. Their
 record counts and incident counts appear in the generated status block above, computed from the
 result files rather than maintained by hand.
 
