@@ -4788,18 +4788,22 @@ class TheDepositMetadataMayNotNameAVersionNobodyDeposited(unittest.TestCase):
         labelled with an older number than one that exists is the confusion the whole convention
         is here to avoid.
         """
-        import json, subprocess
+        import json
         root = Path(__file__).resolve().parent.parent
         v = self._zenodo().get("version", "")
         self.assertTrue(v, ".zenodo.json declares no version")
         deposits = json.loads((root / "repro" / "DEPOSITS.json").read_text())
         have = {d["version"] for d in deposits["versions"]}
-        tags = set(subprocess.run(["git", "-C", str(root), "tag", "--list"], capture_output=True,
-                                  text=True, timeout=60).stdout.split())
-        self.assertTrue(
-            v in have or f"v{v}" in tags,
-            f".zenodo.json names version {v!r}, which is neither deposited ({sorted(have)}) nor "
-            f"a tag in this repository. A version number has to name something real.")
+        # DEPOSITS.json is the register of release points, deposited or not, so asking it avoids
+        # the circularity that asking git for a tag creates: the tag has to point at the commit
+        # that names it, so a tree can never be committed already naming its own tag. The lock
+        # file hit this first and `_repo_tag_note` records the same answer -- the file names the
+        # tag and the tag is created afterwards.
+        known = have | {d["git_tag"].lstrip("v") for d in deposits["tagged_but_not_deposited"]}
+        self.assertIn(
+            v, known,
+            f".zenodo.json names version {v!r}, which repro/DEPOSITS.json does not list as a "
+            f"release point at all (it knows {sorted(known)}). Declare it there first.")
 
         def key(x):
             return tuple(int(n) for n in re.findall(r"\d+", x))
