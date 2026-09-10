@@ -5677,3 +5677,38 @@ longer exists fails, and so does an entry for a test that has since started asse
 then the exemption describes something other than what it names. The `--no-gpu` path used to exit
 after section 9 with its own banner; section 10 now skips instead, so the new section runs on a
 host with no card, which is where a clone will run it.
+
+## Correction 60a, 2026-09-11: two defects in Correction 60's own work, both pushed first
+
+Found by reviewing the commit that made Correction 60 rather than by moving on from it. Both were
+in `02d43d3`, both were on master and through CI before this, and both are the defect class the
+work they were part of exists to hunt.
+
+**A section that did not run, reported as passed.** Making `--no-gpu` skip section 10 instead of
+exiting after section 9 was the right change -- it is what lets a later section run on a host with
+no card -- but the final banner then printed "All sections passed." over a section that never ran.
+The line it replaced said "Sections 1 to 9 passed", which was exact. The banner now names what did
+not run: "Every section that RAN passed. Did not run: 10 (the GPU's state: --no-gpu)."
+
+**A printed count that was not the count it named.** `assert_coverage.py` wrapped every `assert*`
+on `TestCase` and counted each call, and unittest dispatches internally: `assertEqual` on two
+multiline strings calls `assertMultiLineEqual`, which calls `assertIsInstance` twice, so one
+assertion by a test reads as four. On the run that caught it the gate printed **1945 assertions
+executed** where the tests had made **1215**: 730 of the calls it counted were unittest's own, not
+the suite's. The inflation is structural rather than a property of that run -- it is there
+whenever a test compares two multiline strings -- and the figure itself moves, because the
+contention test asserts twice more for each process competing on the host. Only the outermost
+call is counted now. The zero
+detection was never affected -- a test making no assertion counts none either way -- and it was
+re-checked against a planted vacuous test, and against one that fails an assertion inside
+`assertRaises`, which is the path the depth counter has to unwind correctly.
+
+**And what the check cannot see, now written down.** A bare `assert` statement is not a
+`TestCase` method and is invisible to the wrapper, so a test whose only check is one would be
+reported as silent. There is one bare assert in this suite; it is in a helper rather than a test,
+so nothing is currently misreported. The limitation is in the module docstring rather than left
+for the next reader to discover.
+
+The docstring also said this repository had shipped **three** tests that assert nothing and then
+listed two, with Correction 45's four could-not-fail guards as the third item. Those executed
+assertions; they are a neighbouring class, not an instance of this one. It says two.

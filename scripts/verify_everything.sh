@@ -30,6 +30,11 @@ case "${1:-}" in
 esac
 hdr() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 bad() { FAIL=1; printf '   FAIL: %s\n' "$*"; }
+# A skipped section has not passed. --no-gpu used to exit early and say "Sections 1 to 9 passed",
+# which was exact; when section 10 became a skip so that later sections could still run, the final
+# banner started reporting "All sections passed" over a section that never ran. Named here instead.
+SKIPPED_SECTIONS=""
+skipped() { SKIPPED_SECTIONS="${SKIPPED_SECTIONS:+$SKIPPED_SECTIONS, }$1"; }
 
 if [ -f .gpu-in-use.lock ]; then
   echo "REFUSING: .gpu-in-use.lock exists, so a measurement is running."
@@ -448,6 +453,7 @@ fi
 hdr "10. the GPU is where the runs left it"
 if [ "$NO_GPU" = 1 ]; then
   echo "   SKIPPED: --no-gpu. This section reads the card and cannot run without one."
+  skipped "10 (the GPU's state: --no-gpu)"
 else
 # Through the module's own API. `python3 harness/gpustate.py --check` was here, and gpustate.py
 # has no __main__ and no argparse: it imported, did nothing, exited 0, and the fallback after the
@@ -495,5 +501,11 @@ else
 fi
 
 printf '\n'
-if [ $FAIL -eq 0 ]; then echo "All sections passed."; else echo "At least one section failed."; fi
+if [ $FAIL -ne 0 ]; then
+  echo "At least one section failed."
+elif [ -n "$SKIPPED_SECTIONS" ]; then
+  echo "Every section that RAN passed. Did not run: $SKIPPED_SECTIONS."
+else
+  echo "All sections passed."
+fi
 exit $FAIL

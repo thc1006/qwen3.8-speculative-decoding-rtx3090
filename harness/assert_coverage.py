@@ -1,7 +1,7 @@
 """Every test in the suite has to assert something when it runs.
 
 A test that passes without executing a single assertion is counted among the suite's tests,
-reported as a pass, and checks nothing. This repository has shipped three of them.
+reported as a pass, and checks nothing. This repository has shipped two of them.
 
   * `test_record_counts_quoted_in_the_readme_match_the_result_files` searched the prose for
     `Phase A (875 request records`, a form the documents have never used, and its loop turned the
@@ -10,8 +10,13 @@ reported as a pass, and checks nothing. This repository has shipped three of the
   * `test_no_descendant_of_this_process_is_counted_as_competition` put both its assertions inside
     `for c in load["competing"]`, which is empty on a quiet host -- the state a measurement runs
     in. Correction 60.
-  * Correction 45's four guards could not fail for other reasons, and were found by reading rather
-    than by a check.
+Correction 45's four guards are a neighbouring class and not instances of this one: they executed
+assertions, which could not fail. Reading found those; nothing here would have.
+
+What this cannot see: a test whose only check is a bare `assert` statement, which is not a
+`TestCase` method and is invisible to the wrapper. There is one bare assert in this suite and it
+is in a helper, not in a test, so no test currently depends on one -- but a test that did would be
+reported as silent when it is not.
 
 Reading the source cannot find these. The first needed a corpus to match against, the second
 needed a live process table; both looked like ordinary tests and only the run knows. So this
@@ -50,6 +55,11 @@ def _instrument():
     """Count every assertion each test executes. Returns the counter and the current-test slot."""
     counts: collections.Counter[str] = collections.Counter()
     current: list[str | None] = [None]
+    # unittest dispatches internally -- assertEqual on two multiline strings calls
+    # assertMultiLineEqual, which calls assertIsInstance twice -- so counting every wrapped call
+    # made one assertion read as four and the total was not the number it claimed to be. Only the
+    # outermost call is the test's own.
+    depth = [0]
     import inspect
     for name in dir(unittest.TestCase):
         if not name.startswith(("assert", "fail")):
@@ -64,9 +74,13 @@ def _instrument():
 
         def make(orig):
             def wrapper(self, *a, **k):
-                if current[0] is not None:
+                if current[0] is not None and depth[0] == 0:
                     counts[current[0]] += 1
-                return orig(self, *a, **k)
+                depth[0] += 1
+                try:
+                    return orig(self, *a, **k)
+                finally:
+                    depth[0] -= 1
             return wrapper
 
         setattr(unittest.TestCase, name, make(attr))

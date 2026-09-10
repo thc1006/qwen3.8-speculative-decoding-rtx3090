@@ -2722,10 +2722,20 @@ class TestHostContentionIsRecorded(unittest.TestCase):
         # starts has to be found by the descent lookup the filter is built on. Exercising the 5 %
         # threshold on the live host would mean burning a core on a machine `host_load`'s own
         # docstring says this module exists to keep quiet, so that stays with the seam tests.
-        child = subprocess.Popen(["sleep", "30"])
+        # Both binaries are handled rather than assumed. Before this rewrite the raw `ps` call
+        # came AFTER host_load's own note check, so a host without `ps` skipped; moving it first
+        # would have turned that into an error, which is a different verdict for an environment
+        # that simply cannot answer. host_load reports the same condition as a note.
         try:
-            ps = subprocess.run(["ps", "-eo", "pid,ppid", "--no-headers"],
-                                capture_output=True, text=True, timeout=30)
+            child = subprocess.Popen(["sleep", "30"])
+        except OSError as e:
+            self.skipTest(f"cannot start a child to check descent against: {e!r}")
+        try:
+            try:
+                ps = subprocess.run(["ps", "-eo", "pid,ppid", "--no-headers"],
+                                    capture_output=True, text=True, timeout=30)
+            except (OSError, subprocess.SubprocessError) as e:
+                self.skipTest(f"ps unavailable, which host_load reports as a note: {e!r}")
             ppid_of = {}
             for line in ps.stdout.splitlines():
                 f = line.split()
