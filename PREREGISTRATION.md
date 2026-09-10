@@ -5637,3 +5637,43 @@ none. Two files listed by identity is a subject rather than a scope and does not
 `scripts/verify_everything.sh` is deliberately outside its reach: that script names its three
 figure generators literally and is pinned by outcome instead, since it fails when the number of
 figures rewritten differs from the number on disk.
+
+## Correction 60, 2026-09-11: a test that asserted nothing whenever the host was quiet
+
+Correction 59 replaced one check that never matched its corpus, and said the binding constraint
+here is guard coverage rather than guard enforcement. This is what that claim looks like when it
+is measured instead of asserted. Nothing measured changes: no interval, coefficient, record or
+figure moves.
+
+Reading the source cannot find a test that asserts nothing. Correction 59's instance needed a
+corpus to match against before anyone could tell, and this one needs a live process table. Both
+look like ordinary tests on the page. So the suite was run with every `assert*` and `fail*` on
+`TestCase` wrapped in a counter, and each test's tally read afterwards. Of 347 tests, three
+executed no assertion at all.
+
+Two of the three are legitimate and stay. `test_the_committed_registry_is_valid` calls
+`render_evidence.validate()` and `test_a_48_gib_card_takes_them_all` calls
+`vllm_bench.assert_arms_fit()`; both fail by raising, and "must not raise" is the check. They are
+named in the new section's exemption list with the call that carries it.
+
+The third is real. `test_no_descendant_of_this_process_is_counted_as_competition` put both of its
+assertions inside `for c in load["competing"]`, and `competing` is empty on a quiet host -- which
+is the state this repository engineers for and the state a measurement runs in. Its docstring
+says the contract that holds **always** is that nothing the caller started is counted; the test
+checked that only when something else happened to be competing. On this host, right now, it ran
+to the end and asserted nothing. It is in v1.0.0 and in v1.0.4, both deposited.
+
+It cannot be fixed by making the live host busy. `host_load`'s own docstring gives the reason the
+`_ps_output` seam exists: reaching the 5 % threshold for real means burning a core on a machine
+this module exists to keep quiet, and the threshold is already covered by three seam tests. What
+can be checked live, and costs nothing, is the lookup the filter is built on -- so the test now
+starts an idle child, reads the real process table, and asserts that `_descendants_of` finds it.
+It executes two assertions on a quiet host and fails when `_descendants_of` is stubbed to return
+only the pid it was asked about. The `competing` loop stays, marked opportunistic.
+
+`harness/assert_coverage.py` is section 11 of the gate, so the measurement is repeated rather
+than recorded. Its exemption list is checked in both directions: an entry naming a test that no
+longer exists fails, and so does an entry for a test that has since started asserting, because
+then the exemption describes something other than what it names. The `--no-gpu` path used to exit
+after section 9 with its own banner; section 10 now skips instead, so the new section runs on a
+host with no card, which is where a clone will run it.

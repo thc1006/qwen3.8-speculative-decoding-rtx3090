@@ -2714,24 +2714,45 @@ class TestHostContentionIsRecorded(unittest.TestCase):
         import os
         import subprocess
         import telemetry as T
+
+        # Both loops below iterate `competing`, which is empty on a quiet host -- the state this
+        # repository engineers for, and the state a measurement runs in. So on a normal run this
+        # test executed no assertion at all and was still counted among the suite's. What it can
+        # always check, and now does first, is the half that costs nothing: a child this process
+        # starts has to be found by the descent lookup the filter is built on. Exercising the 5 %
+        # threshold on the live host would mean burning a core on a machine `host_load`'s own
+        # docstring says this module exists to keep quiet, so that stays with the seam tests.
+        child = subprocess.Popen(["sleep", "30"])
+        try:
+            ps = subprocess.run(["ps", "-eo", "pid,ppid", "--no-headers"],
+                                capture_output=True, text=True, timeout=30)
+            ppid_of = {}
+            for line in ps.stdout.splitlines():
+                f = line.split()
+                if len(f) == 2:
+                    try:
+                        ppid_of[int(f[0])] = int(f[1])
+                    except ValueError:
+                        pass
+            self.assertTrue(ppid_of, "ps returned no parent map; the descent lookup has no input")
+            mine = T._descendants_of(os.getpid(), ppid_of)
+            self.assertIn(os.getpid(), mine,
+                          "_descendants_of does not include the pid it was asked about")
+            self.assertIn(child.pid, mine,
+                          f"a process this one just started (pid {child.pid}) is not recognised "
+                          f"as its own descendant, so host_load would count it as competition")
+        finally:
+            child.terminate()
+            child.wait(timeout=10)
+
         load = T.host_load()
         if load.get("note"):
             self.skipTest(load["note"])
+        # Opportunistic: only a busy host has anything here, and when it does, none of it may be
+        # ours. The assertions above are what hold on a quiet one.
         for c in load["competing"]:
             self.assertNotIn("llama-server", c["comm"],
                              "the run's own server is being counted against it")
-        ps = subprocess.run(["ps", "-eo", "pid,ppid", "--no-headers"],
-                            capture_output=True, text=True, timeout=30)
-        ppid_of = {}
-        for line in ps.stdout.splitlines():
-            f = line.split()
-            if len(f) == 2:
-                try:
-                    ppid_of[int(f[0])] = int(f[1])
-                except ValueError:
-                    pass
-        mine = T._descendants_of(os.getpid(), ppid_of)
-        for c in load["competing"]:
             self.assertNotIn(c.get("pid"), mine,
                              f"a process this one started is being counted against it: {c}")
 

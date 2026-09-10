@@ -32,7 +32,7 @@ say every script resolved its own root, and used one of the eight as the example
 
 | script | does | notes |
 |---|---|---|
-| `verify_everything.sh` | re-checks every claim the repository makes about itself | ten sections: tests, the result audit, links, the README's numbers, withdrawn claims, registry coverage, the generated evidence block, the anchor report, every other generated report, and the GPU's state. CPU-heavy; the measurement guard refuses it while a run holds the GPU lock |
+| `verify_everything.sh` | re-checks every claim the repository makes about itself | eleven sections: tests, the result audit, links, the README's numbers, withdrawn claims, registry coverage, the generated evidence block, the anchor report, every other generated report, the GPU's state, and that every test which runs asserts something. CPU-heavy; the measurement guard refuses it while a run holds the GPU lock |
 | `reproduce_phase_a.sh` | rebuilds Phase A from `repro/phase_a.lock.json` | pins the engines, the toolchain, the models, the card and this repository's own tag, writes to `results/reproductions/` and compares the paired effects rather than only the record count |
 | `post_measurement.sh` | everything that had to wait for a free GPU | Part A decides whether a re-run is usable and stops if it is not; Part B is deferred maintenance. `--maintenance-anyway` forces past a Part A failure |
 

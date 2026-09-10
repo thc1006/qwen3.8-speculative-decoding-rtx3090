@@ -12,8 +12,11 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 FAIL=0
 
-# --no-gpu runs sections 1 to 9, which need only Python and the committed files. It exists so
-# that CI can run THIS script rather than a copy of some of it. The workflow used to reimplement
+# --no-gpu runs every section except 10, which reads the card; the rest need only Python and the
+# committed files. Section 10 SKIPS rather than exiting: until 2026-09-11 this flag exited there,
+# so anything added after it -- section 11 is the first -- would never have run on a host without
+# a card, which is every host a clone runs on. It exists so that CI can run THIS script rather
+# than a copy of some of it. The workflow used to reimplement
 # section 9 inline, and the two had already drifted: the copy lacked the check that a manifest
 # entry naming a deleted file is a failure, and it lacked the retry that tells a transient
 # apart from a stale artifact. It also never ran sections 3, 4 or 5 at all -- broken links, the
@@ -442,15 +445,10 @@ else
   bad "no interpreter with matplotlib on PATH or in .venv: the figures were NOT checked"
 fi
 
-if [ "$NO_GPU" = 1 ]; then
-  hdr "10. the GPU is where the runs left it"
-  echo "   SKIPPED: --no-gpu. This section reads the card and cannot run without one."
-  echo
-  if [ "$FAIL" = 0 ]; then echo "Sections 1 to 9 passed."; else echo "SOMETHING FAILED above."; fi
-  exit "$FAIL"
-fi
-
 hdr "10. the GPU is where the runs left it"
+if [ "$NO_GPU" = 1 ]; then
+  echo "   SKIPPED: --no-gpu. This section reads the card and cannot run without one."
+else
 # Through the module's own API. `python3 harness/gpustate.py --check` was here, and gpustate.py
 # has no __main__ and no argparse: it imported, did nothing, exited 0, and the fallback after the
 # || never ran. A section that reported nothing and passed.
@@ -482,6 +480,19 @@ if drift:
 print("   at stock")
 GPUCHK
 [ $? -ne 0 ] && bad "the card is not at stock"
+fi
+
+hdr "11. every test that runs asserts something"
+# Reading the source cannot find a test that asserts nothing. Both this repository has shipped
+# looked ordinary on the page: one needed a corpus to match against before the gap showed, the
+# other a live process table. assert_coverage.py wraps every assert* on TestCase, runs the suite
+# and reads each test's tally. Corrections 59 and 60.
+if python3 harness/assert_coverage.py > /tmp/verify_assert_coverage.log 2>&1; then
+  grep -E '^[0-9]+ tests|^every test' /tmp/verify_assert_coverage.log | sed 's/^/   /'
+else
+  grep -E '^FAIL:|^[0-9]+ tests' /tmp/verify_assert_coverage.log | sed 's/^/   /'
+  bad "a test ran without asserting anything; full output in /tmp/verify_assert_coverage.log"
+fi
 
 printf '\n'
 if [ $FAIL -eq 0 ]; then echo "All sections passed."; else echo "At least one section failed."; fi
