@@ -5768,3 +5768,43 @@ withhold the causal reading the way `docs/PHASES.md` does -- it asserted "**the 
 DRAFTED, not tokens REJECTED**" in bold where the authoritative row says "Exploratory, and the
 causal reading is withheld." The absolute ms/step and ms/token are named as what this phase may not
 be read for, which is what `phase_b_mechanism.txt` says in its own closing paragraph.
+
+## Correction 62, 2026-09-11: Phase L's acceptance column, and two guards that would not have caught it
+
+Correction 61 found `TODO.md`'s Phase B entry describing a replaced run. This is the same class,
+found by generalising it: a number a document states that its own generated report states
+differently, in a way too small to be a different quantity and too large to be rounding. Nothing
+measured changes.
+
+`TODO.md`'s Phase L entry gave accepted tokens per verification step as 2.294, 2.297, 2.255, 2.280
+and 2.281. `analysis/phase_l_ladder.txt`'s mtp-n2 column is **2.178, 2.208, 2.239, 2.239 and
+2.239**, and the 8 K rung's interval is **[+52.2, +57.1]** where the entry said [+52.1, +57.3].
+The five speedups in the same sentence -- +54.6, +53.9, +51.7, +53.5 and +53.4 -- match the report
+exactly, which is what dates the drift: this entry records its own earlier correction for figures
+"computed while the fourth rung stood at 60 of 180 records", and that correction updated the
+speedups and left the acceptance column and the interval behind.
+
+The shape matters more than the numbers. The report's column rises across the ladder, 2.178 to
+2.239, which is the evidence for the sentence it sits in; the stale figures wobble. `docs/PHASES.md`
+carried the report's values throughout, including dflash2-n4's 2.607 to 2.650 and MTP's being flat.
+
+**Three drifts have now been found, and all three were in `TODO.md` while `docs/PHASES.md` was
+right.** That is structural rather than coincidental: the phase table is checked by
+`TheHandWrittenPhaseTableAgreesWithTheFiles` and by the README-number guards, and `TODO.md` is
+checked by nothing quantitative. What would end the class is editorial, not mechanical -- the
+working log citing the report rather than restating it.
+
+**Two candidate guards were built for this and both are rejected, which is why none is installed.**
+
+The first compared every number `TODO.md` states for a phase against `docs/PHASES.md`'s row for
+that phase and flagged a near-miss with no exact counterpart. It is unsound and incomplete at once:
+it produced five false positives -- a correlation against an r-squared that happen to fall within a
+percent of each other, and four figures from the sentence that quotes this entry's own WITHDRAWN
+values as withdrawn -- and it flagged the same five before and after the repair above, because the
+acceptance column's authority is the ladder report and not the phase row.
+
+The second required every multi-decimal number in a `TODO.md` phase entry to appear verbatim in
+some committed artifact. All 133 pass, and so would the stale ones: `2.294` occurs 567 times across
+the artifacts and `52.1` occurs 8174 times, so a rule satisfied by coincidence at that rate cannot
+fail. Installing it would have added a check that reports coverage and provides none, which is the
+defect Corrections 59 and 60 exist for.

@@ -211,8 +211,15 @@ second-host addendum in `PREREGISTRATION.md`.
 
       Speculation survives it intact. mtp-n2 against its own baseline is +54.6 %, +53.9 %,
       +51.7 %, +53.5 % and +53.4 % (the 8 K rung's paired class-stratified interval is
-      [+52.1, +57.3]), with accepted tokens per verification step at 2.294, 2.297, 2.255, 2.280
-      and 2.281. The drafter holds while the baseline slows.
+      [+52.2, +57.1]), with accepted tokens per verification step at 2.178, 2.208, 2.239, 2.239
+      and 2.239. The drafter holds while the baseline slows -- acceptance rises slightly across the
+      ladder rather than falling.
+
+      Those last six figures were stale until 2026-09-11. The five speedups were recomputed when
+      the partial fourth rung was caught; the acceptance column and the 8 K interval were not.
+      This entry gave 2.294, 2.297, 2.255, 2.280 and 2.281 against
+      `analysis/phase_l_ladder.txt`'s mtp-n2 column, and [+52.1, +57.3] against its
+      [+52.2, +57.1]. `docs/PHASES.md` carried the report's values throughout. Correction 62.
 
       An earlier version of this entry reported +46.6 %, +48.6 %, +50.2 % and +50.7 % over four
       rungs. Those were computed while the fourth rung stood at 60 of 180 records and are
