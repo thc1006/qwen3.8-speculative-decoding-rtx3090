@@ -113,7 +113,8 @@ second-host addendum in `PREREGISTRATION.md`.
       verification at width 8, and every pass carries attention and the rest besides.
 
       Still no upstream PR. What the data says about the table is that its choice of two warps at
-      widths 5 to 8 is right on Ampere, since four costs 13.6 % at width 5 and 26.7 % at width 8,
+      widths 5 to 8 is right on the one sm_86 card the microbenchmark ran on, since four costs
+      13.6 % at width 5 and 26.7 % at width 8,
       and that two warps at width 4 is 1.5 % faster than the stock four. A 1.5 % micro-tuning on
       one shape and one GPU is far under the bar in AGENTS.md, which asks that every merged line
       be maintained across a large matrix of platforms and backends.
@@ -166,10 +167,18 @@ second-host addendum in `PREREGISTRATION.md`.
 ## Completed phases, in the order they ran
 
 - [x] **Phase C** - complete 2026-08-25 10:43, 750/750, 0 incidents. Drafter quantization barely
-      matters and the highest precision is the slowest: q8 +53.4 %, q4k +52.0 %, bf16 +48.5 %
-      against baseline, so a bf16 drafter costs about five points to run. The class effect is
-      larger than the quantization effect: code +117 %, reason +90 %, zh +0.8 %. Both baselines
-      agree to 0.01 tok/s across the two trees.
+      matters. The point estimates against the same-tree baseline are ordered q8 +53.4 %,
+      q4k +52.0 %, bf16 +48.5 %. **No direct paired interval between two drafter precisions has
+      been computed**, so that ordering is descriptive and not a demonstrated separation:
+      `evidence/registry.json` forbids reading Phase C for one and `docs/PHASES.md` says so in its
+      row. This entry read "a bf16 drafter costs about five points to run" until 2026-09-11, which
+      is that forbidden reading, stated causally. Correction 61.
+
+      The class effect dwarfs the quantization effect: across the three precisions code runs
+      +111 % to +118 %, reason +86 % to +92 % and zh -2.3 % to +0.8 %, a spread of more than a
+      hundred points between classes against five between precisions. This entry gave the top of
+      each range as a single figure, which for zh is the only non-negative end of one that starts
+      at -2.3 %. Both baselines agree to 0.01 tok/s across the two trees.
 
       The three n-gram arms are activation diagnostics, not three comparable efficacy
       measurements, and the drafting counters separate them. `ngram-mod` has `t_draft_n = 0` on
@@ -241,35 +250,50 @@ second-host addendum in `PREREGISTRATION.md`.
       `UD-Q5_K_XL`. `UD-Q6_K_XL` and `Q8_0` do not fit in 24 GB and 29 GB of free disk is not
       enough to stage `Q8_0` either, so the ladder stops there by hardware and not by choice.
       Phase Q-small is the instrument that covers the rest of the bit span.
-- [x] **Phase B** - complete 2026-08-27, 525 records, 7 arms, 3 passes, `--spec-draft-n-max` in
-      {3,7} crossed with `--spec-draft-p-min` in {0,.50,.75}. Two incidents, both host contention
-      and both recorded: `nvidia-smi 50 %` on pass 2, which is this run's own power sampler and a
-      false positive that motivated the descent-attribution fix, and `git 162 %` on pass 3, which
-      was real and was mine. `pass_stability.py` puts the second arm-pass at 0.63 % within-pass
-      scatter against a phase median of 0.74 %, so it is quieter than typical; the incident stands
-      recorded either way.
+- [x] **Phase B** - complete, re-measured 2026-08-28, 525 records, 7 arms, 3 passes,
+      `--spec-draft-n-max` in
+      {3,7} crossed with `--spec-draft-p-min` in {0,.50,.75}.
 
-      The gate works and it works hard: at n-max 7 it takes drafted tokens from 23 719 to 7 016
-      and acceptance from 0.276 to 0.770.
+      **The original run was replaced.** It took two host-contention incidents on 2026-08-27 --
+      `nvidia-smi 50 %` on pass 2, this run's own power sampler and a false positive that motivated
+      the descent-attribution fix, and `git 162 %` on pass 3, which was real and was mine -- and the
+      phase was re-measured on 2026-08-28. The committed `results/phase_b.json` is that
+      replacement: 525 records, **0 incidents**, and `audit_results.py` marks it `ok`. It reproduces
+      the throughput effects arm for arm (`analysis/rerun_agreement.txt`).
 
-      **The cost tracks tokens DRAFTED, not tokens REJECTED.** `harness/mechanism_b.py` is the
-      analyser and did not exist before this phase. The gate sweep spreads the drafted-to-rejected
-      ratio 5.22x across the six arms, which is what makes two one-parameter models comparable
-      whatever their regressors' correlation. Fitting each separately on the extensive form:
-      7.208 ms per drafted token at r2 0.978 against 10.184 ms per rejected token at r2 0.824, and
-      the RSS difference clears zero by 18.5 half-widths. Adding the drafter's own per-step
-      forward pass -- which runs whether or not the gate lets it extend -- gives 4.229 ms/step
-      plus 6.112 ms/drafted token at r2 0.991 against 10.740 plus 6.889 at r2 0.969, and the
-      margin narrows to 3.57 half-widths. That supports H2' over H2 on this target.
+      Every figure below is the replacement's. Until 2026-09-11 this entry gave the original's
+      throughout, including an audit verdict of FAIL that the committed file has never carried.
+      Correction 61.
+
+      The gate works and it works hard: at n-max 7 it takes the phase's drafted tokens from
+      71 136 to 21 042, over three passes and 25 prompts.
+
+      **The causal reading is withheld**, as `docs/PHASES.md` withholds it: what follows is an
+      in-sample fit comparison, not an identification.
+
+      `harness/mechanism_b.py` is the analyser and did not exist before this phase. The gate sweep
+      spreads the drafted-to-rejected ratio 5.22x across the six arms, which is what makes two
+      one-parameter models comparable whatever their regressors' correlation.
+
+      Fitting each separately on the extensive form: 7.2204 ms per drafted token at r2 0.9802
+      against 10.1986 ms per rejected token at r2 0.8256, and the RSS difference
+      clears zero by 21.14 half-widths. Adding the drafter's own per-step forward pass -- which runs
+      whether or not the gate lets it extend -- gives 4.064 ms/step plus 6.167 ms/drafted token at
+      r2 0.9923 against 10.660 plus 6.928 at r2 0.9678, and the margin narrows to 4.22 half-widths.
+      That favours H2' over H2 as a fit.
+
+      The ABSOLUTE ms/step and ms/token are not a result of this phase:
+      `evidence/registry.json` forbids them because they wait on an exact verification-step
+      count, and `phase_b_mechanism.txt` says the same in its closing paragraph.
 
       The joint two-coefficient fit is NOT identified and is reported as such: corr(drafted/fwd,
       rejected/fwd) is +0.996 and the fit answers with a negative coefficient for rejection, which
       is what least squares does when it splits one direction in two.
 
-      On throughput, `mtp-n7-p.00` is **+8.91 % [+3.55, +14.36]** on the class-stratified endpoint,
-      which `analyze.py` flags as clearing zero by only 0.66 half-widths. That single number hides
-      a sign change: +68.0 % on code and +29.3 % on reason against -16.0 % chat, -16.2 % prose and
-      -20.5 % zh. Its pooled median is 37.77 tok/s against the baseline's 41.39, which is the same
+      On throughput, `mtp-n7-p.00` is **+9.04 % [+3.69, +14.46]** on the class-stratified endpoint,
+      which `analyze.py` flags as clearing zero by only 0.68 half-widths. That single number
+      hides a sign change: +68.0 % on code and +29.3 % on reason against -16.0 % chat,
+      -16.2 % prose and -20.5 % zh. Its pooled median is 37.77 tok/s against the baseline's 41.39, which is the same
       data read on a statistic this study does not use as its endpoint.
 
       `cost_model.py` REFUSES to report `k`, `c` or `k0` for this phase: the `mean_len` derivation
@@ -511,10 +535,12 @@ there was omission, not misstatement.
       (Correction 33). Not carried over: the same-tree `baseline@pr27342` divergence control.
 - [x] **D3** Phase B - `n_max` crossed with `p_min`. Run: `results/phase_b.json`, 525 records,
       `mtp-n3` and `mtp-n7` crossed with `p_min` 0.00 / 0.50 / 0.75. It separated the two volumes:
-      step + drafted tokens fits at r2 0.9912 against 0.9687 for step + rejected, 3.57 half-widths
-      apart, so **the cost tracks tokens drafted rather than tokens rejected**, and the verdict
-      holds across F-2 to F+1. Two `host_contended` incidents from processes of my own leave the
-      file marked FAIL in the audit; the fit above should be read with that.
+      step + drafted tokens fits at r2 0.9923 against 0.9678 for step + rejected, 4.22 half-widths
+      apart, so the drafted-token model fits better and the winner holds across F-2 to F+1. That is
+      a fit comparison and not an identification, and the causal reading is withheld. The original
+      run's two `host_contended` incidents are why it was re-measured on 2026-08-28; the committed
+      file is that replacement, with 0 incidents and an audit verdict of `ok`. This item said the
+      file was marked FAIL. Correction 61.
 - [x] **D8** evidence block wired into README.md. `evidence/registry.json` holds only what a file
       cannot state -- the question, a controlled-vocabulary strength, and the claims a phase must
       not be used for -- and `harness/render_evidence.py` computes every count from the result

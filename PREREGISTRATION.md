@@ -5712,3 +5712,59 @@ for the next reader to discover.
 The docstring also said this repository had shipped **three** tests that assert nothing and then
 listed two, with Correction 45's four could-not-fail guards as the third item. Those executed
 assertions; they are a neighbouring class, not an instance of this one. It says two.
+
+## Correction 61, 2026-09-11: reading all 41 forbidden claims against the documents
+
+`evidence/registry.json` declares, per phase, the claims that phase may not be used to make. One
+of them is enforced by a guard; the other forty are published and were never read back against the
+prose. The previous pass closed six mechanical axes and reported this as the only one left with
+depth in it, so this is that reading. Nothing measured changes.
+
+**Thirty-eight of the forty-one hold, and several are honoured with the reasoning written down.**
+`docs/RESOURCE_RESPONSE.md` says of Phase R that it is "a measurement, not a roofline: nothing here
+counts bytes moved or arithmetic issued". `docs/COST_MODEL.md` says calling the verify path
+compute-bound "would need per-kernel counters this study" does not have. `docs/PHASES.md` gives
+Phase C's three precisions and then states, in the row, that no paired interval between two of them
+has been computed. The prohibitions are not decoration.
+
+**Three are not held, and all three are outside `docs/`.**
+
+`TODO.md`'s Phase C entry said "so a bf16 drafter costs about five points to run". That is the
+forbidden reading -- "a demonstrated separation between two drafter precisions: no paired interval
+was computed" -- stated causally, from the same three point estimates the authoritative row
+presents as descriptive only. The same entry gave the class effects as single figures where
+`docs/PHASES.md` gives ranges across the three precisions, and for zh the figure it chose, +0.8 %,
+is the only non-negative end of a range that starts at -2.3 %.
+
+`TODO.md`'s warp entry said the table's choice of two warps at widths 5 to 8 "is right on Ampere",
+which generalises past the tested device and is contradicted twice in its own paragraph -- "a 1.5 %
+micro-tuning on one shape and one GPU", and "The card this ran on is part of what the result
+means". The microbenchmark ran on one A6000.
+
+`docs/ENERGY.md` said "`power.draw` on Ampere is a rolling average of about a second". Phase E4's
+entry forbids "generalising the measured averaging width past this card and this driver version;
+it is a property of one firmware, read through one nvidia-smi", and the section that reports E4
+further down is scrupulous about exactly that. The sentence is now scoped to the card and driver it
+was measured on.
+
+**And the reading found something the registry was not looking for.** `TODO.md`'s Phase B entry,
+and the D3 item that repeats it, describe the run that was REPLACED. Phase B was re-measured on
+2026-08-28 after two host-contention incidents; `docs/PHASES.md` reports the replacement and
+`TODO.md` contains no trace of it. Every figure in both items was the original's:
+
+| | TODO said | the committed artifact |
+|---|---|---|
+| cost per drafted token | 7.208 ms, r2 0.978 | **7.2204 ms, r2 0.9802** |
+| cost per rejected token | 10.184 ms, r2 0.824 | **10.1986 ms, r2 0.8256** |
+| RSS difference | 18.5 half-widths | **21.14** |
+| step + drafted | 4.229 + 6.112 ms, r2 0.991 | **4.064 + 6.167 ms, r2 0.9923** |
+| that margin | 3.57 half-widths | **4.22** |
+| `mtp-n7-p.00` throughput | +8.91 % [+3.55, +14.36], 0.66 half-widths | **+9.04 % [+3.69, +14.46], 0.68** |
+| incidents | two, "leave the file marked FAIL in the audit" | **0 incidents, audit verdict `ok`** |
+
+The audit line is the one that matters most: `results/phase_b.json` has never carried a FAIL, and a
+reader of `TODO.md` was told it did. Both items now name the replacement, carry its figures, and
+withhold the causal reading the way `docs/PHASES.md` does -- it asserted "**the cost tracks tokens
+DRAFTED, not tokens REJECTED**" in bold where the authoritative row says "Exploratory, and the
+causal reading is withheld." The absolute ms/step and ms/token are named as what this phase may not
+be read for, which is what `phase_b_mechanism.txt` says in its own closing paragraph.

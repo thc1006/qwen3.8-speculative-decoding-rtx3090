@@ -40,7 +40,10 @@ its drafter as well.
 All three limits on the figure above have now been measured rather than named, and two of the
 three bias the **relative** comparison in the same direction.
 
-`power.draw` on Ampere is a rolling average of about a second: sampled beside the instantaneous
+`power.draw` on this card, read through this driver, is a rolling average of about a
+second -- Phase E4 measures that width at 1.00 to 1.10 s, and `evidence/registry.json`
+forbids generalising it past this card and this driver version. Sampled beside the
+instantaneous
 field, the two integrals agree to 0.00-0.34 % on the baselines and differ by 0.58-1.97 % on the
 speculative arms, always the same sign, so the averaged field understates exactly the arms being
 compared, worth about 1.1 points. The prefill subtraction removes a `max_tokens=1` calibration
