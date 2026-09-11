@@ -65,7 +65,9 @@ from bench import Arm  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent.parent
 
-# rung -> (filename, approximate VRAM needed with 64K q8_0 KV and the compute buffer)
+# rung -> (filename, VRAM needed at THIS matrix's context: weights + 8192-token q8_0 KV +
+# the ~1.9 GB compute buffer, matching the +buffer column of the table above. The comment
+# here said 64K while the numbers were already the corrected 8K ones.
 RUNGS = {
     "UD-Q4_K_XL": ("Qwen3.8-27B-UD-Q4_K_XL.gguf", 19.8),
     "UD-Q5_K_XL": ("Qwen3.8-27B-UD-Q5_K_XL.gguf", 23.1),
@@ -93,8 +95,16 @@ if MODEL is None:
         f"--local-dir models/quant_ladder\n"
         f"The four rungs total ~93 GB, so scripts/run_phase_q.sh stages one at a time.")
 
-TREES = {"master": REPO / "llamacpp-master"}
-BINARIES = {k: v / "build/bin/llama-server" for k, v in TREES.items()}
+# The tree is overridable for the same reason phase_warp.py takes QWEN_WARP_BUILD: a second host
+# need not lay its build out the way this one does. Host C was set up for the warp intervention and
+# keeps binaries under `warp/<name>/`, so a hard-coded `llamacpp-master` would be discovered
+# missing only after ~27 GB of weights had been staged. QWEN_MASTER_TREE names a directory that
+# CONTAINS build/bin/llama-server; QWEN_SERVER names the binary itself.
+_tree_env = os.environ.get("QWEN_MASTER_TREE")
+TREES = {"master": Path(_tree_env) if _tree_env else REPO / "llamacpp-master"}
+_server_env = os.environ.get("QWEN_SERVER")
+BINARIES = ({"master": Path(_server_env)} if _server_env
+            else {k: v / "build/bin/llama-server" for k, v in TREES.items()})
 
 COMMON_ARGS = [
     "-ngl", "999", "-c", "8192", "-fa", "on",

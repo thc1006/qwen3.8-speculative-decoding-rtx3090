@@ -38,7 +38,10 @@
 #   RUNGS="..."  subset of rungs, in order
 #   KEEP=1       never delete weights
 set -u
-cd /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090 || exit 1
+# Host-agnostic. This was an absolute path to the machine that ran the first two rungs, so on any
+# other host the script exited 1 before doing anything -- including host C, the only machine whose
+# card can hold the upper two.
+cd "$(dirname "$0")/.." || exit 1
 mkdir -p models/quant_ladder results analysis logs
 
 GPU="${GPU:-0}"
@@ -46,6 +49,16 @@ PASSES="${PASSES:-3}"
 PORT="${PORT:-18160}"
 KEEP="${KEEP:-0}"
 DISK_MARGIN_GIB="${DISK_MARGIN_GIB:-5}"   # results, server logs, the downloader's partial file
+# A second card's results must not land on the first card's filenames. `phase_a_hostB.json` and
+# `phase_warp_control_hostB.json` are this repository's convention for that, and the registry
+# gives a second host its OWN phase entry rather than pooling it. Empty by default, so a run on
+# the host that produced the committed rungs writes exactly the names it wrote before.
+TAG="${QWEN_HOST_TAG:-}"
+
+# Free space on the filesystem the staging directory actually lives on. This read `df /`, which
+# is the same answer only when the repo is on the root filesystem; it is on host A and need not
+# be anywhere else.
+free_gib() { df -BG --output=avail models/quant_ladder | tail -1 | tr -dc '0-9'; }
 
 declare -A FILE=(
   [UD-Q4_K_XL]=Qwen3.8-27B-UD-Q4_K_XL.gguf
@@ -143,10 +156,27 @@ import sys; sys.path.insert(0,'harness')
 import devices as D
 try: print(f'{D.get_device($GPU).vram_gb:.1f}')
 except Exception as e: print('0')")
-log "GPU $GPU has ${vram_gb} GB"
+gpu_name=$(python3 -c "
+import sys; sys.path.insert(0,'harness')
+import devices as D
+try: print(D.get_device($GPU).name)
+except Exception: print('unknown')")
+log "GPU $GPU is '${gpu_name}' with ${vram_gb} GB${TAG:+  (results tagged ${TAG})}"
 if [ "$(python3 -c "print(1 if float('$vram_gb')<1 else 0)")" = "1" ]; then
   log "no such GPU - set GPU=<nvidia-smi index>"; exit 1
 fi
+
+# Preflight the binary BEFORE staging tens of gigabytes. The matrix measures with the `master`
+# tree; a host set up for the warp work keeps its builds elsewhere, and finding that out after a
+# 27 GB download costs the download rather than a check. Same two variables the matrix reads.
+SERVER="${QWEN_SERVER:-${QWEN_MASTER_TREE:-llamacpp-master}/build/bin/llama-server}"
+if [ ! -x "$SERVER" ]; then
+  log "FATAL: no executable llama-server at ${SERVER}"
+  log "  set QWEN_SERVER to this host's binary, or QWEN_MASTER_TREE to the directory holding"
+  log "  build/bin/llama-server, before staging ~93 GB of weights."
+  exit 1
+fi
+log "server: ${SERVER} ($(stat -c%s "$SERVER" 2>/dev/null || echo '?') bytes)"
 
 if [ -z "${RUNGS:-}" ]; then
   RUNGS=""
@@ -160,7 +190,7 @@ fi
 
 for RUNG in $RUNGS; do
   F="${FILE[$RUNG]}"
-  OUT="results/phase_q_${RUNG}.json"
+  OUT="results/phase_q_${RUNG}${TAG}.json"
   STAGED="models/quant_ladder/$F"
 
   verdict=$(gate "$OUT" "$RUNG")
@@ -184,7 +214,7 @@ for RUNG in $RUNGS; do
     [ -f "$cand" ] && { SRC="$cand"; break; }
   done
   if [ -z "$SRC" ]; then
-    free_gb=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+    free_gb=$(free_gib)
     need_gb=$(python3 -c "
 import math; print(math.ceil(${NEED_DISK_GIB[$RUNG]} + ${DISK_MARGIN_GIB}))")
     if [ "${free_gb:-0}" -lt "$need_gb" ]; then
@@ -212,11 +242,11 @@ import os; print(f'{os.path.getsize(\"$SRC\")/2**30:.2f}')")
   else
     log "reusing $SRC (not downloading)"
   fi
-  log "disk after staging: $(df -BG --output=avail / | tail -1 | tr -dc '0-9') GiB free"
+  log "disk after staging: $(free_gib) GiB free"
 
   QWEN_Q_TARGET="$RUNG" python3 -u harness/bench.py \
     --matrix phase_q --passes "$PASSES" --gpu "$GPU" --port "$PORT" \
-    --settle-floor --out "$OUT" > "logs/phase_q_${RUNG}.log" 2>&1
+    --settle-floor --out "$OUT" > "logs/phase_q_${RUNG}${TAG}.log" 2>&1
   rc=$?
   verdict=$(gate "$OUT" "$RUNG")
   log "$RUNG exited rc=$rc; gate says: ${verdict}"
@@ -226,12 +256,12 @@ import os; print(f'{os.path.getsize(\"$SRC\")/2**30:.2f}')")
     # belongs, and the weights were deleted anyway. Reports are cheap to regenerate from the
     # result file, but only if someone knows they are missing.
     ok_reports=1
-    python3 harness/analyze.py    "$OUT" > "analysis/phase_q_${RUNG}.txt"      2>&1 || ok_reports=0
-    python3 harness/cost_model.py "$OUT" > "analysis/phase_q_${RUNG}_cost.txt" 2>&1 || ok_reports=0
+    python3 harness/analyze.py    "$OUT" > "analysis/phase_q_${RUNG}${TAG}.txt"      2>&1 || ok_reports=0
+    python3 harness/cost_model.py "$OUT" > "analysis/phase_q_${RUNG}${TAG}_cost.txt" 2>&1 || ok_reports=0
     if [ "$ok_reports" = "1" ]; then
       log "$RUNG complete; reports written"
     else
-      log "$RUNG complete but an analyser FAILED - see analysis/phase_q_${RUNG}*.txt"
+      log "$RUNG complete but an analyser FAILED - see analysis/phase_q_${RUNG}${TAG}*.txt"
       log "  the result file is intact; re-run the analysers by hand after fixing them"
     fi
     # Deletion is decided by WHERE the file is, not by whether this invocation downloaded it.
@@ -246,9 +276,9 @@ import os; print(f'{os.path.getsize(\"$SRC\")/2**30:.2f}')")
       log "keeping $SRC (shared target, not this script's to delete)"
     fi
   else
-    log "$RUNG INCOMPLETE - keeping weights for a retry; inspect logs/phase_q_${RUNG}.log"
+    log "$RUNG INCOMPLETE - keeping weights for a retry; inspect logs/phase_q_${RUNG}${TAG}.log"
   fi
-  log "disk now: $(df -BG --output=avail / | tail -1 | tr -dc '0-9') GiB free"
+  log "disk now: $(free_gib) GiB free"
 done
 
 # Nothing should be left in the staging area once every rung has been accounted for.

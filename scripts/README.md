@@ -4,9 +4,15 @@ The root of the repository held seventeen of these. They are grouped here by wha
 by where they run, because that is the distinction that matters when picking one: a script in
 `warp/` will `cd` into a directory that exists on another machine.
 
-Four of these resolve the repository from their own location and run in any clone:
-`post_measurement.sh`, `reproduce_phase_a.sh`, `run_phase_qsmall.sh` and `verify_everything.sh`.
-The other eight -- `run_chain.sh`, `run_phase_l.sh`, `run_phase_q.sh`, `run_remaining.sh` and the
+Six of these resolve the repository from their own location and run in any clone:
+`collect_phase_q_hostc.sh`, `post_measurement.sh`, `reproduce_phase_a.sh`, `run_phase_q.sh`,
+`run_phase_qsmall.sh` and `verify_everything.sh`.
+
+`run_phase_q.sh` joined them on 2026-09-11: its absolute path was host A's, and the two upper
+rungs of the ladder it drives need host C's 48 GB card, so on the only machine that can finish
+the phase the script exited 1 before doing anything.
+
+The other seven -- `run_chain.sh`, `run_phase_l.sh`, `run_remaining.sh` and the
 four `run_phase_e*.sh`, all four of them in the table below since 2026-09-02 and named only
 in this sentence before that -- **hard-code this checkout's absolute path**. They run from anywhere on
 this host and `cd` to a directory that does not exist in a clone elsewhere, which matters for a
@@ -20,6 +26,7 @@ say every script resolved its own root, and used one of the eight as the example
 |---|---|---|
 | `run_remaining.sh` | the whole remaining chain | calls `run_phase_l.sh` and `run_phase_q.sh` in order, with the anchor gate between them |
 | `run_phase_q.sh` | Phase Q, the 27B target-quantisation ladder | stages one rung of weights at a time against limited disk and verifies a rung is complete before deleting it |
+| `collect_phase_q_hostc.sh` | brings the A6000's quantisation ladder home | runs HERE and pulls from host C: waits on the four rungs, verifies each file by sha256 at both ends, runs the analysers locally, and names anything left staged on a shared machine. Starts nothing |
 | `run_phase_qsmall.sh` | Phase Q-small, the 9B ladder | four rungs to bf16; the instrument that reaches the bit span the 27B ladder cannot |
 | `run_phase_l.sh` | Phase L, the context-depth ladder | budgeted in seconds so it stops at a rung boundary rather than mid-rung |
 | `run_chain.sh` | an earlier chain | superseded by `run_remaining.sh`; kept because results reference it |

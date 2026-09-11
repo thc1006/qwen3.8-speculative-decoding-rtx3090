@@ -5808,3 +5808,50 @@ some committed artifact. All 133 pass, and so would the stale ones: `2.294` occu
 the artifacts and `52.1` occurs 8174 times, so a rule satisfied by coincidence at that rate cannot
 fail. Installing it would have added a check that reports coverage and provides none, which is the
 defect Corrections 59 and 60 exist for.
+
+## Correction 63, 2026-09-12: the ladder's upper rungs were not blocked only by VRAM
+
+Written before running anything, by auditing the files a Phase Q run on the 48 GB card would
+depend on. The audit and every repair it records were made on 2026-09-11; only this entry crossed
+midnight. Nothing measured changes; no rung has run.
+
+`evidence/registry.json` says Phase Q may not be read for "the rungs a 24 GB card cannot hold:
+two of four are blocked on VRAM", and `TODO.md` says the ladder "stops there by hardware and not
+by choice". Both are true and both are incomplete. `scripts/run_phase_q.sh` opened with
+`cd /home/thc1006/dev/qwen3.8-speculative-decoding-rtx3090 || exit 1`, an absolute path to the
+host whose card is too small, so on host C -- the only machine whose A6000 can hold `UD-Q6_K_XL`
+and `Q8_0` -- the driver exited 1 before reading its first line of configuration. The rungs were
+blocked by VRAM on one host and by the driver on the other.
+
+Four more things in the same path would have cost a run rather than a refusal:
+
+**The result filenames collide across cards.** The driver wrote `results/phase_q_<rung>.json`
+unconditionally, which on a second host overwrites or shadows the first host's committed rungs.
+`QWEN_HOST_TAG` now suffixes them, empty by default so a run on host A writes exactly the names it
+wrote before.
+
+**The registry would have pooled them anyway.** Phase Q's `results` was the glob
+`results/phase_q_*.json`, which matches `phase_q_UD-Q6_K_XL_hostC.json` as readily as the two it
+was written for. `c` is a slope in milliseconds and belongs to the card that produced it -- that is
+why `A-hostB` is a separate phase rather than more records inside `A` -- so the glob is now the two
+file names it actually means, with the reason in the registry's own comment so nobody widens it
+back to accommodate a second card.
+
+**The disk guard measured the wrong filesystem.** It read `df /`, which answers for the staging
+area only when the repository sits on the root filesystem. It does here and need not anywhere else.
+
+**The binary was never preflighted.** The matrix measures with the `master` tree at a fixed path,
+and host C was set up for the warp intervention with its builds under `warp/<name>/`. A run there
+would have staged up to 27 GB of weights and then failed on a missing `llama-server`. The tree is
+overridable now -- `QWEN_MASTER_TREE` or `QWEN_SERVER`, the same shape as `phase_warp.py`'s
+`QWEN_WARP_BUILD` -- and the driver refuses before downloading anything if the binary is absent.
+
+`harness/matrices/phase_q.py` also labelled its VRAM table "with 64K q8_0 KV" over numbers that are
+the corrected 8192-token ones the docstring tabulates directly above. And there was no collector:
+every other remote phase has a `collect_*` script that fetches results, checks them by hash at both
+ends and reports what is left on the shared machine, and the ladder had none.
+
+The plan the audit settles: all four rungs run on the A6000, not the two the 3090 cannot hold. Two
+rungs from one card and two from another is not a ladder, and running four gives host A's two a
+cross-host replication as well. The results will need their own registry entry, which cannot be
+added until they exist, because a phase with no results is refused.
