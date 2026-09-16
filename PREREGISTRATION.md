@@ -6035,3 +6035,30 @@ the result itself records, and prints which source it used.
 
 The expected record count was also typed as 300. It is derived now -- arms times passes times the
 frozen prompt set -- and the script refuses to run rather than guess if the derivation fails.
+
+## Correction 68, 2026-09-17: a fix that had passed a linter and never been run
+
+Correction 67 audited what this session produced and had not read back. This is the part of that
+it did not reach: the two repairs made to `harness/bench.py` on 2026-09-16, which passed pyflakes
+and were committed without ever being executed. One of them runs at the start of every future
+measurement.
+
+Both were lifted out of the file and run rather than read. The stream rotation behaves in all
+three states: an existing non-empty `.records.jsonl` is moved aside with its lines intact and the
+move announced, an empty one is left alone, and an absent one raises nothing. The design fields
+give `fixed, identical across arms` with the flag off -- byte-identical to what every earlier phase
+recorded, so a re-run of any of them would not move that field -- and the permutation wording with
+it on, `prompt_seed` present only in the second case.
+
+**The rotation's file name was wrong in a way neither a linter nor a unit test would show.**
+`with_suffix` produced `phase_x.records.superseded.<ts>.jsonl`, which does not end in
+`.records.jsonl` and therefore falls outside `.gitignore`'s `results/*.records.jsonl`. Confirmed by
+creating one: it shows as untracked. Every time the repair fired it would have left an untracked
+file in `results/`, in a repository whose standing rule is that a run leaves nothing behind.
+
+The kept copy is named `phase_x.superseded-<ts>.records.jsonl` now, so the rule that already exists
+covers it and there is no second pattern to keep in step with the first. Confirmed ignored.
+
+The general shape is worth naming: pyflakes proves a name is defined, not that a path is one the
+rest of the repository will accept. The check that caught this was creating the file and asking
+git.

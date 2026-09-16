@@ -406,7 +406,13 @@ def run_matrix(
     # while the main JSON was rewritten clean -- the recovery source silently held two runs and
     # nothing said so. Moving the old one aside keeps it and makes the new one honest.
     if jsonl_path.exists() and jsonl_path.stat().st_size:
-        keep = jsonl_path.with_suffix(f".superseded.{int(jsonl_path.stat().st_mtime)}.jsonl")
+        # The kept copy keeps `.records.jsonl` at the END so `.gitignore`'s existing
+        # `results/*.records.jsonl` covers it. Naming it `*.records.superseded.<ts>.jsonl` -- the
+        # obvious `with_suffix` -- fell outside that rule and would have left an untracked file in
+        # `results/` every time this fired, which is a second pattern to keep in sync for nothing.
+        stem = jsonl_path.name[: -len(".records.jsonl")]
+        keep = jsonl_path.with_name(f"{stem}.superseded-{int(jsonl_path.stat().st_mtime)}"
+                                    f".records.jsonl")
         jsonl_path.rename(keep)
         print(f"  an earlier {jsonl_path.name} was here; moved to {keep.name} rather than "
               f"appended to", flush=True)
