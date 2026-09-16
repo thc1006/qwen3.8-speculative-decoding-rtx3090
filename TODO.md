@@ -273,7 +273,10 @@ second-host addendum in `PREREGISTRATION.md`.
       Correction 61.
 
       The gate works and it works hard: at n-max 7 it takes the phase's drafted tokens from
-      71 136 to 21 042, over three passes and 25 prompts.
+      71 136 to 21 042 over three passes and 25 prompts (`results/phase_b.json`), and acceptance
+      from 0.323 to 0.768 (`analysis/phase_b_report.txt`). This entry gave 0.276 to 0.770 until
+      2026-09-17, the original run's figures like everything else in it; Correction 61 removed them
+      rather than updating them, on a reason that was itself wrong. Correction 66.
 
       **The causal reading is withheld**, as `docs/PHASES.md` withholds it: what follows is an
       in-sample fit comparison, not an identification.

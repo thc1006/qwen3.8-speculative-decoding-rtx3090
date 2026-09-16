@@ -5949,3 +5949,32 @@ What this does not do is make the figures reproducible for a reader on a differe
 comparison is the strictest available check and it buys strictness at the cost of pinning; the
 alternative, a tolerance on pixels, would have let the width-partition caption defect through.
 The pin is the honest trade and it is now written down as one.
+
+## Correction 66, 2026-09-17: a table read as empty because the reading stopped too early
+
+Found by reading `analysis/phase_a_d4.txt` end to end rather than the two blocks that had been
+quoted from it. Nothing measured changes.
+
+`analyze.py` prints the energy-and-acceptance header, then the window-coverage block, then the
+averaged-against-instantaneous block, and only then the rows the header belongs to. Reading a
+window that stops after the header sees a header with nothing under it. That is what happened
+twice: once here, and once on 2026-09-11 against `analysis/phase_b_report.txt`, where the
+conclusion drawn was that the acceptance figures `TODO.md` quoted "cannot be sourced".
+
+They can. `analysis/phase_b_report.txt` gives `mtp-n7-p.00` at **0.323** and `mtp-n7-p.75` at
+**0.768**, in the rows below those two intervening blocks. `TODO.md` said 0.276 to 0.770, which is
+the same superseded pre-replacement run every other figure in that entry came from -- so
+Correction 61 was right that the numbers had to go and wrong about why, and it removed them where
+it should have updated them. They are back at the replacement's values, with the report named
+beside the drafted-token totals that come from the result file instead.
+
+The reading error is the same shape as the one this repository's own gate was rewritten for: "the
+verdict line, not the last three lines of output". A truncated window is not evidence of absence,
+and twice now it has been treated as evidence of absence by the same reader in the same session.
+The layout invites it -- a header separated from its rows by two unrelated blocks -- but the
+defect is in the reading, and the second instance was caught only because the first had made the
+shape familiar.
+
+Also checked while there, and clean: `phase_a_d4`'s acceptance per arm is 0.665, 0.558, 0.412,
+0.474 and 0.339, identical to Phase A's on all five speculative arms, and every arm is
+reproducible 150 of 150 across the seven passes.
