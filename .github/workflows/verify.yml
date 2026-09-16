@@ -37,7 +37,13 @@ jobs:
       - name: Install the two optional third-party packages
         # matplotlib for the figures, PyYAML for the CITATION.cff structural check. Neither is
         # needed to reproduce the numbers; both are needed to check every artifact here.
-        run: python -m pip install --quiet matplotlib pyyaml
+        # matplotlib is PINNED. Section 9 compares the committed figures byte for byte against a
+        # regeneration, which only works while the renderer is fixed: 3.11.2 landed on 2026-09-11
+        # and redraws all sixteen differently, turning every push red for a reason that has nothing
+        # to do with the change being pushed. The gate's own comment names 3.11.1 as the version
+        # the committed figures are byte-reproducible under; this is that version, written down
+        # where pip can act on it. Correction 65.
+        run: python -m pip install --quiet "matplotlib==3.11.1" pyyaml
 
       - name: Test suite
         run: cd harness && python test_harness.py

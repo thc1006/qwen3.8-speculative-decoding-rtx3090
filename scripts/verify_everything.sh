@@ -420,6 +420,11 @@ done
 # Hence: arguments, a checked exit status, and a count of the files actually written this run
 # against the number on disk. A generator that draws nothing now fails instead of passing.
 if [ -n "$PYFIG" ]; then
+  # Name the renderer in the log. A byte comparison against a regeneration is hostage to the
+  # plotting stack, and when 3.11.2 changed all sixteen figures the log said only "a figure is not
+  # what its plot script draws now" -- true, and useless for telling a real change from a new
+  # matplotlib. Correction 65.
+  echo "   renderer: $("$PYFIG" -c 'import matplotlib; print("matplotlib", matplotlib.__version__)' 2>/dev/null || echo 'matplotlib version unknown')"
   before=$(git status --porcelain analysis/*.png)
   marker=$(mktemp)
   run_fig() {

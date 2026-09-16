@@ -5924,3 +5924,28 @@ interval, on seven clusters, and the phrasing asserted a refutation the design c
 Re-run with a cluster bootstrap, every one of those contrasts spans zero. The spread statistic used
 in that first pass, `max - min` over seven noisy means, is also biased upward and cannot be negative,
 so it can never span zero and was dropped.
+
+## Correction 65, 2026-09-17: the figure check was hostage to an unpinned renderer
+
+Found by CI going red on a commit whose local gate was green, and chased rather than re-run.
+
+Section 9 of `scripts/verify_everything.sh` compares all sixteen committed figures byte for byte
+against a regeneration. Its own comment says why that is checkable at all: "Regenerating them is
+byte-reproducible here -- matplotlib 3.11.1, same data, same bytes". The CI workflow installed
+`matplotlib` with no version. **3.11.2 was released on 2026-09-11 and redraws every one of the
+sixteen differently.**
+
+Reproduced before it was believed: a throwaway venv at `matplotlib==3.11.2` regenerates
+`plot_headline.png` to different bytes from the committed one, on the same data, on this machine.
+Nothing about the commit that went red touched a figure or the data any figure reads.
+
+The version is now pinned in `.github/workflows/verify.yml`, which is where pip can act on it
+rather than only in a comment a person has to find. And section 9 prints the renderer it used,
+because the failure it emits -- "a figure is not what its plot script draws now" -- is true and
+useless: it cannot distinguish a real change from a new matplotlib, which is exactly the
+distinction the several steps of this diagnosis were spent on.
+
+What this does not do is make the figures reproducible for a reader on a different stack. A byte
+comparison is the strictest available check and it buys strictness at the cost of pinning; the
+alternative, a tolerance on pixels, would have let the width-partition caption defect through.
+The pin is the honest trade and it is now written down as one.
