@@ -278,8 +278,9 @@ operating point the primary matrix actually used, the effect is not there** -- -
 outside the interval above.
 
 **The headline does not move.** Against Phase A through the same analyser: mtp-n2 +59.67
-[+56.89, +62.62] against +59.77 [+56.95, +62.75], and the other four agree to 0.10 points with both
-interval endpoints inside 0.11. The fixed design was not buying the effects it reported.
+[+56.89, +62.62] against +59.77 [+56.95, +62.75]. No point estimate moves by more than **0.10**
+and no interval endpoint by more than **0.14**, on intervals 6 to 16 points wide. The fixed design
+was not buying the effects it reported.
 
 **What the rotation did find is the other axis.** Within an arm-pass, later requests are slower:
 an OLS slope of **-0.33 % [-0.46, -0.19]** across the 25 ordinals, clearing zero by 1.43 half-widths,

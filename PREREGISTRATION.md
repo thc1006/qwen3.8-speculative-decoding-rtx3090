@@ -5978,3 +5978,60 @@ shape familiar.
 Also checked while there, and clean: `phase_a_d4`'s acceptance per arm is 0.665, 0.558, 0.412,
 0.474 and 0.339, identical to Phase A's on all five speculative arms, and every arm is
 reproducible 150 of 150 across the seven passes.
+
+## Correction 67, 2026-09-17: auditing what this session produced and had not re-read
+
+Correction 66 was found by reading an artifact this session had produced and quoted from without
+reading it through. This entry applies that to the rest of what the session produced: the numeric
+claims in Corrections 58 to 66, none of which had been checked back against the artifacts, and
+`scripts/collect_phase_q_hostc.sh`, which was written, passed `bash -n`, and never read again or
+run. Nothing measured changes.
+
+Correction 64 says of D4 against Phase A that "the other four agree to 0.10 points with **both
+interval endpoints inside 0.11**". The point estimates do agree to 0.10; the endpoints do not.
+Recomputed from the two analyser outputs:
+
+| arm | lower bound | upper bound |
+|---|---:|---:|
+| dflash2-n4 | 0.11 | 0.02 |
+| dflash2-n7 | **0.14** | 0.11 |
+| mtp-n2 | 0.06 | **0.13** |
+| mtp-n3 | 0.07 | 0.05 |
+| mtp-n5 | 0.09 | 0.05 |
+
+The largest endpoint difference is **0.14**, on `dflash2-n7`'s lower bound. The figure quoted was
+the largest *point-estimate* difference rounded together with one endpoint that happened to equal
+it, which is two statistics reported as one.
+
+**The reading is unaffected and the correction is to the bound, not to the conclusion.** A 0.14
+difference sits on intervals 6 to 16 points wide, so "the headline does not move" stands exactly as
+written; what was wrong is the number offered as evidence for it. `docs/METHODOLOGY_AUDIT.md` now
+states both maxima separately, which is what the data supports.
+
+Everything else in 58 to 66 that could be checked was, and holds: the clock gaps at -4.13 % to
+-1.74 % for Phase A against -3.96 % to -1.38 % for D4, the 125 fork pairs as five speculative arms
+by twenty-five prompts, the -0.143 % [-0.199, -0.082] class artefact as the slope interval
+propagated across a 10.4-ordinal gap, and the acceptance figures 0.323 and 0.768 that Correction 66
+restored.
+
+### The collector reintroduced a defect the driver had already had fixed
+
+`scripts/collect_phase_q_hostc.sh` decided a rung was finished with `[ "$n" -ge 300 ]`. The driver
+it collects for carries the comment explaining why that is wrong: "The old gate was
+`len(records) >= EXPECTED`, which a run could satisfy with the wrong shape -- one arm measured
+twelve times reaches 300 records just as four arms in three passes do". The collector was written
+against the same phase, three weeks after that was fixed, with the fixed version open.
+
+It is now shape, on the fetched file: every declared arm present in every pass with the full prompt
+set, and no incidents. Watched firing on a copy with one arm-pass cell removed (`INCOMPLETE -- 1
+arm-pass cell(s) missing`) and on a copy at the full 300 records carrying one planted incident
+(`INCOMPLETE -- 1 incident(s)`) -- the second is exactly the case the count test passes.
+
+**And the shape check would itself have failed on the rungs it exists for.** `matrices/phase_q.py`
+refuses to import when its target gguf is absent, which on this host is every rung but the shared
+Q4 -- confirmed, it raises `RuntimeError` for `UD-Q6_K_XL` here. The driver's gate needed exactly
+this fallback and says so; the collector had not been given it. It now falls back to the arm list
+the result itself records, and prints which source it used.
+
+The expected record count was also typed as 300. It is derived now -- arms times passes times the
+frozen prompt set -- and the script refuses to run rather than guess if the derivation fails.
