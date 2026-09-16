@@ -1,0 +1,88 @@
+
+[selection] per-protocol and intention-to-treat hold the same 1225 records; the exclusion rule does no work here.
+
+====================================================================================================
+metric: decode_tok_s   passes: 7   prompts: 25 ({'code': 5, 'prose': 5, 'reason': 5, 'chat': 5, 'zh': 5})
+design: interleaved=True  cache_prompt=False  fresh server per arm-pass=True
+====================================================================================================
+
+--- per-arm absolute (class-stratified mean over prompts) ---
+arm                           strat mean   raw mean   n obs  worst-prompt CV
+baseline@master                    41.57      41.57     175  reason_zebra=0.4%
+baseline@pr27342                   41.56      41.56     175  reason_zebra=0.3%
+mtp-n2                             66.38      66.38     175  chat_travel=0.6%
+mtp-n3                             63.35      63.35     175  code_py_ratelimiter=0.5%
+mtp-n5                             54.93      54.93     175  chat_travel=0.5%
+dflash2-n4                         63.18      63.18     175  chat_travel=0.8%
+dflash2-n7                         51.01      51.01     175  chat_disagree=0.4%
+
+--- unspeculated contrast (baselines against each other; not an effect) ---
+  baseline@pr27342         vs baseline@master          -0.02 [-0.04, +0.00]   differs in: tree
+  Both sides are unspeculated, so this is a property of the setup, not an effect. A
+  contrast that spans zero is a control: whatever differs did not move baseline throughput.
+
+--- PRIMARY: paired effect vs baseline (class-stratified, cluster bootstrap 95% CI) ---
+arm                          vs                                    delta %  verdict
+mtp-n2                       baseline@master        +59.67 [+56.89, +62.62]  FASTER
+mtp-n3                       baseline@master        +52.39 [+48.54, +56.53]  FASTER
+mtp-n5                       baseline@master        +32.15 [+26.47, +37.80]  FASTER
+dflash2-n4                   baseline@pr27342       +52.02 [+45.67, +58.19]  FASTER
+dflash2-n7                   baseline@pr27342       +22.73 [+14.82, +30.48]  FASTER
+
+--- SECONDARY (exploratory): per-class effect ---
+  mtp-n2                     chat: +47.0%  code: +91.5%  prose: +48.4%  reason: +73.4%  zh: +38.0%
+  mtp-n3                     chat: +31.7%  code: +98.4%  prose: +36.9%  reason: +71.3%  zh: +23.7%
+  mtp-n5                     chat:  +7.4%  code: +90.3%  prose:  +7.1%  reason: +55.0%  zh:  +1.0%
+  dflash2-n4                 chat: +30.6%  code:+116.3%  prose: +22.9%  reason: +89.6%  zh:  +0.7%
+  dflash2-n7                 chat:  -4.0%  code: +91.4%  prose: -11.1%  reason: +65.7%  zh: -28.4%
+
+--- integrity ---
+  incidents recorded: 0
+  requests excluded from aggregates: 0 / 1225
+  requests flagged but KEPT (absolute-threshold concerns): 0
+
+--- energy and acceptance ---
+  (tok/J is decode-only: prefill energy is measured separately and subtracted.
+   No study in the prior-art sweep publishes an energy figure for this model.)
+
+arm                     tok/J dec   vs base  J/request   vs base  accept  draft len
+
+--- energy window coverage: 99.8 % of wall time (min 99.4 %) ---
+  Energy outside the first and last sample is not in the figure above.
+
+--- averaged against instantaneous power, per arm ---
+  baseline@master         +0.44 %   n=175
+  baseline@pr27342        +0.41 %   n=175
+  dflash2-n4              +1.30 %   n=175
+  dflash2-n7              +0.97 %   n=175
+  mtp-n2                  +1.24 %   n=175
+  mtp-n3                  +1.17 %   n=175
+  mtp-n5                  +0.99 %   n=175
+  Positive means power.draw integrated low. It leaves the baselines nearly alone
+  and understates the speculative arms, so an energy saving read off the averaged
+  field is larger than the instantaneous field supports, by about this much.
+baseline@master            0.1003     +0.0%       3979     +0.0%       -          -
+baseline@pr27342           0.1002     +0.0%       3980     +0.0%       -          -
+mtp-n2                     0.1617    +61.3%       2511    -36.9%   0.665       2.32
+mtp-n3                     0.1543    +53.8%       2686    -32.5%   0.558       2.67
+mtp-n5                     0.1336    +33.2%       3230    -18.8%   0.412       3.05
+dflash2-n4                 0.1547    +54.4%       2836    -28.7%   0.474       2.88
+dflash2-n7                 0.1244    +24.1%       3789     -4.8%   0.339       3.35
+  Each arm is measured against its own baseline from baseline_map, not against a single
+  reference: this matrix holds more than one.
+
+--- losslessness (greedy arms vs baseline text, same prompt+pass) ---
+  dflash2-n4                 no divergence through cap 35/175   median shared prefix when forked: 0.228
+  dflash2-n7                 no divergence through cap 35/175   median shared prefix when forked: 0.228
+  mtp-n2                     no divergence through cap 42/175   median shared prefix when forked: 0.240
+  mtp-n3                     no divergence through cap 42/175   median shared prefix when forked: 0.240
+  mtp-n5                     no divergence through cap 35/175   median shared prefix when forked: 0.228
+
+--- determinism (greedy, same arm/prompt across passes) ---
+  baseline@master            reproducible 150/150
+  baseline@pr27342           reproducible 150/150
+  dflash2-n4                 reproducible 150/150
+  dflash2-n7                 reproducible 150/150
+  mtp-n2                     reproducible 150/150
+  mtp-n3                     reproducible 150/150
+  mtp-n5                     reproducible 150/150

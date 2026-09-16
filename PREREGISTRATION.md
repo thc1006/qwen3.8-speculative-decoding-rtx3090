@@ -5855,3 +5855,72 @@ The plan the audit settles: all four rungs run on the A6000, not the two the 309
 rungs from one card and two from another is not a ladder, and running four gives host A's two a
 cross-host replication as well. The results will need their own registry entry, which cannot be
 added until they exist, because a phase with no results is refused.
+
+## Correction 64, 2026-09-17: the rotation D4 registered has been run, and it changes two readings
+
+`docs/METHODOLOGY_AUDIT.md` said of the 1.95 % position effect: "that is the number a rotation has
+to defeat". D4 is that rotation. `results/phase_a_d4.json`, measured 2026-09-16: Phase A's seven
+arms under `--latin-arms --shuffle-prompts`, 1225 records, 49 arm-passes of 25, **0 incidents**, at
+420 W stock. The arm rotation closes -- every arm visits every one of the seven positions exactly
+once, checked rather than assumed -- and each pass carries a fresh seeded prompt permutation,
+identical across arms within it.
+
+**The headline does not move.** Through the same analyser invocation, mtp-n2 is +59.67
+[+56.89, +62.62] against Phase A's +59.77 [+56.95, +62.75]; the other four agree to 0.10 points
+with both interval endpoints inside 0.11. Phase A's fixed design was not buying the effects it
+reported, and this is a control that strengthens it rather than a re-measurement that replaces it.
+
+**No arm-position effect is established.** Cluster bootstrap over the seven arms, 2000 replicates:
+throughput position 1 to 2 is -0.11 % [-0.26, +0.01] and 1 to 7 is -0.01 % [-0.07, +0.05]; SM clock
+1 to 2 is +0.15 % [-0.27, +0.59] and 1 to 7 is +0.09 % [-0.40, +0.62]. Every directional contrast
+spans zero.
+
+**That is not a refutation of the 1.95 %, and this run cannot be one.** The published figure belongs
+to the card as found, at 450 W and overclocked, where every arm sat within 5 W of the cap; D4 ran at
+the 420 W stock cap the primary matrix used, with the thermal gate active. The rotation and the
+operating point changed together and one run cannot separate them. What D4 establishes is narrower
+and still worth having: at the point the primary matrix actually ran on, the effect is not there.
+
+**The other axis is where the effect turned out to be.** Within an arm-pass later requests are
+slower: an OLS slope of -0.33 % [-0.46, -0.19] across the 25 ordinals, clearing zero by 1.43
+half-widths, and -0.76 % [-0.97, -0.53] from first ordinal to last at 2.38. Small, but established
+by this repository's own 1.3-half-width rule exactly where the position contrasts are not.
+
+**And it is quantified against the thing it could have damaged.** The fixed order runs the classes
+in two blocks, so mean ordinal per class runs 6.8 for `code` to 17.2 for `zh`. At the measured drift
+that gap is worth **-0.143 % [-0.199, -0.082]** between those classes from order alone, against the
+class effects Phase C reports at +111 % to +118 % for code and -2.3 % to +0.8 % for zh. The confound
+is real, it is now measured, and it is far below the size at which it would matter. The shuffle was
+worth running and its result retires the concern rather than opening one.
+
+**One control came free.** Fork position per (arm, prompt) is identical in **125 of 125** pairs
+across the two runs, so permuting prompts and rotating arms changed nothing about where outputs
+diverge. And B12's clock gap survives balancing: speculative arms boost 1.38 % to 3.96 % below their
+own baseline here against 1.74 % to 4.13 % in Phase A, so it is a property of the arm and not of the
+position it ran in.
+
+### Two defects the run exposed in `harness/bench.py`
+
+`design.prompt_order` was the literal string "fixed, identical across arms" whatever
+`--shuffle-prompts` said. D4 is the first run to use that flag, so the defect bit exactly the run
+the flag exists for: its own design block described the order it was built to remove. The real
+per-pass orders were in `prompt_order_by_pass` throughout -- seven distinct ones, verified before
+anything was changed -- and `design.prompt_order`, `design.shuffle_prompts` and `design.prompt_seed`
+are now written from what the run did. The committed result carries the repair under `repairs`;
+no record or measurement was touched. `harness/vllm_bench.py` has the same literal and is correct,
+because it has no shuffle option.
+
+`_append_jsonl` opens `.records.jsonl` with "a", and that file's own docstring calls it the stream
+every record is recoverable from if the main JSON is lost. A re-run after an interrupted one
+therefore concatenated both runs into the recovery source while the main JSON was rewritten clean.
+The first D4 attempt was interrupted at 8 of 49 arm-passes and left 200 lines behind; the second
+would have appended 1225 to them. An existing stream is now moved aside rather than appended to.
+
+### The analysis this entry reports was itself corrected first
+
+The first reading quoted the position effects as bare point estimates -- 0.11 % on throughput,
+0.33 % on the clock -- and said the effect "is 0.33 %, not 1.95 %". Both are point estimates with no
+interval, on seven clusters, and the phrasing asserted a refutation the design cannot support.
+Re-run with a cluster bootstrap, every one of those contrasts spans zero. The spread statistic used
+in that first pass, `max - min` over seven noisy means, is also biased upward and cannot be negative,
+so it can never span zero and was dropped.

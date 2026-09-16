@@ -5311,6 +5311,9 @@ class TheHandWrittenPhaseTableAgreesWithTheFiles(unittest.TestCase):
                     "a cross-host replication, written up under the pooling limitation"),
         "warp":    ("docs/GREEDY_DIVERGENCE.md", "warp",
                     "the forced-warp intervention, written up with the partition it tests"),
+        "A-d4":    ("docs/METHODOLOGY_AUDIT.md", "phase_a_d4",
+                    "the arm-rotation and prompt-shuffle control, written up under the position "
+                    "effect it was built to test"),
     }
 
     def test_every_exemption_names_a_file_that_covers_the_phase(self):

@@ -562,11 +562,27 @@ there was omission, not misstatement.
       91.1 % (0.3 SE) and heavy-tailed on 88.0 % at 87.5 % (0.7), while uniform is 92.0 % against
       90.6 % (2.3). The earlier 300-replication pass had put the discrepancy on `normal` at 2.0 SE;
       that was Monte Carlo noise. Binary at n=25 is 90.2 %, inside the continuous band.
-- [ ] **D4** full re-run of Phase A under the C1/C2/C3 harness, once those land.
+- [x] **D4** done 2026-09-16. `results/phase_a_d4.json`: Phase A's seven arms under
+      `--latin-arms --shuffle-prompts`, 1225 records, 49 arm-passes of 25, **0 incidents**, at
+      420 W stock. The arm rotation closes -- every arm visits every position exactly once, checked.
+
+      **The headline does not move**: mtp-n2 +59.67 [+56.89, +62.62] against Phase A's +59.77
+      [+56.95, +62.75] through the same analyser, the other four inside 0.10 points. Fork position
+      per (arm, prompt) is identical in 125 of 125 pairs.
+
+      **No arm-position effect is established** -- every directional contrast spans zero, e.g.
+      throughput position 1 to 2 at -0.11 % [-0.26, +0.01]. That is not a refutation of the
+      published 1.95 %, which was measured on the card as found at 450 W and overclocked; the
+      rotation and the operating point changed together.
+
+      **The effect is on the other axis**: within an arm-pass later requests are slower, an OLS
+      slope of -0.33 % [-0.46, -0.19] across the 25 ordinals. The fixed order blocks classes, so
+      that buys -0.143 % [-0.199, -0.082] between `code` and `zh` from order alone -- real,
+      measured, and far below the class effects it could have damaged. Correction 64.
 - [ ] **D6** what the averaged-field offset actually is. Phase E establishes what it is not, over
-      119 file-arm cells and 7125 measured windows in `analysis/energy_instruments.txt`: not proportional
-      (r = +0.078 against total energy), not power alone (r = +0.548, and within a cap the arm
-      drawing LESS power carries the larger offset), not power fluctuation (-0.106 against
+      126 file-arm cells and 8350 measured windows in `analysis/energy_instruments.txt`: not proportional
+      (r = +0.070 against total energy), not power alone (r = +0.544, and within a cap the arm
+      drawing LESS power carries the larger offset), not power fluctuation (-0.091 against
       SM-clock spread), and not a per-window constant -- an
       earlier reading with an arm-dependent time constant was refused by nine files and by the
       negative offsets on `phase_m`'s `moe-draft08b-*` arms. The context ladder adds a dimension

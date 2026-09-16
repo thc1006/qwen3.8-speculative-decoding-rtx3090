@@ -254,6 +254,48 @@ Power did not sit at ~445 W throughout: the two baselines did, the five speculat
 within 5 W of a 450 W cap at every arm, leakage rises with temperature, and the same wattage buys
 fewer megahertz. The card never reports an error and `/health` stays green.
 
+### The rotation has now been run, and it does not find the position effect
+
+`results/phase_a_d4.json`, 2026-09-16: Phase A's seven arms under `--latin-arms --shuffle-prompts`,
+so the arm rotation closes -- every arm visits every one of the seven positions exactly once, which
+is checked rather than assumed -- and the prompt order is a fresh seeded permutation each pass,
+identical across arms within it. 1225 records, 49 arm-passes of 25, **0 incidents**, on the card at
+**420 W stock**.
+
+**No arm-position effect is established.** Every directional contrast spans zero, on a cluster
+bootstrap over the seven arms at 2000 replicates:
+
+| contrast | throughput | SM clock |
+|---|---|---|
+| position 1 -> 2 | -0.11 % [-0.26, +0.01] | +0.15 % [-0.27, +0.59] |
+| position 1 -> 7 | -0.01 % [-0.07, +0.05] | +0.09 % [-0.40, +0.62] |
+
+**This does not refute the 1.95 %, and cannot.** That figure belongs to the card as found, at
+450 W and overclocked, where the arms sat within 5 W of the cap and the same wattage bought fewer
+megahertz; D4 ran at the 420 W stock cap the primary matrix ran on, with the thermal gate active.
+Two things changed at once and one run cannot separate them. What it does say is that **at the
+operating point the primary matrix actually used, the effect is not there** -- -1.95 % is far
+outside the interval above.
+
+**The headline does not move.** Against Phase A through the same analyser: mtp-n2 +59.67
+[+56.89, +62.62] against +59.77 [+56.95, +62.75], and the other four agree to 0.10 points with both
+interval endpoints inside 0.11. The fixed design was not buying the effects it reported.
+
+**What the rotation did find is the other axis.** Within an arm-pass, later requests are slower:
+an OLS slope of **-0.33 % [-0.46, -0.19]** across the 25 ordinals, clearing zero by 1.43 half-widths,
+and **-0.76 % [-0.97, -0.53]** first ordinal to last at 2.38. Small, but established by this
+repository's own margin rule where the position contrasts are not.
+
+That matters because the fixed order runs classes in two blocks, so mean ordinal per class runs
+from 6.8 for `code` to 17.2 for `zh`. At the measured drift that gap is worth **-0.143 %
+[-0.199, -0.082]** between those two classes **from order alone** -- against class effects Phase C
+reports as +111 % to +118 % for code and -2.3 % to +0.8 % for zh. The confound is real, it is now
+measured, and it is three orders of magnitude below what it would have to reach to matter.
+
+One control came free. Fork position per (arm, prompt) is **identical in 125 of 125** pairs between
+the two runs, so permuting the prompt order and rotating the arms changed nothing about where the
+outputs diverge.
+
 Why it matters: a 1.95 % position effect on identical work is larger than several of the effects
 this study is trying to resolve, and because arms occupy different positions within a pass, it
 lands **inside every paired comparison**. A study that runs arms sequentially assigns the whole of it to whichever arm

@@ -92,7 +92,7 @@ the power limit stepped 420 / 250 / 150 W so that a load-dependent error can be 
 constant one -- the counter agrees with the integral of `power.draw.instant` to within **0.15 % on
 every arm at every cap**, while its apparent disagreement with `energy_j` runs from -0.14 % to
 **+1.87 %** and regresses on the instantaneous field's own disagreement, over every file in
-`analysis/energy_instruments.txt` rather than this one, at **r = +0.839**.
+`analysis/energy_instruments.txt` rather than this one, at **r = +0.790**.
 
 Two of the three readout paths agree and the averaged field is the one that departs, by more the
 harder the card works. They are paths over one sensor rather than independent instruments, so this
@@ -118,10 +118,14 @@ as zero -- against 3.8 % for reading the counter itself once a second.
 
 ## What the averaged field's offset is not
 
-What the averaged field's offset is NOT, over 119 file-arm cells and 7125 records in
+These counts and correlations grew on 2026-09-17 when `results/phase_a_d4.json` joined the
+sweep: 119 cells over 7125 records became 126 over 8350, and the four correlations moved in
+the third decimal without changing a single refusal. Correction 64.
+
+What the averaged field's offset is NOT, over 126 file-arm cells and 8350 records in
 `analysis/energy_instruments.txt` -- both base models, six named quantizations, five context
 lengths from 8k to 96k, three power caps, three sampler periods -- is proportional: it tracks
-total energy at r = +0.078, so it cannot be corrected by scaling and does not cancel between two
+total energy at r = +0.070, so it cannot be corrected by scaling and does not cancel between two
 arms drawing different power.
 
 Nor is it an integration artefact, which Phase E3 was built to test and which had been the live
@@ -201,8 +205,8 @@ roll.
 
 ## What is left, and what would settle it
 
-The other correlations are what they were -- mean power r = +0.548, window length -0.150, SM-clock
-spread -0.106 -- and Phase E2 had refuted the candidate that the offset is the variation the
+The other correlations are what they were -- mean power r = +0.544, window length -0.156, SM-clock
+spread -0.091 -- and Phase E2 had refuted the candidate that the offset is the variation the
 smoothing discarded -- `sd_instant - sd` correlates with it at the wrong sign, and the
 joules-per-joule test that would make it a mechanism spans a factor of 574. `power_max_w` could
 not stand in for the spread: while the card sits at its limit, max IS the cap, so `max - mean`

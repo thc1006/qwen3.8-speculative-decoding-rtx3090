@@ -401,6 +401,15 @@ def run_matrix(
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     jsonl_path = out_path.with_suffix('.records.jsonl')
+    # `_append_jsonl` opens with "a", and this file is documented as the stream every record is
+    # recoverable from. A re-run after an interrupted one therefore concatenated both into it
+    # while the main JSON was rewritten clean -- the recovery source silently held two runs and
+    # nothing said so. Moving the old one aside keeps it and makes the new one honest.
+    if jsonl_path.exists() and jsonl_path.stat().st_size:
+        keep = jsonl_path.with_suffix(f".superseded.{int(jsonl_path.stat().st_mtime)}.jsonl")
+        jsonl_path.rename(keep)
+        print(f"  an earlier {jsonl_path.name} was here; moved to {keep.name} rather than "
+              f"appended to", flush=True)
     log_dir = out_path.parent / "server_logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -422,7 +431,15 @@ def run_matrix(
             "latin_arms": latin_arms,
             "interleaved": True,
             "fresh_server_per_arm_per_pass": True,
-            "prompt_order": "fixed, identical across arms",
+            # Was the literal string "fixed, identical across arms" whatever the flag said.
+            # `--shuffle-prompts` landed in C1 and nothing ran with it until phase_a_d4 on
+            # 2026-09-16, whose own design block then reported the order it was built to remove.
+            # The real per-pass order is in `prompt_order_by_pass` either way; this is the field a
+            # reader checks first.
+            "prompt_order": ("a seeded permutation per pass, identical across arms within a pass"
+                             if shuffle_prompts else "fixed, identical across arms"),
+            "shuffle_prompts": shuffle_prompts,
+            "prompt_seed": prompt_seed if shuffle_prompts else None,
             "max_tokens": max_tokens,
             "common_args": common_args,
             "warmup_requests_discarded": warmup,

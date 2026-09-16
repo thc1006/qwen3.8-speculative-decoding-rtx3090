@@ -318,6 +318,7 @@ records sat in `results/phase_b.json`, and it never mentioned Phase R, which has
 | A | 875 records, complete, 0 incidents | primary result |
 | A-1600 | 525 records, complete, 0 incidents | within-run contrasts reported -- re-measured 2026-08-28. The first extended-cap run took two host_contended incidents from another session's data-perturbation suite; the replacement carries none, and the arm-by-arm comparison that justified retiring the older file is in analysis/rerun_agreement.txt |
 | A-hostB | 175 records, complete, 0 incidents | association, not a controlled contrast |
+| A-d4 | 1225 records, complete, 0 incidents | control |
 | B | 525 records, complete, 0 incidents | exploratory -- H2 and H2' and the arm design were in the initial commit; the model comparison was committed before the run finished; the forward-count robustness sweep was added after the data; re-measured 2026-08-28 after the first run took two host_contended incidents from this session's own nvidia-smi and git, with the comparison in analysis/rerun_agreement.txt |
 | C | 750 records, complete, 0 incidents | within-run contrasts reported |
 | KV | 175 records, complete, 0 incidents | control |
@@ -353,6 +354,7 @@ these are the wider constraints those wordings came from.
 | A | representative deployment traffic: the 25 prompts were purposively constructed<br>semantic equivalence: only byte-level divergence is measured |
 | A-1600 | identity: a run that matched inside the 1600-token cap is right-censored, not byte-identical<br>representative deployment traffic: the 25 prompts were purposively constructed |
 | A-hostB | absolute tok/s pooled with Phase A: different host |
+| A-d4 | representative deployment traffic: the 25 prompts were purposively constructed<br>semantic equivalence: only byte-level divergence is measured<br>an arm-position effect: every directional contrast here spans zero<br>a refutation of the 1.95 % measured on the card as found: that was at 450 W and overclocked, this at 420 W stock, and one run cannot separate the rotation from the cap |
 | B | quantization or arithmetic intensity as the cause: no intervention on either<br>the joint drafted/rejected coefficients: the regressors correlate at +0.9963<br>absolute ms/step and ms/token: they wait on an exact verification-step count |
 | C | a demonstrated separation between two drafter precisions: no paired interval was computed<br>n-gram efficacy from an arm that never activated |
 | L | a refutation of #27623: that report is a different architecture, quantization and software stack<br>throttling excluded: only SM-clock drift is ruled out as the explanation<br>a method separation at depth: the deepest rungs' intervals overlap |
